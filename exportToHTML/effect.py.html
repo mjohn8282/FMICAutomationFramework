@@ -1,0 +1,424 @@
+<html>
+<head>
+<title>effect.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+effect.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">NoneSet,</span>
+    <span class="s1">Float,)</span>
+
+
+<span class="s0">from </span><span class="s1">.colors </span><span class="s0">import </span><span class="s1">ColorChoice</span>
+
+
+<span class="s0">class </span><span class="s1">TintEffect(Serialisable):</span>
+
+    <span class="s1">hue = Integer()</span>
+    <span class="s1">amt = Integer()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">hue=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">amt=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.hue = hue</span>
+        <span class="s1">self.amt = amt</span>
+
+
+<span class="s0">class </span><span class="s1">LuminanceEffect(Serialisable):</span>
+
+    <span class="s1">bright = Integer()</span>
+    <span class="s1">contrast = Integer()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">bright=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">contrast=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.bright = bright</span>
+        <span class="s1">self.contrast = contrast</span>
+
+
+<span class="s0">class </span><span class="s1">HSLEffect(Serialisable):</span>
+
+    <span class="s1">hue = Integer()</span>
+    <span class="s1">sat = Integer()</span>
+    <span class="s1">lum = Integer()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">hue=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sat=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lum=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.hue = hue</span>
+        <span class="s1">self.sat = sat</span>
+        <span class="s1">self.lum = lum</span>
+
+
+<span class="s0">class </span><span class="s1">GrayscaleEffect(Serialisable):</span>
+
+    <span class="s0">pass</span>
+
+<span class="s0">class </span><span class="s1">FillOverlayEffect(Serialisable):</span>
+
+    <span class="s1">blend = Set(values=([</span><span class="s3">'over'</span><span class="s1">, </span><span class="s3">'mult'</span><span class="s1">, </span><span class="s3">'screen'</span><span class="s1">, </span><span class="s3">'darken'</span><span class="s1">, </span><span class="s3">'lighten'</span><span class="s1">]))</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">blend=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.blend = blend</span>
+
+
+<span class="s0">class </span><span class="s1">DuotoneEffect(Serialisable):</span>
+
+    <span class="s0">pass</span>
+
+<span class="s0">class </span><span class="s1">ColorReplaceEffect(Serialisable):</span>
+
+    <span class="s0">pass</span>
+
+<span class="s0">class </span><span class="s1">Color(Serialisable):</span>
+
+    <span class="s0">pass</span>
+
+<span class="s0">class </span><span class="s1">ColorChangeEffect(Serialisable):</span>
+
+    <span class="s1">useA = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">clrFrom = Typed(expected_type=Color, )</span>
+    <span class="s1">clrTo = Typed(expected_type=Color, )</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">useA=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">clrFrom=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">clrTo=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.useA = useA</span>
+        <span class="s1">self.clrFrom = clrFrom</span>
+        <span class="s1">self.clrTo = clrTo</span>
+
+
+<span class="s0">class </span><span class="s1">BlurEffect(Serialisable):</span>
+
+    <span class="s1">rad = Float()</span>
+    <span class="s1">grow = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">rad=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">grow=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.rad = rad</span>
+        <span class="s1">self.grow = grow</span>
+
+
+<span class="s0">class </span><span class="s1">BiLevelEffect(Serialisable):</span>
+
+    <span class="s1">thresh = Integer()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">thresh=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.thresh = thresh</span>
+
+
+<span class="s0">class </span><span class="s1">AlphaReplaceEffect(Serialisable):</span>
+
+    <span class="s1">a = Integer()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">a=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.a = a</span>
+
+
+<span class="s0">class </span><span class="s1">AlphaModulateFixedEffect(Serialisable):</span>
+
+    <span class="s1">amt = Integer()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">amt=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.amt = amt</span>
+
+
+<span class="s0">class </span><span class="s1">EffectContainer(Serialisable):</span>
+
+    <span class="s1">type = Set(values=([</span><span class="s3">'sib'</span><span class="s1">, </span><span class="s3">'tree'</span><span class="s1">]))</span>
+    <span class="s1">name = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">type=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">name=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.type = type</span>
+        <span class="s1">self.name = name</span>
+
+
+<span class="s0">class </span><span class="s1">AlphaModulateEffect(Serialisable):</span>
+
+    <span class="s1">cont = Typed(expected_type=EffectContainer, )</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">cont=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.cont = cont</span>
+
+
+<span class="s0">class </span><span class="s1">AlphaInverseEffect(Serialisable):</span>
+
+    <span class="s0">pass</span>
+
+<span class="s0">class </span><span class="s1">AlphaFloorEffect(Serialisable):</span>
+
+    <span class="s0">pass</span>
+
+<span class="s0">class </span><span class="s1">AlphaCeilingEffect(Serialisable):</span>
+
+    <span class="s0">pass</span>
+
+<span class="s0">class </span><span class="s1">AlphaBiLevelEffect(Serialisable):</span>
+
+    <span class="s1">thresh = Integer()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">thresh=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.thresh = thresh</span>
+
+
+<span class="s0">class </span><span class="s1">GlowEffect(ColorChoice):</span>
+
+    <span class="s1">rad = Float()</span>
+    <span class="s2"># uses element group EG_ColorChoice</span>
+    <span class="s1">scrgbClr = ColorChoice.scrgbClr</span>
+    <span class="s1">srgbClr = ColorChoice.srgbClr</span>
+    <span class="s1">hslClr = ColorChoice.hslClr</span>
+    <span class="s1">sysClr = ColorChoice.sysClr</span>
+    <span class="s1">schemeClr = ColorChoice.schemeClr</span>
+    <span class="s1">prstClr = ColorChoice.prstClr</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'scrgbClr'</span><span class="s1">, </span><span class="s3">'srgbClr'</span><span class="s1">, </span><span class="s3">'hslClr'</span><span class="s1">, </span><span class="s3">'sysClr'</span><span class="s1">, </span><span class="s3">'schemeClr'</span><span class="s1">, </span><span class="s3">'prstClr'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">rad=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">**kw</span>
+                <span class="s1">):</span>
+        <span class="s1">self.rad = rad</span>
+        <span class="s1">super(GlowEffect, self).__init__(**kw)</span>
+
+
+<span class="s0">class </span><span class="s1">InnerShadowEffect(ColorChoice):</span>
+
+    <span class="s1">blurRad = Float()</span>
+    <span class="s1">dist = Float()</span>
+    <span class="s1">dir = Integer()</span>
+    <span class="s2"># uses element group EG_ColorChoice</span>
+    <span class="s1">scrgbClr = ColorChoice.scrgbClr</span>
+    <span class="s1">srgbClr = ColorChoice.srgbClr</span>
+    <span class="s1">hslClr = ColorChoice.hslClr</span>
+    <span class="s1">sysClr = ColorChoice.sysClr</span>
+    <span class="s1">schemeClr = ColorChoice.schemeClr</span>
+    <span class="s1">prstClr = ColorChoice.prstClr</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'scrgbClr'</span><span class="s1">, </span><span class="s3">'srgbClr'</span><span class="s1">, </span><span class="s3">'hslClr'</span><span class="s1">, </span><span class="s3">'sysClr'</span><span class="s1">, </span><span class="s3">'schemeClr'</span><span class="s1">, </span><span class="s3">'prstClr'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">blurRad=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dist=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dir=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">**kw</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.blurRad = blurRad</span>
+        <span class="s1">self.dist = dist</span>
+        <span class="s1">self.dir = dir</span>
+        <span class="s1">super(InnerShadowEffect, self).__init__(**kw)</span>
+
+
+<span class="s0">class </span><span class="s1">OuterShadow(ColorChoice):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;outerShdw&quot;</span>
+
+    <span class="s1">blurRad = Float(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">dist = Float(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">dir = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">sx = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">sy = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">kx = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">ky = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">algn = Set(values=[</span><span class="s3">'tl'</span><span class="s1">, </span><span class="s3">'t'</span><span class="s1">, </span><span class="s3">'tr'</span><span class="s1">, </span><span class="s3">'l'</span><span class="s1">, </span><span class="s3">'ctr'</span><span class="s1">, </span><span class="s3">'r'</span><span class="s1">, </span><span class="s3">'bl'</span><span class="s1">, </span><span class="s3">'b'</span><span class="s1">, </span><span class="s3">'br'</span><span class="s1">])</span>
+    <span class="s1">rotWithShape = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s2"># uses element group EG_ColorChoice</span>
+    <span class="s1">scrgbClr = ColorChoice.scrgbClr</span>
+    <span class="s1">srgbClr = ColorChoice.srgbClr</span>
+    <span class="s1">hslClr = ColorChoice.hslClr</span>
+    <span class="s1">sysClr = ColorChoice.sysClr</span>
+    <span class="s1">schemeClr = ColorChoice.schemeClr</span>
+    <span class="s1">prstClr = ColorChoice.prstClr</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'scrgbClr'</span><span class="s1">, </span><span class="s3">'srgbClr'</span><span class="s1">, </span><span class="s3">'hslClr'</span><span class="s1">, </span><span class="s3">'sysClr'</span><span class="s1">, </span><span class="s3">'schemeClr'</span><span class="s1">, </span><span class="s3">'prstClr'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">blurRad=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dist=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dir=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sx=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sy=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">kx=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">ky=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">algn=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rotWithShape=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">**kw</span>
+                <span class="s1">):</span>
+        <span class="s1">self.blurRad = blurRad</span>
+        <span class="s1">self.dist = dist</span>
+        <span class="s1">self.dir = dir</span>
+        <span class="s1">self.sx = sx</span>
+        <span class="s1">self.sy = sy</span>
+        <span class="s1">self.kx = kx</span>
+        <span class="s1">self.ky = ky</span>
+        <span class="s1">self.algn = algn</span>
+        <span class="s1">self.rotWithShape = rotWithShape</span>
+        <span class="s1">super(OuterShadow, self).__init__(**kw)</span>
+
+
+<span class="s0">class </span><span class="s1">PresetShadowEffect(ColorChoice):</span>
+
+    <span class="s1">prst = Set(values=([</span><span class="s3">'shdw1'</span><span class="s1">, </span><span class="s3">'shdw2'</span><span class="s1">, </span><span class="s3">'shdw3'</span><span class="s1">, </span><span class="s3">'shdw4'</span><span class="s1">, </span><span class="s3">'shdw5'</span><span class="s1">, </span><span class="s3">'shdw6'</span><span class="s1">,</span>
+                        <span class="s3">'shdw7'</span><span class="s1">, </span><span class="s3">'shdw8'</span><span class="s1">, </span><span class="s3">'shdw9'</span><span class="s1">, </span><span class="s3">'shdw10'</span><span class="s1">, </span><span class="s3">'shdw11'</span><span class="s1">, </span><span class="s3">'shdw12'</span><span class="s1">, </span><span class="s3">'shdw13'</span><span class="s1">,</span>
+                        <span class="s3">'shdw14'</span><span class="s1">, </span><span class="s3">'shdw15'</span><span class="s1">, </span><span class="s3">'shdw16'</span><span class="s1">, </span><span class="s3">'shdw17'</span><span class="s1">, </span><span class="s3">'shdw18'</span><span class="s1">, </span><span class="s3">'shdw19'</span><span class="s1">, </span><span class="s3">'shdw20'</span><span class="s1">]))</span>
+    <span class="s1">dist = Float()</span>
+    <span class="s1">dir = Integer()</span>
+    <span class="s2"># uses element group EG_ColorChoice</span>
+    <span class="s1">scrgbClr = ColorChoice.scrgbClr</span>
+    <span class="s1">srgbClr = ColorChoice.srgbClr</span>
+    <span class="s1">hslClr = ColorChoice.hslClr</span>
+    <span class="s1">sysClr = ColorChoice.sysClr</span>
+    <span class="s1">schemeClr = ColorChoice.schemeClr</span>
+    <span class="s1">prstClr = ColorChoice.prstClr</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'scrgbClr'</span><span class="s1">, </span><span class="s3">'srgbClr'</span><span class="s1">, </span><span class="s3">'hslClr'</span><span class="s1">, </span><span class="s3">'sysClr'</span><span class="s1">, </span><span class="s3">'schemeClr'</span><span class="s1">, </span><span class="s3">'prstClr'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">prst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dist=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dir=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">**kw</span>
+                <span class="s1">):</span>
+        <span class="s1">self.prst = prst</span>
+        <span class="s1">self.dist = dist</span>
+        <span class="s1">self.dir = dir</span>
+        <span class="s1">super(PresetShadowEffect, self).__init__(**kw)</span>
+
+
+<span class="s0">class </span><span class="s1">ReflectionEffect(Serialisable):</span>
+
+    <span class="s1">blurRad = Float()</span>
+    <span class="s1">stA = Integer()</span>
+    <span class="s1">stPos = Integer()</span>
+    <span class="s1">endA = Integer()</span>
+    <span class="s1">endPos = Integer()</span>
+    <span class="s1">dist = Float()</span>
+    <span class="s1">dir = Integer()</span>
+    <span class="s1">fadeDir = Integer()</span>
+    <span class="s1">sx = Integer()</span>
+    <span class="s1">sy = Integer()</span>
+    <span class="s1">kx = Integer()</span>
+    <span class="s1">ky = Integer()</span>
+    <span class="s1">algn = Set(values=([</span><span class="s3">'tl'</span><span class="s1">, </span><span class="s3">'t'</span><span class="s1">, </span><span class="s3">'tr'</span><span class="s1">, </span><span class="s3">'l'</span><span class="s1">, </span><span class="s3">'ctr'</span><span class="s1">, </span><span class="s3">'r'</span><span class="s1">, </span><span class="s3">'bl'</span><span class="s1">, </span><span class="s3">'b'</span><span class="s1">, </span><span class="s3">'br'</span><span class="s1">]))</span>
+    <span class="s1">rotWithShape = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">blurRad=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">stA=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">stPos=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">endA=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">endPos=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dist=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dir=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fadeDir=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sx=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sy=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">kx=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">ky=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">algn=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rotWithShape=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.blurRad = blurRad</span>
+        <span class="s1">self.stA = stA</span>
+        <span class="s1">self.stPos = stPos</span>
+        <span class="s1">self.endA = endA</span>
+        <span class="s1">self.endPos = endPos</span>
+        <span class="s1">self.dist = dist</span>
+        <span class="s1">self.dir = dir</span>
+        <span class="s1">self.fadeDir = fadeDir</span>
+        <span class="s1">self.sx = sx</span>
+        <span class="s1">self.sy = sy</span>
+        <span class="s1">self.kx = kx</span>
+        <span class="s1">self.ky = ky</span>
+        <span class="s1">self.algn = algn</span>
+        <span class="s1">self.rotWithShape = rotWithShape</span>
+
+
+<span class="s0">class </span><span class="s1">SoftEdgesEffect(Serialisable):</span>
+
+    <span class="s1">rad = Float()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">rad=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.rad = rad</span>
+
+
+<span class="s0">class </span><span class="s1">EffectList(Serialisable):</span>
+
+    <span class="s1">blur = Typed(expected_type=BlurEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">fillOverlay = Typed(expected_type=FillOverlayEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">glow = Typed(expected_type=GlowEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">innerShdw = Typed(expected_type=InnerShadowEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">outerShdw = Typed(expected_type=OuterShadow, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">prstShdw = Typed(expected_type=PresetShadowEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">reflection = Typed(expected_type=ReflectionEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">softEdge = Typed(expected_type=SoftEdgesEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'blur'</span><span class="s1">, </span><span class="s3">'fillOverlay'</span><span class="s1">, </span><span class="s3">'glow'</span><span class="s1">, </span><span class="s3">'innerShdw'</span><span class="s1">, </span><span class="s3">'outerShdw'</span><span class="s1">,</span>
+                    <span class="s3">'prstShdw'</span><span class="s1">, </span><span class="s3">'reflection'</span><span class="s1">, </span><span class="s3">'softEdge'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">blur=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fillOverlay=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">glow=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">innerShdw=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">outerShdw=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">prstShdw=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">reflection=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">softEdge=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.blur = blur</span>
+        <span class="s1">self.fillOverlay = fillOverlay</span>
+        <span class="s1">self.glow = glow</span>
+        <span class="s1">self.innerShdw = innerShdw</span>
+        <span class="s1">self.outerShdw = outerShdw</span>
+        <span class="s1">self.prstShdw = prstShdw</span>
+        <span class="s1">self.reflection = reflection</span>
+        <span class="s1">self.softEdge = softEdge</span>
+</pre>
+</body>
+</html>

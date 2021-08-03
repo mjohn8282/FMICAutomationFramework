@@ -1,0 +1,71 @@
+<html>
+<head>
+<title>merge.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+merge.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Sequence,</span>
+<span class="s1">)</span>
+
+<span class="s0">from </span><span class="s1">.cell_range </span><span class="s0">import </span><span class="s1">CellRange</span>
+
+
+<span class="s0">class </span><span class="s1">MergeCell(CellRange):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;mergeCell&quot;</span>
+    <span class="s1">ref = CellRange.coord</span>
+
+    <span class="s1">__attrs__ = (</span><span class="s3">&quot;ref&quot;</span><span class="s1">,)</span>
+
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">ref=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">super(MergeCell, self).__init__(ref)</span>
+
+
+    <span class="s0">def </span><span class="s1">__copy__(self):</span>
+        <span class="s0">return </span><span class="s1">self.__class__(self.ref)</span>
+
+
+<span class="s0">class </span><span class="s1">MergeCells(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;mergeCells&quot;</span>
+
+    <span class="s1">count = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">mergeCell = Sequence(expected_type=MergeCell, )</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'mergeCell'</span><span class="s1">,)</span>
+    <span class="s1">__attrs__ = (</span><span class="s3">'count'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">count=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">mergeCell=(),</span>
+                <span class="s1">):</span>
+        <span class="s1">self.mergeCell = mergeCell</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">count(self):</span>
+        <span class="s0">return </span><span class="s1">len(self.mergeCell)</span>
+</pre>
+</body>
+</html>

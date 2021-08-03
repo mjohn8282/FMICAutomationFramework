@@ -1,0 +1,459 @@
+<html>
+<head>
+<title>colors.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+colors.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">basestring, unicode</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Alias,</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">MinMax,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">Percentage</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">NestedNoneSet,</span>
+    <span class="s1">NestedValue,</span>
+    <span class="s1">NestedInteger,</span>
+    <span class="s1">EmptyTag,</span>
+<span class="s1">)</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.styles.colors </span><span class="s0">import </span><span class="s1">RGB</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">DRAWING_NS</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">ExtensionList </span><span class="s0">as </span><span class="s1">OfficeArtExtensionList</span>
+
+<span class="s1">PRESET_COLORS = [</span>
+        <span class="s3">'aliceBlue'</span><span class="s1">, </span><span class="s3">'antiqueWhite'</span><span class="s1">, </span><span class="s3">'aqua'</span><span class="s1">, </span><span class="s3">'aquamarine'</span><span class="s1">,</span>
+        <span class="s3">'azure'</span><span class="s1">, </span><span class="s3">'beige'</span><span class="s1">, </span><span class="s3">'bisque'</span><span class="s1">, </span><span class="s3">'black'</span><span class="s1">, </span><span class="s3">'blanchedAlmond'</span><span class="s1">, </span><span class="s3">'blue'</span><span class="s1">,</span>
+        <span class="s3">'blueViolet'</span><span class="s1">, </span><span class="s3">'brown'</span><span class="s1">, </span><span class="s3">'burlyWood'</span><span class="s1">, </span><span class="s3">'cadetBlue'</span><span class="s1">, </span><span class="s3">'chartreuse'</span><span class="s1">,</span>
+        <span class="s3">'chocolate'</span><span class="s1">, </span><span class="s3">'coral'</span><span class="s1">, </span><span class="s3">'cornflowerBlue'</span><span class="s1">, </span><span class="s3">'cornsilk'</span><span class="s1">, </span><span class="s3">'crimson'</span><span class="s1">, </span><span class="s3">'cyan'</span><span class="s1">,</span>
+        <span class="s3">'darkBlue'</span><span class="s1">, </span><span class="s3">'darkCyan'</span><span class="s1">, </span><span class="s3">'darkGoldenrod'</span><span class="s1">, </span><span class="s3">'darkGray'</span><span class="s1">, </span><span class="s3">'darkGrey'</span><span class="s1">,</span>
+        <span class="s3">'darkGreen'</span><span class="s1">, </span><span class="s3">'darkKhaki'</span><span class="s1">, </span><span class="s3">'darkMagenta'</span><span class="s1">, </span><span class="s3">'darkOliveGreen'</span><span class="s1">, </span><span class="s3">'darkOrange'</span><span class="s1">,</span>
+        <span class="s3">'darkOrchid'</span><span class="s1">, </span><span class="s3">'darkRed'</span><span class="s1">, </span><span class="s3">'darkSalmon'</span><span class="s1">, </span><span class="s3">'darkSeaGreen'</span><span class="s1">, </span><span class="s3">'darkSlateBlue'</span><span class="s1">,</span>
+        <span class="s3">'darkSlateGray'</span><span class="s1">, </span><span class="s3">'darkSlateGrey'</span><span class="s1">, </span><span class="s3">'darkTurquoise'</span><span class="s1">, </span><span class="s3">'darkViolet'</span><span class="s1">,</span>
+        <span class="s3">'dkBlue'</span><span class="s1">, </span><span class="s3">'dkCyan'</span><span class="s1">, </span><span class="s3">'dkGoldenrod'</span><span class="s1">, </span><span class="s3">'dkGray'</span><span class="s1">, </span><span class="s3">'dkGrey'</span><span class="s1">, </span><span class="s3">'dkGreen'</span><span class="s1">,</span>
+        <span class="s3">'dkKhaki'</span><span class="s1">, </span><span class="s3">'dkMagenta'</span><span class="s1">, </span><span class="s3">'dkOliveGreen'</span><span class="s1">, </span><span class="s3">'dkOrange'</span><span class="s1">, </span><span class="s3">'dkOrchid'</span><span class="s1">, </span><span class="s3">'dkRed'</span><span class="s1">,</span>
+        <span class="s3">'dkSalmon'</span><span class="s1">, </span><span class="s3">'dkSeaGreen'</span><span class="s1">, </span><span class="s3">'dkSlateBlue'</span><span class="s1">, </span><span class="s3">'dkSlateGray'</span><span class="s1">, </span><span class="s3">'dkSlateGrey'</span><span class="s1">,</span>
+        <span class="s3">'dkTurquoise'</span><span class="s1">, </span><span class="s3">'dkViolet'</span><span class="s1">, </span><span class="s3">'deepPink'</span><span class="s1">, </span><span class="s3">'deepSkyBlue'</span><span class="s1">, </span><span class="s3">'dimGray'</span><span class="s1">,</span>
+        <span class="s3">'dimGrey'</span><span class="s1">, </span><span class="s3">'dodgerBlue'</span><span class="s1">, </span><span class="s3">'firebrick'</span><span class="s1">, </span><span class="s3">'floralWhite'</span><span class="s1">, </span><span class="s3">'forestGreen'</span><span class="s1">,</span>
+        <span class="s3">'fuchsia'</span><span class="s1">, </span><span class="s3">'gainsboro'</span><span class="s1">, </span><span class="s3">'ghostWhite'</span><span class="s1">, </span><span class="s3">'gold'</span><span class="s1">, </span><span class="s3">'goldenrod'</span><span class="s1">, </span><span class="s3">'gray'</span><span class="s1">,</span>
+        <span class="s3">'grey'</span><span class="s1">, </span><span class="s3">'green'</span><span class="s1">, </span><span class="s3">'greenYellow'</span><span class="s1">, </span><span class="s3">'honeydew'</span><span class="s1">, </span><span class="s3">'hotPink'</span><span class="s1">, </span><span class="s3">'indianRed'</span><span class="s1">,</span>
+        <span class="s3">'indigo'</span><span class="s1">, </span><span class="s3">'ivory'</span><span class="s1">, </span><span class="s3">'khaki'</span><span class="s1">, </span><span class="s3">'lavender'</span><span class="s1">, </span><span class="s3">'lavenderBlush'</span><span class="s1">, </span><span class="s3">'lawnGreen'</span><span class="s1">,</span>
+        <span class="s3">'lemonChiffon'</span><span class="s1">, </span><span class="s3">'lightBlue'</span><span class="s1">, </span><span class="s3">'lightCoral'</span><span class="s1">, </span><span class="s3">'lightCyan'</span><span class="s1">,</span>
+        <span class="s3">'lightGoldenrodYellow'</span><span class="s1">, </span><span class="s3">'lightGray'</span><span class="s1">, </span><span class="s3">'lightGrey'</span><span class="s1">, </span><span class="s3">'lightGreen'</span><span class="s1">,</span>
+        <span class="s3">'lightPink'</span><span class="s1">, </span><span class="s3">'lightSalmon'</span><span class="s1">, </span><span class="s3">'lightSeaGreen'</span><span class="s1">, </span><span class="s3">'lightSkyBlue'</span><span class="s1">,</span>
+        <span class="s3">'lightSlateGray'</span><span class="s1">, </span><span class="s3">'lightSlateGrey'</span><span class="s1">, </span><span class="s3">'lightSteelBlue'</span><span class="s1">, </span><span class="s3">'lightYellow'</span><span class="s1">,</span>
+        <span class="s3">'ltBlue'</span><span class="s1">, </span><span class="s3">'ltCoral'</span><span class="s1">, </span><span class="s3">'ltCyan'</span><span class="s1">, </span><span class="s3">'ltGoldenrodYellow'</span><span class="s1">, </span><span class="s3">'ltGray'</span><span class="s1">, </span><span class="s3">'ltGrey'</span><span class="s1">,</span>
+        <span class="s3">'ltGreen'</span><span class="s1">, </span><span class="s3">'ltPink'</span><span class="s1">, </span><span class="s3">'ltSalmon'</span><span class="s1">, </span><span class="s3">'ltSeaGreen'</span><span class="s1">, </span><span class="s3">'ltSkyBlue'</span><span class="s1">,</span>
+        <span class="s3">'ltSlateGray'</span><span class="s1">, </span><span class="s3">'ltSlateGrey'</span><span class="s1">, </span><span class="s3">'ltSteelBlue'</span><span class="s1">, </span><span class="s3">'ltYellow'</span><span class="s1">, </span><span class="s3">'lime'</span><span class="s1">,</span>
+        <span class="s3">'limeGreen'</span><span class="s1">, </span><span class="s3">'linen'</span><span class="s1">, </span><span class="s3">'magenta'</span><span class="s1">, </span><span class="s3">'maroon'</span><span class="s1">, </span><span class="s3">'medAquamarine'</span><span class="s1">, </span><span class="s3">'medBlue'</span><span class="s1">,</span>
+        <span class="s3">'medOrchid'</span><span class="s1">, </span><span class="s3">'medPurple'</span><span class="s1">, </span><span class="s3">'medSeaGreen'</span><span class="s1">, </span><span class="s3">'medSlateBlue'</span><span class="s1">,</span>
+        <span class="s3">'medSpringGreen'</span><span class="s1">, </span><span class="s3">'medTurquoise'</span><span class="s1">, </span><span class="s3">'medVioletRed'</span><span class="s1">, </span><span class="s3">'mediumAquamarine'</span><span class="s1">,</span>
+        <span class="s3">'mediumBlue'</span><span class="s1">, </span><span class="s3">'mediumOrchid'</span><span class="s1">, </span><span class="s3">'mediumPurple'</span><span class="s1">, </span><span class="s3">'mediumSeaGreen'</span><span class="s1">,</span>
+        <span class="s3">'mediumSlateBlue'</span><span class="s1">, </span><span class="s3">'mediumSpringGreen'</span><span class="s1">, </span><span class="s3">'mediumTurquoise'</span><span class="s1">,</span>
+        <span class="s3">'mediumVioletRed'</span><span class="s1">, </span><span class="s3">'midnightBlue'</span><span class="s1">, </span><span class="s3">'mintCream'</span><span class="s1">, </span><span class="s3">'mistyRose'</span><span class="s1">, </span><span class="s3">'moccasin'</span><span class="s1">,</span>
+        <span class="s3">'navajoWhite'</span><span class="s1">, </span><span class="s3">'navy'</span><span class="s1">, </span><span class="s3">'oldLace'</span><span class="s1">, </span><span class="s3">'olive'</span><span class="s1">, </span><span class="s3">'oliveDrab'</span><span class="s1">, </span><span class="s3">'orange'</span><span class="s1">,</span>
+        <span class="s3">'orangeRed'</span><span class="s1">, </span><span class="s3">'orchid'</span><span class="s1">, </span><span class="s3">'paleGoldenrod'</span><span class="s1">, </span><span class="s3">'paleGreen'</span><span class="s1">, </span><span class="s3">'paleTurquoise'</span><span class="s1">,</span>
+        <span class="s3">'paleVioletRed'</span><span class="s1">, </span><span class="s3">'papayaWhip'</span><span class="s1">, </span><span class="s3">'peachPuff'</span><span class="s1">, </span><span class="s3">'peru'</span><span class="s1">, </span><span class="s3">'pink'</span><span class="s1">, </span><span class="s3">'plum'</span><span class="s1">,</span>
+        <span class="s3">'powderBlue'</span><span class="s1">, </span><span class="s3">'purple'</span><span class="s1">, </span><span class="s3">'red'</span><span class="s1">, </span><span class="s3">'rosyBrown'</span><span class="s1">, </span><span class="s3">'royalBlue'</span><span class="s1">, </span><span class="s3">'saddleBrown'</span><span class="s1">,</span>
+        <span class="s3">'salmon'</span><span class="s1">, </span><span class="s3">'sandyBrown'</span><span class="s1">, </span><span class="s3">'seaGreen'</span><span class="s1">, </span><span class="s3">'seaShell'</span><span class="s1">, </span><span class="s3">'sienna'</span><span class="s1">, </span><span class="s3">'silver'</span><span class="s1">,</span>
+        <span class="s3">'skyBlue'</span><span class="s1">, </span><span class="s3">'slateBlue'</span><span class="s1">, </span><span class="s3">'slateGray'</span><span class="s1">, </span><span class="s3">'slateGrey'</span><span class="s1">, </span><span class="s3">'snow'</span><span class="s1">, </span><span class="s3">'springGreen'</span><span class="s1">,</span>
+        <span class="s3">'steelBlue'</span><span class="s1">, </span><span class="s3">'tan'</span><span class="s1">, </span><span class="s3">'teal'</span><span class="s1">, </span><span class="s3">'thistle'</span><span class="s1">, </span><span class="s3">'tomato'</span><span class="s1">, </span><span class="s3">'turquoise'</span><span class="s1">, </span><span class="s3">'violet'</span><span class="s1">,</span>
+        <span class="s3">'wheat'</span><span class="s1">, </span><span class="s3">'white'</span><span class="s1">, </span><span class="s3">'whiteSmoke'</span><span class="s1">, </span><span class="s3">'yellow'</span><span class="s1">, </span><span class="s3">'yellowGreen'</span>
+    <span class="s1">]</span>
+
+
+<span class="s1">SCHEME_COLORS= [</span><span class="s3">'bg1'</span><span class="s1">, </span><span class="s3">'tx1'</span><span class="s1">, </span><span class="s3">'bg2'</span><span class="s1">, </span><span class="s3">'tx2'</span><span class="s1">, </span><span class="s3">'accent1'</span><span class="s1">, </span><span class="s3">'accent2'</span><span class="s1">, </span><span class="s3">'accent3'</span><span class="s1">,</span>
+                <span class="s3">'accent4'</span><span class="s1">, </span><span class="s3">'accent5'</span><span class="s1">, </span><span class="s3">'accent6'</span><span class="s1">, </span><span class="s3">'hlink'</span><span class="s1">, </span><span class="s3">'folHlink'</span><span class="s1">, </span><span class="s3">'phClr'</span><span class="s1">, </span><span class="s3">'dk1'</span><span class="s1">, </span><span class="s3">'lt1'</span><span class="s1">,</span>
+                <span class="s3">'dk2'</span><span class="s1">, </span><span class="s3">'lt2'</span>
+                <span class="s1">]</span>
+
+
+<span class="s0">class </span><span class="s1">Transform(Serialisable):</span>
+
+    <span class="s0">pass</span>
+
+
+<span class="s0">class </span><span class="s1">SystemColor(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;sysClr&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s2"># color transform options</span>
+    <span class="s1">tint = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">shade = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">comp = Typed(expected_type=Transform, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">inv = Typed(expected_type=Transform, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">gray = Typed(expected_type=Transform, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">alpha = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">alphaOff = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">alphaMod = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">hue = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">hueOff = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">hueMod = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">sat = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">satOff = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">satMod = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lum = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lumOff = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lumMod = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">red = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">redOff = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">redMod = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">green = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">greenOff = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">greenMod = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">blue = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">blueOff = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">blueMod = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">gamma = Typed(expected_type=Transform, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">invGamma = Typed(expected_type=Transform, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">val = Set(values=( [</span><span class="s3">'scrollBar'</span><span class="s1">, </span><span class="s3">'background'</span><span class="s1">, </span><span class="s3">'activeCaption'</span><span class="s1">,</span>
+                        <span class="s3">'inactiveCaption'</span><span class="s1">, </span><span class="s3">'menu'</span><span class="s1">, </span><span class="s3">'window'</span><span class="s1">, </span><span class="s3">'windowFrame'</span><span class="s1">, </span><span class="s3">'menuText'</span><span class="s1">,</span>
+                        <span class="s3">'windowText'</span><span class="s1">, </span><span class="s3">'captionText'</span><span class="s1">, </span><span class="s3">'activeBorder'</span><span class="s1">, </span><span class="s3">'inactiveBorder'</span><span class="s1">,</span>
+                        <span class="s3">'appWorkspace'</span><span class="s1">, </span><span class="s3">'highlight'</span><span class="s1">, </span><span class="s3">'highlightText'</span><span class="s1">, </span><span class="s3">'btnFace'</span><span class="s1">, </span><span class="s3">'btnShadow'</span><span class="s1">,</span>
+                        <span class="s3">'grayText'</span><span class="s1">, </span><span class="s3">'btnText'</span><span class="s1">, </span><span class="s3">'inactiveCaptionText'</span><span class="s1">, </span><span class="s3">'btnHighlight'</span><span class="s1">,</span>
+                        <span class="s3">'3dDkShadow'</span><span class="s1">, </span><span class="s3">'3dLight'</span><span class="s1">, </span><span class="s3">'infoText'</span><span class="s1">, </span><span class="s3">'infoBk'</span><span class="s1">, </span><span class="s3">'hotLight'</span><span class="s1">,</span>
+                        <span class="s3">'gradientActiveCaption'</span><span class="s1">, </span><span class="s3">'gradientInactiveCaption'</span><span class="s1">, </span><span class="s3">'menuHighlight'</span><span class="s1">,</span>
+                        <span class="s3">'menuBar'</span><span class="s1">] )</span>
+              <span class="s1">)</span>
+    <span class="s1">lastClr = RGB(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'tint'</span><span class="s1">, </span><span class="s3">'shade'</span><span class="s1">, </span><span class="s3">'comp'</span><span class="s1">, </span><span class="s3">'inv'</span><span class="s1">, </span><span class="s3">'gray'</span><span class="s1">, </span><span class="s3">&quot;alpha&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;alphaOff&quot;</span><span class="s1">, </span><span class="s3">&quot;alphaMod&quot;</span><span class="s1">, </span><span class="s3">&quot;hue&quot;</span><span class="s1">, </span><span class="s3">&quot;hueOff&quot;</span><span class="s1">, </span><span class="s3">&quot;hueMod&quot;</span><span class="s1">, </span><span class="s3">&quot;hueOff&quot;</span><span class="s1">, </span><span class="s3">&quot;sat&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;satOff&quot;</span><span class="s1">, </span><span class="s3">&quot;satMod&quot;</span><span class="s1">, </span><span class="s3">&quot;lum&quot;</span><span class="s1">, </span><span class="s3">&quot;lumOff&quot;</span><span class="s1">, </span><span class="s3">&quot;lumMod&quot;</span><span class="s1">, </span><span class="s3">&quot;red&quot;</span><span class="s1">, </span><span class="s3">&quot;redOff&quot;</span><span class="s1">, </span><span class="s3">&quot;redMod&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;green&quot;</span><span class="s1">, </span><span class="s3">&quot;greenOff&quot;</span><span class="s1">, </span><span class="s3">&quot;greenMod&quot;</span><span class="s1">, </span><span class="s3">&quot;blue&quot;</span><span class="s1">, </span><span class="s3">&quot;blueOff&quot;</span><span class="s1">, </span><span class="s3">&quot;blueMod&quot;</span><span class="s1">, </span><span class="s3">&quot;gamma&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;invGamma&quot;</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">val=</span><span class="s3">&quot;windowText&quot;</span><span class="s1">,</span>
+                 <span class="s1">lastClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">tint=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">shade=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">comp=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">inv=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">gray=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">alpha=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">alphaOff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">alphaMod=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">hue=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">hueOff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">hueMod=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sat=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">satOff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">satMod=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lum=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lumOff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lumMod=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">red=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">redOff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">redMod=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">green=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">greenOff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">greenMod=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">blue=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">blueOff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">blueMod=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">gamma=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">invGamma=</span><span class="s0">None</span>
+                <span class="s1">):</span>
+        <span class="s1">self.val = val</span>
+        <span class="s1">self.lastClr = lastClr</span>
+        <span class="s1">self.tint = tint</span>
+        <span class="s1">self.shade = shade</span>
+        <span class="s1">self.comp = comp</span>
+        <span class="s1">self.inv = inv</span>
+        <span class="s1">self.gray = gray</span>
+        <span class="s1">self.alpha = alpha</span>
+        <span class="s1">self.alphaOff = alphaOff</span>
+        <span class="s1">self.alphaMod = alphaMod</span>
+        <span class="s1">self.hue = hue</span>
+        <span class="s1">self.hueOff = hueOff</span>
+        <span class="s1">self.hueMod = hueMod</span>
+        <span class="s1">self.sat = sat</span>
+        <span class="s1">self.satOff = satOff</span>
+        <span class="s1">self.satMod = satMod</span>
+        <span class="s1">self.lum = lum</span>
+        <span class="s1">self.lumOff = lumOff</span>
+        <span class="s1">self.lumMod = lumMod</span>
+        <span class="s1">self.red = red</span>
+        <span class="s1">self.redOff = redOff</span>
+        <span class="s1">self.redMod = redMod</span>
+        <span class="s1">self.green = green</span>
+        <span class="s1">self.greenOff = greenOff</span>
+        <span class="s1">self.greenMod = greenMod</span>
+        <span class="s1">self.blue = blue</span>
+        <span class="s1">self.blueOff = blueOff</span>
+        <span class="s1">self.blueMod = blueMod</span>
+        <span class="s1">self.gamma = gamma</span>
+        <span class="s1">self.invGamma = invGamma</span>
+
+
+<span class="s0">class </span><span class="s1">HSLColor(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;hslClr&quot;</span>
+
+    <span class="s1">hue = Integer()</span>
+    <span class="s1">sat = MinMax(min=</span><span class="s4">0</span><span class="s1">, max=</span><span class="s4">100</span><span class="s1">)</span>
+    <span class="s1">lum = MinMax(min=</span><span class="s4">0</span><span class="s1">, max=</span><span class="s4">100</span><span class="s1">)</span>
+
+    <span class="s2">#TODO add color transform options</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">hue=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sat=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lum=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.hue = hue</span>
+        <span class="s1">self.sat = sat</span>
+        <span class="s1">self.lum = lum</span>
+
+
+
+<span class="s0">class </span><span class="s1">RGBPercent(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;rgbClr&quot;</span>
+
+    <span class="s1">r = MinMax(min=</span><span class="s4">0</span><span class="s1">, max=</span><span class="s4">100</span><span class="s1">)</span>
+    <span class="s1">g = MinMax(min=</span><span class="s4">0</span><span class="s1">, max=</span><span class="s4">100</span><span class="s1">)</span>
+    <span class="s1">b = MinMax(min=</span><span class="s4">0</span><span class="s1">, max=</span><span class="s4">100</span><span class="s1">)</span>
+
+    <span class="s2">#TODO add color transform options</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">r=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">g=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">b=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.r = r</span>
+        <span class="s1">self.g = g</span>
+        <span class="s1">self.b = b</span>
+
+
+<span class="s0">class </span><span class="s1">SchemeColor(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;schemeClr&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">tint = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">shade = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">comp = EmptyTag(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">inv = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">gray = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">alpha = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">alphaOff = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">alphaMod = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">hue = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">hueOff = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">hueMod = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">sat = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">satOff = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">satMod = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lum = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lumOff = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lumMod = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">red = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">redOff = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">redMod = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">green = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">greenOff = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">greenMod = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">blue = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">blueOff = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">blueMod = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">gamma = EmptyTag(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">invGamma = EmptyTag(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">val = Set(values=([</span><span class="s3">'bg1'</span><span class="s1">, </span><span class="s3">'tx1'</span><span class="s1">, </span><span class="s3">'bg2'</span><span class="s1">, </span><span class="s3">'tx2'</span><span class="s1">, </span><span class="s3">'accent1'</span><span class="s1">, </span><span class="s3">'accent2'</span><span class="s1">,</span>
+                       <span class="s3">'accent3'</span><span class="s1">, </span><span class="s3">'accent4'</span><span class="s1">, </span><span class="s3">'accent5'</span><span class="s1">, </span><span class="s3">'accent6'</span><span class="s1">, </span><span class="s3">'hlink'</span><span class="s1">, </span><span class="s3">'folHlink'</span><span class="s1">, </span><span class="s3">'phClr'</span><span class="s1">,</span>
+                       <span class="s3">'dk1'</span><span class="s1">, </span><span class="s3">'lt1'</span><span class="s1">, </span><span class="s3">'dk2'</span><span class="s1">, </span><span class="s3">'lt2'</span><span class="s1">]))</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'tint'</span><span class="s1">, </span><span class="s3">'shade'</span><span class="s1">, </span><span class="s3">'comp'</span><span class="s1">, </span><span class="s3">'inv'</span><span class="s1">, </span><span class="s3">'gray'</span><span class="s1">, </span><span class="s3">'alpha'</span><span class="s1">,</span>
+                    <span class="s3">'alphaOff'</span><span class="s1">, </span><span class="s3">'alphaMod'</span><span class="s1">, </span><span class="s3">'hue'</span><span class="s1">, </span><span class="s3">'hueOff'</span><span class="s1">, </span><span class="s3">'hueMod'</span><span class="s1">, </span><span class="s3">'sat'</span><span class="s1">, </span><span class="s3">'satOff'</span><span class="s1">,</span>
+                    <span class="s3">'satMod'</span><span class="s1">, </span><span class="s3">'lum'</span><span class="s1">, </span><span class="s3">'lumMod'</span><span class="s1">, </span><span class="s3">'lumOff'</span><span class="s1">, </span><span class="s3">'red'</span><span class="s1">, </span><span class="s3">'redOff'</span><span class="s1">, </span><span class="s3">'redMod'</span><span class="s1">, </span><span class="s3">'green'</span><span class="s1">,</span>
+                    <span class="s3">'greenOff'</span><span class="s1">, </span><span class="s3">'greenMod'</span><span class="s1">, </span><span class="s3">'blue'</span><span class="s1">, </span><span class="s3">'blueOff'</span><span class="s1">, </span><span class="s3">'blueMod'</span><span class="s1">, </span><span class="s3">'gamma'</span><span class="s1">,</span>
+                    <span class="s3">'invGamma'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">tint=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">shade=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">comp=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">inv=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">gray=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">alpha=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">alphaOff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">alphaMod=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">hue=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">hueOff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">hueMod=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sat=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">satOff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">satMod=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lum=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lumOff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lumMod=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">red=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">redOff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">redMod=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">green=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">greenOff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">greenMod=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">blue=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">blueOff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">blueMod=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">gamma=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">invGamma=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">val=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.tint = tint</span>
+        <span class="s1">self.shade = shade</span>
+        <span class="s1">self.comp = comp</span>
+        <span class="s1">self.inv = inv</span>
+        <span class="s1">self.gray = gray</span>
+        <span class="s1">self.alpha = alpha</span>
+        <span class="s1">self.alphaOff = alphaOff</span>
+        <span class="s1">self.alphaMod = alphaMod</span>
+        <span class="s1">self.hue = hue</span>
+        <span class="s1">self.hueOff = hueOff</span>
+        <span class="s1">self.hueMod = hueMod</span>
+        <span class="s1">self.sat = sat</span>
+        <span class="s1">self.satOff = satOff</span>
+        <span class="s1">self.satMod = satMod</span>
+        <span class="s1">self.lum = lum</span>
+        <span class="s1">self.lumOff = lumOff</span>
+        <span class="s1">self.lumMod = lumMod</span>
+        <span class="s1">self.red = red</span>
+        <span class="s1">self.redOff = redOff</span>
+        <span class="s1">self.redMod = redMod</span>
+        <span class="s1">self.green = green</span>
+        <span class="s1">self.greenOff = greenOff</span>
+        <span class="s1">self.greenMod = greenMod</span>
+        <span class="s1">self.blue = blue</span>
+        <span class="s1">self.blueOff = blueOff</span>
+        <span class="s1">self.blueMod = blueMod</span>
+        <span class="s1">self.gamma = gamma</span>
+        <span class="s1">self.invGamma = invGamma</span>
+        <span class="s1">self.val = val</span>
+
+<span class="s0">class </span><span class="s1">ColorChoice(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;colorChoice&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">scrgbClr = Typed(expected_type=RGBPercent, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">RGBPercent = Alias(</span><span class="s3">'scrgbClr'</span><span class="s1">)</span>
+    <span class="s1">srgbClr = NestedValue(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">) </span><span class="s2"># needs pattern and can have transform</span>
+    <span class="s1">RGB = Alias(</span><span class="s3">'srgbClr'</span><span class="s1">)</span>
+    <span class="s1">hslClr = Typed(expected_type=HSLColor, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">sysClr = Typed(expected_type=SystemColor, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">schemeClr = Typed(expected_type=SchemeColor, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">prstClr = NestedNoneSet(values=PRESET_COLORS)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'scrgbClr'</span><span class="s1">, </span><span class="s3">'srgbClr'</span><span class="s1">, </span><span class="s3">'hslClr'</span><span class="s1">, </span><span class="s3">'sysClr'</span><span class="s1">, </span><span class="s3">'schemeClr'</span><span class="s1">, </span><span class="s3">'prstClr'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">scrgbClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">srgbClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">hslClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sysClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">schemeClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">prstClr=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.scrgbClr = scrgbClr</span>
+        <span class="s1">self.srgbClr = srgbClr</span>
+        <span class="s1">self.hslClr = hslClr</span>
+        <span class="s1">self.sysClr = sysClr</span>
+        <span class="s1">self.schemeClr = schemeClr</span>
+        <span class="s1">self.prstClr = prstClr</span>
+
+<span class="s1">_COLOR_SET = (</span><span class="s3">'dk1'</span><span class="s1">, </span><span class="s3">'lt1'</span><span class="s1">, </span><span class="s3">'dk2'</span><span class="s1">, </span><span class="s3">'lt2'</span><span class="s1">, </span><span class="s3">'accent1'</span><span class="s1">, </span><span class="s3">'accent2'</span><span class="s1">, </span><span class="s3">'accent3'</span><span class="s1">,</span>
+               <span class="s3">'accent4'</span><span class="s1">, </span><span class="s3">'accent5'</span><span class="s1">, </span><span class="s3">'accent6'</span><span class="s1">, </span><span class="s3">'hlink'</span><span class="s1">, </span><span class="s3">'folHlink'</span><span class="s1">)</span>
+
+
+<span class="s0">class </span><span class="s1">ColorMapping(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;clrMapOvr&quot;</span>
+
+    <span class="s1">bg1 = Set(values=_COLOR_SET)</span>
+    <span class="s1">tx1 = Set(values=_COLOR_SET)</span>
+    <span class="s1">bg2 = Set(values=_COLOR_SET)</span>
+    <span class="s1">tx2 = Set(values=_COLOR_SET)</span>
+    <span class="s1">accent1 = Set(values=_COLOR_SET)</span>
+    <span class="s1">accent2 = Set(values=_COLOR_SET)</span>
+    <span class="s1">accent3 = Set(values=_COLOR_SET)</span>
+    <span class="s1">accent4 = Set(values=_COLOR_SET)</span>
+    <span class="s1">accent5 = Set(values=_COLOR_SET)</span>
+    <span class="s1">accent6 = Set(values=_COLOR_SET)</span>
+    <span class="s1">hlink = Set(values=_COLOR_SET)</span>
+    <span class="s1">folHlink = Set(values=_COLOR_SET)</span>
+    <span class="s1">extLst = Typed(expected_type=OfficeArtExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">bg1=</span><span class="s3">&quot;lt1&quot;</span><span class="s1">,</span>
+                 <span class="s1">tx1=</span><span class="s3">&quot;dk1&quot;</span><span class="s1">,</span>
+                 <span class="s1">bg2=</span><span class="s3">&quot;lt2&quot;</span><span class="s1">,</span>
+                 <span class="s1">tx2=</span><span class="s3">&quot;dk2&quot;</span><span class="s1">,</span>
+                 <span class="s1">accent1=</span><span class="s3">&quot;accent1&quot;</span><span class="s1">,</span>
+                 <span class="s1">accent2=</span><span class="s3">&quot;accent2&quot;</span><span class="s1">,</span>
+                 <span class="s1">accent3=</span><span class="s3">&quot;accent3&quot;</span><span class="s1">,</span>
+                 <span class="s1">accent4=</span><span class="s3">&quot;accent4&quot;</span><span class="s1">,</span>
+                 <span class="s1">accent5=</span><span class="s3">&quot;accent5&quot;</span><span class="s1">,</span>
+                 <span class="s1">accent6=</span><span class="s3">&quot;accent6&quot;</span><span class="s1">,</span>
+                 <span class="s1">hlink=</span><span class="s3">&quot;hlink&quot;</span><span class="s1">,</span>
+                 <span class="s1">folHlink=</span><span class="s3">&quot;folHlink&quot;</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.bg1 = bg1</span>
+        <span class="s1">self.tx1 = tx1</span>
+        <span class="s1">self.bg2 = bg2</span>
+        <span class="s1">self.tx2 = tx2</span>
+        <span class="s1">self.accent1 = accent1</span>
+        <span class="s1">self.accent2 = accent2</span>
+        <span class="s1">self.accent3 = accent3</span>
+        <span class="s1">self.accent4 = accent4</span>
+        <span class="s1">self.accent5 = accent5</span>
+        <span class="s1">self.accent6 = accent6</span>
+        <span class="s1">self.hlink = hlink</span>
+        <span class="s1">self.folHlink = folHlink</span>
+        <span class="s1">self.extLst = extLst</span>
+
+
+<span class="s0">class </span><span class="s1">ColorChoiceDescriptor(Typed):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Objects can choose from 7 different kinds of color system. 
+    Assume RGBHex if a string is passed in. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">expected_type = ColorChoice</span>
+    <span class="s1">allow_none = </span><span class="s0">True</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s0">if </span><span class="s1">isinstance(value, basestring):</span>
+            <span class="s1">value = ColorChoice(srgbClr=value)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s0">if </span><span class="s1">hasattr(self, </span><span class="s3">&quot;namespace&quot;</span><span class="s1">) </span><span class="s0">and </span><span class="s1">value </span><span class="s0">is not None</span><span class="s1">:</span>
+                <span class="s1">value.namespace = self.namespace</span>
+        <span class="s1">super(ColorChoiceDescriptor, self).__set__(instance, value)</span>
+</pre>
+</body>
+</html>

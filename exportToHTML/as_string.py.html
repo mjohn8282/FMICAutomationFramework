@@ -1,0 +1,647 @@
+<html>
+<head>
+<title>as_string.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+.s3 { color: #56b6c2;}
+.s4 { color: #c678dd;}
+.s5 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+as_string.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2009-2011, 2013-2014 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2010 Daniel Harding &lt;dharding@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2013-2016, 2018-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2013-2014 Google, Inc.</span>
+<span class="s0"># Copyright (c) 2015-2016 Ceridwen &lt;ceridwenv@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Jared Garst &lt;jgarst@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Jakub Wilk &lt;jwilk@jwilk.net&gt;</span>
+<span class="s0"># Copyright (c) 2017, 2019 Łukasz Rogalski &lt;rogalski.91@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 rr- &lt;rr-@sakuya.pl&gt;</span>
+<span class="s0"># Copyright (c) 2018 Serhiy Storchaka &lt;storchaka@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Ville Skyttä &lt;ville.skytta@iki.fi&gt;</span>
+<span class="s0"># Copyright (c) 2018 brendanator &lt;brendan.maginnis@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Nick Drozd &lt;nicholasdrozd@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Alex Hall &lt;alex.mojaki@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Hugo van Kemenade &lt;hugovk@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Marc Mueller &lt;30130371+cdce8p@users.noreply.github.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;This module renders Astroid nodes as string: 
+ 
+* :func:`to_code` function return equivalent (hopefully valid) python string 
+ 
+* :func:`dump` function return an internal representation of nodes found 
+  in the tree, useful for debugging or understanding the tree structure 
+&quot;&quot;&quot;</span>
+
+<span class="s0"># pylint: disable=unused-argument</span>
+
+<span class="s1">DOC_NEWLINE = </span><span class="s2">&quot;</span><span class="s3">\0</span><span class="s2">&quot;</span>
+
+
+<span class="s4">class </span><span class="s1">AsStringVisitor:</span>
+    <span class="s0">&quot;&quot;&quot;Visitor to render an Astroid node as a valid python code string&quot;&quot;&quot;</span>
+
+    <span class="s4">def </span><span class="s1">__init__(self, indent):</span>
+        <span class="s1">self.indent = indent</span>
+
+    <span class="s4">def </span><span class="s1">__call__(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Makes this visitor behave as a simple function&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s1">node.accept(self).replace(DOC_NEWLINE, </span><span class="s2">&quot;</span><span class="s3">\n</span><span class="s2">&quot;</span><span class="s1">)</span>
+
+    <span class="s4">def </span><span class="s1">_docs_dedent(self, doc):</span>
+        <span class="s0">&quot;&quot;&quot;Stop newlines in docs being indented by self._stmt_list&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">'</span><span class="s3">\n</span><span class="s2">{}&quot;&quot;&quot;{}&quot;&quot;&quot;'</span><span class="s1">.format(self.indent, doc.replace(</span><span class="s2">&quot;</span><span class="s3">\n</span><span class="s2">&quot;</span><span class="s1">, DOC_NEWLINE))</span>
+
+    <span class="s4">def </span><span class="s1">_stmt_list(self, stmts, indent=</span><span class="s4">True</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;return a list of nodes to string&quot;&quot;&quot;</span>
+        <span class="s1">stmts = </span><span class="s2">&quot;</span><span class="s3">\n</span><span class="s2">&quot;</span><span class="s1">.join(nstr </span><span class="s4">for </span><span class="s1">nstr </span><span class="s4">in </span><span class="s1">[n.accept(self) </span><span class="s4">for </span><span class="s1">n </span><span class="s4">in </span><span class="s1">stmts] </span><span class="s4">if </span><span class="s1">nstr)</span>
+        <span class="s4">if </span><span class="s1">indent:</span>
+            <span class="s4">return </span><span class="s1">self.indent + stmts.replace(</span><span class="s2">&quot;</span><span class="s3">\n</span><span class="s2">&quot;</span><span class="s1">, </span><span class="s2">&quot;</span><span class="s3">\n</span><span class="s2">&quot; </span><span class="s1">+ self.indent)</span>
+
+        <span class="s4">return </span><span class="s1">stmts</span>
+
+    <span class="s4">def </span><span class="s1">_precedence_parens(self, node, child, is_left=</span><span class="s4">True</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Wrap child in parens only if required to keep same semantics&quot;&quot;&quot;</span>
+        <span class="s4">if </span><span class="s1">self._should_wrap(node, child, is_left):</span>
+            <span class="s4">return </span><span class="s2">&quot;(%s)&quot; </span><span class="s1">% child.accept(self)</span>
+
+        <span class="s4">return </span><span class="s1">child.accept(self)</span>
+
+    <span class="s4">def </span><span class="s1">_should_wrap(self, node, child, is_left):</span>
+        <span class="s0">&quot;&quot;&quot;Wrap child if: 
+        - it has lower precedence 
+        - same precedence with position opposite to associativity direction 
+        &quot;&quot;&quot;</span>
+        <span class="s1">node_precedence = node.op_precedence()</span>
+        <span class="s1">child_precedence = child.op_precedence()</span>
+
+        <span class="s4">if </span><span class="s1">node_precedence &gt; child_precedence:</span>
+            <span class="s0"># 3 * (4 + 5)</span>
+            <span class="s4">return True</span>
+
+        <span class="s4">if </span><span class="s1">(</span>
+            <span class="s1">node_precedence == child_precedence</span>
+            <span class="s4">and </span><span class="s1">is_left != node.op_left_associative()</span>
+        <span class="s1">):</span>
+            <span class="s0"># 3 - (4 - 5)</span>
+            <span class="s0"># (2**3)**4</span>
+            <span class="s4">return True</span>
+
+        <span class="s4">return False</span>
+
+    <span class="s0">## visit_&lt;node&gt; methods ###########################################</span>
+
+    <span class="s4">def </span><span class="s1">visit_await(self, node):</span>
+        <span class="s4">return </span><span class="s2">&quot;await %s&quot; </span><span class="s1">% node.value.accept(self)</span>
+
+    <span class="s4">def </span><span class="s1">visit_asyncwith(self, node):</span>
+        <span class="s4">return </span><span class="s2">&quot;async %s&quot; </span><span class="s1">% self.visit_with(node)</span>
+
+    <span class="s4">def </span><span class="s1">visit_asyncfor(self, node):</span>
+        <span class="s4">return </span><span class="s2">&quot;async %s&quot; </span><span class="s1">% self.visit_for(node)</span>
+
+    <span class="s4">def </span><span class="s1">visit_arguments(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Function node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s1">node.format_args()</span>
+
+    <span class="s4">def </span><span class="s1">visit_assignattr(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.AssAttr node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s1">self.visit_attribute(node)</span>
+
+    <span class="s4">def </span><span class="s1">visit_assert(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Assert node as string&quot;&quot;&quot;</span>
+        <span class="s4">if </span><span class="s1">node.fail:</span>
+            <span class="s4">return </span><span class="s2">&quot;assert {}, {}&quot;</span><span class="s1">.format(</span>
+                <span class="s1">node.test.accept(self), node.fail.accept(self)</span>
+            <span class="s1">)</span>
+        <span class="s4">return </span><span class="s2">&quot;assert %s&quot; </span><span class="s1">% node.test.accept(self)</span>
+
+    <span class="s4">def </span><span class="s1">visit_assignname(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.AssName node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s1">node.name</span>
+
+    <span class="s4">def </span><span class="s1">visit_assign(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Assign node as string&quot;&quot;&quot;</span>
+        <span class="s1">lhs = </span><span class="s2">&quot; = &quot;</span><span class="s1">.join(n.accept(self) </span><span class="s4">for </span><span class="s1">n </span><span class="s4">in </span><span class="s1">node.targets)</span>
+        <span class="s4">return </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">lhs</span><span class="s3">} </span><span class="s2">= </span><span class="s3">{</span><span class="s1">node.value.accept(self)</span><span class="s3">}</span><span class="s2">&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_augassign(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.AugAssign node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;{} {} {}&quot;</span><span class="s1">.format(</span>
+            <span class="s1">node.target.accept(self), node.op, node.value.accept(self)</span>
+        <span class="s1">)</span>
+
+    <span class="s4">def </span><span class="s1">visit_annassign(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Return an astroid.AugAssign node as string&quot;&quot;&quot;</span>
+
+        <span class="s1">target = node.target.accept(self)</span>
+        <span class="s1">annotation = node.annotation.accept(self)</span>
+        <span class="s4">if </span><span class="s1">node.value </span><span class="s4">is None</span><span class="s1">:</span>
+            <span class="s4">return </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">target</span><span class="s3">}</span><span class="s2">: </span><span class="s3">{</span><span class="s1">annotation</span><span class="s3">}</span><span class="s2">&quot;</span>
+        <span class="s4">return </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">target</span><span class="s3">}</span><span class="s2">: </span><span class="s3">{</span><span class="s1">annotation</span><span class="s3">} </span><span class="s2">= </span><span class="s3">{</span><span class="s1">node.value.accept(self)</span><span class="s3">}</span><span class="s2">&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_repr(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Repr node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;`%s`&quot; </span><span class="s1">% node.value.accept(self)</span>
+
+    <span class="s4">def </span><span class="s1">visit_binop(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.BinOp node as string&quot;&quot;&quot;</span>
+        <span class="s1">left = self._precedence_parens(node, node.left)</span>
+        <span class="s1">right = self._precedence_parens(node, node.right, is_left=</span><span class="s4">False</span><span class="s1">)</span>
+        <span class="s4">if </span><span class="s1">node.op == </span><span class="s2">&quot;**&quot;</span><span class="s1">:</span>
+            <span class="s4">return </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">left</span><span class="s3">}{</span><span class="s1">node.op</span><span class="s3">}{</span><span class="s1">right</span><span class="s3">}</span><span class="s2">&quot;</span>
+
+        <span class="s4">return </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">left</span><span class="s3">} {</span><span class="s1">node.op</span><span class="s3">} {</span><span class="s1">right</span><span class="s3">}</span><span class="s2">&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_boolop(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.BoolOp node as string&quot;&quot;&quot;</span>
+        <span class="s1">values = [</span><span class="s2">&quot;%s&quot; </span><span class="s1">% self._precedence_parens(node, n) </span><span class="s4">for </span><span class="s1">n </span><span class="s4">in </span><span class="s1">node.values]</span>
+        <span class="s4">return </span><span class="s1">(</span><span class="s2">&quot; %s &quot; </span><span class="s1">% node.op).join(values)</span>
+
+    <span class="s4">def </span><span class="s1">visit_break(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Break node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;break&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_call(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Call node as string&quot;&quot;&quot;</span>
+        <span class="s1">expr_str = self._precedence_parens(node, node.func)</span>
+        <span class="s1">args = [arg.accept(self) </span><span class="s4">for </span><span class="s1">arg </span><span class="s4">in </span><span class="s1">node.args]</span>
+        <span class="s4">if </span><span class="s1">node.keywords:</span>
+            <span class="s1">keywords = [kwarg.accept(self) </span><span class="s4">for </span><span class="s1">kwarg </span><span class="s4">in </span><span class="s1">node.keywords]</span>
+        <span class="s4">else</span><span class="s1">:</span>
+            <span class="s1">keywords = []</span>
+
+        <span class="s1">args.extend(keywords)</span>
+        <span class="s4">return </span><span class="s2">&quot;{}({})&quot;</span><span class="s1">.format(expr_str, </span><span class="s2">&quot;, &quot;</span><span class="s1">.join(args))</span>
+
+    <span class="s4">def </span><span class="s1">visit_classdef(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.ClassDef node as string&quot;&quot;&quot;</span>
+        <span class="s1">decorate = node.decorators.accept(self) </span><span class="s4">if </span><span class="s1">node.decorators </span><span class="s4">else </span><span class="s2">&quot;&quot;</span>
+        <span class="s1">args = [n.accept(self) </span><span class="s4">for </span><span class="s1">n </span><span class="s4">in </span><span class="s1">node.bases]</span>
+        <span class="s4">if </span><span class="s1">node._metaclass </span><span class="s4">and not </span><span class="s1">node.has_metaclass_hack():</span>
+            <span class="s1">args.append(</span><span class="s2">&quot;metaclass=&quot; </span><span class="s1">+ node._metaclass.accept(self))</span>
+        <span class="s1">args += [n.accept(self) </span><span class="s4">for </span><span class="s1">n </span><span class="s4">in </span><span class="s1">node.keywords]</span>
+        <span class="s1">args = </span><span class="s2">&quot;(%s)&quot; </span><span class="s1">% </span><span class="s2">&quot;, &quot;</span><span class="s1">.join(args) </span><span class="s4">if </span><span class="s1">args </span><span class="s4">else </span><span class="s2">&quot;&quot;</span>
+        <span class="s1">docs = self._docs_dedent(node.doc) </span><span class="s4">if </span><span class="s1">node.doc </span><span class="s4">else </span><span class="s2">&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;</span><span class="s3">\n\n</span><span class="s2">{}class {}{}:{}</span><span class="s3">\n</span><span class="s2">{}</span><span class="s3">\n</span><span class="s2">&quot;</span><span class="s1">.format(</span>
+            <span class="s1">decorate, node.name, args, docs, self._stmt_list(node.body)</span>
+        <span class="s1">)</span>
+
+    <span class="s4">def </span><span class="s1">visit_compare(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Compare node as string&quot;&quot;&quot;</span>
+        <span class="s1">rhs_str = </span><span class="s2">&quot; &quot;</span><span class="s1">.join(</span>
+            <span class="s1">[</span>
+                <span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">op</span><span class="s3">} {</span><span class="s1">self._precedence_parens(node, expr, is_left=</span><span class="s4">False</span><span class="s1">)</span><span class="s3">}</span><span class="s2">&quot;</span>
+                <span class="s4">for </span><span class="s1">op, expr </span><span class="s4">in </span><span class="s1">node.ops</span>
+            <span class="s1">]</span>
+        <span class="s1">)</span>
+        <span class="s4">return </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">self._precedence_parens(node, node.left)</span><span class="s3">} {</span><span class="s1">rhs_str</span><span class="s3">}</span><span class="s2">&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_comprehension(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Comprehension node as string&quot;&quot;&quot;</span>
+        <span class="s1">ifs = </span><span class="s2">&quot;&quot;</span><span class="s1">.join(</span><span class="s2">&quot; if %s&quot; </span><span class="s1">% n.accept(self) </span><span class="s4">for </span><span class="s1">n </span><span class="s4">in </span><span class="s1">node.ifs)</span>
+        <span class="s1">generated = </span><span class="s2">&quot;for {} in {}{}&quot;</span><span class="s1">.format(</span>
+            <span class="s1">node.target.accept(self), node.iter.accept(self), ifs</span>
+        <span class="s1">)</span>
+        <span class="s4">return </span><span class="s2">&quot;{}{}&quot;</span><span class="s1">.format(</span><span class="s2">&quot;async &quot; </span><span class="s4">if </span><span class="s1">node.is_async </span><span class="s4">else </span><span class="s2">&quot;&quot;</span><span class="s1">, generated)</span>
+
+    <span class="s4">def </span><span class="s1">visit_const(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Const node as string&quot;&quot;&quot;</span>
+        <span class="s4">if </span><span class="s1">node.value </span><span class="s4">is </span><span class="s1">Ellipsis:</span>
+            <span class="s4">return </span><span class="s2">&quot;...&quot;</span>
+        <span class="s4">return </span><span class="s1">repr(node.value)</span>
+
+    <span class="s4">def </span><span class="s1">visit_continue(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Continue node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;continue&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_delete(self, node):  </span><span class="s0"># XXX check if correct</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Delete node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;del %s&quot; </span><span class="s1">% </span><span class="s2">&quot;, &quot;</span><span class="s1">.join(child.accept(self) </span><span class="s4">for </span><span class="s1">child </span><span class="s4">in </span><span class="s1">node.targets)</span>
+
+    <span class="s4">def </span><span class="s1">visit_delattr(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.DelAttr node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s1">self.visit_attribute(node)</span>
+
+    <span class="s4">def </span><span class="s1">visit_delname(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.DelName node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s1">node.name</span>
+
+    <span class="s4">def </span><span class="s1">visit_decorators(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Decorators node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;@%s</span><span class="s3">\n</span><span class="s2">&quot; </span><span class="s1">% </span><span class="s2">&quot;</span><span class="s3">\n</span><span class="s2">@&quot;</span><span class="s1">.join(item.accept(self) </span><span class="s4">for </span><span class="s1">item </span><span class="s4">in </span><span class="s1">node.nodes)</span>
+
+    <span class="s4">def </span><span class="s1">visit_dict(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Dict node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;{%s}&quot; </span><span class="s1">% </span><span class="s2">&quot;, &quot;</span><span class="s1">.join(self._visit_dict(node))</span>
+
+    <span class="s4">def </span><span class="s1">_visit_dict(self, node):</span>
+        <span class="s4">for </span><span class="s1">key, value </span><span class="s4">in </span><span class="s1">node.items:</span>
+            <span class="s1">key = key.accept(self)</span>
+            <span class="s1">value = value.accept(self)</span>
+            <span class="s4">if </span><span class="s1">key == </span><span class="s2">&quot;**&quot;</span><span class="s1">:</span>
+                <span class="s0"># It can only be a DictUnpack node.</span>
+                <span class="s4">yield </span><span class="s1">key + value</span>
+            <span class="s4">else</span><span class="s1">:</span>
+                <span class="s4">yield </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">key</span><span class="s3">}</span><span class="s2">: </span><span class="s3">{</span><span class="s1">value</span><span class="s3">}</span><span class="s2">&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_dictunpack(self, node):</span>
+        <span class="s4">return </span><span class="s2">&quot;**&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_dictcomp(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.DictComp node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;{{{}: {} {}}}&quot;</span><span class="s1">.format(</span>
+            <span class="s1">node.key.accept(self),</span>
+            <span class="s1">node.value.accept(self),</span>
+            <span class="s2">&quot; &quot;</span><span class="s1">.join(n.accept(self) </span><span class="s4">for </span><span class="s1">n </span><span class="s4">in </span><span class="s1">node.generators),</span>
+        <span class="s1">)</span>
+
+    <span class="s4">def </span><span class="s1">visit_expr(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Discard node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s1">node.value.accept(self)</span>
+
+    <span class="s4">def </span><span class="s1">visit_emptynode(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;dummy method for visiting an Empty node&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_excepthandler(self, node):</span>
+        <span class="s4">if </span><span class="s1">node.type:</span>
+            <span class="s4">if </span><span class="s1">node.name:</span>
+                <span class="s1">excs = </span><span class="s2">&quot;except {} as {}&quot;</span><span class="s1">.format(</span>
+                    <span class="s1">node.type.accept(self), node.name.accept(self)</span>
+                <span class="s1">)</span>
+            <span class="s4">else</span><span class="s1">:</span>
+                <span class="s1">excs = </span><span class="s2">&quot;except %s&quot; </span><span class="s1">% node.type.accept(self)</span>
+        <span class="s4">else</span><span class="s1">:</span>
+            <span class="s1">excs = </span><span class="s2">&quot;except&quot;</span>
+        <span class="s4">return </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">excs</span><span class="s3">}</span><span class="s2">:</span><span class="s3">\n{</span><span class="s1">self._stmt_list(node.body)</span><span class="s3">}</span><span class="s2">&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_ellipsis(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Ellipsis node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;...&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_empty(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an Empty node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_exec(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Exec node as string&quot;&quot;&quot;</span>
+        <span class="s4">if </span><span class="s1">node.locals:</span>
+            <span class="s4">return </span><span class="s2">&quot;exec {} in {}, {}&quot;</span><span class="s1">.format(</span>
+                <span class="s1">node.expr.accept(self),</span>
+                <span class="s1">node.locals.accept(self),</span>
+                <span class="s1">node.globals.accept(self),</span>
+            <span class="s1">)</span>
+        <span class="s4">if </span><span class="s1">node.globals:</span>
+            <span class="s4">return </span><span class="s2">&quot;exec {} in {}&quot;</span><span class="s1">.format(</span>
+                <span class="s1">node.expr.accept(self), node.globals.accept(self)</span>
+            <span class="s1">)</span>
+        <span class="s4">return </span><span class="s2">&quot;exec %s&quot; </span><span class="s1">% node.expr.accept(self)</span>
+
+    <span class="s4">def </span><span class="s1">visit_extslice(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.ExtSlice node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;, &quot;</span><span class="s1">.join(dim.accept(self) </span><span class="s4">for </span><span class="s1">dim </span><span class="s4">in </span><span class="s1">node.dims)</span>
+
+    <span class="s4">def </span><span class="s1">visit_for(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.For node as string&quot;&quot;&quot;</span>
+        <span class="s1">fors = </span><span class="s2">&quot;for {} in {}:</span><span class="s3">\n</span><span class="s2">{}&quot;</span><span class="s1">.format(</span>
+            <span class="s1">node.target.accept(self), node.iter.accept(self), self._stmt_list(node.body)</span>
+        <span class="s1">)</span>
+        <span class="s4">if </span><span class="s1">node.orelse:</span>
+            <span class="s1">fors = </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">fors</span><span class="s3">}\n</span><span class="s2">else:</span><span class="s3">\n{</span><span class="s1">self._stmt_list(node.orelse)</span><span class="s3">}</span><span class="s2">&quot;</span>
+        <span class="s4">return </span><span class="s1">fors</span>
+
+    <span class="s4">def </span><span class="s1">visit_importfrom(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.ImportFrom node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;from {} import {}&quot;</span><span class="s1">.format(</span>
+            <span class="s2">&quot;.&quot; </span><span class="s1">* (node.level </span><span class="s4">or </span><span class="s5">0</span><span class="s1">) + node.modname, _import_string(node.names)</span>
+        <span class="s1">)</span>
+
+    <span class="s4">def </span><span class="s1">visit_joinedstr(self, node):</span>
+        <span class="s1">string = </span><span class="s2">&quot;&quot;</span><span class="s1">.join(</span>
+            <span class="s0"># Use repr on the string literal parts</span>
+            <span class="s0"># to get proper escapes, e.g. \n, \\, \&quot;</span>
+            <span class="s0"># But strip the quotes off the ends</span>
+            <span class="s0"># (they will always be one character: ' or &quot;)</span>
+            <span class="s1">repr(value.value)[</span><span class="s5">1</span><span class="s1">:-</span><span class="s5">1</span><span class="s1">]</span>
+            <span class="s0"># Literal braces must be doubled to escape them</span>
+            <span class="s1">.replace(</span><span class="s2">&quot;{&quot;</span><span class="s1">, </span><span class="s2">&quot;{{&quot;</span><span class="s1">).replace(</span><span class="s2">&quot;}&quot;</span><span class="s1">, </span><span class="s2">&quot;}}&quot;</span><span class="s1">)</span>
+            <span class="s0"># Each value in values is either a string literal (Const)</span>
+            <span class="s0"># or a FormattedValue</span>
+            <span class="s4">if </span><span class="s1">type(value).__name__ == </span><span class="s2">&quot;Const&quot; </span><span class="s4">else </span><span class="s1">value.accept(self)</span>
+            <span class="s4">for </span><span class="s1">value </span><span class="s4">in </span><span class="s1">node.values</span>
+        <span class="s1">)</span>
+
+        <span class="s0"># Try to find surrounding quotes that don't appear at all in the string.</span>
+        <span class="s0"># Because the formatted values inside {} can't contain backslash (\)</span>
+        <span class="s0"># using a triple quote is sometimes necessary</span>
+        <span class="s4">for </span><span class="s1">quote </span><span class="s4">in </span><span class="s1">[</span><span class="s2">&quot;'&quot;</span><span class="s1">, </span><span class="s2">'&quot;'</span><span class="s1">, </span><span class="s2">'&quot;&quot;&quot;'</span><span class="s1">, </span><span class="s2">&quot;'''&quot;</span><span class="s1">]:</span>
+            <span class="s4">if </span><span class="s1">quote </span><span class="s4">not in </span><span class="s1">string:</span>
+                <span class="s4">break</span>
+
+        <span class="s4">return </span><span class="s2">&quot;f&quot; </span><span class="s1">+ quote + string + quote</span>
+
+    <span class="s4">def </span><span class="s1">visit_formattedvalue(self, node):</span>
+        <span class="s1">result = node.value.accept(self)</span>
+        <span class="s4">if </span><span class="s1">node.conversion </span><span class="s4">and </span><span class="s1">node.conversion &gt;= </span><span class="s5">0</span><span class="s1">:</span>
+            <span class="s0"># e.g. if node.conversion == 114: result += &quot;!r&quot;</span>
+            <span class="s1">result += </span><span class="s2">&quot;!&quot; </span><span class="s1">+ chr(node.conversion)</span>
+        <span class="s4">if </span><span class="s1">node.format_spec:</span>
+            <span class="s0"># The format spec is itself a JoinedString, i.e. an f-string</span>
+            <span class="s0"># We strip the f and quotes of the ends</span>
+            <span class="s1">result += </span><span class="s2">&quot;:&quot; </span><span class="s1">+ node.format_spec.accept(self)[</span><span class="s5">2</span><span class="s1">:-</span><span class="s5">1</span><span class="s1">]</span>
+        <span class="s4">return </span><span class="s2">&quot;{%s}&quot; </span><span class="s1">% result</span>
+
+    <span class="s4">def </span><span class="s1">handle_functiondef(self, node, keyword):</span>
+        <span class="s0">&quot;&quot;&quot;return a (possibly async) function definition node as string&quot;&quot;&quot;</span>
+        <span class="s1">decorate = node.decorators.accept(self) </span><span class="s4">if </span><span class="s1">node.decorators </span><span class="s4">else </span><span class="s2">&quot;&quot;</span>
+        <span class="s1">docs = self._docs_dedent(node.doc) </span><span class="s4">if </span><span class="s1">node.doc </span><span class="s4">else </span><span class="s2">&quot;&quot;</span>
+        <span class="s1">trailer = </span><span class="s2">&quot;:&quot;</span>
+        <span class="s4">if </span><span class="s1">node.returns:</span>
+            <span class="s1">return_annotation = </span><span class="s2">&quot; -&gt; &quot; </span><span class="s1">+ node.returns.as_string()</span>
+            <span class="s1">trailer = return_annotation + </span><span class="s2">&quot;:&quot;</span>
+        <span class="s1">def_format = </span><span class="s2">&quot;</span><span class="s3">\n</span><span class="s2">%s%s %s(%s)%s%s</span><span class="s3">\n</span><span class="s2">%s&quot;</span>
+        <span class="s4">return </span><span class="s1">def_format % (</span>
+            <span class="s1">decorate,</span>
+            <span class="s1">keyword,</span>
+            <span class="s1">node.name,</span>
+            <span class="s1">node.args.accept(self),</span>
+            <span class="s1">trailer,</span>
+            <span class="s1">docs,</span>
+            <span class="s1">self._stmt_list(node.body),</span>
+        <span class="s1">)</span>
+
+    <span class="s4">def </span><span class="s1">visit_functiondef(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.FunctionDef node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s1">self.handle_functiondef(node, </span><span class="s2">&quot;def&quot;</span><span class="s1">)</span>
+
+    <span class="s4">def </span><span class="s1">visit_asyncfunctiondef(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.AsyncFunction node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s1">self.handle_functiondef(node, </span><span class="s2">&quot;async def&quot;</span><span class="s1">)</span>
+
+    <span class="s4">def </span><span class="s1">visit_generatorexp(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.GeneratorExp node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;({} {})&quot;</span><span class="s1">.format(</span>
+            <span class="s1">node.elt.accept(self), </span><span class="s2">&quot; &quot;</span><span class="s1">.join(n.accept(self) </span><span class="s4">for </span><span class="s1">n </span><span class="s4">in </span><span class="s1">node.generators)</span>
+        <span class="s1">)</span>
+
+    <span class="s4">def </span><span class="s1">visit_attribute(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Getattr node as string&quot;&quot;&quot;</span>
+        <span class="s1">left = self._precedence_parens(node, node.expr)</span>
+        <span class="s4">if </span><span class="s1">left.isdigit():</span>
+            <span class="s1">left = </span><span class="s2">&quot;(%s)&quot; </span><span class="s1">% left</span>
+        <span class="s4">return </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">left</span><span class="s3">}</span><span class="s2">.</span><span class="s3">{</span><span class="s1">node.attrname</span><span class="s3">}</span><span class="s2">&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_global(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Global node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;global %s&quot; </span><span class="s1">% </span><span class="s2">&quot;, &quot;</span><span class="s1">.join(node.names)</span>
+
+    <span class="s4">def </span><span class="s1">visit_if(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.If node as string&quot;&quot;&quot;</span>
+        <span class="s1">ifs = [</span><span class="s2">f&quot;if </span><span class="s3">{</span><span class="s1">node.test.accept(self)</span><span class="s3">}</span><span class="s2">:</span><span class="s3">\n{</span><span class="s1">self._stmt_list(node.body)</span><span class="s3">}</span><span class="s2">&quot;</span><span class="s1">]</span>
+        <span class="s4">if </span><span class="s1">node.has_elif_block():</span>
+            <span class="s1">ifs.append(</span><span class="s2">&quot;el%s&quot; </span><span class="s1">% self._stmt_list(node.orelse, indent=</span><span class="s4">False</span><span class="s1">))</span>
+        <span class="s4">elif </span><span class="s1">node.orelse:</span>
+            <span class="s1">ifs.append(</span><span class="s2">&quot;else:</span><span class="s3">\n</span><span class="s2">%s&quot; </span><span class="s1">% self._stmt_list(node.orelse))</span>
+        <span class="s4">return </span><span class="s2">&quot;</span><span class="s3">\n</span><span class="s2">&quot;</span><span class="s1">.join(ifs)</span>
+
+    <span class="s4">def </span><span class="s1">visit_ifexp(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.IfExp node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;{} if {} else {}&quot;</span><span class="s1">.format(</span>
+            <span class="s1">self._precedence_parens(node, node.body, is_left=</span><span class="s4">True</span><span class="s1">),</span>
+            <span class="s1">self._precedence_parens(node, node.test, is_left=</span><span class="s4">True</span><span class="s1">),</span>
+            <span class="s1">self._precedence_parens(node, node.orelse, is_left=</span><span class="s4">False</span><span class="s1">),</span>
+        <span class="s1">)</span>
+
+    <span class="s4">def </span><span class="s1">visit_import(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Import node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;import %s&quot; </span><span class="s1">% _import_string(node.names)</span>
+
+    <span class="s4">def </span><span class="s1">visit_keyword(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Keyword node as string&quot;&quot;&quot;</span>
+        <span class="s4">if </span><span class="s1">node.arg </span><span class="s4">is None</span><span class="s1">:</span>
+            <span class="s4">return </span><span class="s2">&quot;**%s&quot; </span><span class="s1">% node.value.accept(self)</span>
+        <span class="s4">return </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">node.arg</span><span class="s3">}</span><span class="s2">=</span><span class="s3">{</span><span class="s1">node.value.accept(self)</span><span class="s3">}</span><span class="s2">&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_lambda(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Lambda node as string&quot;&quot;&quot;</span>
+        <span class="s1">args = node.args.accept(self)</span>
+        <span class="s1">body = node.body.accept(self)</span>
+        <span class="s4">if </span><span class="s1">args:</span>
+            <span class="s4">return </span><span class="s2">f&quot;lambda </span><span class="s3">{</span><span class="s1">args</span><span class="s3">}</span><span class="s2">: </span><span class="s3">{</span><span class="s1">body</span><span class="s3">}</span><span class="s2">&quot;</span>
+
+        <span class="s4">return </span><span class="s2">&quot;lambda: %s&quot; </span><span class="s1">% body</span>
+
+    <span class="s4">def </span><span class="s1">visit_list(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.List node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;[%s]&quot; </span><span class="s1">% </span><span class="s2">&quot;, &quot;</span><span class="s1">.join(child.accept(self) </span><span class="s4">for </span><span class="s1">child </span><span class="s4">in </span><span class="s1">node.elts)</span>
+
+    <span class="s4">def </span><span class="s1">visit_listcomp(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.ListComp node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;[{} {}]&quot;</span><span class="s1">.format(</span>
+            <span class="s1">node.elt.accept(self), </span><span class="s2">&quot; &quot;</span><span class="s1">.join(n.accept(self) </span><span class="s4">for </span><span class="s1">n </span><span class="s4">in </span><span class="s1">node.generators)</span>
+        <span class="s1">)</span>
+
+    <span class="s4">def </span><span class="s1">visit_module(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Module node as string&quot;&quot;&quot;</span>
+        <span class="s1">docs = </span><span class="s2">'&quot;&quot;&quot;%s&quot;&quot;&quot;</span><span class="s3">\n\n</span><span class="s2">' </span><span class="s1">% node.doc </span><span class="s4">if </span><span class="s1">node.doc </span><span class="s4">else </span><span class="s2">&quot;&quot;</span>
+        <span class="s4">return </span><span class="s1">docs + </span><span class="s2">&quot;</span><span class="s3">\n</span><span class="s2">&quot;</span><span class="s1">.join(n.accept(self) </span><span class="s4">for </span><span class="s1">n </span><span class="s4">in </span><span class="s1">node.body) + </span><span class="s2">&quot;</span><span class="s3">\n\n</span><span class="s2">&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_name(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Name node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s1">node.name</span>
+
+    <span class="s4">def </span><span class="s1">visit_namedexpr(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Return an assignment expression node as string&quot;&quot;&quot;</span>
+        <span class="s1">target = node.target.accept(self)</span>
+        <span class="s1">value = node.value.accept(self)</span>
+        <span class="s4">return </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">target</span><span class="s3">} </span><span class="s2">:= </span><span class="s3">{</span><span class="s1">value</span><span class="s3">}</span><span class="s2">&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_nonlocal(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Nonlocal node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;nonlocal %s&quot; </span><span class="s1">% </span><span class="s2">&quot;, &quot;</span><span class="s1">.join(node.names)</span>
+
+    <span class="s4">def </span><span class="s1">visit_pass(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Pass node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;pass&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_print(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Print node as string&quot;&quot;&quot;</span>
+        <span class="s1">nodes = </span><span class="s2">&quot;, &quot;</span><span class="s1">.join(n.accept(self) </span><span class="s4">for </span><span class="s1">n </span><span class="s4">in </span><span class="s1">node.values)</span>
+        <span class="s4">if not </span><span class="s1">node.nl:</span>
+            <span class="s1">nodes = </span><span class="s2">&quot;%s,&quot; </span><span class="s1">% nodes</span>
+        <span class="s4">if </span><span class="s1">node.dest:</span>
+            <span class="s4">return </span><span class="s2">f&quot;print &gt;&gt; </span><span class="s3">{</span><span class="s1">node.dest.accept(self)</span><span class="s3">}</span><span class="s2">, </span><span class="s3">{</span><span class="s1">nodes</span><span class="s3">}</span><span class="s2">&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;print %s&quot; </span><span class="s1">% nodes</span>
+
+    <span class="s4">def </span><span class="s1">visit_raise(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Raise node as string&quot;&quot;&quot;</span>
+        <span class="s4">if </span><span class="s1">node.exc:</span>
+            <span class="s4">if </span><span class="s1">node.cause:</span>
+                <span class="s4">return </span><span class="s2">&quot;raise {} from {}&quot;</span><span class="s1">.format(</span>
+                    <span class="s1">node.exc.accept(self), node.cause.accept(self)</span>
+                <span class="s1">)</span>
+            <span class="s4">return </span><span class="s2">&quot;raise %s&quot; </span><span class="s1">% node.exc.accept(self)</span>
+        <span class="s4">return </span><span class="s2">&quot;raise&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_return(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Return node as string&quot;&quot;&quot;</span>
+        <span class="s4">if </span><span class="s1">node.is_tuple_return() </span><span class="s4">and </span><span class="s1">len(node.value.elts) &gt; </span><span class="s5">1</span><span class="s1">:</span>
+            <span class="s1">elts = [child.accept(self) </span><span class="s4">for </span><span class="s1">child </span><span class="s4">in </span><span class="s1">node.value.elts]</span>
+            <span class="s4">return </span><span class="s2">&quot;return %s&quot; </span><span class="s1">% </span><span class="s2">&quot;, &quot;</span><span class="s1">.join(elts)</span>
+
+        <span class="s4">if </span><span class="s1">node.value:</span>
+            <span class="s4">return </span><span class="s2">&quot;return %s&quot; </span><span class="s1">% node.value.accept(self)</span>
+
+        <span class="s4">return </span><span class="s2">&quot;return&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_index(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Index node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s1">node.value.accept(self)</span>
+
+    <span class="s4">def </span><span class="s1">visit_set(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Set node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;{%s}&quot; </span><span class="s1">% </span><span class="s2">&quot;, &quot;</span><span class="s1">.join(child.accept(self) </span><span class="s4">for </span><span class="s1">child </span><span class="s4">in </span><span class="s1">node.elts)</span>
+
+    <span class="s4">def </span><span class="s1">visit_setcomp(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.SetComp node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;{{{} {}}}&quot;</span><span class="s1">.format(</span>
+            <span class="s1">node.elt.accept(self), </span><span class="s2">&quot; &quot;</span><span class="s1">.join(n.accept(self) </span><span class="s4">for </span><span class="s1">n </span><span class="s4">in </span><span class="s1">node.generators)</span>
+        <span class="s1">)</span>
+
+    <span class="s4">def </span><span class="s1">visit_slice(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Slice node as string&quot;&quot;&quot;</span>
+        <span class="s1">lower = node.lower.accept(self) </span><span class="s4">if </span><span class="s1">node.lower </span><span class="s4">else </span><span class="s2">&quot;&quot;</span>
+        <span class="s1">upper = node.upper.accept(self) </span><span class="s4">if </span><span class="s1">node.upper </span><span class="s4">else </span><span class="s2">&quot;&quot;</span>
+        <span class="s1">step = node.step.accept(self) </span><span class="s4">if </span><span class="s1">node.step </span><span class="s4">else </span><span class="s2">&quot;&quot;</span>
+        <span class="s4">if </span><span class="s1">step:</span>
+            <span class="s4">return </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">lower</span><span class="s3">}</span><span class="s2">:</span><span class="s3">{</span><span class="s1">upper</span><span class="s3">}</span><span class="s2">:</span><span class="s3">{</span><span class="s1">step</span><span class="s3">}</span><span class="s2">&quot;</span>
+        <span class="s4">return </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">lower</span><span class="s3">}</span><span class="s2">:</span><span class="s3">{</span><span class="s1">upper</span><span class="s3">}</span><span class="s2">&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_subscript(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Subscript node as string&quot;&quot;&quot;</span>
+        <span class="s1">idx = node.slice</span>
+        <span class="s4">if </span><span class="s1">idx.__class__.__name__.lower() == </span><span class="s2">&quot;index&quot;</span><span class="s1">:</span>
+            <span class="s1">idx = idx.value</span>
+        <span class="s1">idxstr = idx.accept(self)</span>
+        <span class="s4">if </span><span class="s1">idx.__class__.__name__.lower() == </span><span class="s2">&quot;tuple&quot; </span><span class="s4">and </span><span class="s1">idx.elts:</span>
+            <span class="s0"># Remove parenthesis in tuple and extended slice.</span>
+            <span class="s0"># a[(::1, 1:)] is not valid syntax.</span>
+            <span class="s1">idxstr = idxstr[</span><span class="s5">1</span><span class="s1">:-</span><span class="s5">1</span><span class="s1">]</span>
+        <span class="s4">return </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">self._precedence_parens(node, node.value)</span><span class="s3">}</span><span class="s2">[</span><span class="s3">{</span><span class="s1">idxstr</span><span class="s3">}</span><span class="s2">]&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_tryexcept(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.TryExcept node as string&quot;&quot;&quot;</span>
+        <span class="s1">trys = [</span><span class="s2">&quot;try:</span><span class="s3">\n</span><span class="s2">%s&quot; </span><span class="s1">% self._stmt_list(node.body)]</span>
+        <span class="s4">for </span><span class="s1">handler </span><span class="s4">in </span><span class="s1">node.handlers:</span>
+            <span class="s1">trys.append(handler.accept(self))</span>
+        <span class="s4">if </span><span class="s1">node.orelse:</span>
+            <span class="s1">trys.append(</span><span class="s2">&quot;else:</span><span class="s3">\n</span><span class="s2">%s&quot; </span><span class="s1">% self._stmt_list(node.orelse))</span>
+        <span class="s4">return </span><span class="s2">&quot;</span><span class="s3">\n</span><span class="s2">&quot;</span><span class="s1">.join(trys)</span>
+
+    <span class="s4">def </span><span class="s1">visit_tryfinally(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.TryFinally node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;try:</span><span class="s3">\n</span><span class="s2">{}</span><span class="s3">\n</span><span class="s2">finally:</span><span class="s3">\n</span><span class="s2">{}&quot;</span><span class="s1">.format(</span>
+            <span class="s1">self._stmt_list(node.body), self._stmt_list(node.finalbody)</span>
+        <span class="s1">)</span>
+
+    <span class="s4">def </span><span class="s1">visit_tuple(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.Tuple node as string&quot;&quot;&quot;</span>
+        <span class="s4">if </span><span class="s1">len(node.elts) == </span><span class="s5">1</span><span class="s1">:</span>
+            <span class="s4">return </span><span class="s2">&quot;(%s, )&quot; </span><span class="s1">% node.elts[</span><span class="s5">0</span><span class="s1">].accept(self)</span>
+        <span class="s4">return </span><span class="s2">&quot;(%s)&quot; </span><span class="s1">% </span><span class="s2">&quot;, &quot;</span><span class="s1">.join(child.accept(self) </span><span class="s4">for </span><span class="s1">child </span><span class="s4">in </span><span class="s1">node.elts)</span>
+
+    <span class="s4">def </span><span class="s1">visit_unaryop(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.UnaryOp node as string&quot;&quot;&quot;</span>
+        <span class="s4">if </span><span class="s1">node.op == </span><span class="s2">&quot;not&quot;</span><span class="s1">:</span>
+            <span class="s1">operator = </span><span class="s2">&quot;not &quot;</span>
+        <span class="s4">else</span><span class="s1">:</span>
+            <span class="s1">operator = node.op</span>
+        <span class="s4">return </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">operator</span><span class="s3">}{</span><span class="s1">self._precedence_parens(node, node.operand)</span><span class="s3">}</span><span class="s2">&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_while(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.While node as string&quot;&quot;&quot;</span>
+        <span class="s1">whiles = </span><span class="s2">&quot;while {}:</span><span class="s3">\n</span><span class="s2">{}&quot;</span><span class="s1">.format(</span>
+            <span class="s1">node.test.accept(self), self._stmt_list(node.body)</span>
+        <span class="s1">)</span>
+        <span class="s4">if </span><span class="s1">node.orelse:</span>
+            <span class="s1">whiles = </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">whiles</span><span class="s3">}\n</span><span class="s2">else:</span><span class="s3">\n{</span><span class="s1">self._stmt_list(node.orelse)</span><span class="s3">}</span><span class="s2">&quot;</span>
+        <span class="s4">return </span><span class="s1">whiles</span>
+
+    <span class="s4">def </span><span class="s1">visit_with(self, node):  </span><span class="s0"># 'with' without 'as' is possible</span>
+        <span class="s0">&quot;&quot;&quot;return an astroid.With node as string&quot;&quot;&quot;</span>
+        <span class="s1">items = </span><span class="s2">&quot;, &quot;</span><span class="s1">.join(</span>
+            <span class="s1">(</span><span class="s2">&quot;%s&quot; </span><span class="s1">% expr.accept(self)) + (vars </span><span class="s4">and </span><span class="s2">&quot; as %s&quot; </span><span class="s1">% (vars.accept(self)) </span><span class="s4">or </span><span class="s2">&quot;&quot;</span><span class="s1">)</span>
+            <span class="s4">for </span><span class="s1">expr, vars </span><span class="s4">in </span><span class="s1">node.items</span>
+        <span class="s1">)</span>
+        <span class="s4">return </span><span class="s2">f&quot;with </span><span class="s3">{</span><span class="s1">items</span><span class="s3">}</span><span class="s2">:</span><span class="s3">\n{</span><span class="s1">self._stmt_list(node.body)</span><span class="s3">}</span><span class="s2">&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_yield(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;yield an ast.Yield node as string&quot;&quot;&quot;</span>
+        <span class="s1">yi_val = (</span><span class="s2">&quot; &quot; </span><span class="s1">+ node.value.accept(self)) </span><span class="s4">if </span><span class="s1">node.value </span><span class="s4">else </span><span class="s2">&quot;&quot;</span>
+        <span class="s1">expr = </span><span class="s2">&quot;yield&quot; </span><span class="s1">+ yi_val</span>
+        <span class="s4">if </span><span class="s1">node.parent.is_statement:</span>
+            <span class="s4">return </span><span class="s1">expr</span>
+
+        <span class="s4">return </span><span class="s2">f&quot;(</span><span class="s3">{</span><span class="s1">expr</span><span class="s3">}</span><span class="s2">)&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_yieldfrom(self, node):</span>
+        <span class="s0">&quot;&quot;&quot; Return an astroid.YieldFrom node as string. &quot;&quot;&quot;</span>
+        <span class="s1">yi_val = (</span><span class="s2">&quot; &quot; </span><span class="s1">+ node.value.accept(self)) </span><span class="s4">if </span><span class="s1">node.value </span><span class="s4">else </span><span class="s2">&quot;&quot;</span>
+        <span class="s1">expr = </span><span class="s2">&quot;yield from&quot; </span><span class="s1">+ yi_val</span>
+        <span class="s4">if </span><span class="s1">node.parent.is_statement:</span>
+            <span class="s4">return </span><span class="s1">expr</span>
+
+        <span class="s4">return </span><span class="s2">f&quot;(</span><span class="s3">{</span><span class="s1">expr</span><span class="s3">}</span><span class="s2">)&quot;</span>
+
+    <span class="s4">def </span><span class="s1">visit_starred(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return Starred node as string&quot;&quot;&quot;</span>
+        <span class="s4">return </span><span class="s2">&quot;*&quot; </span><span class="s1">+ node.value.accept(self)</span>
+
+    <span class="s0"># These aren't for real AST nodes, but for inference objects.</span>
+
+    <span class="s4">def </span><span class="s1">visit_frozenset(self, node):</span>
+        <span class="s4">return </span><span class="s1">node.parent.accept(self)</span>
+
+    <span class="s4">def </span><span class="s1">visit_super(self, node):</span>
+        <span class="s4">return </span><span class="s1">node.parent.accept(self)</span>
+
+    <span class="s4">def </span><span class="s1">visit_uninferable(self, node):</span>
+        <span class="s4">return </span><span class="s1">str(node)</span>
+
+    <span class="s4">def </span><span class="s1">visit_property(self, node):</span>
+        <span class="s4">return </span><span class="s1">node.function.accept(self)</span>
+
+    <span class="s4">def </span><span class="s1">visit_evaluatedobject(self, node):</span>
+        <span class="s4">return </span><span class="s1">node.original.accept(self)</span>
+
+
+<span class="s4">def </span><span class="s1">_import_string(names):</span>
+    <span class="s0">&quot;&quot;&quot;return a list of (name, asname) formatted as a string&quot;&quot;&quot;</span>
+    <span class="s1">_names = []</span>
+    <span class="s4">for </span><span class="s1">name, asname </span><span class="s4">in </span><span class="s1">names:</span>
+        <span class="s4">if </span><span class="s1">asname </span><span class="s4">is not None</span><span class="s1">:</span>
+            <span class="s1">_names.append(</span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">name</span><span class="s3">} </span><span class="s2">as </span><span class="s3">{</span><span class="s1">asname</span><span class="s3">}</span><span class="s2">&quot;</span><span class="s1">)</span>
+        <span class="s4">else</span><span class="s1">:</span>
+            <span class="s1">_names.append(name)</span>
+    <span class="s4">return </span><span class="s2">&quot;, &quot;</span><span class="s1">.join(_names)</span>
+
+
+<span class="s0"># This sets the default indent to 4 spaces.</span>
+<span class="s1">to_code = AsStringVisitor(</span><span class="s2">&quot;    &quot;</span><span class="s1">)</span>
+</pre>
+</body>
+</html>

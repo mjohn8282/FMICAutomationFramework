@@ -1,0 +1,209 @@
+<html>
+<head>
+<title>parser.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+parser.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Alias,</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">NoneSet,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">Sequence,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">ExtensionList, Relation</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.sequence </span><span class="s0">import </span><span class="s1">NestedSequence</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">NestedString</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">SHEET_MAIN_NS</span>
+
+<span class="s0">from </span><span class="s1">.defined_name </span><span class="s0">import </span><span class="s1">DefinedName, DefinedNameList</span>
+<span class="s0">from </span><span class="s1">.external_reference </span><span class="s0">import </span><span class="s1">ExternalReference</span>
+<span class="s0">from </span><span class="s1">.function_group </span><span class="s0">import </span><span class="s1">FunctionGroupList</span>
+<span class="s0">from </span><span class="s1">.properties </span><span class="s0">import </span><span class="s1">WorkbookProperties, CalcProperties, FileVersion</span>
+<span class="s0">from </span><span class="s1">.protection </span><span class="s0">import </span><span class="s1">WorkbookProtection, FileSharing</span>
+<span class="s0">from </span><span class="s1">.smart_tags </span><span class="s0">import </span><span class="s1">SmartTagList, SmartTagProperties</span>
+<span class="s0">from </span><span class="s1">.views </span><span class="s0">import </span><span class="s1">CustomWorkbookView, BookView</span>
+<span class="s0">from </span><span class="s1">.web </span><span class="s0">import </span><span class="s1">WebPublishing, WebPublishObjectList</span>
+
+
+<span class="s0">class </span><span class="s1">FileRecoveryProperties(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;fileRecoveryPr&quot;</span>
+
+    <span class="s1">autoRecover = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">crashSave = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">dataExtractLoad = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">repairLoad = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">autoRecover=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">crashSave=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dataExtractLoad=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">repairLoad=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.autoRecover = autoRecover</span>
+        <span class="s1">self.crashSave = crashSave</span>
+        <span class="s1">self.dataExtractLoad = dataExtractLoad</span>
+        <span class="s1">self.repairLoad = repairLoad</span>
+
+
+<span class="s0">class </span><span class="s1">ChildSheet(Serialisable):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Represents a reference to a worksheet or chartsheet in workbook.xml 
+ 
+    It contains the title, order and state but only an indirect reference to 
+    the objects themselves. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;sheet&quot;</span>
+
+    <span class="s1">name = String()</span>
+    <span class="s1">sheetId = Integer()</span>
+    <span class="s1">state = NoneSet(values=([</span><span class="s3">'visible'</span><span class="s1">, </span><span class="s3">'hidden'</span><span class="s1">, </span><span class="s3">'veryHidden'</span><span class="s1">]))</span>
+    <span class="s1">id = Relation()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">name=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sheetId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">state=</span><span class="s3">&quot;visible&quot;</span><span class="s1">,</span>
+                 <span class="s1">id=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.sheetId = sheetId</span>
+        <span class="s1">self.state = state</span>
+        <span class="s1">self.id = id</span>
+
+
+<span class="s0">class </span><span class="s1">PivotCache(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;pivotCache&quot;</span>
+
+    <span class="s1">cacheId = Integer()</span>
+    <span class="s1">id = Relation()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">cacheId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">id=</span><span class="s0">None</span>
+                <span class="s1">):</span>
+        <span class="s1">self.cacheId = cacheId</span>
+        <span class="s1">self.id = id</span>
+
+
+<span class="s0">class </span><span class="s1">WorkbookPackage(Serialisable):</span>
+
+    <span class="s2">&quot;&quot;&quot; 
+    Represent the workbook file in the archive 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;workbook&quot;</span>
+
+    <span class="s1">conformance = NoneSet(values=[</span><span class="s3">'strict'</span><span class="s1">, </span><span class="s3">'transitional'</span><span class="s1">])</span>
+    <span class="s1">fileVersion = Typed(expected_type=FileVersion, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">fileSharing = Typed(expected_type=FileSharing, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">workbookPr = Typed(expected_type=WorkbookProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">properties = Alias(</span><span class="s3">&quot;workbookPr&quot;</span><span class="s1">)</span>
+    <span class="s1">workbookProtection = Typed(expected_type=WorkbookProtection, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">bookViews = NestedSequence(expected_type=BookView)</span>
+    <span class="s1">sheets = NestedSequence(expected_type=ChildSheet)</span>
+    <span class="s1">functionGroups = Typed(expected_type=FunctionGroupList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">externalReferences = NestedSequence(expected_type=ExternalReference)</span>
+    <span class="s1">definedNames = Typed(expected_type=DefinedNameList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">calcPr = Typed(expected_type=CalcProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">oleSize = NestedString(allow_none=</span><span class="s0">True</span><span class="s1">, attribute=</span><span class="s3">&quot;ref&quot;</span><span class="s1">)</span>
+    <span class="s1">customWorkbookViews = NestedSequence(expected_type=CustomWorkbookView)</span>
+    <span class="s1">pivotCaches = NestedSequence(expected_type=PivotCache, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">smartTagPr = Typed(expected_type=SmartTagProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">smartTagTypes = Typed(expected_type=SmartTagList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">webPublishing = Typed(expected_type=WebPublishing, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">fileRecoveryPr = Typed(expected_type=FileRecoveryProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">webPublishObjects = Typed(expected_type=WebPublishObjectList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">Ignorable = NestedString(namespace=</span><span class="s3">&quot;http://schemas.openxmlformats.org/markup-compatibility/2006&quot;</span><span class="s1">, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'fileVersion'</span><span class="s1">, </span><span class="s3">'fileSharing'</span><span class="s1">, </span><span class="s3">'workbookPr'</span><span class="s1">,</span>
+                    <span class="s3">'workbookProtection'</span><span class="s1">, </span><span class="s3">'bookViews'</span><span class="s1">, </span><span class="s3">'sheets'</span><span class="s1">, </span><span class="s3">'functionGroups'</span><span class="s1">,</span>
+                    <span class="s3">'externalReferences'</span><span class="s1">, </span><span class="s3">'definedNames'</span><span class="s1">, </span><span class="s3">'calcPr'</span><span class="s1">, </span><span class="s3">'oleSize'</span><span class="s1">,</span>
+                    <span class="s3">'customWorkbookViews'</span><span class="s1">, </span><span class="s3">'pivotCaches'</span><span class="s1">, </span><span class="s3">'smartTagPr'</span><span class="s1">, </span><span class="s3">'smartTagTypes'</span><span class="s1">,</span>
+                    <span class="s3">'webPublishing'</span><span class="s1">, </span><span class="s3">'fileRecoveryPr'</span><span class="s1">, </span><span class="s3">'webPublishObjects'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">conformance=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fileVersion=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fileSharing=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">workbookPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">workbookProtection=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">bookViews=(),</span>
+                 <span class="s1">sheets=(),</span>
+                 <span class="s1">functionGroups=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">externalReferences=(),</span>
+                 <span class="s1">definedNames=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">calcPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">oleSize=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">customWorkbookViews=(),</span>
+                 <span class="s1">pivotCaches=(),</span>
+                 <span class="s1">smartTagPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">smartTagTypes=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">webPublishing=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fileRecoveryPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">webPublishObjects=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">Ignorable=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.conformance = conformance</span>
+        <span class="s1">self.fileVersion = fileVersion</span>
+        <span class="s1">self.fileSharing = fileSharing</span>
+        <span class="s0">if </span><span class="s1">workbookPr </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">workbookPr = WorkbookProperties()</span>
+        <span class="s1">self.workbookPr = workbookPr</span>
+        <span class="s1">self.workbookProtection = workbookProtection</span>
+        <span class="s1">self.bookViews = bookViews</span>
+        <span class="s1">self.sheets = sheets</span>
+        <span class="s1">self.functionGroups = functionGroups</span>
+        <span class="s1">self.externalReferences = externalReferences</span>
+        <span class="s1">self.definedNames = definedNames</span>
+        <span class="s1">self.calcPr = calcPr</span>
+        <span class="s1">self.oleSize = oleSize</span>
+        <span class="s1">self.customWorkbookViews = customWorkbookViews</span>
+        <span class="s1">self.pivotCaches = pivotCaches</span>
+        <span class="s1">self.smartTagPr = smartTagPr</span>
+        <span class="s1">self.smartTagTypes = smartTagTypes</span>
+        <span class="s1">self.webPublishing = webPublishing</span>
+        <span class="s1">self.fileRecoveryPr = fileRecoveryPr</span>
+        <span class="s1">self.webPublishObjects = webPublishObjects</span>
+
+
+    <span class="s0">def </span><span class="s1">to_tree(self):</span>
+        <span class="s1">tree = super(WorkbookPackage, self).to_tree()</span>
+        <span class="s1">tree.set(</span><span class="s3">&quot;xmlns&quot;</span><span class="s1">, SHEET_MAIN_NS)</span>
+        <span class="s0">return </span><span class="s1">tree</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">active(self):</span>
+        <span class="s0">for </span><span class="s1">view </span><span class="s0">in </span><span class="s1">self.bookViews:</span>
+            <span class="s0">if </span><span class="s1">view.activeTab </span><span class="s0">is not None</span><span class="s1">:</span>
+                <span class="s0">return </span><span class="s1">view.activeTab</span>
+        <span class="s0">return </span><span class="s4">0</span>
+</pre>
+</body>
+</html>

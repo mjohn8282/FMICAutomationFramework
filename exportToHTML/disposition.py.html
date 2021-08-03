@@ -1,0 +1,57 @@
+<html>
+<head>
+<title>disposition.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+disposition.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;Simple value objects for tracking what to do with files.&quot;&quot;&quot;</span>
+
+
+<span class="s2">class </span><span class="s1">FileDisposition(object):</span>
+    <span class="s0">&quot;&quot;&quot;A simple value type for recording what to do with a file.&quot;&quot;&quot;</span>
+    <span class="s2">pass</span>
+
+
+<span class="s0"># FileDisposition &quot;methods&quot;: FileDisposition is a pure value object, so it can</span>
+<span class="s0"># be implemented in either C or Python.  Acting on them is done with these</span>
+<span class="s0"># functions.</span>
+
+<span class="s2">def </span><span class="s1">disposition_init(cls, original_filename):</span>
+    <span class="s0">&quot;&quot;&quot;Construct and initialize a new FileDisposition object.&quot;&quot;&quot;</span>
+    <span class="s1">disp = cls()</span>
+    <span class="s1">disp.original_filename = original_filename</span>
+    <span class="s1">disp.canonical_filename = original_filename</span>
+    <span class="s1">disp.source_filename = </span><span class="s2">None</span>
+    <span class="s1">disp.trace = </span><span class="s2">False</span>
+    <span class="s1">disp.reason = </span><span class="s3">&quot;&quot;</span>
+    <span class="s1">disp.file_tracer = </span><span class="s2">None</span>
+    <span class="s1">disp.has_dynamic_filename = </span><span class="s2">False</span>
+    <span class="s2">return </span><span class="s1">disp</span>
+
+
+<span class="s2">def </span><span class="s1">disposition_debug_msg(disp):</span>
+    <span class="s0">&quot;&quot;&quot;Make a nice debug message of what the FileDisposition is doing.&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">disp.trace:</span>
+        <span class="s1">msg = </span><span class="s3">&quot;Tracing %r&quot; </span><span class="s1">% (disp.original_filename,)</span>
+        <span class="s2">if </span><span class="s1">disp.file_tracer:</span>
+            <span class="s1">msg += </span><span class="s3">&quot;: will be traced by %r&quot; </span><span class="s1">% disp.file_tracer</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">msg = </span><span class="s3">&quot;Not tracing %r: %s&quot; </span><span class="s1">% (disp.original_filename, disp.reason)</span>
+    <span class="s2">return </span><span class="s1">msg</span>
+</pre>
+</body>
+</html>

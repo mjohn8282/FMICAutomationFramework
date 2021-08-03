@@ -1,0 +1,272 @@
+<html>
+<head>
+<title>gateway_io.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+.s5 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+gateway_io.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># -*- coding: utf-8 -*-</span>
+<span class="s0">&quot;&quot;&quot; 
+execnet io initialization code 
+ 
+creates io instances used for gateway io 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">shlex</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s2">from </span><span class="s1">execnet.gateway_base </span><span class="s2">import </span><span class="s1">Popen2IO, Message</span>
+<span class="s2">except </span><span class="s1">ImportError:</span>
+    <span class="s2">from </span><span class="s1">__main__ </span><span class="s2">import </span><span class="s1">Popen2IO, Message</span>
+
+<span class="s2">from </span><span class="s1">functools </span><span class="s2">import </span><span class="s1">partial</span>
+
+
+<span class="s2">class </span><span class="s1">Popen2IOMaster(Popen2IO):</span>
+    <span class="s2">def </span><span class="s1">__init__(self, args, execmodel):</span>
+        <span class="s1">self.popen = p = execmodel.PopenPiped(args)</span>
+        <span class="s1">Popen2IO.__init__(self, p.stdin, p.stdout, execmodel=execmodel)</span>
+
+    <span class="s2">def </span><span class="s1">wait(self):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">self.popen.wait()</span>
+        <span class="s2">except </span><span class="s1">OSError:</span>
+            <span class="s2">pass  </span><span class="s0"># subprocess probably dead already</span>
+
+    <span class="s2">def </span><span class="s1">kill(self):</span>
+        <span class="s1">killpopen(self.popen)</span>
+
+
+<span class="s2">def </span><span class="s1">killpopen(popen):</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">if </span><span class="s1">hasattr(popen, </span><span class="s3">&quot;kill&quot;</span><span class="s1">):</span>
+            <span class="s1">popen.kill()</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">killpid(popen.pid)</span>
+    <span class="s2">except </span><span class="s1">EnvironmentError:</span>
+        <span class="s1">sys.stderr.write(</span><span class="s3">&quot;ERROR killing: %s</span><span class="s4">\n</span><span class="s3">&quot; </span><span class="s1">% (sys.exc_info()[</span><span class="s5">1</span><span class="s1">]))</span>
+        <span class="s1">sys.stderr.flush()</span>
+
+
+<span class="s2">def </span><span class="s1">killpid(pid):</span>
+    <span class="s2">if </span><span class="s1">hasattr(os, </span><span class="s3">&quot;kill&quot;</span><span class="s1">):</span>
+        <span class="s1">os.kill(pid, </span><span class="s5">15</span><span class="s1">)</span>
+    <span class="s2">elif </span><span class="s1">sys.platform == </span><span class="s3">&quot;win32&quot; </span><span class="s2">or </span><span class="s1">getattr(os, </span><span class="s3">&quot;_name&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">) == </span><span class="s3">&quot;nt&quot;</span><span class="s1">:</span>
+        <span class="s2">import </span><span class="s1">ctypes</span>
+
+        <span class="s1">PROCESS_TERMINATE = </span><span class="s5">1</span>
+        <span class="s1">handle = ctypes.windll.kernel32.OpenProcess(PROCESS_TERMINATE, </span><span class="s2">False</span><span class="s1">, pid)</span>
+        <span class="s1">ctypes.windll.kernel32.TerminateProcess(handle, -</span><span class="s5">1</span><span class="s1">)</span>
+        <span class="s1">ctypes.windll.kernel32.CloseHandle(handle)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">EnvironmentError(</span><span class="s3">&quot;no method to kill {}&quot;</span><span class="s1">.format(pid))</span>
+
+
+<span class="s1">popen_bootstrapline = </span><span class="s3">&quot;import sys;exec(eval(sys.stdin.readline()))&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">shell_split_path(path):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Use shell lexer to split the given path into a list of components, 
+    taking care to handle Windows' '\' correctly. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">sys.platform.startswith(</span><span class="s3">&quot;win&quot;</span><span class="s1">):</span>
+        <span class="s0"># replace \\ by / otherwise shlex will strip them out</span>
+        <span class="s1">path = path.replace(</span><span class="s3">&quot;</span><span class="s4">\\</span><span class="s3">&quot;</span><span class="s1">, </span><span class="s3">&quot;/&quot;</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">shlex.split(path)</span>
+
+
+<span class="s2">def </span><span class="s1">popen_args(spec):</span>
+    <span class="s1">args = shell_split_path(spec.python) </span><span class="s2">if </span><span class="s1">spec.python </span><span class="s2">else </span><span class="s1">[sys.executable]</span>
+    <span class="s1">args.append(</span><span class="s3">&quot;-u&quot;</span><span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">spec </span><span class="s2">is not None and </span><span class="s1">spec.dont_write_bytecode:</span>
+        <span class="s1">args.append(</span><span class="s3">&quot;-B&quot;</span><span class="s1">)</span>
+    <span class="s0"># Slight gymnastics in ordering these arguments because CPython (as of</span>
+    <span class="s0"># 2.7.1) ignores -B if you provide `python -c &quot;something&quot; -B`</span>
+    <span class="s1">args.extend([</span><span class="s3">&quot;-c&quot;</span><span class="s1">, popen_bootstrapline])</span>
+    <span class="s2">return </span><span class="s1">args</span>
+
+
+<span class="s2">def </span><span class="s1">ssh_args(spec):</span>
+    <span class="s0"># NOTE: If changing this, you need to sync those changes to vagrant_args</span>
+    <span class="s0"># as well, or, take some time to further refactor the commonalities of</span>
+    <span class="s0"># ssh_args and vagrant_args.</span>
+    <span class="s1">remotepython = spec.python </span><span class="s2">or </span><span class="s3">&quot;python&quot;</span>
+    <span class="s1">args = [</span><span class="s3">&quot;ssh&quot;</span><span class="s1">, </span><span class="s3">&quot;-C&quot;</span><span class="s1">]</span>
+    <span class="s2">if </span><span class="s1">spec.ssh_config </span><span class="s2">is not None</span><span class="s1">:</span>
+        <span class="s1">args.extend([</span><span class="s3">&quot;-F&quot;</span><span class="s1">, str(spec.ssh_config)])</span>
+
+    <span class="s1">args.extend(spec.ssh.split())</span>
+    <span class="s1">remotecmd = </span><span class="s3">'{} -c &quot;{}&quot;'</span><span class="s1">.format(remotepython, popen_bootstrapline)</span>
+    <span class="s1">args.append(remotecmd)</span>
+    <span class="s2">return </span><span class="s1">args</span>
+
+
+<span class="s2">def </span><span class="s1">vagrant_ssh_args(spec):</span>
+    <span class="s0"># This is the vagrant-wrapped version of SSH. Unfortunately the</span>
+    <span class="s0"># command lines are incompatible to just channel through ssh_args</span>
+    <span class="s0"># due to ordering/templating issues.</span>
+    <span class="s0"># NOTE: This should be kept in sync with the ssh_args behaviour.</span>
+    <span class="s0"># spec.vagrant is identical to spec.ssh in that they both carry</span>
+    <span class="s0"># the remote host &quot;address&quot;.</span>
+    <span class="s1">remotepython = spec.python </span><span class="s2">or </span><span class="s3">&quot;python&quot;</span>
+    <span class="s1">args = [</span><span class="s3">&quot;vagrant&quot;</span><span class="s1">, </span><span class="s3">&quot;ssh&quot;</span><span class="s1">, spec.vagrant_ssh, </span><span class="s3">&quot;--&quot;</span><span class="s1">, </span><span class="s3">&quot;-C&quot;</span><span class="s1">]</span>
+    <span class="s2">if </span><span class="s1">spec.ssh_config </span><span class="s2">is not None</span><span class="s1">:</span>
+        <span class="s1">args.extend([</span><span class="s3">&quot;-F&quot;</span><span class="s1">, str(spec.ssh_config)])</span>
+    <span class="s1">remotecmd = </span><span class="s3">'{} -c &quot;{}&quot;'</span><span class="s1">.format(remotepython, popen_bootstrapline)</span>
+    <span class="s1">args.extend([remotecmd])</span>
+    <span class="s2">return </span><span class="s1">args</span>
+
+
+<span class="s2">def </span><span class="s1">create_io(spec, execmodel):</span>
+    <span class="s2">if </span><span class="s1">spec.popen:</span>
+        <span class="s1">args = popen_args(spec)</span>
+        <span class="s2">return </span><span class="s1">Popen2IOMaster(args, execmodel)</span>
+    <span class="s2">if </span><span class="s1">spec.ssh:</span>
+        <span class="s1">args = ssh_args(spec)</span>
+        <span class="s1">io = Popen2IOMaster(args, execmodel)</span>
+        <span class="s1">io.remoteaddress = spec.ssh</span>
+        <span class="s2">return </span><span class="s1">io</span>
+    <span class="s2">if </span><span class="s1">spec.vagrant_ssh:</span>
+        <span class="s1">args = vagrant_ssh_args(spec)</span>
+        <span class="s1">io = Popen2IOMaster(args, execmodel)</span>
+        <span class="s1">io.remoteaddress = spec.vagrant_ssh</span>
+        <span class="s2">return </span><span class="s1">io</span>
+
+
+<span class="s0">#</span>
+<span class="s0"># Proxy Gateway handling code</span>
+<span class="s0">#</span>
+<span class="s0"># master: proxy initiator</span>
+<span class="s0"># forwarder: forwards between master and sub</span>
+<span class="s0"># sub: sub process that is proxied to the initiator</span>
+
+<span class="s1">RIO_KILL = </span><span class="s5">1</span>
+<span class="s1">RIO_WAIT = </span><span class="s5">2</span>
+<span class="s1">RIO_REMOTEADDRESS = </span><span class="s5">3</span>
+<span class="s1">RIO_CLOSE_WRITE = </span><span class="s5">4</span>
+
+
+<span class="s2">class </span><span class="s1">ProxyIO(object):</span>
+    <span class="s0">&quot;&quot;&quot;A Proxy IO object allows to instantiate a Gateway 
+    through another &quot;via&quot; gateway.  A master:ProxyIO object 
+    provides an IO object effectively connected to the sub 
+    via the forwarder.  To achieve this, master:ProxyIO interacts 
+    with forwarder:serve_proxy_io() which itself 
+    instantiates and interacts with the sub. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, proxy_channel, execmodel):</span>
+        <span class="s0"># after exchanging the control channel we use proxy_channel</span>
+        <span class="s0"># for messaging IO</span>
+        <span class="s1">self.controlchan = proxy_channel.gateway.newchannel()</span>
+        <span class="s1">proxy_channel.send(self.controlchan)</span>
+        <span class="s1">self.iochan = proxy_channel</span>
+        <span class="s1">self.iochan_file = self.iochan.makefile(</span><span class="s3">&quot;r&quot;</span><span class="s1">)</span>
+        <span class="s1">self.execmodel = execmodel</span>
+
+    <span class="s2">def </span><span class="s1">read(self, nbytes):</span>
+        <span class="s2">return </span><span class="s1">self.iochan_file.read(nbytes)</span>
+
+    <span class="s2">def </span><span class="s1">write(self, data):</span>
+        <span class="s2">return </span><span class="s1">self.iochan.send(data)</span>
+
+    <span class="s2">def </span><span class="s1">_controll(self, event):</span>
+        <span class="s1">self.controlchan.send(event)</span>
+        <span class="s2">return </span><span class="s1">self.controlchan.receive()</span>
+
+    <span class="s2">def </span><span class="s1">close_write(self):</span>
+        <span class="s1">self._controll(RIO_CLOSE_WRITE)</span>
+
+    <span class="s2">def </span><span class="s1">kill(self):</span>
+        <span class="s1">self._controll(RIO_KILL)</span>
+
+    <span class="s2">def </span><span class="s1">wait(self):</span>
+        <span class="s2">return </span><span class="s1">self._controll(RIO_WAIT)</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">remoteaddress(self):</span>
+        <span class="s2">return </span><span class="s1">self._controll(RIO_REMOTEADDRESS)</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;&lt;RemoteIO via {}&gt;&quot;</span><span class="s1">.format(self.iochan.gateway.id)</span>
+
+
+<span class="s2">class </span><span class="s1">PseudoSpec:</span>
+    <span class="s2">def </span><span class="s1">__init__(self, vars):</span>
+        <span class="s1">self.__dict__.update(vars)</span>
+
+    <span class="s2">def </span><span class="s1">__getattr__(self, name):</span>
+        <span class="s2">return None</span>
+
+
+<span class="s2">def </span><span class="s1">serve_proxy_io(proxy_channelX):</span>
+    <span class="s1">execmodel = proxy_channelX.gateway.execmodel</span>
+    <span class="s1">log = partial(</span>
+        <span class="s1">proxy_channelX.gateway._trace, </span><span class="s3">&quot;serve_proxy_io:%s&quot; </span><span class="s1">% proxy_channelX.id</span>
+    <span class="s1">)</span>
+    <span class="s1">spec = PseudoSpec(proxy_channelX.receive())</span>
+    <span class="s0"># create sub IO object which we will proxy back to our proxy initiator</span>
+    <span class="s1">sub_io = create_io(spec, execmodel)</span>
+    <span class="s1">control_chan = proxy_channelX.receive()</span>
+    <span class="s1">log(</span><span class="s3">&quot;got control chan&quot;</span><span class="s1">, control_chan)</span>
+
+    <span class="s0"># read data from master, forward it to the sub</span>
+    <span class="s0"># XXX writing might block, thus blocking the receiver thread</span>
+    <span class="s2">def </span><span class="s1">forward_to_sub(data):</span>
+        <span class="s1">log(</span><span class="s3">&quot;forward data to sub, size %s&quot; </span><span class="s1">% len(data))</span>
+        <span class="s1">sub_io.write(data)</span>
+
+    <span class="s1">proxy_channelX.setcallback(forward_to_sub)</span>
+
+    <span class="s2">def </span><span class="s1">controll(data):</span>
+        <span class="s2">if </span><span class="s1">data == RIO_WAIT:</span>
+            <span class="s1">control_chan.send(sub_io.wait())</span>
+        <span class="s2">elif </span><span class="s1">data == RIO_KILL:</span>
+            <span class="s1">control_chan.send(sub_io.kill())</span>
+        <span class="s2">elif </span><span class="s1">data == RIO_REMOTEADDRESS:</span>
+            <span class="s1">control_chan.send(sub_io.remoteaddress)</span>
+        <span class="s2">elif </span><span class="s1">data == RIO_CLOSE_WRITE:</span>
+            <span class="s1">control_chan.send(sub_io.close_write())</span>
+
+    <span class="s1">control_chan.setcallback(controll)</span>
+
+    <span class="s0"># write data to the master coming from the sub</span>
+    <span class="s1">forward_to_master_file = proxy_channelX.makefile(</span><span class="s3">&quot;w&quot;</span><span class="s1">)</span>
+
+    <span class="s0"># read bootstrap byte from sub, send it on to master</span>
+    <span class="s1">log(</span><span class="s3">&quot;reading bootstrap byte from sub&quot;</span><span class="s1">, spec.id)</span>
+    <span class="s1">initial = sub_io.read(</span><span class="s5">1</span><span class="s1">)</span>
+    <span class="s2">assert </span><span class="s1">initial == </span><span class="s3">&quot;1&quot;</span><span class="s1">.encode(</span><span class="s3">&quot;ascii&quot;</span><span class="s1">), initial</span>
+    <span class="s1">log(</span><span class="s3">&quot;forwarding bootstrap byte from sub&quot;</span><span class="s1">, spec.id)</span>
+    <span class="s1">forward_to_master_file.write(initial)</span>
+
+    <span class="s0"># enter message forwarding loop</span>
+    <span class="s2">while True</span><span class="s1">:</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">message = Message.from_io(sub_io)</span>
+        <span class="s2">except </span><span class="s1">EOFError:</span>
+            <span class="s1">log(</span><span class="s3">&quot;EOF from sub, terminating proxying loop&quot;</span><span class="s1">, spec.id)</span>
+            <span class="s2">break</span>
+        <span class="s1">message.to_io(forward_to_master_file)</span>
+    <span class="s0"># proxy_channelX will be closed from remote_exec's finalization code</span>
+
+
+<span class="s2">if </span><span class="s1">__name__ == </span><span class="s3">&quot;__channelexec__&quot;</span><span class="s1">:</span>
+    <span class="s1">serve_proxy_io(channel)  </span><span class="s0"># noqa</span>
+</pre>
+</body>
+</html>

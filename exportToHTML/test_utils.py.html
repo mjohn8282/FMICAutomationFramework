@@ -1,0 +1,98 @@
+<html>
+<head>
+<title>test_utils.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+test_utils.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2013-2014 Google, Inc.</span>
+<span class="s0"># Copyright (c) 2014 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2015-2016, 2018-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015-2016 Ceridwen &lt;ceridwenv@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Jakub Wilk &lt;jwilk@jwilk.net&gt;</span>
+<span class="s0"># Copyright (c) 2018 Anthony Sottile &lt;asottile@umich.edu&gt;</span>
+<span class="s0"># Copyright (c) 2020-2021 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Marc Mueller &lt;30130371+cdce8p@users.noreply.github.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;Utility functions for test code that uses astroid ASTs as input.&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">contextlib</span>
+<span class="s2">import </span><span class="s1">functools</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">warnings</span>
+
+<span class="s2">import </span><span class="s1">pytest</span>
+
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">nodes</span>
+
+
+<span class="s2">def </span><span class="s1">require_version(minver=</span><span class="s2">None</span><span class="s1">, maxver=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Compare version of python interpreter to the given one. Skip the test 
+    if older. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">parse(string, default=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">string = string </span><span class="s2">or </span><span class="s1">default</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">tuple(int(v) </span><span class="s2">for </span><span class="s1">v </span><span class="s2">in </span><span class="s1">string.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">))</span>
+        <span class="s2">except </span><span class="s1">ValueError </span><span class="s2">as </span><span class="s1">exc:</span>
+            <span class="s2">raise </span><span class="s1">ValueError(</span>
+                <span class="s3">&quot;{string} is not a correct version : should be X.Y[.Z].&quot;</span><span class="s1">.format(</span>
+                    <span class="s1">string=string</span>
+                <span class="s1">)</span>
+            <span class="s1">) </span><span class="s2">from </span><span class="s1">exc</span>
+
+    <span class="s2">def </span><span class="s1">check_require_version(f):</span>
+        <span class="s1">current = sys.version_info[:</span><span class="s4">3</span><span class="s1">]</span>
+        <span class="s2">if </span><span class="s1">parse(minver, </span><span class="s3">&quot;0&quot;</span><span class="s1">) &lt; current &lt;= parse(maxver, </span><span class="s3">&quot;4&quot;</span><span class="s1">):</span>
+            <span class="s2">return </span><span class="s1">f</span>
+
+        <span class="s1">str_version = </span><span class="s3">&quot;.&quot;</span><span class="s1">.join(str(v) </span><span class="s2">for </span><span class="s1">v </span><span class="s2">in </span><span class="s1">sys.version_info)</span>
+
+        <span class="s1">@functools.wraps(f)</span>
+        <span class="s2">def </span><span class="s1">new_f(*args, **kwargs):</span>
+            <span class="s2">if </span><span class="s1">minver </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s1">pytest.skip(</span>
+                    <span class="s3">f&quot;Needs Python &gt; </span><span class="s5">{</span><span class="s1">minver</span><span class="s5">}</span><span class="s3">. Current version is </span><span class="s5">{</span><span class="s1">str_version</span><span class="s5">}</span><span class="s3">.&quot;</span>
+                <span class="s1">)</span>
+            <span class="s2">elif </span><span class="s1">maxver </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s1">pytest.skip(</span>
+                    <span class="s3">f&quot;Needs Python &lt;= </span><span class="s5">{</span><span class="s1">maxver</span><span class="s5">}</span><span class="s3">. Current version is </span><span class="s5">{</span><span class="s1">str_version</span><span class="s5">}</span><span class="s3">.&quot;</span>
+                <span class="s1">)</span>
+
+        <span class="s2">return </span><span class="s1">new_f</span>
+
+    <span class="s2">return </span><span class="s1">check_require_version</span>
+
+
+<span class="s2">def </span><span class="s1">get_name_node(start_from, name, index=</span><span class="s4">0</span><span class="s1">):</span>
+    <span class="s2">return </span><span class="s1">[n </span><span class="s2">for </span><span class="s1">n </span><span class="s2">in </span><span class="s1">start_from.nodes_of_class(nodes.Name) </span><span class="s2">if </span><span class="s1">n.name == name][index]</span>
+
+
+<span class="s1">@contextlib.contextmanager</span>
+<span class="s2">def </span><span class="s1">enable_warning(warning):</span>
+    <span class="s1">warnings.simplefilter(</span><span class="s3">&quot;always&quot;</span><span class="s1">, warning)</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">yield</span>
+    <span class="s2">finally</span><span class="s1">:</span>
+        <span class="s0"># Reset it to default value, so it will take</span>
+        <span class="s0"># into account the values from the -W flag.</span>
+        <span class="s1">warnings.simplefilter(</span><span class="s3">&quot;default&quot;</span><span class="s1">, warning)</span>
+</pre>
+</body>
+</html>

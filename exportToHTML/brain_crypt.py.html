@@ -1,0 +1,48 @@
+<html>
+<head>
+<title>brain_crypt.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_crypt.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+
+<span class="s1">PY37 = sys.version_info &gt;= (</span><span class="s3">3</span><span class="s1">, </span><span class="s3">7</span><span class="s1">)</span>
+
+<span class="s2">if </span><span class="s1">PY37:</span>
+    <span class="s0"># Since Python 3.7 Hashing Methods are added</span>
+    <span class="s0"># dynamically to globals()</span>
+
+    <span class="s2">def </span><span class="s1">_re_transform():</span>
+        <span class="s2">return </span><span class="s1">astroid.parse(</span>
+            <span class="s4">&quot;&quot;&quot; 
+        from collections import namedtuple 
+        _Method = namedtuple('_Method', 'name ident salt_chars total_size') 
+ 
+        METHOD_SHA512 = _Method('SHA512', '6', 16, 106) 
+        METHOD_SHA256 = _Method('SHA256', '5', 16, 63) 
+        METHOD_BLOWFISH = _Method('BLOWFISH', 2, 'b', 22) 
+        METHOD_MD5 = _Method('MD5', '1', 8, 34) 
+        METHOD_CRYPT = _Method('CRYPT', None, 2, 13) 
+        &quot;&quot;&quot;</span>
+        <span class="s1">)</span>
+
+    <span class="s1">astroid.register_module_extender(astroid.MANAGER, </span><span class="s4">&quot;crypt&quot;</span><span class="s1">, _re_transform)</span>
+</pre>
+</body>
+</html>

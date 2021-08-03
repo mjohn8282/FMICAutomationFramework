@@ -1,0 +1,386 @@
+<html>
+<head>
+<title>table.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+table.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Descriptor,</span>
+    <span class="s1">Alias,</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">Float,</span>
+    <span class="s1">DateTime,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">NoneSet,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Sequence,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">ExtensionList, CellRange</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.sequence </span><span class="s0">import </span><span class="s1">NestedSequence</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">SHEET_MAIN_NS, REL_NS</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s0">import </span><span class="s1">tostring</span>
+<span class="s0">from </span><span class="s1">openpyexcel.utils </span><span class="s0">import </span><span class="s1">range_boundaries</span>
+<span class="s0">from </span><span class="s1">openpyexcel.utils.escape </span><span class="s0">import </span><span class="s1">escape, unescape</span>
+
+<span class="s0">from </span><span class="s1">.related </span><span class="s0">import </span><span class="s1">Related</span>
+
+<span class="s0">from </span><span class="s1">.filters </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">AutoFilter,</span>
+    <span class="s1">SortState,</span>
+<span class="s1">)</span>
+
+<span class="s1">TABLESTYLES = tuple(</span>
+    <span class="s1">[</span><span class="s3">&quot;TableStyleMedium{0}&quot;</span><span class="s1">.format(i) </span><span class="s0">for </span><span class="s1">i </span><span class="s0">in </span><span class="s1">range(</span><span class="s4">1</span><span class="s1">, </span><span class="s4">29</span><span class="s1">)]</span>
+    <span class="s1">+ [</span><span class="s3">&quot;TableStyleLight{0}&quot;</span><span class="s1">.format(i) </span><span class="s0">for </span><span class="s1">i </span><span class="s0">in </span><span class="s1">range(</span><span class="s4">1</span><span class="s1">, </span><span class="s4">22</span><span class="s1">)]</span>
+    <span class="s1">+ [</span><span class="s3">&quot;TableStyleDark{0}&quot;</span><span class="s1">.format(i) </span><span class="s0">for </span><span class="s1">i </span><span class="s0">in </span><span class="s1">range(</span><span class="s4">1</span><span class="s1">, </span><span class="s4">12</span><span class="s1">)]</span>
+<span class="s1">)</span>
+
+<span class="s1">PIVOTSTYLES = tuple(</span>
+    <span class="s1">[</span><span class="s3">&quot;PivotStyleMedium{0}&quot;</span><span class="s1">.format(i) </span><span class="s0">for </span><span class="s1">i </span><span class="s0">in </span><span class="s1">range(</span><span class="s4">1</span><span class="s1">, </span><span class="s4">29</span><span class="s1">)]</span>
+    <span class="s1">+ [</span><span class="s3">&quot;PivotStyleLight{0}&quot;</span><span class="s1">.format(i) </span><span class="s0">for </span><span class="s1">i </span><span class="s0">in </span><span class="s1">range(</span><span class="s4">1</span><span class="s1">, </span><span class="s4">29</span><span class="s1">)]</span>
+    <span class="s1">+ [</span><span class="s3">&quot;PivotStyleDark{0}&quot;</span><span class="s1">.format(i) </span><span class="s0">for </span><span class="s1">i </span><span class="s0">in </span><span class="s1">range(</span><span class="s4">1</span><span class="s1">, </span><span class="s4">29</span><span class="s1">)]</span>
+<span class="s1">)</span>
+
+
+<span class="s0">class </span><span class="s1">TableStyleInfo(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;tableStyleInfo&quot;</span>
+
+    <span class="s1">name = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">showFirstColumn = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">showLastColumn = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">showRowStripes = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">showColumnStripes = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">name=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">showFirstColumn=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">showLastColumn=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">showRowStripes=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">showColumnStripes=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.showFirstColumn = showFirstColumn</span>
+        <span class="s1">self.showLastColumn = showLastColumn</span>
+        <span class="s1">self.showRowStripes = showRowStripes</span>
+        <span class="s1">self.showColumnStripes = showColumnStripes</span>
+
+
+<span class="s0">class </span><span class="s1">XMLColumnProps(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;xmlColumnPr&quot;</span>
+
+    <span class="s1">mapId = Integer()</span>
+    <span class="s1">xpath = String()</span>
+    <span class="s1">denormalized = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">xmlDataType = String()</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = ()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">mapId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">xpath=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">denormalized=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">xmlDataType=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.mapId = mapId</span>
+        <span class="s1">self.xpath = xpath</span>
+        <span class="s1">self.denormalized = denormalized</span>
+        <span class="s1">self.xmlDataType = xmlDataType</span>
+
+
+<span class="s0">class </span><span class="s1">TableFormula(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;tableFormula&quot;</span>
+
+    <span class="s2">## Note formula is stored as the text value</span>
+
+    <span class="s1">array = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">attr_text = Descriptor()</span>
+    <span class="s1">text = Alias(</span><span class="s3">'attr_text'</span><span class="s1">)</span>
+
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">array=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">attr_text=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.array = array</span>
+        <span class="s1">self.attr_text = attr_text</span>
+
+
+<span class="s0">class </span><span class="s1">TableColumn(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;tableColumn&quot;</span>
+
+    <span class="s1">id = Integer()</span>
+    <span class="s1">uniqueName = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">name = String()</span>
+    <span class="s1">totalsRowFunction = NoneSet(values=([</span><span class="s3">'sum'</span><span class="s1">, </span><span class="s3">'min'</span><span class="s1">, </span><span class="s3">'max'</span><span class="s1">, </span><span class="s3">'average'</span><span class="s1">,</span>
+                                         <span class="s3">'count'</span><span class="s1">, </span><span class="s3">'countNums'</span><span class="s1">, </span><span class="s3">'stdDev'</span><span class="s1">, </span><span class="s3">'var'</span><span class="s1">, </span><span class="s3">'custom'</span><span class="s1">]))</span>
+    <span class="s1">totalsRowLabel = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">queryTableFieldId = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">headerRowDxfId = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">dataDxfId = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">totalsRowDxfId = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">headerRowCellStyle = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">dataCellStyle = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">totalsRowCellStyle = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">calculatedColumnFormula = Typed(expected_type=TableFormula, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">totalsRowFormula = Typed(expected_type=TableFormula, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">xmlColumnPr = Typed(expected_type=XMLColumnProps, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'calculatedColumnFormula'</span><span class="s1">, </span><span class="s3">'totalsRowFormula'</span><span class="s1">,</span>
+                    <span class="s3">'xmlColumnPr'</span><span class="s1">, </span><span class="s3">'extLst'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">id=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">uniqueName=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">name=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">totalsRowFunction=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">totalsRowLabel=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">queryTableFieldId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">headerRowDxfId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dataDxfId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">totalsRowDxfId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">headerRowCellStyle=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dataCellStyle=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">totalsRowCellStyle=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">calculatedColumnFormula=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">totalsRowFormula=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">xmlColumnPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.id = id</span>
+        <span class="s1">self.uniqueName = uniqueName</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.totalsRowFunction = totalsRowFunction</span>
+        <span class="s1">self.totalsRowLabel = totalsRowLabel</span>
+        <span class="s1">self.queryTableFieldId = queryTableFieldId</span>
+        <span class="s1">self.headerRowDxfId = headerRowDxfId</span>
+        <span class="s1">self.dataDxfId = dataDxfId</span>
+        <span class="s1">self.totalsRowDxfId = totalsRowDxfId</span>
+        <span class="s1">self.headerRowCellStyle = headerRowCellStyle</span>
+        <span class="s1">self.dataCellStyle = dataCellStyle</span>
+        <span class="s1">self.totalsRowCellStyle = totalsRowCellStyle</span>
+        <span class="s1">self.calculatedColumnFormula = calculatedColumnFormula</span>
+        <span class="s1">self.totalsRowFormula = totalsRowFormula</span>
+        <span class="s1">self.xmlColumnPr = xmlColumnPr</span>
+        <span class="s1">self.extLst = extLst</span>
+
+
+    <span class="s0">def </span><span class="s1">__iter__(self):</span>
+        <span class="s0">for </span><span class="s1">k, v </span><span class="s0">in </span><span class="s1">super(TableColumn, self).__iter__():</span>
+            <span class="s0">if </span><span class="s1">k == </span><span class="s3">'name'</span><span class="s1">:</span>
+                <span class="s1">v = escape(v)</span>
+            <span class="s0">yield </span><span class="s1">k, v</span>
+
+
+    <span class="s1">@classmethod</span>
+    <span class="s0">def </span><span class="s1">from_tree(cls, node):</span>
+        <span class="s1">self = super(TableColumn, cls).from_tree(node)</span>
+        <span class="s1">self.name = unescape(self.name)</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+
+<span class="s0">class </span><span class="s1">TableNameDescriptor(String):</span>
+
+    <span class="s2">&quot;&quot;&quot; 
+    Table names cannot have spaces in them 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s0">if </span><span class="s1">value </span><span class="s0">is not None and </span><span class="s3">&quot; &quot; </span><span class="s0">in </span><span class="s1">value:</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;Table names cannot have spaces&quot;</span><span class="s1">)</span>
+        <span class="s1">super(TableNameDescriptor, self).__set__(instance, value)</span>
+
+
+<span class="s0">class </span><span class="s1">Table(Serialisable):</span>
+
+    <span class="s1">_path = </span><span class="s3">&quot;/tables/table{0}.xml&quot;</span>
+    <span class="s1">mime_type = </span><span class="s3">&quot;application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml&quot;</span>
+    <span class="s1">_rel_type = REL_NS + </span><span class="s3">&quot;/table&quot;</span>
+    <span class="s1">_rel_id = </span><span class="s0">None</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;table&quot;</span>
+
+    <span class="s1">id = Integer()</span>
+    <span class="s1">name = TableNameDescriptor(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">displayName = TableNameDescriptor()</span>
+    <span class="s1">comment = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">ref = CellRange()</span>
+    <span class="s1">tableType = NoneSet(values=([</span><span class="s3">'worksheet'</span><span class="s1">, </span><span class="s3">'xml'</span><span class="s1">, </span><span class="s3">'queryTable'</span><span class="s1">]))</span>
+    <span class="s1">headerRowCount = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">insertRow = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">insertRowShift = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">totalsRowCount = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">totalsRowShown = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">published = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">headerRowDxfId = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">dataDxfId = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">totalsRowDxfId = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">headerRowBorderDxfId = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">tableBorderDxfId = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">totalsRowBorderDxfId = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">headerRowCellStyle = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">dataCellStyle = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">totalsRowCellStyle = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">connectionId = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">autoFilter = Typed(expected_type=AutoFilter, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">sortState = Typed(expected_type=SortState, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">tableColumns = NestedSequence(expected_type=TableColumn, count=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">tableStyleInfo = Typed(expected_type=TableStyleInfo, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'autoFilter'</span><span class="s1">, </span><span class="s3">'sortState'</span><span class="s1">, </span><span class="s3">'tableColumns'</span><span class="s1">,</span>
+                    <span class="s3">'tableStyleInfo'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">id=</span><span class="s4">1</span><span class="s1">,</span>
+                 <span class="s1">displayName=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">ref=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">name=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">comment=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">tableType=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">headerRowCount=</span><span class="s4">1</span><span class="s1">,</span>
+                 <span class="s1">insertRow=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">insertRowShift=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">totalsRowCount=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">totalsRowShown=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">published=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">headerRowDxfId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dataDxfId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">totalsRowDxfId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">headerRowBorderDxfId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">tableBorderDxfId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">totalsRowBorderDxfId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">headerRowCellStyle=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dataCellStyle=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">totalsRowCellStyle=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">connectionId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">autoFilter=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sortState=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">tableColumns=(),</span>
+                 <span class="s1">tableStyleInfo=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.id = id</span>
+        <span class="s1">self.displayName = displayName</span>
+        <span class="s0">if </span><span class="s1">name </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">name = displayName</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.comment = comment</span>
+        <span class="s1">self.ref = ref</span>
+        <span class="s1">self.tableType = tableType</span>
+        <span class="s1">self.headerRowCount = headerRowCount</span>
+        <span class="s1">self.insertRow = insertRow</span>
+        <span class="s1">self.insertRowShift = insertRowShift</span>
+        <span class="s1">self.totalsRowCount = totalsRowCount</span>
+        <span class="s1">self.totalsRowShown = totalsRowShown</span>
+        <span class="s1">self.published = published</span>
+        <span class="s1">self.headerRowDxfId = headerRowDxfId</span>
+        <span class="s1">self.dataDxfId = dataDxfId</span>
+        <span class="s1">self.totalsRowDxfId = totalsRowDxfId</span>
+        <span class="s1">self.headerRowBorderDxfId = headerRowBorderDxfId</span>
+        <span class="s1">self.tableBorderDxfId = tableBorderDxfId</span>
+        <span class="s1">self.totalsRowBorderDxfId = totalsRowBorderDxfId</span>
+        <span class="s1">self.headerRowCellStyle = headerRowCellStyle</span>
+        <span class="s1">self.dataCellStyle = dataCellStyle</span>
+        <span class="s1">self.totalsRowCellStyle = totalsRowCellStyle</span>
+        <span class="s1">self.connectionId = connectionId</span>
+        <span class="s1">self.autoFilter = autoFilter</span>
+        <span class="s1">self.sortState = sortState</span>
+        <span class="s1">self.tableColumns = tableColumns</span>
+        <span class="s1">self.tableStyleInfo = tableStyleInfo</span>
+
+
+    <span class="s0">def </span><span class="s1">to_tree(self):</span>
+        <span class="s1">tree = super(Table, self).to_tree()</span>
+        <span class="s1">tree.set(</span><span class="s3">&quot;xmlns&quot;</span><span class="s1">, SHEET_MAIN_NS)</span>
+        <span class="s0">return </span><span class="s1">tree</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">path(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Return path within the archive 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s3">&quot;/xl&quot; </span><span class="s1">+ self._path.format(self.id)</span>
+
+
+    <span class="s0">def </span><span class="s1">_write(self, archive):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Serialise to XML and write to archive 
+        &quot;&quot;&quot;</span>
+        <span class="s1">xml = self.to_tree()</span>
+        <span class="s1">archive.writestr(self.path[</span><span class="s4">1</span><span class="s1">:], tostring(xml))</span>
+
+
+    <span class="s0">def </span><span class="s1">_initialise_columns(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Create a list of table columns from a cell range 
+        Always set a ref if we have headers (the default) 
+        Column headings must be strings and must match cells in the worksheet. 
+        &quot;&quot;&quot;</span>
+
+        <span class="s1">min_col, min_row, max_col, max_row = range_boundaries(self.ref)</span>
+        <span class="s0">for </span><span class="s1">idx </span><span class="s0">in </span><span class="s1">range(min_col, max_col+</span><span class="s4">1</span><span class="s1">):</span>
+            <span class="s1">col = TableColumn(id=idx, name=</span><span class="s3">&quot;Column{0}&quot;</span><span class="s1">.format(idx))</span>
+            <span class="s1">self.tableColumns.append(col)</span>
+        <span class="s0">if </span><span class="s1">self.headerRowCount:</span>
+            <span class="s1">self.autoFilter = AutoFilter(ref=self.ref)</span>
+
+
+<span class="s0">class </span><span class="s1">TablePartList(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;tableParts&quot;</span>
+
+    <span class="s1">count = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">tablePart = Sequence(expected_type=Related)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'tablePart'</span><span class="s1">,)</span>
+    <span class="s1">__attrs__ = (</span><span class="s3">'count'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">count=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">tablePart=(),</span>
+                <span class="s1">):</span>
+        <span class="s1">self.tablePart = tablePart</span>
+
+
+    <span class="s0">def </span><span class="s1">append(self, part):</span>
+        <span class="s1">self.tablePart.append(part)</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">count(self):</span>
+        <span class="s0">return </span><span class="s1">len(self.tablePart)</span>
+
+
+    <span class="s0">def </span><span class="s1">__bool__(self):</span>
+        <span class="s0">return </span><span class="s1">bool(self.tablePart)</span>
+
+    <span class="s1">__nonzero__ = __bool__</span>
+</pre>
+</body>
+</html>

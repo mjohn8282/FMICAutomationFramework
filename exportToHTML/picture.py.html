@@ -1,0 +1,170 @@
+<html>
+<head>
+<title>picture.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+picture.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">DRAWING_NS</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">NoneSet,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Alias,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">ExtensionList </span><span class="s0">as </span><span class="s1">OfficeArtExtensionList</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.chart.shapes </span><span class="s0">import </span><span class="s1">GraphicalProperties</span>
+
+<span class="s0">from </span><span class="s1">.fill </span><span class="s0">import </span><span class="s1">RelativeRect, BlipFillProperties</span>
+<span class="s0">from </span><span class="s1">.properties </span><span class="s0">import </span><span class="s1">NonVisualDrawingProps, NonVisualGroupDrawingShapeProps</span>
+<span class="s0">from </span><span class="s1">.geometry </span><span class="s0">import </span><span class="s1">ShapeStyle</span>
+
+
+<span class="s0">class </span><span class="s1">PictureLocking(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;picLocks&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s2">#Using attribute group AG_Locking</span>
+    <span class="s1">noCrop = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noGrp = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noSelect = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noRot = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noChangeAspect = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noMove = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noResize = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noEditPoints = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noAdjustHandles = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noChangeArrowheads = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noChangeShapeType = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=OfficeArtExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = ()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">noCrop=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noGrp=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noSelect=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noRot=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noChangeAspect=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noMove=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noResize=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noEditPoints=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noAdjustHandles=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noChangeArrowheads=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noChangeShapeType=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.noCrop = noCrop</span>
+        <span class="s1">self.noGrp = noGrp</span>
+        <span class="s1">self.noSelect = noSelect</span>
+        <span class="s1">self.noRot = noRot</span>
+        <span class="s1">self.noChangeAspect = noChangeAspect</span>
+        <span class="s1">self.noMove = noMove</span>
+        <span class="s1">self.noResize = noResize</span>
+        <span class="s1">self.noEditPoints = noEditPoints</span>
+        <span class="s1">self.noAdjustHandles = noAdjustHandles</span>
+        <span class="s1">self.noChangeArrowheads = noChangeArrowheads</span>
+        <span class="s1">self.noChangeShapeType = noChangeShapeType</span>
+
+
+<span class="s0">class </span><span class="s1">NonVisualPictureProperties(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;cNvPicPr&quot;</span>
+
+    <span class="s1">preferRelativeResize = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">picLocks = Typed(expected_type=PictureLocking, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=OfficeArtExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">&quot;picLocks&quot;</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">preferRelativeResize=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">picLocks=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.preferRelativeResize = preferRelativeResize</span>
+        <span class="s1">self.picLocks = picLocks</span>
+
+
+<span class="s0">class </span><span class="s1">PictureNonVisual(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;nvPicPr&quot;</span>
+
+    <span class="s1">cNvPr = Typed(expected_type=NonVisualDrawingProps, )</span>
+    <span class="s1">cNvPicPr = Typed(expected_type=NonVisualPictureProperties, )</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">&quot;cNvPr&quot;</span><span class="s1">, </span><span class="s3">&quot;cNvPicPr&quot;</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">cNvPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">cNvPicPr=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s0">if </span><span class="s1">cNvPr </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">cNvPr = NonVisualDrawingProps(id=</span><span class="s4">0</span><span class="s1">, name=</span><span class="s3">&quot;Image 1&quot;</span><span class="s1">, descr=</span><span class="s3">&quot;Name of file&quot;</span><span class="s1">)</span>
+        <span class="s1">self.cNvPr = cNvPr</span>
+        <span class="s0">if </span><span class="s1">cNvPicPr </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">cNvPicPr = NonVisualPictureProperties()</span>
+        <span class="s1">self.cNvPicPr = cNvPicPr</span>
+
+
+
+
+<span class="s0">class </span><span class="s1">PictureFrame(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;pic&quot;</span>
+
+    <span class="s1">macro = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">fPublished = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">nvPicPr = Typed(expected_type=PictureNonVisual, )</span>
+    <span class="s1">blipFill = Typed(expected_type=BlipFillProperties, )</span>
+    <span class="s1">spPr = Typed(expected_type=GraphicalProperties, )</span>
+    <span class="s1">graphicalProperties = Alias(</span><span class="s3">'spPr'</span><span class="s1">)</span>
+    <span class="s1">style = Typed(expected_type=ShapeStyle, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">&quot;nvPicPr&quot;</span><span class="s1">, </span><span class="s3">&quot;blipFill&quot;</span><span class="s1">, </span><span class="s3">&quot;spPr&quot;</span><span class="s1">, </span><span class="s3">&quot;style&quot;</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">macro=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fPublished=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">nvPicPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">blipFill=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">style=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.macro = macro</span>
+        <span class="s1">self.fPublished = fPublished</span>
+        <span class="s0">if </span><span class="s1">nvPicPr </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">nvPicPr = PictureNonVisual()</span>
+        <span class="s1">self.nvPicPr = nvPicPr</span>
+        <span class="s0">if </span><span class="s1">blipFill </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">blipFill = BlipFillProperties()</span>
+        <span class="s1">self.blipFill = blipFill</span>
+        <span class="s0">if </span><span class="s1">spPr </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">spPr = GraphicalProperties()</span>
+        <span class="s1">self.spPr = spPr</span>
+        <span class="s1">self.style = style</span>
+
+</pre>
+</body>
+</html>

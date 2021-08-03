@@ -1,0 +1,94 @@
+<html>
+<head>
+<title>dataframe.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+dataframe.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">import </span><span class="s1">operator</span>
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">accumulate, zip</span>
+
+
+<span class="s0">def </span><span class="s1">dataframe_to_rows(df, index=</span><span class="s0">True</span><span class="s1">, header=</span><span class="s0">True</span><span class="s1">):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Convert a Pandas dataframe into something suitable for passing into a worksheet. 
+    If index is True then the index will be included, starting one row below the header. 
+    If header is True then column headers will be included starting one column to the right. 
+    Formatting should be done by client code. 
+    &quot;&quot;&quot;</span>
+    <span class="s0">import </span><span class="s1">numpy</span>
+    <span class="s0">from </span><span class="s1">pandas </span><span class="s0">import </span><span class="s1">Timestamp</span>
+    <span class="s1">blocks = df._data.blocks</span>
+    <span class="s1">ncols = sum(b.shape[</span><span class="s3">0</span><span class="s1">] </span><span class="s0">for </span><span class="s1">b </span><span class="s0">in </span><span class="s1">blocks)</span>
+    <span class="s1">data = [</span><span class="s0">None</span><span class="s1">] * ncols</span>
+
+    <span class="s0">for </span><span class="s1">b </span><span class="s0">in </span><span class="s1">blocks:</span>
+        <span class="s1">values = b.values</span>
+
+        <span class="s0">if </span><span class="s1">b.dtype.type == numpy.datetime64:</span>
+            <span class="s1">values = numpy.array([Timestamp(v) </span><span class="s0">for </span><span class="s1">v </span><span class="s0">in </span><span class="s1">values.ravel()])</span>
+            <span class="s1">values = values.reshape(b.shape)</span>
+
+        <span class="s1">result = values.tolist()</span>
+
+        <span class="s0">for </span><span class="s1">col_loc, col </span><span class="s0">in </span><span class="s1">zip(b.mgr_locs, result):</span>
+            <span class="s1">data[col_loc] = col</span>
+
+    <span class="s0">if </span><span class="s1">header:</span>
+        <span class="s0">if </span><span class="s1">df.columns.nlevels &gt; </span><span class="s3">1</span><span class="s1">:</span>
+            <span class="s1">rows = expand_levels(df.columns.levels, df.columns.labels)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">rows = [list(df.columns.values)]</span>
+        <span class="s0">for </span><span class="s1">row </span><span class="s0">in </span><span class="s1">rows:</span>
+            <span class="s1">n = []</span>
+            <span class="s0">for </span><span class="s1">v </span><span class="s0">in </span><span class="s1">row:</span>
+                <span class="s0">if </span><span class="s1">isinstance(v, numpy.datetime64):</span>
+                    <span class="s1">v = Timestamp(v)</span>
+                <span class="s1">n.append(v)</span>
+            <span class="s1">row = n</span>
+            <span class="s0">if </span><span class="s1">index:</span>
+                <span class="s1">row = [</span><span class="s0">None</span><span class="s1">]*df.index.nlevels + row</span>
+            <span class="s0">yield </span><span class="s1">row</span>
+
+
+    <span class="s0">if </span><span class="s1">index:</span>
+        <span class="s0">yield </span><span class="s1">df.index.names</span>
+
+    <span class="s0">for </span><span class="s1">idx, v </span><span class="s0">in </span><span class="s1">enumerate(df.index):</span>
+        <span class="s1">row = [data[j][idx] </span><span class="s0">for </span><span class="s1">j </span><span class="s0">in </span><span class="s1">range(ncols)]</span>
+        <span class="s0">if </span><span class="s1">index:</span>
+            <span class="s1">row = [v] + row</span>
+        <span class="s0">yield </span><span class="s1">row</span>
+
+
+<span class="s0">def </span><span class="s1">expand_levels(levels, labels):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Multiindexes need expanding so that subtitles repeat 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">for </span><span class="s1">label, order </span><span class="s0">in </span><span class="s1">zip(levels, labels):</span>
+        <span class="s1">current = </span><span class="s0">None</span>
+        <span class="s1">row = []</span>
+        <span class="s0">for </span><span class="s1">idx </span><span class="s0">in </span><span class="s1">order:</span>
+            <span class="s0">if </span><span class="s1">current == idx:</span>
+                <span class="s1">row.append(</span><span class="s0">None</span><span class="s1">)</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">row.append(label[idx])</span>
+                <span class="s1">current = idx</span>
+        <span class="s0">yield </span><span class="s1">row</span>
+</pre>
+</body>
+</html>

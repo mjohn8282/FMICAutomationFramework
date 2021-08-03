@@ -1,0 +1,136 @@
+<html>
+<head>
+<title>test_release.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+.s3 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+test_release.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">collections </span><span class="s0">import </span><span class="s1">namedtuple</span>
+<span class="s0">from </span><span class="s1">datetime </span><span class="s0">import </span><span class="s1">datetime</span>
+<span class="s0">import </span><span class="s1">json</span>
+<span class="s0">import </span><span class="s1">os</span>
+<span class="s0">import </span><span class="s1">unittest</span>
+
+<span class="s0">from </span><span class="s1">yarg.package </span><span class="s0">import </span><span class="s1">json2package</span>
+<span class="s0">from </span><span class="s1">yarg.release </span><span class="s0">import </span><span class="s1">Release</span>
+
+
+<span class="s0">class </span><span class="s1">TestRelease(unittest.TestCase):</span>
+
+    <span class="s0">def </span><span class="s1">setUp(self):</span>
+        <span class="s1">package = os.path.join(os.path.dirname(__file__),</span>
+                               <span class="s2">'package.json'</span><span class="s1">)</span>
+        <span class="s1">self.json = json.loads(open(package).read())</span>
+        <span class="s1">self.package = json2package(open(package).read())</span>
+
+    <span class="s0">def </span><span class="s1">test_release_ids(self):</span>
+        <span class="s1">self.assertEquals([</span><span class="s2">u'0.0.0'</span><span class="s1">, </span><span class="s2">u'0.0.2'</span><span class="s1">, </span><span class="s2">u'0.0.15'</span><span class="s1">],</span>
+                          <span class="s1">self.package.release_ids)</span>
+
+    <span class="s0">def </span><span class="s1">test_release(self):</span>
+        <span class="s1">release_id = </span><span class="s2">'0.0.2'</span>
+        <span class="s1">release = self.json[</span><span class="s2">'releases'</span><span class="s1">][release_id]</span>
+        <span class="s1">release_list = [Release(release_id, r) </span><span class="s0">for </span><span class="s1">r </span><span class="s0">in </span><span class="s1">release]</span>
+        <span class="s1">self.assertEquals(release_list[</span><span class="s3">0</span><span class="s1">].md5_digest,</span>
+                          <span class="s1">self.package.release(release_id)[</span><span class="s3">0</span><span class="s1">].md5_digest)</span>
+        <span class="s1">self.assertEquals(release_list[</span><span class="s3">1</span><span class="s1">].md5_digest,</span>
+                          <span class="s1">self.package.release(release_id)[</span><span class="s3">1</span><span class="s1">].md5_digest)</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">'3e3098611177c34706de2e10476b3e50'</span><span class="s1">,</span>
+                          <span class="s1">self.package.release(release_id)[</span><span class="s3">0</span><span class="s1">].md5_digest)</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">'be198baa95116c1c9d17874428e3a0c6'</span><span class="s1">,</span>
+                          <span class="s1">self.package.release(release_id)[</span><span class="s3">1</span><span class="s1">].md5_digest)</span>
+
+    <span class="s0">def </span><span class="s1">test_repr(self):</span>
+        <span class="s1">release_id = </span><span class="s2">'0.0.2'</span>
+        <span class="s1">release = self.package.release(release_id)[</span><span class="s3">0</span><span class="s1">]</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">u'&lt;Release 0.0.2&gt;'</span><span class="s1">, release.__repr__())</span>
+
+    <span class="s0">def </span><span class="s1">test_release_id(self):</span>
+        <span class="s1">release_id = </span><span class="s2">'0.0.2'</span>
+        <span class="s1">release = self.package.release(release_id)[</span><span class="s3">0</span><span class="s1">]</span>
+        <span class="s1">self.assertEquals(release_id, release.release_id)</span>
+
+    <span class="s0">def </span><span class="s1">test_release_id(self):</span>
+        <span class="s1">release_id = </span><span class="s2">'0.0.3'</span>
+        <span class="s1">release = self.package.release(release_id)</span>
+        <span class="s1">self.assertEquals(</span><span class="s0">None</span><span class="s1">, release)</span>
+
+    <span class="s0">def </span><span class="s1">test_release_uploaded(self):</span>
+        <span class="s1">release_id = </span><span class="s2">'0.0.2'</span>
+        <span class="s1">release = self.package.release(release_id)[</span><span class="s3">0</span><span class="s1">]</span>
+        <span class="s1">self.assertEquals(datetime.strptime(</span><span class="s2">&quot;2014-08-16T12:21:20&quot;</span><span class="s1">,</span>
+                                            <span class="s2">&quot;%Y-%m-%dT%H:%M:%S&quot;</span><span class="s1">),</span>
+                          <span class="s1">release.uploaded)</span>
+
+    <span class="s0">def </span><span class="s1">test_release_python_version(self):</span>
+        <span class="s1">release_id = </span><span class="s2">'0.0.2'</span>
+        <span class="s1">release = self.package.release(release_id)[</span><span class="s3">0</span><span class="s1">]</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">u'2.7'</span><span class="s1">, release.python_version)</span>
+
+    <span class="s0">def </span><span class="s1">test_release_url(self):</span>
+        <span class="s1">release_id = </span><span class="s2">'0.0.2'</span>
+        <span class="s1">release = self.package.release(release_id)[</span><span class="s3">0</span><span class="s1">]</span>
+        <span class="s1">url = </span><span class="s2">u'https://pypi.python.org/packages/2.7/y/yarg/yarg-0.0.2-py2.py3-none-any.whl'</span>
+        <span class="s1">self.assertEquals(url, release.url)</span>
+
+    <span class="s0">def </span><span class="s1">test_release_md5(self):</span>
+        <span class="s1">release_id = </span><span class="s2">'0.0.2'</span>
+        <span class="s1">release = self.package.release(release_id)[</span><span class="s3">0</span><span class="s1">]</span>
+        <span class="s1">md5 = </span><span class="s2">u'3e3098611177c34706de2e10476b3e50'</span>
+        <span class="s1">self.assertEquals(md5, release.md5_digest)</span>
+
+    <span class="s0">def </span><span class="s1">test_release_filename(self):</span>
+        <span class="s1">release_id = </span><span class="s2">'0.0.2'</span>
+        <span class="s1">release = self.package.release(release_id)[</span><span class="s3">0</span><span class="s1">]</span>
+        <span class="s1">filename = </span><span class="s2">u'yarg-0.0.2-py2.py3-none-any.whl'</span>
+        <span class="s1">self.assertEquals(filename, release.filename)</span>
+
+    <span class="s0">def </span><span class="s1">test_release_size(self):</span>
+        <span class="s1">release_id = </span><span class="s2">'0.0.2'</span>
+        <span class="s1">release = self.package.release(release_id)[</span><span class="s3">0</span><span class="s1">]</span>
+        <span class="s1">size = </span><span class="s3">21596</span>
+        <span class="s1">self.assertEquals(size, release.size)</span>
+
+    <span class="s0">def </span><span class="s1">test_release_unknown_package_type(self):</span>
+        <span class="s1">release_id = </span><span class="s2">'0.0.0'</span>
+        <span class="s1">release = self.package.release(release_id)[</span><span class="s3">0</span><span class="s1">]</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">u'wheeeel'</span><span class="s1">, release.package_type)</span>
+
+    <span class="s0">def </span><span class="s1">test_release_package_type(self):</span>
+        <span class="s1">release_id = </span><span class="s2">'0.0.2'</span>
+        <span class="s1">release = self.package.release(release_id)[</span><span class="s3">0</span><span class="s1">]</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">u'wheel'</span><span class="s1">, release.package_type)</span>
+
+    <span class="s0">def </span><span class="s1">test_release_has_sig(self):</span>
+        <span class="s1">release_id = </span><span class="s2">'0.0.2'</span>
+        <span class="s1">release = self.package.release(release_id)[</span><span class="s3">0</span><span class="s1">]</span>
+        <span class="s1">self.assertEquals(</span><span class="s0">True</span><span class="s1">, release.has_sig)</span>
+
+    <span class="s0">def </span><span class="s1">test_latest_release_id(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">u'0.0.15'</span><span class="s1">, self.package.latest_release_id)</span>
+
+    <span class="s0">def </span><span class="s1">test_latest_release(self):</span>
+        <span class="s1">release_id = </span><span class="s2">'0.0.15'</span>
+        <span class="s1">release = self.json[</span><span class="s2">'releases'</span><span class="s1">][release_id]</span>
+        <span class="s1">release_list = [Release(release_id, r) </span><span class="s0">for </span><span class="s1">r </span><span class="s0">in </span><span class="s1">release]</span>
+        <span class="s1">self.assertEquals(release_list[</span><span class="s3">0</span><span class="s1">].md5_digest,</span>
+                          <span class="s1">self.package.latest_release[</span><span class="s3">0</span><span class="s1">].md5_digest)</span>
+        <span class="s1">self.assertEquals(release_list[</span><span class="s3">1</span><span class="s1">].md5_digest,</span>
+                          <span class="s1">self.package.latest_release[</span><span class="s3">1</span><span class="s1">].md5_digest)</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">'3e3098611177c34706de2e10476b3e51'</span><span class="s1">,</span>
+                          <span class="s1">self.package.latest_release[</span><span class="s3">0</span><span class="s1">].md5_digest)</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">'be198baa95116c1c9d17874428e3a0c7'</span><span class="s1">,</span>
+                          <span class="s1">self.package.latest_release[</span><span class="s3">1</span><span class="s1">].md5_digest)</span>
+</pre>
+</body>
+</html>

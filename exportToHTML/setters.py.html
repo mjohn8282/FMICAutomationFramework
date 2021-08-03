@@ -1,0 +1,97 @@
+<html>
+<head>
+<title>setters.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+setters.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+Commonly used hooks for on_setattr. 
+&quot;&quot;&quot;</span>
+
+<span class="s2">from </span><span class="s1">__future__ </span><span class="s2">import </span><span class="s1">absolute_import, division, print_function</span>
+
+<span class="s2">from </span><span class="s1">. </span><span class="s2">import </span><span class="s1">_config</span>
+<span class="s2">from </span><span class="s1">.exceptions </span><span class="s2">import </span><span class="s1">FrozenAttributeError</span>
+
+
+<span class="s2">def </span><span class="s1">pipe(*setters):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Run all *setters* and return the return value of the last one. 
+ 
+    .. versionadded:: 20.1.0 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">wrapped_pipe(instance, attrib, new_value):</span>
+        <span class="s1">rv = new_value</span>
+
+        <span class="s2">for </span><span class="s1">setter </span><span class="s2">in </span><span class="s1">setters:</span>
+            <span class="s1">rv = setter(instance, attrib, rv)</span>
+
+        <span class="s2">return </span><span class="s1">rv</span>
+
+    <span class="s2">return </span><span class="s1">wrapped_pipe</span>
+
+
+<span class="s2">def </span><span class="s1">frozen(_, __, ___):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Prevent an attribute to be modified. 
+ 
+    .. versionadded:: 20.1.0 
+    &quot;&quot;&quot;</span>
+    <span class="s2">raise </span><span class="s1">FrozenAttributeError()</span>
+
+
+<span class="s2">def </span><span class="s1">validate(instance, attrib, new_value):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Run *attrib*'s validator on *new_value* if it has one. 
+ 
+    .. versionadded:: 20.1.0 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">_config._run_validators </span><span class="s2">is False</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">new_value</span>
+
+    <span class="s1">v = attrib.validator</span>
+    <span class="s2">if not </span><span class="s1">v:</span>
+        <span class="s2">return </span><span class="s1">new_value</span>
+
+    <span class="s1">v(instance, attrib, new_value)</span>
+
+    <span class="s2">return </span><span class="s1">new_value</span>
+
+
+<span class="s2">def </span><span class="s1">convert(instance, attrib, new_value):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Run *attrib*'s converter -- if it has one --  on *new_value* and return the 
+    result. 
+ 
+    .. versionadded:: 20.1.0 
+    &quot;&quot;&quot;</span>
+    <span class="s1">c = attrib.converter</span>
+    <span class="s2">if </span><span class="s1">c:</span>
+        <span class="s2">return </span><span class="s1">c(new_value)</span>
+
+    <span class="s2">return </span><span class="s1">new_value</span>
+
+
+<span class="s1">NO_OP = object()</span>
+<span class="s3">&quot;&quot;&quot; 
+Sentinel for disabling class-wide *on_setattr* hooks for certain attributes. 
+ 
+Does not work in `pipe` or within lists. 
+ 
+.. versionadded:: 20.1.0 
+&quot;&quot;&quot;</span>
+</pre>
+</body>
+</html>

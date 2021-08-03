@@ -1,0 +1,112 @@
+<html>
+<head>
+<title>transforms.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+transforms.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2015-2016, 2018 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Ceridwen &lt;ceridwenv@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Nick Drozd &lt;nicholasdrozd@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+
+<span class="s2">import </span><span class="s1">collections</span>
+<span class="s2">from </span><span class="s1">functools </span><span class="s2">import </span><span class="s1">lru_cache</span>
+
+
+<span class="s2">class </span><span class="s1">TransformVisitor:</span>
+    <span class="s0">&quot;&quot;&quot;A visitor for handling transforms. 
+ 
+    The standard approach of using it is to call 
+    :meth:`~visit` with an *astroid* module and the class 
+    will take care of the rest, walking the tree and running the 
+    transforms for each encountered node. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">TRANSFORM_MAX_CACHE_SIZE = </span><span class="s3">10000</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self):</span>
+        <span class="s1">self.transforms = collections.defaultdict(list)</span>
+
+    <span class="s1">@lru_cache(maxsize=TRANSFORM_MAX_CACHE_SIZE)</span>
+    <span class="s2">def </span><span class="s1">_transform(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Call matching transforms for the given node if any and return the 
+        transformed node. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">cls = node.__class__</span>
+        <span class="s2">if </span><span class="s1">cls </span><span class="s2">not in </span><span class="s1">self.transforms:</span>
+            <span class="s0"># no transform registered for this class of node</span>
+            <span class="s2">return </span><span class="s1">node</span>
+
+        <span class="s1">transforms = self.transforms[cls]</span>
+        <span class="s2">for </span><span class="s1">transform_func, predicate </span><span class="s2">in </span><span class="s1">transforms:</span>
+            <span class="s2">if </span><span class="s1">predicate </span><span class="s2">is None or </span><span class="s1">predicate(node):</span>
+                <span class="s1">ret = transform_func(node)</span>
+                <span class="s0"># if the transformation function returns something, it's</span>
+                <span class="s0"># expected to be a replacement for the node</span>
+                <span class="s2">if </span><span class="s1">ret </span><span class="s2">is not None</span><span class="s1">:</span>
+                    <span class="s1">node = ret</span>
+                <span class="s2">if </span><span class="s1">ret.__class__ != cls:</span>
+                    <span class="s0"># Can no longer apply the rest of the transforms.</span>
+                    <span class="s2">break</span>
+        <span class="s2">return </span><span class="s1">node</span>
+
+    <span class="s2">def </span><span class="s1">_visit(self, node):</span>
+        <span class="s2">if </span><span class="s1">hasattr(node, </span><span class="s4">&quot;_astroid_fields&quot;</span><span class="s1">):</span>
+            <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">node._astroid_fields:</span>
+                <span class="s1">value = getattr(node, name)</span>
+                <span class="s1">visited = self._visit_generic(value)</span>
+                <span class="s2">if </span><span class="s1">visited != value:</span>
+                    <span class="s1">setattr(node, name, visited)</span>
+        <span class="s2">return </span><span class="s1">self._transform(node)</span>
+
+    <span class="s2">def </span><span class="s1">_visit_generic(self, node):</span>
+        <span class="s2">if </span><span class="s1">isinstance(node, list):</span>
+            <span class="s2">return </span><span class="s1">[self._visit_generic(child) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node]</span>
+        <span class="s2">if </span><span class="s1">isinstance(node, tuple):</span>
+            <span class="s2">return </span><span class="s1">tuple(self._visit_generic(child) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node)</span>
+        <span class="s2">if not </span><span class="s1">node </span><span class="s2">or </span><span class="s1">isinstance(node, str):</span>
+            <span class="s2">return </span><span class="s1">node</span>
+
+        <span class="s2">return </span><span class="s1">self._visit(node)</span>
+
+    <span class="s2">def </span><span class="s1">register_transform(self, node_class, transform, predicate=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Register `transform(node)` function to be applied on the given 
+        astroid's `node_class` if `predicate` is None or returns true 
+        when called with the node as argument. 
+ 
+        The transform function may return a value which is then used to 
+        substitute the original node in the tree. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.transforms[node_class].append((transform, predicate))</span>
+
+    <span class="s2">def </span><span class="s1">unregister_transform(self, node_class, transform, predicate=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Unregister the given transform.&quot;&quot;&quot;</span>
+        <span class="s1">self.transforms[node_class].remove((transform, predicate))</span>
+
+    <span class="s2">def </span><span class="s1">visit(self, module):</span>
+        <span class="s0">&quot;&quot;&quot;Walk the given astroid *tree* and transform each encountered node 
+ 
+        Only the nodes which have transforms registered will actually 
+        be replaced or changed. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">module.body = [self._visit(child) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">module.body]</span>
+        <span class="s2">return </span><span class="s1">self._transform(module)</span>
+</pre>
+</body>
+</html>

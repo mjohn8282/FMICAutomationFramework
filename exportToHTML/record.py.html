@@ -1,0 +1,132 @@
+<html>
+<head>
+<title>record.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+record.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s2">import </span><span class="s1">Serialisable</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Sequence,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.sequence </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">MultiSequence,</span>
+    <span class="s1">MultiSequencePart,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s2">import </span><span class="s1">ExtensionList</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">NestedInteger,</span>
+    <span class="s1">NestedBool,</span>
+<span class="s1">)</span>
+
+<span class="s2">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s2">import </span><span class="s1">SHEET_MAIN_NS</span>
+<span class="s2">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s2">import </span><span class="s1">tostring</span>
+
+<span class="s2">from </span><span class="s1">.fields </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">Boolean,</span>
+    <span class="s1">Error,</span>
+    <span class="s1">Missing,</span>
+    <span class="s1">Number,</span>
+    <span class="s1">Text,</span>
+    <span class="s1">TupleList,</span>
+    <span class="s1">DateTimeField,</span>
+    <span class="s1">Index,</span>
+<span class="s1">)</span>
+
+
+<span class="s2">class </span><span class="s1">Record(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;r&quot;</span>
+
+    <span class="s1">_fields = MultiSequence()</span>
+    <span class="s1">m = MultiSequencePart(expected_type=Missing, store=</span><span class="s3">&quot;_fields&quot;</span><span class="s1">)</span>
+    <span class="s1">n = MultiSequencePart(expected_type=Number, store=</span><span class="s3">&quot;_fields&quot;</span><span class="s1">)</span>
+    <span class="s1">b = MultiSequencePart(expected_type=Boolean, store=</span><span class="s3">&quot;_fields&quot;</span><span class="s1">)</span>
+    <span class="s1">e = MultiSequencePart(expected_type=Error, store=</span><span class="s3">&quot;_fields&quot;</span><span class="s1">)</span>
+    <span class="s1">s = MultiSequencePart(expected_type=Text,  store=</span><span class="s3">&quot;_fields&quot;</span><span class="s1">)</span>
+    <span class="s1">d = MultiSequencePart(expected_type=DateTimeField, store=</span><span class="s3">&quot;_fields&quot;</span><span class="s1">)</span>
+    <span class="s1">x = MultiSequencePart(expected_type=Index, store=</span><span class="s3">&quot;_fields&quot;</span><span class="s1">)</span>
+
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">_fields=(),</span>
+                 <span class="s1">m=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">n=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">b=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">e=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">s=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">d=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">x=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self._fields = _fields</span>
+
+
+<span class="s2">class </span><span class="s1">RecordList(Serialisable):</span>
+
+    <span class="s1">mime_type = </span><span class="s3">&quot;application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml&quot;</span>
+    <span class="s1">rel_type = </span><span class="s3">&quot;http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords&quot;</span>
+    <span class="s1">_id = </span><span class="s4">1</span>
+    <span class="s1">_path = </span><span class="s3">&quot;/xl/pivotCache/pivotCacheRecords{0}.xml&quot;</span>
+
+    <span class="s1">tagname =</span><span class="s3">&quot;pivotCacheRecords&quot;</span>
+
+    <span class="s1">r = Sequence(expected_type=Record, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'r'</span><span class="s1">, )</span>
+    <span class="s1">__attrs__ = (</span><span class="s3">'count'</span><span class="s1">, )</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">count=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">r=(),</span>
+                 <span class="s1">extLst=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.r = r</span>
+        <span class="s1">self.extLst = extLst</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">count(self):</span>
+        <span class="s2">return </span><span class="s1">len(self.r)</span>
+
+
+    <span class="s2">def </span><span class="s1">to_tree(self):</span>
+        <span class="s1">tree = super(RecordList, self).to_tree()</span>
+        <span class="s1">tree.set(</span><span class="s3">&quot;xmlns&quot;</span><span class="s1">, SHEET_MAIN_NS)</span>
+        <span class="s2">return </span><span class="s1">tree</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">path(self):</span>
+        <span class="s2">return </span><span class="s1">self._path.format(self._id)</span>
+
+
+    <span class="s2">def </span><span class="s1">_write(self, archive, manifest):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Write to zipfile and update manifest 
+        &quot;&quot;&quot;</span>
+        <span class="s1">xml = tostring(self.to_tree())</span>
+        <span class="s1">archive.writestr(self.path[</span><span class="s4">1</span><span class="s1">:], xml)</span>
+        <span class="s1">manifest.append(self)</span>
+
+
+    <span class="s2">def </span><span class="s1">_write_rels(self, archive, manifest):</span>
+        <span class="s2">pass</span>
+</pre>
+</body>
+</html>

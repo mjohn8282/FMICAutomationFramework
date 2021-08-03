@@ -1,0 +1,125 @@
+<html>
+<head>
+<title>xmlfile.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+xmlfile.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2015 openpyxl</span>
+
+<span class="s3">&quot;&quot;&quot;Implements the lxml.etree.xmlfile API using the standard library xml.etree&quot;&quot;&quot;</span>
+
+
+<span class="s0">from </span><span class="s1">contextlib </span><span class="s0">import </span><span class="s1">contextmanager</span>
+
+<span class="s0">from </span><span class="s1">xml.etree.ElementTree </span><span class="s0">import </span><span class="s1">Element, tostring</span>
+
+
+<span class="s0">class </span><span class="s1">LxmlSyntaxError(Exception):</span>
+    <span class="s0">pass</span>
+
+
+<span class="s0">class </span><span class="s1">_FakeIncrementalFileWriter(object):</span>
+    <span class="s2">&quot;&quot;&quot;Replacement for _IncrementalFileWriter of lxml. 
+       Uses ElementTree to build xml in memory.&quot;&quot;&quot;</span>
+    <span class="s0">def </span><span class="s1">__init__(self, output_file):</span>
+        <span class="s1">self._element_stack = []</span>
+        <span class="s1">self._top_element = </span><span class="s0">None</span>
+        <span class="s1">self._file = output_file</span>
+        <span class="s1">self._have_root = </span><span class="s0">False</span>
+
+    <span class="s1">@contextmanager</span>
+    <span class="s0">def </span><span class="s1">element(self, tag, attrib=</span><span class="s0">None</span><span class="s1">, nsmap=</span><span class="s0">None</span><span class="s1">, **_extra):</span>
+        <span class="s2">&quot;&quot;&quot;Create a new xml element using a context manager. 
+        The elements are written when the top level context is left. 
+ 
+        This is for code compatibility only as it is quite slow. 
+        &quot;&quot;&quot;</span>
+
+        <span class="s2"># __enter__ part</span>
+        <span class="s1">self._have_root = </span><span class="s0">True</span>
+        <span class="s0">if </span><span class="s1">attrib </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">attrib = {}</span>
+        <span class="s1">self._top_element = Element(tag, attrib=attrib, **_extra)</span>
+        <span class="s1">self._top_element.text = </span><span class="s3">''</span>
+        <span class="s1">self._top_element.tail = </span><span class="s3">''</span>
+        <span class="s1">self._element_stack.append(self._top_element)</span>
+        <span class="s0">yield</span>
+
+        <span class="s2"># __exit__ part</span>
+        <span class="s1">el = self._element_stack.pop()</span>
+        <span class="s0">if </span><span class="s1">self._element_stack:</span>
+            <span class="s1">parent = self._element_stack[-</span><span class="s4">1</span><span class="s1">]</span>
+            <span class="s1">parent.append(self._top_element)</span>
+            <span class="s1">self._top_element = parent</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">self._write_element(el)</span>
+            <span class="s1">self._top_element = </span><span class="s0">None</span>
+
+    <span class="s0">def </span><span class="s1">write(self, arg):</span>
+        <span class="s2">&quot;&quot;&quot;Write a string or subelement.&quot;&quot;&quot;</span>
+
+        <span class="s0">if </span><span class="s1">isinstance(arg, str):</span>
+            <span class="s2"># it is not allowed to write a string outside of an element</span>
+            <span class="s0">if </span><span class="s1">self._top_element </span><span class="s0">is None</span><span class="s1">:</span>
+                <span class="s0">raise </span><span class="s1">LxmlSyntaxError()</span>
+
+            <span class="s0">if </span><span class="s1">len(self._top_element) == </span><span class="s4">0</span><span class="s1">:</span>
+                <span class="s2"># element has no children: add string to text</span>
+                <span class="s1">self._top_element.text += arg</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s2"># element has children: add string to tail of last child</span>
+                <span class="s1">self._top_element[-</span><span class="s4">1</span><span class="s1">].tail += arg</span>
+
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s0">if </span><span class="s1">self._top_element </span><span class="s0">is not None</span><span class="s1">:</span>
+                <span class="s1">self._top_element.append(arg)</span>
+            <span class="s0">elif not </span><span class="s1">self._have_root:</span>
+                <span class="s1">self._write_element(arg)</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s0">raise </span><span class="s1">LxmlSyntaxError()</span>
+
+    <span class="s0">def </span><span class="s1">_write_element(self, element):</span>
+        <span class="s1">xml = tostring(element)</span>
+        <span class="s1">self._file.write(xml)</span>
+
+    <span class="s0">def </span><span class="s1">__enter__(self):</span>
+        <span class="s0">pass</span>
+
+    <span class="s0">def </span><span class="s1">__exit__(self, type, value, traceback):</span>
+        <span class="s2"># without root the xml document is incomplete</span>
+        <span class="s0">if not </span><span class="s1">self._have_root:</span>
+            <span class="s0">raise </span><span class="s1">LxmlSyntaxError()</span>
+
+
+<span class="s0">class </span><span class="s1">xmlfile(object):</span>
+    <span class="s2">&quot;&quot;&quot;Context manager that can replace lxml.etree.xmlfile.&quot;&quot;&quot;</span>
+    <span class="s0">def </span><span class="s1">__init__(self, output_file, buffered=</span><span class="s0">False</span><span class="s1">, encoding=</span><span class="s0">None</span><span class="s1">, close=</span><span class="s0">False</span><span class="s1">):</span>
+        <span class="s0">if </span><span class="s1">isinstance(output_file, str):</span>
+            <span class="s1">self._file = open(output_file, </span><span class="s3">'wb'</span><span class="s1">)</span>
+            <span class="s1">self._close = </span><span class="s0">True</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">self._file = output_file</span>
+            <span class="s1">self._close = close</span>
+
+    <span class="s0">def </span><span class="s1">__enter__(self):</span>
+        <span class="s0">return </span><span class="s1">_FakeIncrementalFileWriter(self._file)</span>
+
+    <span class="s0">def </span><span class="s1">__exit__(self, type, value, traceback):</span>
+        <span class="s0">if </span><span class="s1">self._close == </span><span class="s0">True</span><span class="s1">:</span>
+            <span class="s1">self._file.close()</span>
+</pre>
+</body>
+</html>

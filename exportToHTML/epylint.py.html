@@ -1,0 +1,224 @@
+<html>
+<head>
+<title>epylint.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+epylint.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># mode: python; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4</span>
+<span class="s0"># -*- vim:fenc=utf-8:ft=python:et:sw=4:ts=4:sts=4</span>
+
+<span class="s0"># Copyright (c) 2008-2014 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2014 Jakob Normark &lt;jakobnormark@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Brett Cannon &lt;brett@python.org&gt;</span>
+<span class="s0"># Copyright (c) 2014 Manuel Vázquez Acosta &lt;mva.led@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Derek Harland &lt;derek.harland@finq.co.nz&gt;</span>
+<span class="s0"># Copyright (c) 2014 Arun Persaud &lt;arun@nubati.net&gt;</span>
+<span class="s0"># Copyright (c) 2015-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015 Mihai Balint &lt;balint.mihai@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015 Ionel Cristian Maries &lt;contact@ionelmc.ro&gt;</span>
+<span class="s0"># Copyright (c) 2017, 2020 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Daniela Plascencia &lt;daplascen@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Sushobhit &lt;31987769+sushobhit27@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Ryan McGuire &lt;ryan@enigmacurry.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 thernstig &lt;30827238+thernstig@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Radostin Stoyanov &lt;rst0git@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2019, 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Hugo van Kemenade &lt;hugovk@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Damien Baty &lt;damien.baty@polyconseil.fr&gt;</span>
+<span class="s0"># Copyright (c) 2020 Anthony Sottile &lt;asottile@umich.edu&gt;</span>
+<span class="s0"># Copyright (c) 2021 Andreas Finkler &lt;andi.finkler@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;Emacs and Flymake compatible Pylint. 
+ 
+This script is for integration with emacs and is compatible with flymake mode. 
+ 
+epylint walks out of python packages before invoking pylint. This avoids 
+reporting import errors that occur when a module within a package uses the 
+absolute import path to get another module within this package. 
+ 
+For example: 
+    - Suppose a package is structured as 
+ 
+        a/__init__.py 
+        a/b/x.py 
+        a/c/y.py 
+ 
+   - Then if y.py imports x as &quot;from a.b import x&quot; the following produces pylint 
+     errors 
+ 
+       cd a/c; pylint y.py 
+ 
+   - The following obviously doesn't 
+ 
+       pylint a/c/y.py 
+ 
+   - As this script will be invoked by emacs within the directory of the file 
+     we are checking we need to go out of it to avoid these false positives. 
+ 
+ 
+You may also use py_run to run pylint with desired options and get back (or not) 
+its output. 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">shlex</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">from </span><span class="s1">io </span><span class="s2">import </span><span class="s1">StringIO</span>
+<span class="s2">from </span><span class="s1">subprocess </span><span class="s2">import </span><span class="s1">PIPE, Popen</span>
+
+
+<span class="s2">def </span><span class="s1">_get_env():</span>
+    <span class="s0">&quot;&quot;&quot;Extracts the environment PYTHONPATH and appends the current sys.path to 
+    those.&quot;&quot;&quot;</span>
+    <span class="s1">env = dict(os.environ)</span>
+    <span class="s1">env[</span><span class="s3">&quot;PYTHONPATH&quot;</span><span class="s1">] = os.pathsep.join(sys.path)</span>
+    <span class="s2">return </span><span class="s1">env</span>
+
+
+<span class="s2">def </span><span class="s1">lint(filename, options=()):</span>
+    <span class="s0">&quot;&quot;&quot;Pylint the given file. 
+ 
+    When run from emacs we will be in the directory of a file, and passed its 
+    filename.  If this file is part of a package and is trying to import other 
+    modules from within its own package or another package rooted in a directory 
+    below it, pylint will classify it as a failed import. 
+ 
+    To get around this, we traverse down the directory tree to find the root of 
+    the package this module is in.  We then invoke pylint from this directory. 
+ 
+    Finally, we must correct the filenames in the output generated by pylint so 
+    Emacs doesn't become confused (it will expect just the original filename, 
+    while pylint may extend it with extra directories if we've traversed down 
+    the tree) 
+    &quot;&quot;&quot;</span>
+    <span class="s0"># traverse downwards until we are out of a python package</span>
+    <span class="s1">full_path = os.path.abspath(filename)</span>
+    <span class="s1">parent_path = os.path.dirname(full_path)</span>
+    <span class="s1">child_path = os.path.basename(full_path)</span>
+
+    <span class="s2">while </span><span class="s1">parent_path != </span><span class="s3">&quot;/&quot; </span><span class="s2">and </span><span class="s1">os.path.exists(</span>
+        <span class="s1">os.path.join(parent_path, </span><span class="s3">&quot;__init__.py&quot;</span><span class="s1">)</span>
+    <span class="s1">):</span>
+        <span class="s1">child_path = os.path.join(os.path.basename(parent_path), child_path)</span>
+        <span class="s1">parent_path = os.path.dirname(parent_path)</span>
+
+    <span class="s0"># Start pylint</span>
+    <span class="s0"># Ensure we use the python and pylint associated with the running epylint</span>
+    <span class="s1">run_cmd = </span><span class="s3">&quot;import sys; from pylint.lint import Run; Run(sys.argv[1:])&quot;</span>
+    <span class="s1">cmd = (</span>
+        <span class="s1">[sys.executable, </span><span class="s3">&quot;-c&quot;</span><span class="s1">, run_cmd]</span>
+        <span class="s1">+ [</span>
+            <span class="s3">&quot;--msg-template&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;{path}:{line}: {category} ({msg_id}, {symbol}, {obj}) {msg}&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;-r&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;n&quot;</span><span class="s1">,</span>
+            <span class="s1">child_path,</span>
+        <span class="s1">]</span>
+        <span class="s1">+ list(options)</span>
+    <span class="s1">)</span>
+
+    <span class="s2">with </span><span class="s1">Popen(</span>
+        <span class="s1">cmd, stdout=PIPE, cwd=parent_path, env=_get_env(), universal_newlines=</span><span class="s2">True</span>
+    <span class="s1">) </span><span class="s2">as </span><span class="s1">process:</span>
+
+        <span class="s2">for </span><span class="s1">line </span><span class="s2">in </span><span class="s1">process.stdout:</span>
+            <span class="s0"># remove pylintrc warning</span>
+            <span class="s2">if </span><span class="s1">line.startswith(</span><span class="s3">&quot;No config file found&quot;</span><span class="s1">):</span>
+                <span class="s2">continue</span>
+
+            <span class="s0"># modify the file name thats output to reverse the path traversal we made</span>
+            <span class="s1">parts = line.split(</span><span class="s3">&quot;:&quot;</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">parts </span><span class="s2">and </span><span class="s1">parts[</span><span class="s4">0</span><span class="s1">] == child_path:</span>
+                <span class="s1">line = </span><span class="s3">&quot;:&quot;</span><span class="s1">.join([filename] + parts[</span><span class="s4">1</span><span class="s1">:])</span>
+            <span class="s1">print(line, end=</span><span class="s3">&quot; &quot;</span><span class="s1">)</span>
+
+        <span class="s1">process.wait()</span>
+        <span class="s2">return </span><span class="s1">process.returncode</span>
+
+
+<span class="s2">def </span><span class="s1">py_run(command_options=</span><span class="s3">&quot;&quot;</span><span class="s1">, return_std=</span><span class="s2">False</span><span class="s1">, stdout=</span><span class="s2">None</span><span class="s1">, stderr=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Run pylint from python 
+ 
+    ``command_options`` is a string containing ``pylint`` command line options; 
+    ``return_std`` (boolean) indicates return of created standard output 
+    and error (see below); 
+    ``stdout`` and ``stderr`` are 'file-like' objects in which standard output 
+    could be written. 
+ 
+    Calling agent is responsible for stdout/err management (creation, close). 
+    Default standard output and error are those from sys, 
+    or standalone ones (``subprocess.PIPE``) are used 
+    if they are not set and ``return_std``. 
+ 
+    If ``return_std`` is set to ``True``, this function returns a 2-uple 
+    containing standard output and error related to created process, 
+    as follows: ``(stdout, stderr)``. 
+ 
+    To silently run Pylint on a module, and get its standard output and error: 
+        &gt;&gt;&gt; (pylint_stdout, pylint_stderr) = py_run( 'module_name.py', True) 
+    &quot;&quot;&quot;</span>
+    <span class="s0"># Detect if we use Python as executable or not, else default to `python`</span>
+    <span class="s1">executable = sys.executable </span><span class="s2">if </span><span class="s3">&quot;python&quot; </span><span class="s2">in </span><span class="s1">sys.executable </span><span class="s2">else </span><span class="s3">&quot;python&quot;</span>
+
+    <span class="s0"># Create command line to call pylint</span>
+    <span class="s1">epylint_part = [executable, </span><span class="s3">&quot;-c&quot;</span><span class="s1">, </span><span class="s3">&quot;from pylint import epylint;epylint.Run()&quot;</span><span class="s1">]</span>
+    <span class="s1">options = shlex.split(command_options, posix=</span><span class="s2">not </span><span class="s1">sys.platform.startswith(</span><span class="s3">&quot;win&quot;</span><span class="s1">))</span>
+    <span class="s1">cli = epylint_part + options</span>
+
+    <span class="s0"># Providing standard output and/or error if not set</span>
+    <span class="s2">if </span><span class="s1">stdout </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s2">if </span><span class="s1">return_std:</span>
+            <span class="s1">stdout = PIPE</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">stdout = sys.stdout</span>
+    <span class="s2">if </span><span class="s1">stderr </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s2">if </span><span class="s1">return_std:</span>
+            <span class="s1">stderr = PIPE</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">stderr = sys.stderr</span>
+    <span class="s0"># Call pylint in a subprocess</span>
+    <span class="s2">with </span><span class="s1">Popen(</span>
+        <span class="s1">cli,</span>
+        <span class="s1">shell=</span><span class="s2">False</span><span class="s1">,</span>
+        <span class="s1">stdout=stdout,</span>
+        <span class="s1">stderr=stderr,</span>
+        <span class="s1">env=_get_env(),</span>
+        <span class="s1">universal_newlines=</span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s1">) </span><span class="s2">as </span><span class="s1">process:</span>
+        <span class="s1">proc_stdout, proc_stderr = process.communicate()</span>
+        <span class="s0"># Return standard output and error</span>
+        <span class="s2">if </span><span class="s1">return_std:</span>
+            <span class="s2">return </span><span class="s1">StringIO(proc_stdout), StringIO(proc_stderr)</span>
+        <span class="s2">return None</span>
+
+
+<span class="s2">def </span><span class="s1">Run():</span>
+    <span class="s2">if </span><span class="s1">len(sys.argv) == </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s1">print(</span><span class="s3">&quot;Usage: %s &lt;filename&gt; [options]&quot; </span><span class="s1">% sys.argv[</span><span class="s4">0</span><span class="s1">])</span>
+        <span class="s1">sys.exit(</span><span class="s4">1</span><span class="s1">)</span>
+    <span class="s2">elif not </span><span class="s1">os.path.exists(sys.argv[</span><span class="s4">1</span><span class="s1">]):</span>
+        <span class="s1">print(</span><span class="s3">&quot;%s does not exist&quot; </span><span class="s1">% sys.argv[</span><span class="s4">1</span><span class="s1">])</span>
+        <span class="s1">sys.exit(</span><span class="s4">1</span><span class="s1">)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">sys.exit(lint(sys.argv[</span><span class="s4">1</span><span class="s1">], sys.argv[</span><span class="s4">2</span><span class="s1">:]))</span>
+
+
+<span class="s2">if </span><span class="s1">__name__ == </span><span class="s3">&quot;__main__&quot;</span><span class="s1">:</span>
+    <span class="s1">Run()</span>
+</pre>
+</body>
+</html>

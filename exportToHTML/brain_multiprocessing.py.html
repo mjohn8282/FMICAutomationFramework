@@ -1,0 +1,129 @@
+<html>
+<head>
+<title>brain_multiprocessing.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_multiprocessing.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2016, 2018, 2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Hugo van Kemenade &lt;hugovk@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2020-2021 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 David Gilman &lt;davidgilman1@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+
+<span class="s2">import </span><span class="s1">astroid</span>
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">exceptions</span>
+
+
+<span class="s2">def </span><span class="s1">_multiprocessing_transform():</span>
+    <span class="s1">module = astroid.parse(</span>
+        <span class="s3">&quot;&quot;&quot; 
+    from multiprocessing.managers import SyncManager 
+    def Manager(): 
+        return SyncManager() 
+    &quot;&quot;&quot;</span>
+    <span class="s1">)</span>
+    <span class="s0"># Multiprocessing uses a getattr lookup inside contexts,</span>
+    <span class="s0"># in order to get the attributes they need. Since it's extremely</span>
+    <span class="s0"># dynamic, we use this approach to fake it.</span>
+    <span class="s1">node = astroid.parse(</span>
+        <span class="s3">&quot;&quot;&quot; 
+    from multiprocessing.context import DefaultContext, BaseContext 
+    default = DefaultContext() 
+    base = BaseContext() 
+    &quot;&quot;&quot;</span>
+    <span class="s1">)</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">context = next(node[</span><span class="s3">&quot;default&quot;</span><span class="s1">].infer())</span>
+        <span class="s1">base = next(node[</span><span class="s3">&quot;base&quot;</span><span class="s1">].infer())</span>
+    <span class="s2">except </span><span class="s1">exceptions.InferenceError:</span>
+        <span class="s2">return </span><span class="s1">module</span>
+
+    <span class="s2">for </span><span class="s1">node </span><span class="s2">in </span><span class="s1">(context, base):</span>
+        <span class="s2">for </span><span class="s1">key, value </span><span class="s2">in </span><span class="s1">node.locals.items():</span>
+            <span class="s2">if </span><span class="s1">key.startswith(</span><span class="s3">&quot;_&quot;</span><span class="s1">):</span>
+                <span class="s2">continue</span>
+
+            <span class="s1">value = value[</span><span class="s4">0</span><span class="s1">]</span>
+            <span class="s2">if </span><span class="s1">isinstance(value, astroid.FunctionDef):</span>
+                <span class="s0"># We need to rebound this, since otherwise</span>
+                <span class="s0"># it will have an extra argument (self).</span>
+                <span class="s1">value = astroid.BoundMethod(value, node)</span>
+            <span class="s1">module[key] = value</span>
+    <span class="s2">return </span><span class="s1">module</span>
+
+
+<span class="s2">def </span><span class="s1">_multiprocessing_managers_transform():</span>
+    <span class="s2">return </span><span class="s1">astroid.parse(</span>
+        <span class="s3">&quot;&quot;&quot; 
+    import array 
+    import threading 
+    import multiprocessing.pool as pool 
+    import queue 
+ 
+    class Namespace(object): 
+        pass 
+ 
+    class Value(object): 
+        def __init__(self, typecode, value, lock=True): 
+            self._typecode = typecode 
+            self._value = value 
+        def get(self): 
+            return self._value 
+        def set(self, value): 
+            self._value = value 
+        def __repr__(self): 
+            return '%s(%r, %r)'%(type(self).__name__, self._typecode, self._value) 
+        value = property(get, set) 
+ 
+    def Array(typecode, sequence, lock=True): 
+        return array.array(typecode, sequence) 
+ 
+    class SyncManager(object): 
+        Queue = JoinableQueue = queue.Queue 
+        Event = threading.Event 
+        RLock = threading.RLock 
+        BoundedSemaphore = threading.BoundedSemaphore 
+        Condition = threading.Condition 
+        Barrier = threading.Barrier 
+        Pool = pool.Pool 
+        list = list 
+        dict = dict 
+        Value = Value 
+        Array = Array 
+        Namespace = Namespace 
+        __enter__ = lambda self: self 
+        __exit__ = lambda *args: args 
+ 
+        def start(self, initializer=None, initargs=None): 
+            pass 
+        def shutdown(self): 
+            pass 
+    &quot;&quot;&quot;</span>
+    <span class="s1">)</span>
+
+
+<span class="s1">astroid.register_module_extender(</span>
+    <span class="s1">astroid.MANAGER, </span><span class="s3">&quot;multiprocessing.managers&quot;</span><span class="s1">, _multiprocessing_managers_transform</span>
+<span class="s1">)</span>
+<span class="s1">astroid.register_module_extender(</span>
+    <span class="s1">astroid.MANAGER, </span><span class="s3">&quot;multiprocessing&quot;</span><span class="s1">, _multiprocessing_transform</span>
+<span class="s1">)</span>
+</pre>
+</body>
+</html>

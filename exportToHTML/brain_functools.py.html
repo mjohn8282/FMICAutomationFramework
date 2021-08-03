@@ -1,0 +1,178 @@
+<html>
+<head>
+<title>brain_functools.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_functools.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2016, 2018-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Bryce Guinta &lt;bryce.paul.guinta@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0">&quot;&quot;&quot;Astroid hooks for understanding functools library module.&quot;&quot;&quot;</span>
+<span class="s2">from </span><span class="s1">functools </span><span class="s2">import </span><span class="s1">partial</span>
+<span class="s2">from </span><span class="s1">itertools </span><span class="s2">import </span><span class="s1">chain</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">MANAGER, BoundMethod, arguments, extract_node, helpers, objects</span>
+<span class="s2">from </span><span class="s1">astroid.interpreter </span><span class="s2">import </span><span class="s1">objectmodel</span>
+
+<span class="s1">LRU_CACHE = </span><span class="s3">&quot;functools.lru_cache&quot;</span>
+
+
+<span class="s2">class </span><span class="s1">LruWrappedModel(objectmodel.FunctionModel):</span>
+    <span class="s0">&quot;&quot;&quot;Special attribute model for functions decorated with functools.lru_cache. 
+ 
+    The said decorators patches at decoration time some functions onto 
+    the decorated function. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">attr___wrapped__(self):</span>
+        <span class="s2">return </span><span class="s1">self._instance</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">attr_cache_info(self):</span>
+        <span class="s1">cache_info = extract_node(</span>
+            <span class="s3">&quot;&quot;&quot; 
+        from functools import _CacheInfo 
+        _CacheInfo(0, 0, 0, 0) 
+        &quot;&quot;&quot;</span>
+        <span class="s1">)</span>
+
+        <span class="s2">class </span><span class="s1">CacheInfoBoundMethod(BoundMethod):</span>
+            <span class="s2">def </span><span class="s1">infer_call_result(self, caller, context=</span><span class="s2">None</span><span class="s1">):</span>
+                <span class="s2">yield </span><span class="s1">helpers.safe_infer(cache_info)</span>
+
+        <span class="s2">return </span><span class="s1">CacheInfoBoundMethod(proxy=self._instance, bound=self._instance)</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">attr_cache_clear(self):</span>
+        <span class="s1">node = extract_node(</span><span class="s3">&quot;&quot;&quot;def cache_clear(self): pass&quot;&quot;&quot;</span><span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">BoundMethod(proxy=node, bound=self._instance.parent.scope())</span>
+
+
+<span class="s2">def </span><span class="s1">_transform_lru_cache(node, context=</span><span class="s2">None</span><span class="s1">) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+    <span class="s0"># TODO: this is not ideal, since the node should be immutable,</span>
+    <span class="s0"># but due to https://github.com/PyCQA/astroid/issues/354,</span>
+    <span class="s0"># there's not much we can do now.</span>
+    <span class="s0"># Replacing the node would work partially, because,</span>
+    <span class="s0"># in pylint, the old node would still be available, leading</span>
+    <span class="s0"># to spurious false positives.</span>
+    <span class="s1">node.special_attributes = LruWrappedModel()(node)</span>
+
+
+<span class="s2">def </span><span class="s1">_functools_partial_inference(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s1">call = arguments.CallSite.from_call(node, context=context)</span>
+    <span class="s1">number_of_positional = len(call.positional_arguments)</span>
+    <span class="s2">if </span><span class="s1">number_of_positional &lt; </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">astroid.UseInferenceDefault(</span>
+            <span class="s3">&quot;functools.partial takes at least one argument&quot;</span>
+        <span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">number_of_positional == </span><span class="s4">1 </span><span class="s2">and not </span><span class="s1">call.keyword_arguments:</span>
+        <span class="s2">raise </span><span class="s1">astroid.UseInferenceDefault(</span>
+            <span class="s3">&quot;functools.partial needs at least to have some filled arguments&quot;</span>
+        <span class="s1">)</span>
+
+    <span class="s1">partial_function = call.positional_arguments[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">inferred_wrapped_function = next(partial_function.infer(context=context))</span>
+    <span class="s2">except </span><span class="s1">astroid.InferenceError </span><span class="s2">as </span><span class="s1">exc:</span>
+        <span class="s2">raise </span><span class="s1">astroid.UseInferenceDefault </span><span class="s2">from </span><span class="s1">exc</span>
+    <span class="s2">if </span><span class="s1">inferred_wrapped_function </span><span class="s2">is </span><span class="s1">astroid.Uninferable:</span>
+        <span class="s2">raise </span><span class="s1">astroid.UseInferenceDefault(</span><span class="s3">&quot;Cannot infer the wrapped function&quot;</span><span class="s1">)</span>
+    <span class="s2">if not </span><span class="s1">isinstance(inferred_wrapped_function, astroid.FunctionDef):</span>
+        <span class="s2">raise </span><span class="s1">astroid.UseInferenceDefault(</span><span class="s3">&quot;The wrapped function is not a function&quot;</span><span class="s1">)</span>
+
+    <span class="s0"># Determine if the passed keywords into the callsite are supported</span>
+    <span class="s0"># by the wrapped function.</span>
+    <span class="s2">if not </span><span class="s1">inferred_wrapped_function.args:</span>
+        <span class="s1">function_parameters = []</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">function_parameters = chain(</span>
+            <span class="s1">inferred_wrapped_function.args.args </span><span class="s2">or </span><span class="s1">(),</span>
+            <span class="s1">inferred_wrapped_function.args.posonlyargs </span><span class="s2">or </span><span class="s1">(),</span>
+            <span class="s1">inferred_wrapped_function.args.kwonlyargs </span><span class="s2">or </span><span class="s1">(),</span>
+        <span class="s1">)</span>
+    <span class="s1">parameter_names = {</span>
+        <span class="s1">param.name</span>
+        <span class="s2">for </span><span class="s1">param </span><span class="s2">in </span><span class="s1">function_parameters</span>
+        <span class="s2">if </span><span class="s1">isinstance(param, astroid.AssignName)</span>
+    <span class="s1">}</span>
+    <span class="s2">if </span><span class="s1">set(call.keyword_arguments) - parameter_names:</span>
+        <span class="s2">raise </span><span class="s1">astroid.UseInferenceDefault(</span>
+            <span class="s3">&quot;wrapped function received unknown parameters&quot;</span>
+        <span class="s1">)</span>
+
+    <span class="s1">partial_function = objects.PartialFunction(</span>
+        <span class="s1">call,</span>
+        <span class="s1">name=inferred_wrapped_function.name,</span>
+        <span class="s1">doc=inferred_wrapped_function.doc,</span>
+        <span class="s1">lineno=inferred_wrapped_function.lineno,</span>
+        <span class="s1">col_offset=inferred_wrapped_function.col_offset,</span>
+        <span class="s1">parent=inferred_wrapped_function.parent,</span>
+    <span class="s1">)</span>
+    <span class="s1">partial_function.postinit(</span>
+        <span class="s1">args=inferred_wrapped_function.args,</span>
+        <span class="s1">body=inferred_wrapped_function.body,</span>
+        <span class="s1">decorators=inferred_wrapped_function.decorators,</span>
+        <span class="s1">returns=inferred_wrapped_function.returns,</span>
+        <span class="s1">type_comment_returns=inferred_wrapped_function.type_comment_returns,</span>
+        <span class="s1">type_comment_args=inferred_wrapped_function.type_comment_args,</span>
+    <span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">iter((partial_function,))</span>
+
+
+<span class="s2">def </span><span class="s1">_looks_like_lru_cache(node):</span>
+    <span class="s0">&quot;&quot;&quot;Check if the given function node is decorated with lru_cache.&quot;&quot;&quot;</span>
+    <span class="s2">if not </span><span class="s1">node.decorators:</span>
+        <span class="s2">return False</span>
+    <span class="s2">for </span><span class="s1">decorator </span><span class="s2">in </span><span class="s1">node.decorators.nodes:</span>
+        <span class="s2">if not </span><span class="s1">isinstance(decorator, astroid.Call):</span>
+            <span class="s2">continue</span>
+        <span class="s2">if </span><span class="s1">_looks_like_functools_member(decorator, </span><span class="s3">&quot;lru_cache&quot;</span><span class="s1">):</span>
+            <span class="s2">return True</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">_looks_like_functools_member(node, member) -&gt; bool:</span>
+    <span class="s0">&quot;&quot;&quot;Check if the given Call node is a functools.partial call&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">isinstance(node.func, astroid.Name):</span>
+        <span class="s2">return </span><span class="s1">node.func.name == member</span>
+    <span class="s2">if </span><span class="s1">isinstance(node.func, astroid.Attribute):</span>
+        <span class="s2">return </span><span class="s1">(</span>
+            <span class="s1">node.func.attrname == member</span>
+            <span class="s2">and </span><span class="s1">isinstance(node.func.expr, astroid.Name)</span>
+            <span class="s2">and </span><span class="s1">node.func.expr.name == </span><span class="s3">&quot;functools&quot;</span>
+        <span class="s1">)</span>
+    <span class="s2">return False</span>
+
+
+<span class="s1">_looks_like_partial = partial(_looks_like_functools_member, member=</span><span class="s3">&quot;partial&quot;</span><span class="s1">)</span>
+
+
+<span class="s1">MANAGER.register_transform(</span>
+    <span class="s1">astroid.FunctionDef, _transform_lru_cache, _looks_like_lru_cache</span>
+<span class="s1">)</span>
+
+
+<span class="s1">MANAGER.register_transform(</span>
+    <span class="s1">astroid.Call,</span>
+    <span class="s1">astroid.inference_tip(_functools_partial_inference),</span>
+    <span class="s1">_looks_like_partial,</span>
+<span class="s1">)</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,494 @@
+<html>
+<head>
+<title>spelling.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+spelling.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2014-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Michal Nowikowski &lt;godfryd@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2015 Pavel Roskin &lt;proski@gnu.org&gt;</span>
+<span class="s0"># Copyright (c) 2015 Ionel Cristian Maries &lt;contact@ionelmc.ro&gt;</span>
+<span class="s0"># Copyright (c) 2016-2017, 2020 Pedro Algarvio &lt;pedro@algarvio.me&gt;</span>
+<span class="s0"># Copyright (c) 2016 Alexander Todorov &lt;atodorov@otb.bg&gt;</span>
+<span class="s0"># Copyright (c) 2017 Łukasz Rogalski &lt;rogalski.91@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Mikhail Fesenko &lt;proggga@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018, 2020 Anthony Sottile &lt;asottile@umich.edu&gt;</span>
+<span class="s0"># Copyright (c) 2018 ssolanki &lt;sushobhitsolanki@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Mike Frysinger &lt;vapier@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Sushobhit &lt;31987769+sushobhit27@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2019-2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Peter Kolbus &lt;peter.kolbus@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 agutole &lt;toldo_carp@hotmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Ganden Schaffner &lt;gschaffner@pm.me&gt;</span>
+<span class="s0"># Copyright (c) 2020 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Damien Baty &lt;damien.baty@polyconseil.fr&gt;</span>
+<span class="s0"># Copyright (c) 2021 Marc Mueller &lt;30130371+cdce8p@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Andreas Finkler &lt;andi.finkler@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Eli Fine &lt;ejfine@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;Checker for spelling errors in comments and docstrings. 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">re</span>
+<span class="s2">import </span><span class="s1">tokenize</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Pattern</span>
+
+<span class="s2">from </span><span class="s1">pylint.checkers </span><span class="s2">import </span><span class="s1">BaseTokenChecker</span>
+<span class="s2">from </span><span class="s1">pylint.checkers.utils </span><span class="s2">import </span><span class="s1">check_messages</span>
+<span class="s2">from </span><span class="s1">pylint.interfaces </span><span class="s2">import </span><span class="s1">IAstroidChecker, ITokenChecker</span>
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s2">import </span><span class="s1">enchant</span>
+    <span class="s2">from </span><span class="s1">enchant.tokenize </span><span class="s2">import </span><span class="s1">(</span>
+        <span class="s1">Chunker,</span>
+        <span class="s1">EmailFilter,</span>
+        <span class="s1">Filter,</span>
+        <span class="s1">URLFilter,</span>
+        <span class="s1">WikiWordFilter,</span>
+        <span class="s1">get_tokenizer,</span>
+    <span class="s1">)</span>
+<span class="s2">except </span><span class="s1">ImportError:</span>
+    <span class="s1">enchant = </span><span class="s2">None</span>
+
+    <span class="s2">class </span><span class="s1">EmailFilter:  </span><span class="s0"># type: ignore</span>
+        <span class="s1">...</span>
+
+    <span class="s2">class </span><span class="s1">URLFilter:  </span><span class="s0"># type: ignore</span>
+        <span class="s1">...</span>
+
+    <span class="s2">class </span><span class="s1">WikiWordFilter:  </span><span class="s0"># type: ignore</span>
+        <span class="s1">...</span>
+
+    <span class="s2">class </span><span class="s1">Filter:  </span><span class="s0"># type: ignore</span>
+        <span class="s2">def </span><span class="s1">_skip(self, word):</span>
+            <span class="s2">raise </span><span class="s1">NotImplementedError</span>
+
+    <span class="s2">class </span><span class="s1">Chunker:  </span><span class="s0"># type: ignore</span>
+        <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">get_tokenizer(</span>
+        <span class="s1">tag=</span><span class="s2">None</span><span class="s1">, chunkers=</span><span class="s2">None</span><span class="s1">, filters=</span><span class="s2">None</span>
+    <span class="s1">):  </span><span class="s0"># pylint: disable=unused-argument</span>
+        <span class="s2">return </span><span class="s1">Filter()</span>
+
+
+<span class="s2">if </span><span class="s1">enchant </span><span class="s2">is not None</span><span class="s1">:</span>
+    <span class="s1">br = enchant.Broker()</span>
+    <span class="s1">dicts = br.list_dicts()</span>
+    <span class="s1">dict_choices = [</span><span class="s3">&quot;&quot;</span><span class="s1">] + [d[</span><span class="s4">0</span><span class="s1">] </span><span class="s2">for </span><span class="s1">d </span><span class="s2">in </span><span class="s1">dicts]</span>
+    <span class="s1">dicts = [</span><span class="s3">&quot;{} ({})&quot;</span><span class="s1">.format(d[</span><span class="s4">0</span><span class="s1">], d[</span><span class="s4">1</span><span class="s1">].name) </span><span class="s2">for </span><span class="s1">d </span><span class="s2">in </span><span class="s1">dicts]</span>
+    <span class="s1">dicts = </span><span class="s3">&quot;, &quot;</span><span class="s1">.join(dicts)</span>
+    <span class="s1">instr = </span><span class="s3">&quot;&quot;</span>
+<span class="s2">else</span><span class="s1">:</span>
+    <span class="s1">dicts = </span><span class="s3">&quot;none&quot;</span>
+    <span class="s1">dict_choices = [</span><span class="s3">&quot;&quot;</span><span class="s1">]</span>
+    <span class="s1">instr = </span><span class="s3">&quot; To make it work, install the 'python-enchant' package.&quot;</span>
+
+
+<span class="s2">class </span><span class="s1">WordsWithDigitsFilter(Filter):</span>
+    <span class="s0">&quot;&quot;&quot;Skips words with digits.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">_skip(self, word):</span>
+        <span class="s2">for </span><span class="s1">char </span><span class="s2">in </span><span class="s1">word:</span>
+            <span class="s2">if </span><span class="s1">char.isdigit():</span>
+                <span class="s2">return True</span>
+        <span class="s2">return False</span>
+
+
+<span class="s2">class </span><span class="s1">WordsWithUnderscores(Filter):</span>
+    <span class="s0">&quot;&quot;&quot;Skips words with underscores. 
+ 
+    They are probably function parameter names. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">_skip(self, word):</span>
+        <span class="s2">return </span><span class="s3">&quot;_&quot; </span><span class="s2">in </span><span class="s1">word</span>
+
+
+<span class="s2">class </span><span class="s1">RegExFilter(Filter):</span>
+    <span class="s0">&quot;&quot;&quot;Parent class for filters using regular expressions. 
+ 
+    This filter skips any words the match the expression 
+    assigned to the class attribute ``_pattern``. 
+ 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">_pattern: Pattern[str]</span>
+
+    <span class="s2">def </span><span class="s1">_skip(self, word) -&gt; bool:</span>
+        <span class="s2">return </span><span class="s1">bool(self._pattern.match(word))</span>
+
+
+<span class="s2">class </span><span class="s1">CamelCasedWord(RegExFilter):</span>
+    <span class="s0">r&quot;&quot;&quot;Filter skipping over camelCasedWords. 
+    This filter skips any words matching the following regular expression: 
+ 
+           ^([a-z]\w+[A-Z]+\w+) 
+ 
+    That is, any words that are camelCasedWords. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">_pattern = re.compile(</span><span class="s3">r&quot;^([a-z]+([\d]|[A-Z])(?:\w+)?)&quot;</span><span class="s1">)</span>
+
+
+<span class="s2">class </span><span class="s1">SphinxDirectives(RegExFilter):</span>
+    <span class="s0">r&quot;&quot;&quot;Filter skipping over Sphinx Directives. 
+    This filter skips any words matching the following regular expression: 
+ 
+           ^(:([a-z]+)){1,2}:`([^`]+)(`)? 
+ 
+    That is, for example, :class:`BaseQuery` 
+    &quot;&quot;&quot;</span>
+    <span class="s0"># The final ` in the pattern is optional because enchant strips it out</span>
+    <span class="s1">_pattern = re.compile(</span><span class="s3">r&quot;^(:([a-z]+)){1,2}:`([^`]+)(`)?&quot;</span><span class="s1">)</span>
+
+
+<span class="s2">class </span><span class="s1">ForwardSlashChunker(Chunker):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    This chunker allows splitting words like 'before/after' into 'before' and 'after' 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">next(self):</span>
+        <span class="s2">while True</span><span class="s1">:</span>
+            <span class="s2">if not </span><span class="s1">self._text:</span>
+                <span class="s2">raise </span><span class="s1">StopIteration()</span>
+            <span class="s2">if </span><span class="s3">&quot;/&quot; </span><span class="s2">not in </span><span class="s1">self._text:</span>
+                <span class="s1">text = self._text</span>
+                <span class="s1">self._offset = </span><span class="s4">0</span>
+                <span class="s1">self._text = </span><span class="s3">&quot;&quot;</span>
+                <span class="s2">return </span><span class="s1">(text, </span><span class="s4">0</span><span class="s1">)</span>
+            <span class="s1">pre_text, post_text = self._text.split(</span><span class="s3">&quot;/&quot;</span><span class="s1">, </span><span class="s4">1</span><span class="s1">)</span>
+            <span class="s1">self._text = post_text</span>
+            <span class="s1">self._offset = </span><span class="s4">0</span>
+            <span class="s2">if </span><span class="s1">(</span>
+                <span class="s2">not </span><span class="s1">pre_text</span>
+                <span class="s2">or not </span><span class="s1">post_text</span>
+                <span class="s2">or not </span><span class="s1">pre_text[-</span><span class="s4">1</span><span class="s1">].isalpha()</span>
+                <span class="s2">or not </span><span class="s1">post_text[</span><span class="s4">0</span><span class="s1">].isalpha()</span>
+            <span class="s1">):</span>
+                <span class="s1">self._text = </span><span class="s3">&quot;&quot;</span>
+                <span class="s1">self._offset = </span><span class="s4">0</span>
+                <span class="s2">return </span><span class="s1">(pre_text + </span><span class="s3">&quot;/&quot; </span><span class="s1">+ post_text, </span><span class="s4">0</span><span class="s1">)</span>
+            <span class="s2">return </span><span class="s1">(pre_text, </span><span class="s4">0</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_next(self):</span>
+        <span class="s2">while True</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s3">&quot;/&quot; </span><span class="s2">not in </span><span class="s1">self._text:</span>
+                <span class="s2">return </span><span class="s1">(self._text, </span><span class="s4">0</span><span class="s1">)</span>
+            <span class="s1">pre_text, post_text = self._text.split(</span><span class="s3">&quot;/&quot;</span><span class="s1">, </span><span class="s4">1</span><span class="s1">)</span>
+            <span class="s2">if not </span><span class="s1">pre_text </span><span class="s2">or not </span><span class="s1">post_text:</span>
+                <span class="s2">break</span>
+            <span class="s2">if not </span><span class="s1">pre_text[-</span><span class="s4">1</span><span class="s1">].isalpha() </span><span class="s2">or not </span><span class="s1">post_text[</span><span class="s4">0</span><span class="s1">].isalpha():</span>
+                <span class="s2">raise </span><span class="s1">StopIteration()</span>
+            <span class="s1">self._text = pre_text + </span><span class="s3">&quot; &quot; </span><span class="s1">+ post_text</span>
+        <span class="s2">raise </span><span class="s1">StopIteration()</span>
+
+
+<span class="s1">CODE_FLANKED_IN_BACKTICK_REGEX = re.compile(</span><span class="s3">r&quot;(\s|^)(`{1,2})([^`]+)(\2)([^`]|$)&quot;</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_strip_code_flanked_in_backticks(line: str) -&gt; str:</span>
+    <span class="s0">&quot;&quot;&quot;Alter line so code flanked in backticks is ignored. 
+ 
+    Pyenchant automatically strips backticks when parsing tokens, 
+    so this cannot be done at the individual filter level.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">replace_code_but_leave_surrounding_characters(match_obj) -&gt; str:</span>
+        <span class="s2">return </span><span class="s1">match_obj.group(</span><span class="s4">1</span><span class="s1">) + match_obj.group(</span><span class="s4">5</span><span class="s1">)</span>
+
+    <span class="s2">return </span><span class="s1">CODE_FLANKED_IN_BACKTICK_REGEX.sub(</span>
+        <span class="s1">replace_code_but_leave_surrounding_characters, line</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">class </span><span class="s1">SpellingChecker(BaseTokenChecker):</span>
+    <span class="s0">&quot;&quot;&quot;Check spelling in comments and docstrings&quot;&quot;&quot;</span>
+
+    <span class="s1">__implements__ = (ITokenChecker, IAstroidChecker)</span>
+    <span class="s1">name = </span><span class="s3">&quot;spelling&quot;</span>
+    <span class="s1">msgs = {</span>
+        <span class="s3">&quot;C0401&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Wrong spelling of a word '%s' in a comment:</span><span class="s5">\n</span><span class="s3">%s</span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;%s</span><span class="s5">\n</span><span class="s3">Did you mean: '%s'?&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;wrong-spelling-in-comment&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a word in comment is not spelled correctly.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;C0402&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Wrong spelling of a word '%s' in a docstring:</span><span class="s5">\n</span><span class="s3">%s</span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;%s</span><span class="s5">\n</span><span class="s3">Did you mean: '%s'?&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;wrong-spelling-in-docstring&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a word in docstring is not spelled correctly.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;C0403&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Invalid characters %r in a docstring&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;invalid-characters-in-docstring&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a word in docstring cannot be checked by enchant.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+    <span class="s1">}</span>
+    <span class="s1">options = (</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;spelling-dict&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;choice&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;dict name&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;choices&quot;</span><span class="s1">: dict_choices,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Spelling dictionary name. &quot;</span>
+                <span class="s3">&quot;Available dictionaries: %s.%s&quot; </span><span class="s1">% (dicts, instr),</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;spelling-ignore-words&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;string&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;comma separated words&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;List of comma separated words that should not be checked.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;spelling-private-dict-file&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;string&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;path to file&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;A path to a file that contains the private &quot;</span>
+                <span class="s3">&quot;dictionary; one word per line.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;spelling-store-unknown-words&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s3">&quot;n&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;yn&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;y_or_n&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Tells whether to store unknown words to the &quot;</span>
+                <span class="s3">&quot;private dictionary (see the &quot;</span>
+                <span class="s3">&quot;--spelling-private-dict-file option) instead of &quot;</span>
+                <span class="s3">&quot;raising a message.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;max-spelling-suggestions&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s4">4</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;N&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Limits count of emitted suggestions for spelling mistakes.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;spelling-ignore-comment-directives&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s3">&quot;fmt: on,fmt: off,noqa:,noqa,nosec,isort:skip,mypy:&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;string&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;comma separated words&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;List of comma separated words that should be considered directives if they appear and the beginning of a comment and should not be checked.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">open(self):</span>
+        <span class="s1">self.initialized = </span><span class="s2">False</span>
+        <span class="s1">self.private_dict_file = </span><span class="s2">None</span>
+
+        <span class="s2">if </span><span class="s1">enchant </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">return</span>
+        <span class="s1">dict_name = self.config.spelling_dict</span>
+        <span class="s2">if not </span><span class="s1">dict_name:</span>
+            <span class="s2">return</span>
+
+        <span class="s1">self.ignore_list = [</span>
+            <span class="s1">w.strip() </span><span class="s2">for </span><span class="s1">w </span><span class="s2">in </span><span class="s1">self.config.spelling_ignore_words.split(</span><span class="s3">&quot;,&quot;</span><span class="s1">)</span>
+        <span class="s1">]</span>
+        <span class="s0"># &quot;param&quot; appears in docstring in param description and</span>
+        <span class="s0"># &quot;pylint&quot; appears in comments in pylint pragmas.</span>
+        <span class="s1">self.ignore_list.extend([</span><span class="s3">&quot;param&quot;</span><span class="s1">, </span><span class="s3">&quot;pylint&quot;</span><span class="s1">])</span>
+
+        <span class="s1">self.ignore_comment_directive_list = [</span>
+            <span class="s1">w.strip() </span><span class="s2">for </span><span class="s1">w </span><span class="s2">in </span><span class="s1">self.config.spelling_ignore_comment_directives.split(</span><span class="s3">&quot;,&quot;</span><span class="s1">)</span>
+        <span class="s1">]</span>
+
+        <span class="s0"># Expand tilde to allow e.g. spelling-private-dict-file = ~/.pylintdict</span>
+        <span class="s2">if </span><span class="s1">self.config.spelling_private_dict_file:</span>
+            <span class="s1">self.config.spelling_private_dict_file = os.path.expanduser(</span>
+                <span class="s1">self.config.spelling_private_dict_file</span>
+            <span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">self.config.spelling_private_dict_file:</span>
+            <span class="s1">self.spelling_dict = enchant.DictWithPWL(</span>
+                <span class="s1">dict_name, self.config.spelling_private_dict_file</span>
+            <span class="s1">)</span>
+            <span class="s1">self.private_dict_file = open(  </span><span class="s0"># pylint: disable=consider-using-with</span>
+                <span class="s1">self.config.spelling_private_dict_file, </span><span class="s3">&quot;a&quot;</span>
+            <span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.spelling_dict = enchant.Dict(dict_name)</span>
+
+        <span class="s2">if </span><span class="s1">self.config.spelling_store_unknown_words:</span>
+            <span class="s1">self.unknown_words = set()</span>
+
+        <span class="s1">self.tokenizer = get_tokenizer(</span>
+            <span class="s1">dict_name,</span>
+            <span class="s1">chunkers=[ForwardSlashChunker],</span>
+            <span class="s1">filters=[</span>
+                <span class="s1">EmailFilter,</span>
+                <span class="s1">URLFilter,</span>
+                <span class="s1">WikiWordFilter,</span>
+                <span class="s1">WordsWithDigitsFilter,</span>
+                <span class="s1">WordsWithUnderscores,</span>
+                <span class="s1">CamelCasedWord,</span>
+                <span class="s1">SphinxDirectives,</span>
+            <span class="s1">],</span>
+        <span class="s1">)</span>
+        <span class="s1">self.initialized = </span><span class="s2">True</span>
+
+    <span class="s2">def </span><span class="s1">close(self):</span>
+        <span class="s2">if </span><span class="s1">self.private_dict_file:</span>
+            <span class="s1">self.private_dict_file.close()</span>
+
+    <span class="s2">def </span><span class="s1">_check_spelling(self, msgid, line, line_num):</span>
+        <span class="s1">original_line = line</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">initial_space = re.search(</span><span class="s3">r&quot;^[^\S]\s*&quot;</span><span class="s1">, line).regs[</span><span class="s4">0</span><span class="s1">][</span><span class="s4">1</span><span class="s1">]</span>
+        <span class="s2">except </span><span class="s1">(IndexError, AttributeError):</span>
+            <span class="s1">initial_space = </span><span class="s4">0</span>
+        <span class="s2">if </span><span class="s1">line.strip().startswith(</span><span class="s3">&quot;#&quot;</span><span class="s1">) </span><span class="s2">and </span><span class="s3">&quot;docstring&quot; </span><span class="s2">not in </span><span class="s1">msgid:</span>
+            <span class="s1">line = line.strip()[</span><span class="s4">1</span><span class="s1">:]</span>
+            <span class="s0"># A ``Filter`` cannot determine if the directive is at the beginning of a line,</span>
+            <span class="s0">#   nor determine if a colon is present or not (``pyenchant`` strips trailing colons).</span>
+            <span class="s0">#   So implementing this here.</span>
+            <span class="s2">for </span><span class="s1">iter_directive </span><span class="s2">in </span><span class="s1">self.ignore_comment_directive_list:</span>
+                <span class="s2">if </span><span class="s1">line.startswith(</span><span class="s3">&quot; &quot; </span><span class="s1">+ iter_directive):</span>
+                    <span class="s1">line = line[(len(iter_directive) + </span><span class="s4">1</span><span class="s1">) :]</span>
+                    <span class="s2">break</span>
+            <span class="s1">starts_with_comment = </span><span class="s2">True</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">starts_with_comment = </span><span class="s2">False</span>
+
+        <span class="s1">line = _strip_code_flanked_in_backticks(line)</span>
+
+        <span class="s2">for </span><span class="s1">word, word_start_at </span><span class="s2">in </span><span class="s1">self.tokenizer(line.strip()):</span>
+            <span class="s1">word_start_at += initial_space</span>
+            <span class="s1">lower_cased_word = word.casefold()</span>
+
+            <span class="s0"># Skip words from ignore list.</span>
+            <span class="s2">if </span><span class="s1">word </span><span class="s2">in </span><span class="s1">self.ignore_list </span><span class="s2">or </span><span class="s1">lower_cased_word </span><span class="s2">in </span><span class="s1">self.ignore_list:</span>
+                <span class="s2">continue</span>
+
+            <span class="s0"># Strip starting u' from unicode literals and r' from raw strings.</span>
+            <span class="s2">if </span><span class="s1">word.startswith((</span><span class="s3">&quot;u'&quot;</span><span class="s1">, </span><span class="s3">'u&quot;'</span><span class="s1">, </span><span class="s3">&quot;r'&quot;</span><span class="s1">, </span><span class="s3">'r&quot;'</span><span class="s1">)) </span><span class="s2">and </span><span class="s1">len(word) &gt; </span><span class="s4">2</span><span class="s1">:</span>
+                <span class="s1">word = word[</span><span class="s4">2</span><span class="s1">:]</span>
+                <span class="s1">lower_cased_word = lower_cased_word[</span><span class="s4">2</span><span class="s1">:]</span>
+
+            <span class="s0"># If it is a known word, then continue.</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s2">if </span><span class="s1">self.spelling_dict.check(lower_cased_word):</span>
+                    <span class="s0"># The lower cased version of word passed spell checking</span>
+                    <span class="s2">continue</span>
+
+                <span class="s0"># If we reached this far, it means there was a spelling mistake.</span>
+                <span class="s0"># Let's retry with the original work because 'unicode' is a</span>
+                <span class="s0"># spelling mistake but 'Unicode' is not</span>
+                <span class="s2">if </span><span class="s1">self.spelling_dict.check(word):</span>
+                    <span class="s2">continue</span>
+            <span class="s2">except </span><span class="s1">enchant.errors.Error:</span>
+                <span class="s1">self.add_message(</span>
+                    <span class="s3">&quot;invalid-characters-in-docstring&quot;</span><span class="s1">, line=line_num, args=(word,)</span>
+                <span class="s1">)</span>
+                <span class="s2">continue</span>
+
+            <span class="s0"># Store word to private dict or raise a message.</span>
+            <span class="s2">if </span><span class="s1">self.config.spelling_store_unknown_words:</span>
+                <span class="s2">if </span><span class="s1">lower_cased_word </span><span class="s2">not in </span><span class="s1">self.unknown_words:</span>
+                    <span class="s1">self.private_dict_file.write(</span><span class="s3">&quot;%s</span><span class="s5">\n</span><span class="s3">&quot; </span><span class="s1">% lower_cased_word)</span>
+                    <span class="s1">self.unknown_words.add(lower_cased_word)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s0"># Present up to N suggestions.</span>
+                <span class="s1">suggestions = self.spelling_dict.suggest(word)</span>
+                <span class="s2">del </span><span class="s1">suggestions[self.config.max_spelling_suggestions :]</span>
+                <span class="s1">line_segment = line[word_start_at:]</span>
+                <span class="s1">match = re.search(</span><span class="s3">r&quot;(\W|^)(%s)(\W|$)&quot; </span><span class="s1">% word, line_segment)</span>
+                <span class="s2">if </span><span class="s1">match:</span>
+                    <span class="s0"># Start position of second group in regex.</span>
+                    <span class="s1">col = match.regs[</span><span class="s4">2</span><span class="s1">][</span><span class="s4">0</span><span class="s1">]</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">col = line_segment.index(word)</span>
+                <span class="s1">col += word_start_at</span>
+                <span class="s2">if </span><span class="s1">starts_with_comment:</span>
+                    <span class="s1">col += </span><span class="s4">1</span>
+                <span class="s1">indicator = (</span><span class="s3">&quot; &quot; </span><span class="s1">* col) + (</span><span class="s3">&quot;^&quot; </span><span class="s1">* len(word))</span>
+                <span class="s1">all_suggestion = </span><span class="s3">&quot;' or '&quot;</span><span class="s1">.join(suggestions)</span>
+                <span class="s1">args = (word, original_line, indicator, </span><span class="s3">f&quot;'</span><span class="s5">{</span><span class="s1">all_suggestion</span><span class="s5">}</span><span class="s3">'&quot;</span><span class="s1">)</span>
+                <span class="s1">self.add_message(msgid, line=line_num, args=args)</span>
+
+    <span class="s2">def </span><span class="s1">process_tokens(self, tokens):</span>
+        <span class="s2">if not </span><span class="s1">self.initialized:</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># Process tokens and look for comments.</span>
+        <span class="s2">for </span><span class="s1">(tok_type, token, (start_row, _), _, _) </span><span class="s2">in </span><span class="s1">tokens:</span>
+            <span class="s2">if </span><span class="s1">tok_type == tokenize.COMMENT:</span>
+                <span class="s2">if </span><span class="s1">start_row == </span><span class="s4">1 </span><span class="s2">and </span><span class="s1">token.startswith(</span><span class="s3">&quot;#!/&quot;</span><span class="s1">):</span>
+                    <span class="s0"># Skip shebang lines</span>
+                    <span class="s2">continue</span>
+                <span class="s2">if </span><span class="s1">token.startswith(</span><span class="s3">&quot;# pylint:&quot;</span><span class="s1">):</span>
+                    <span class="s0"># Skip pylint enable/disable comments</span>
+                    <span class="s2">continue</span>
+                <span class="s1">self._check_spelling(</span><span class="s3">&quot;wrong-spelling-in-comment&quot;</span><span class="s1">, token, start_row)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;wrong-spelling-in-docstring&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_module(self, node):</span>
+        <span class="s2">if not </span><span class="s1">self.initialized:</span>
+            <span class="s2">return</span>
+        <span class="s1">self._check_docstring(node)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;wrong-spelling-in-docstring&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_classdef(self, node):</span>
+        <span class="s2">if not </span><span class="s1">self.initialized:</span>
+            <span class="s2">return</span>
+        <span class="s1">self._check_docstring(node)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;wrong-spelling-in-docstring&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_functiondef(self, node):</span>
+        <span class="s2">if not </span><span class="s1">self.initialized:</span>
+            <span class="s2">return</span>
+        <span class="s1">self._check_docstring(node)</span>
+
+    <span class="s1">visit_asyncfunctiondef = visit_functiondef</span>
+
+    <span class="s2">def </span><span class="s1">_check_docstring(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;check the node has any spelling errors&quot;&quot;&quot;</span>
+        <span class="s1">docstring = node.doc</span>
+        <span class="s2">if not </span><span class="s1">docstring:</span>
+            <span class="s2">return</span>
+
+        <span class="s1">start_line = node.lineno + </span><span class="s4">1</span>
+
+        <span class="s0"># Go through lines of docstring</span>
+        <span class="s2">for </span><span class="s1">idx, line </span><span class="s2">in </span><span class="s1">enumerate(docstring.splitlines()):</span>
+            <span class="s1">self._check_spelling(</span><span class="s3">&quot;wrong-spelling-in-docstring&quot;</span><span class="s1">, line, start_line + idx)</span>
+
+
+<span class="s2">def </span><span class="s1">register(linter):</span>
+    <span class="s0">&quot;&quot;&quot;required method to auto register this checker&quot;&quot;&quot;</span>
+    <span class="s1">linter.register_checker(SpellingChecker(linter))</span>
+</pre>
+</body>
+</html>

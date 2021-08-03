@@ -1,0 +1,229 @@
+<html>
+<head>
+<title>manifest.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+manifest.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s3">&quot;&quot;&quot; 
+File manifest 
+&quot;&quot;&quot;</span>
+<span class="s0">import </span><span class="s1">mimetypes</span>
+<span class="s0">import </span><span class="s1">os.path</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">String, Sequence</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s0">import </span><span class="s1">fromstring</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">ARC_CORE,</span>
+    <span class="s1">ARC_CONTENT_TYPES,</span>
+    <span class="s1">ARC_WORKBOOK,</span>
+    <span class="s1">ARC_APP,</span>
+    <span class="s1">ARC_THEME,</span>
+    <span class="s1">ARC_STYLE,</span>
+    <span class="s1">ARC_SHARED_STRINGS,</span>
+    <span class="s1">EXTERNAL_LINK,</span>
+    <span class="s1">THEME_TYPE,</span>
+    <span class="s1">STYLES_TYPE,</span>
+    <span class="s1">XLSX,</span>
+    <span class="s1">XLSM,</span>
+    <span class="s1">XLTM,</span>
+    <span class="s1">XLTX,</span>
+    <span class="s1">WORKSHEET_TYPE,</span>
+    <span class="s1">COMMENTS_TYPE,</span>
+    <span class="s1">SHARED_STRINGS,</span>
+    <span class="s1">DRAWING_TYPE,</span>
+    <span class="s1">CHART_TYPE,</span>
+    <span class="s1">CHARTSHAPE_TYPE,</span>
+    <span class="s1">CHARTSHEET_TYPE,</span>
+    <span class="s1">CONTYPES_NS</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s0">import </span><span class="s1">tostring</span>
+
+<span class="s2"># initialise mime-types</span>
+<span class="s0">if not </span><span class="s1">mimetypes.inited:</span>
+    <span class="s1">mimetypes.init()</span>
+<span class="s1">mimetypes.add_type(</span><span class="s3">'application/xml'</span><span class="s1">, </span><span class="s3">&quot;.xml&quot;</span><span class="s1">)</span>
+<span class="s1">mimetypes.add_type(</span><span class="s3">'application/vnd.openxmlformats-package.relationships+xml'</span><span class="s1">, </span><span class="s3">&quot;.rels&quot;</span><span class="s1">)</span>
+<span class="s1">mimetypes.add_type(</span><span class="s3">&quot;application/vnd.ms-office.vbaProject&quot;</span><span class="s1">, </span><span class="s3">&quot;.bin&quot;</span><span class="s1">)</span>
+<span class="s1">mimetypes.add_type(</span><span class="s3">&quot;application/vnd.openxmlformats-officedocument.vmlDrawing&quot;</span><span class="s1">, </span><span class="s3">&quot;.vml&quot;</span><span class="s1">)</span>
+<span class="s1">mimetypes.add_type(</span><span class="s3">&quot;image/x-emf&quot;</span><span class="s1">, </span><span class="s3">&quot;.emf&quot;</span><span class="s1">)</span>
+
+
+<span class="s0">class </span><span class="s1">FileExtension(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;Default&quot;</span>
+
+    <span class="s1">Extension = String()</span>
+    <span class="s1">ContentType = String()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, Extension, ContentType):</span>
+        <span class="s1">self.Extension = Extension</span>
+        <span class="s1">self.ContentType = ContentType</span>
+
+
+<span class="s0">class </span><span class="s1">Override(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;Override&quot;</span>
+
+    <span class="s1">PartName = String()</span>
+    <span class="s1">ContentType = String()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, PartName, ContentType):</span>
+        <span class="s1">self.PartName = PartName</span>
+        <span class="s1">self.ContentType = ContentType</span>
+
+
+<span class="s1">DEFAULT_TYPES = [</span>
+    <span class="s1">FileExtension(</span><span class="s3">&quot;rels&quot;</span><span class="s1">, </span><span class="s3">&quot;application/vnd.openxmlformats-package.relationships+xml&quot;</span><span class="s1">),</span>
+    <span class="s1">FileExtension(</span><span class="s3">&quot;xml&quot;</span><span class="s1">, </span><span class="s3">&quot;application/xml&quot;</span><span class="s1">),</span>
+<span class="s1">]</span>
+
+<span class="s1">DEFAULT_OVERRIDE = [</span>
+    <span class="s1">Override(</span><span class="s3">&quot;/&quot; </span><span class="s1">+ ARC_SHARED_STRINGS, SHARED_STRINGS), </span><span class="s2"># Shared strings</span>
+    <span class="s1">Override(</span><span class="s3">&quot;/&quot; </span><span class="s1">+ ARC_STYLE, STYLES_TYPE), </span><span class="s2"># Styles</span>
+    <span class="s1">Override(</span><span class="s3">&quot;/&quot; </span><span class="s1">+ ARC_THEME, THEME_TYPE), </span><span class="s2"># Theme</span>
+    <span class="s1">Override(</span><span class="s3">&quot;/docProps/core.xml&quot;</span><span class="s1">, </span><span class="s3">&quot;application/vnd.openxmlformats-package.core-properties+xml&quot;</span><span class="s1">),</span>
+    <span class="s1">Override(</span><span class="s3">&quot;/docProps/app.xml&quot;</span><span class="s1">, </span><span class="s3">&quot;application/vnd.openxmlformats-officedocument.extended-properties+xml&quot;</span><span class="s1">)</span>
+<span class="s1">]</span>
+
+
+<span class="s0">class </span><span class="s1">Manifest(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;Types&quot;</span>
+
+    <span class="s1">Default = Sequence(expected_type=FileExtension, unique=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">Override = Sequence(expected_type=Override, unique=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">path = </span><span class="s3">&quot;[Content_Types].xml&quot;</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">&quot;Default&quot;</span><span class="s1">, </span><span class="s3">&quot;Override&quot;</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">Default=(),</span>
+                 <span class="s1">Override=(),</span>
+                 <span class="s1">):</span>
+        <span class="s0">if not </span><span class="s1">Default:</span>
+            <span class="s1">Default = DEFAULT_TYPES</span>
+        <span class="s1">self.Default = Default</span>
+        <span class="s0">if not </span><span class="s1">Override:</span>
+            <span class="s1">Override = DEFAULT_OVERRIDE</span>
+        <span class="s1">self.Override = Override</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">filenames(self):</span>
+        <span class="s0">return </span><span class="s1">[part.PartName </span><span class="s0">for </span><span class="s1">part </span><span class="s0">in </span><span class="s1">self.Override]</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">extensions(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Map content types to file extensions 
+        Skip parts without extensions 
+        &quot;&quot;&quot;</span>
+        <span class="s1">exts = set([os.path.splitext(part.PartName)[-</span><span class="s4">1</span><span class="s1">] </span><span class="s0">for </span><span class="s1">part </span><span class="s0">in </span><span class="s1">self.Override])</span>
+        <span class="s0">return </span><span class="s1">[(ext[</span><span class="s4">1</span><span class="s1">:], mimetypes.types_map[ext]) </span><span class="s0">for </span><span class="s1">ext </span><span class="s0">in </span><span class="s1">sorted(exts) </span><span class="s0">if </span><span class="s1">ext]</span>
+
+
+    <span class="s0">def </span><span class="s1">to_tree(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Custom serialisation method to allow setting a default namespace 
+        &quot;&quot;&quot;</span>
+        <span class="s1">defaults = [t.Extension </span><span class="s0">for </span><span class="s1">t </span><span class="s0">in </span><span class="s1">self.Default]</span>
+        <span class="s0">for </span><span class="s1">ext, mime </span><span class="s0">in </span><span class="s1">self.extensions:</span>
+            <span class="s0">if </span><span class="s1">ext </span><span class="s0">not in </span><span class="s1">defaults:</span>
+                <span class="s1">mime = FileExtension(ext, mime)</span>
+                <span class="s1">self.Default.append(mime)</span>
+        <span class="s1">tree = super(Manifest, self).to_tree()</span>
+        <span class="s1">tree.set(</span><span class="s3">&quot;xmlns&quot;</span><span class="s1">, CONTYPES_NS)</span>
+        <span class="s0">return </span><span class="s1">tree</span>
+
+
+    <span class="s0">def </span><span class="s1">__contains__(self, content_type):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Check whether a particular content type is contained 
+        &quot;&quot;&quot;</span>
+        <span class="s0">for </span><span class="s1">t </span><span class="s0">in </span><span class="s1">self.Override:</span>
+            <span class="s0">if </span><span class="s1">t.ContentType == content_type:</span>
+                <span class="s0">return True</span>
+
+
+    <span class="s0">def </span><span class="s1">find(self, content_type):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Find specific content-type 
+        &quot;&quot;&quot;</span>
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">next(self.findall(content_type))</span>
+        <span class="s0">except </span><span class="s1">StopIteration:</span>
+            <span class="s0">return</span>
+
+
+    <span class="s0">def </span><span class="s1">findall(self, content_type):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Find all elements of a specific content-type 
+        &quot;&quot;&quot;</span>
+        <span class="s0">for </span><span class="s1">t </span><span class="s0">in </span><span class="s1">self.Override:</span>
+            <span class="s0">if </span><span class="s1">t.ContentType == content_type:</span>
+                <span class="s0">yield </span><span class="s1">t</span>
+
+
+    <span class="s0">def </span><span class="s1">append(self, obj):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Add content object to the package manifest 
+        # needs a contract... 
+        &quot;&quot;&quot;</span>
+        <span class="s1">ct = Override(PartName=obj.path, ContentType=obj.mime_type)</span>
+        <span class="s1">self.Override.append(ct)</span>
+
+
+    <span class="s0">def </span><span class="s1">_write(self, archive, workbook):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Write manifest to the archive 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.append(workbook)</span>
+        <span class="s1">self._write_vba(workbook)</span>
+        <span class="s1">self._register_mimetypes(filenames=archive.namelist())</span>
+        <span class="s1">archive.writestr(self.path, tostring(self.to_tree()))</span>
+
+
+    <span class="s0">def </span><span class="s1">_register_mimetypes(self, filenames):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Make sure that the mime type for all file extensions is registered 
+        &quot;&quot;&quot;</span>
+        <span class="s0">for </span><span class="s1">fn </span><span class="s0">in </span><span class="s1">filenames:</span>
+            <span class="s1">ext = os.path.splitext(fn)[-</span><span class="s4">1</span><span class="s1">]</span>
+            <span class="s0">if not </span><span class="s1">ext:</span>
+                <span class="s0">continue</span>
+            <span class="s1">mime = mimetypes.types_map[ext]</span>
+            <span class="s1">fe = FileExtension(ext[</span><span class="s4">1</span><span class="s1">:], mime)</span>
+            <span class="s1">self.Default.append(fe)</span>
+
+
+    <span class="s0">def </span><span class="s1">_write_vba(self, workbook):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Add content types from cached workbook when keeping VBA 
+        &quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">workbook.vba_archive:</span>
+            <span class="s1">node = fromstring(workbook.vba_archive.read(ARC_CONTENT_TYPES))</span>
+            <span class="s1">mf = Manifest.from_tree(node)</span>
+            <span class="s1">filenames = self.filenames</span>
+            <span class="s0">for </span><span class="s1">override </span><span class="s0">in </span><span class="s1">mf.Override:</span>
+                <span class="s0">if </span><span class="s1">override.PartName </span><span class="s0">not in </span><span class="s1">filenames:</span>
+                    <span class="s1">self.Override.append(override)</span>
+</pre>
+</body>
+</html>

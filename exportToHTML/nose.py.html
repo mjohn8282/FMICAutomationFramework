@@ -1,0 +1,59 @@
+<html>
+<head>
+<title>nose.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+nose.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot;Run testsuites written for nose.&quot;&quot;&quot;</span>
+<span class="s2">from </span><span class="s1">_pytest </span><span class="s2">import </span><span class="s1">python</span>
+<span class="s2">from </span><span class="s1">_pytest </span><span class="s2">import </span><span class="s1">unittest</span>
+<span class="s2">from </span><span class="s1">_pytest.config </span><span class="s2">import </span><span class="s1">hookimpl</span>
+<span class="s2">from </span><span class="s1">_pytest.nodes </span><span class="s2">import </span><span class="s1">Item</span>
+
+
+<span class="s1">@hookimpl(trylast=</span><span class="s2">True</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">pytest_runtest_setup(item):</span>
+    <span class="s2">if </span><span class="s1">is_potential_nosetest(item):</span>
+        <span class="s2">if not </span><span class="s1">call_optional(item.obj, </span><span class="s3">&quot;setup&quot;</span><span class="s1">):</span>
+            <span class="s0"># Call module level setup if there is no object level one.</span>
+            <span class="s1">call_optional(item.parent.obj, </span><span class="s3">&quot;setup&quot;</span><span class="s1">)</span>
+        <span class="s0"># XXX This implies we only call teardown when setup worked.</span>
+        <span class="s1">item.session._setupstate.addfinalizer((</span><span class="s2">lambda</span><span class="s1">: teardown_nose(item)), item)</span>
+
+
+<span class="s2">def </span><span class="s1">teardown_nose(item):</span>
+    <span class="s2">if </span><span class="s1">is_potential_nosetest(item):</span>
+        <span class="s2">if not </span><span class="s1">call_optional(item.obj, </span><span class="s3">&quot;teardown&quot;</span><span class="s1">):</span>
+            <span class="s1">call_optional(item.parent.obj, </span><span class="s3">&quot;teardown&quot;</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">is_potential_nosetest(item: Item) -&gt; bool:</span>
+    <span class="s0"># Extra check needed since we do not do nose style setup/teardown</span>
+    <span class="s0"># on direct unittest style classes.</span>
+    <span class="s2">return </span><span class="s1">isinstance(item, python.Function) </span><span class="s2">and not </span><span class="s1">isinstance(</span>
+        <span class="s1">item, unittest.TestCaseFunction</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">call_optional(obj, name):</span>
+    <span class="s1">method = getattr(obj, name, </span><span class="s2">None</span><span class="s1">)</span>
+    <span class="s1">isfixture = hasattr(method, </span><span class="s3">&quot;_pytestfixturefunction&quot;</span><span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">method </span><span class="s2">is not None and not </span><span class="s1">isfixture </span><span class="s2">and </span><span class="s1">callable(method):</span>
+        <span class="s0"># If there's any problems allow the exception to raise rather than</span>
+        <span class="s0"># silently ignoring them.</span>
+        <span class="s1">method()</span>
+        <span class="s2">return True</span>
+</pre>
+</body>
+</html>

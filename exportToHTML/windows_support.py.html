@@ -1,0 +1,50 @@
+<html>
+<head>
+<title>windows_support.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+.s3 { color: #5c6370;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+windows_support.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">platform</span>
+<span class="s0">import </span><span class="s1">ctypes</span>
+
+
+<span class="s0">def </span><span class="s1">windows_only(func):</span>
+    <span class="s0">if </span><span class="s1">platform.system() != </span><span class="s2">'Windows'</span><span class="s1">:</span>
+        <span class="s0">return lambda </span><span class="s1">*args, **kwargs: </span><span class="s0">None</span>
+    <span class="s0">return </span><span class="s1">func</span>
+
+
+<span class="s1">@windows_only</span>
+<span class="s0">def </span><span class="s1">hide_file(path):</span>
+    <span class="s3">&quot;&quot;&quot; 
+    Set the hidden attribute on a file or directory. 
+ 
+    From http://stackoverflow.com/questions/19622133/ 
+ 
+    `path` must be text. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">__import__(</span><span class="s2">'ctypes.wintypes'</span><span class="s1">)</span>
+    <span class="s1">SetFileAttributes = ctypes.windll.kernel32.SetFileAttributesW</span>
+    <span class="s1">SetFileAttributes.argtypes = ctypes.wintypes.LPWSTR, ctypes.wintypes.DWORD</span>
+    <span class="s1">SetFileAttributes.restype = ctypes.wintypes.BOOL</span>
+
+    <span class="s1">FILE_ATTRIBUTE_HIDDEN = </span><span class="s4">0x02</span>
+
+    <span class="s1">ret = SetFileAttributes(path, FILE_ATTRIBUTE_HIDDEN)</span>
+    <span class="s0">if not </span><span class="s1">ret:</span>
+        <span class="s0">raise </span><span class="s1">ctypes.WinError()</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,221 @@
+<html>
+<head>
+<title>mccabe.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+mccabe.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2016-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Moises Lopez &lt;moylop260@vauxoo.com&gt;</span>
+<span class="s0"># Copyright (c) 2017, 2020 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019, 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Hugo van Kemenade &lt;hugovk@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Anthony Sottile &lt;asottile@umich.edu&gt;</span>
+
+<span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;Module to add McCabe checker class for pylint. &quot;&quot;&quot;</span>
+
+<span class="s2">from </span><span class="s1">mccabe </span><span class="s2">import </span><span class="s1">PathGraph </span><span class="s2">as </span><span class="s1">Mccabe_PathGraph</span>
+<span class="s2">from </span><span class="s1">mccabe </span><span class="s2">import </span><span class="s1">PathGraphingAstVisitor </span><span class="s2">as </span><span class="s1">Mccabe_PathGraphingAstVisitor</span>
+
+<span class="s2">from </span><span class="s1">pylint </span><span class="s2">import </span><span class="s1">checkers</span>
+<span class="s2">from </span><span class="s1">pylint.checkers.utils </span><span class="s2">import </span><span class="s1">check_messages</span>
+<span class="s2">from </span><span class="s1">pylint.interfaces </span><span class="s2">import </span><span class="s1">HIGH, IAstroidChecker</span>
+
+
+<span class="s2">class </span><span class="s1">PathGraph(Mccabe_PathGraph):</span>
+    <span class="s2">def </span><span class="s1">__init__(self, node):</span>
+        <span class="s1">super().__init__(name=</span><span class="s3">&quot;&quot;</span><span class="s1">, entity=</span><span class="s3">&quot;&quot;</span><span class="s1">, lineno=</span><span class="s4">1</span><span class="s1">)</span>
+        <span class="s1">self.root = node</span>
+
+
+<span class="s2">class </span><span class="s1">PathGraphingAstVisitor(Mccabe_PathGraphingAstVisitor):</span>
+    <span class="s2">def </span><span class="s1">__init__(self):</span>
+        <span class="s1">super().__init__()</span>
+        <span class="s1">self._bottom_counter = </span><span class="s4">0</span>
+
+    <span class="s2">def </span><span class="s1">default(self, node, *args):</span>
+        <span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.get_children():</span>
+            <span class="s1">self.dispatch(child, *args)</span>
+
+    <span class="s2">def </span><span class="s1">dispatch(self, node, *args):</span>
+        <span class="s1">self.node = node</span>
+        <span class="s1">klass = node.__class__</span>
+        <span class="s1">meth = self._cache.get(klass)</span>
+        <span class="s2">if </span><span class="s1">meth </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">class_name = klass.__name__</span>
+            <span class="s1">meth = getattr(self.visitor, </span><span class="s3">&quot;visit&quot; </span><span class="s1">+ class_name, self.default)</span>
+            <span class="s1">self._cache[klass] = meth</span>
+        <span class="s2">return </span><span class="s1">meth(node, *args)</span>
+
+    <span class="s2">def </span><span class="s1">visitFunctionDef(self, node):</span>
+        <span class="s2">if </span><span class="s1">self.graph </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s0"># closure</span>
+            <span class="s1">pathnode = self._append_node(node)</span>
+            <span class="s1">self.tail = pathnode</span>
+            <span class="s1">self.dispatch_list(node.body)</span>
+            <span class="s1">bottom = </span><span class="s3">&quot;%s&quot; </span><span class="s1">% self._bottom_counter</span>
+            <span class="s1">self._bottom_counter += </span><span class="s4">1</span>
+            <span class="s1">self.graph.connect(self.tail, bottom)</span>
+            <span class="s1">self.graph.connect(node, bottom)</span>
+            <span class="s1">self.tail = bottom</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.graph = PathGraph(node)</span>
+            <span class="s1">self.tail = node</span>
+            <span class="s1">self.dispatch_list(node.body)</span>
+            <span class="s1">self.graphs[</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">self.classname</span><span class="s5">}{</span><span class="s1">node.name</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">] = self.graph</span>
+            <span class="s1">self.reset()</span>
+
+    <span class="s1">visitAsyncFunctionDef = visitFunctionDef</span>
+
+    <span class="s2">def </span><span class="s1">visitSimpleStatement(self, node):</span>
+        <span class="s1">self._append_node(node)</span>
+
+    <span class="s1">visitAssert = (</span>
+        <span class="s1">visitAssign</span>
+    <span class="s1">) = (</span>
+        <span class="s1">visitAugAssign</span>
+    <span class="s1">) = (</span>
+        <span class="s1">visitDelete</span>
+    <span class="s1">) = (</span>
+        <span class="s1">visitPrint</span>
+    <span class="s1">) = (</span>
+        <span class="s1">visitRaise</span>
+    <span class="s1">) = (</span>
+        <span class="s1">visitYield</span>
+    <span class="s1">) = (</span>
+        <span class="s1">visitImport</span>
+    <span class="s1">) = (</span>
+        <span class="s1">visitCall</span>
+    <span class="s1">) = (</span>
+        <span class="s1">visitSubscript</span>
+    <span class="s1">) = (</span>
+        <span class="s1">visitPass</span>
+    <span class="s1">) = (</span>
+        <span class="s1">visitContinue</span>
+    <span class="s1">) = (</span>
+        <span class="s1">visitBreak</span>
+    <span class="s1">) = visitGlobal = visitReturn = visitExpr = visitAwait = visitSimpleStatement</span>
+
+    <span class="s2">def </span><span class="s1">visitWith(self, node):</span>
+        <span class="s1">self._append_node(node)</span>
+        <span class="s1">self.dispatch_list(node.body)</span>
+
+    <span class="s1">visitAsyncWith = visitWith</span>
+
+    <span class="s2">def </span><span class="s1">_append_node(self, node):</span>
+        <span class="s2">if not </span><span class="s1">self.tail:</span>
+            <span class="s2">return None</span>
+        <span class="s1">self.graph.connect(self.tail, node)</span>
+        <span class="s1">self.tail = node</span>
+        <span class="s2">return </span><span class="s1">node</span>
+
+    <span class="s2">def </span><span class="s1">_subgraph(self, node, name, extra_blocks=()):</span>
+        <span class="s0">&quot;&quot;&quot;create the subgraphs representing any `if` and `for` statements&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.graph </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s0"># global loop</span>
+            <span class="s1">self.graph = PathGraph(node)</span>
+            <span class="s1">self._subgraph_parse(node, node, extra_blocks)</span>
+            <span class="s1">self.graphs[</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">self.classname</span><span class="s5">}{</span><span class="s1">name</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">] = self.graph</span>
+            <span class="s1">self.reset()</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self._append_node(node)</span>
+            <span class="s1">self._subgraph_parse(node, node, extra_blocks)</span>
+
+    <span class="s2">def </span><span class="s1">_subgraph_parse(self, node, pathnode, extra_blocks):</span>
+        <span class="s0">&quot;&quot;&quot;parse the body and any `else` block of `if` and `for` statements&quot;&quot;&quot;</span>
+        <span class="s1">loose_ends = []</span>
+        <span class="s1">self.tail = node</span>
+        <span class="s1">self.dispatch_list(node.body)</span>
+        <span class="s1">loose_ends.append(self.tail)</span>
+        <span class="s2">for </span><span class="s1">extra </span><span class="s2">in </span><span class="s1">extra_blocks:</span>
+            <span class="s1">self.tail = node</span>
+            <span class="s1">self.dispatch_list(extra.body)</span>
+            <span class="s1">loose_ends.append(self.tail)</span>
+        <span class="s2">if </span><span class="s1">node.orelse:</span>
+            <span class="s1">self.tail = node</span>
+            <span class="s1">self.dispatch_list(node.orelse)</span>
+            <span class="s1">loose_ends.append(self.tail)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">loose_ends.append(node)</span>
+        <span class="s2">if </span><span class="s1">node:</span>
+            <span class="s1">bottom = </span><span class="s3">&quot;%s&quot; </span><span class="s1">% self._bottom_counter</span>
+            <span class="s1">self._bottom_counter += </span><span class="s4">1</span>
+            <span class="s2">for </span><span class="s1">end </span><span class="s2">in </span><span class="s1">loose_ends:</span>
+                <span class="s1">self.graph.connect(end, bottom)</span>
+            <span class="s1">self.tail = bottom</span>
+
+
+<span class="s2">class </span><span class="s1">McCabeMethodChecker(checkers.BaseChecker):</span>
+    <span class="s0">&quot;&quot;&quot;Checks McCabe complexity cyclomatic threshold in methods and functions 
+    to validate a too complex code. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__implements__ = IAstroidChecker</span>
+    <span class="s1">name = </span><span class="s3">&quot;design&quot;</span>
+
+    <span class="s1">msgs = {</span>
+        <span class="s3">&quot;R1260&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;%s is too complex. The McCabe rating is %d&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;too-complex&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a method or function is too complex based on &quot;</span>
+            <span class="s3">&quot;McCabe Complexity Cyclomatic&quot;</span><span class="s1">,</span>
+        <span class="s1">)</span>
+    <span class="s1">}</span>
+    <span class="s1">options = (</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;max-complexity&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s4">10</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;int&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;McCabe complexity cyclomatic threshold&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;too-complex&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_module(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;visit an astroid.Module node to check too complex rating and 
+        add message if is greather than max_complexity stored from options&quot;&quot;&quot;</span>
+        <span class="s1">visitor = PathGraphingAstVisitor()</span>
+        <span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.body:</span>
+            <span class="s1">visitor.preorder(child, visitor)</span>
+        <span class="s2">for </span><span class="s1">graph </span><span class="s2">in </span><span class="s1">visitor.graphs.values():</span>
+            <span class="s1">complexity = graph.complexity()</span>
+            <span class="s1">node = graph.root</span>
+            <span class="s2">if </span><span class="s1">hasattr(node, </span><span class="s3">&quot;name&quot;</span><span class="s1">):</span>
+                <span class="s1">node_name = </span><span class="s3">&quot;'%s'&quot; </span><span class="s1">% node.name</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">node_name = </span><span class="s3">&quot;This '%s'&quot; </span><span class="s1">% node.__class__.__name__.lower()</span>
+            <span class="s2">if </span><span class="s1">complexity &lt;= self.config.max_complexity:</span>
+                <span class="s2">continue</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;too-complex&quot;</span><span class="s1">, node=node, confidence=HIGH, args=(node_name, complexity)</span>
+            <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">register(linter):</span>
+    <span class="s0">&quot;&quot;&quot;Required method to auto register this checker. 
+ 
+    :param linter: Main interface object for Pylint plugins 
+    :type linter: Pylint object 
+    &quot;&quot;&quot;</span>
+    <span class="s1">linter.register_checker(McCabeMethodChecker(linter))</span>
+</pre>
+</body>
+</html>

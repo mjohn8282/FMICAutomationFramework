@@ -1,0 +1,146 @@
+<html>
+<head>
+<title>data.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+data.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;Coverage data for coverage.py. 
+ 
+This file had the 4.x JSON data support, which is now gone.  This file still 
+has storage-agnostic helpers, and is kept to avoid changing too many imports. 
+CoverageData is now defined in sqldata.py, and imported here to keep the 
+imports working. 
+ 
+&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">glob</span>
+<span class="s2">import </span><span class="s1">os.path</span>
+
+<span class="s2">from </span><span class="s1">coverage.misc </span><span class="s2">import </span><span class="s1">CoverageException, file_be_gone</span>
+<span class="s2">from </span><span class="s1">coverage.sqldata </span><span class="s2">import </span><span class="s1">CoverageData</span>
+
+
+<span class="s2">def </span><span class="s1">line_counts(data, fullpath=</span><span class="s2">False</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Return a dict summarizing the line coverage data. 
+ 
+    Keys are based on the file names, and values are the number of executed 
+    lines.  If `fullpath` is true, then the keys are the full pathnames of 
+    the files, otherwise they are the basenames of the files. 
+ 
+    Returns a dict mapping file names to counts of lines. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">summ = {}</span>
+    <span class="s2">if </span><span class="s1">fullpath:</span>
+        <span class="s1">filename_fn = </span><span class="s2">lambda </span><span class="s1">f: f</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">filename_fn = os.path.basename</span>
+    <span class="s2">for </span><span class="s1">filename </span><span class="s2">in </span><span class="s1">data.measured_files():</span>
+        <span class="s1">summ[filename_fn(filename)] = len(data.lines(filename))</span>
+    <span class="s2">return </span><span class="s1">summ</span>
+
+
+<span class="s2">def </span><span class="s1">add_data_to_hash(data, filename, hasher):</span>
+    <span class="s0">&quot;&quot;&quot;Contribute `filename`'s data to the `hasher`. 
+ 
+    `hasher` is a `coverage.misc.Hasher` instance to be updated with 
+    the file's data.  It should only get the results data, not the run 
+    data. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">data.has_arcs():</span>
+        <span class="s1">hasher.update(sorted(data.arcs(filename) </span><span class="s2">or </span><span class="s1">[]))</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">hasher.update(sorted(data.lines(filename) </span><span class="s2">or </span><span class="s1">[]))</span>
+    <span class="s1">hasher.update(data.file_tracer(filename))</span>
+
+
+<span class="s2">def </span><span class="s1">combine_parallel_data(data, aliases=</span><span class="s2">None</span><span class="s1">, data_paths=</span><span class="s2">None</span><span class="s1">, strict=</span><span class="s2">False</span><span class="s1">, keep=</span><span class="s2">False</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Combine a number of data files together. 
+ 
+    Treat `data.filename` as a file prefix, and combine the data from all 
+    of the data files starting with that prefix plus a dot. 
+ 
+    If `aliases` is provided, it's a `PathAliases` object that is used to 
+    re-map paths to match the local machine's. 
+ 
+    If `data_paths` is provided, it is a list of directories or files to 
+    combine.  Directories are searched for files that start with 
+    `data.filename` plus dot as a prefix, and those files are combined. 
+ 
+    If `data_paths` is not provided, then the directory portion of 
+    `data.filename` is used as the directory to search for data files. 
+ 
+    Unless `keep` is True every data file found and combined is then deleted from disk. If a file 
+    cannot be read, a warning will be issued, and the file will not be 
+    deleted. 
+ 
+    If `strict` is true, and no files are found to combine, an error is 
+    raised. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s0"># Because of the os.path.abspath in the constructor, data_dir will</span>
+    <span class="s0"># never be an empty string.</span>
+    <span class="s1">data_dir, local = os.path.split(data.base_filename())</span>
+    <span class="s1">localdot = local + </span><span class="s3">'.*'</span>
+
+    <span class="s1">data_paths = data_paths </span><span class="s2">or </span><span class="s1">[data_dir]</span>
+    <span class="s1">files_to_combine = []</span>
+    <span class="s2">for </span><span class="s1">p </span><span class="s2">in </span><span class="s1">data_paths:</span>
+        <span class="s2">if </span><span class="s1">os.path.isfile(p):</span>
+            <span class="s1">files_to_combine.append(os.path.abspath(p))</span>
+        <span class="s2">elif </span><span class="s1">os.path.isdir(p):</span>
+            <span class="s1">pattern = os.path.join(os.path.abspath(p), localdot)</span>
+            <span class="s1">files_to_combine.extend(glob.glob(pattern))</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">CoverageException(</span><span class="s3">&quot;Couldn't combine from non-existent path '%s'&quot; </span><span class="s1">% (p,))</span>
+
+    <span class="s2">if </span><span class="s1">strict </span><span class="s2">and not </span><span class="s1">files_to_combine:</span>
+        <span class="s2">raise </span><span class="s1">CoverageException(</span><span class="s3">&quot;No data to combine&quot;</span><span class="s1">)</span>
+
+    <span class="s1">files_combined = </span><span class="s4">0</span>
+    <span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">files_to_combine:</span>
+        <span class="s2">if </span><span class="s1">f == data.data_filename():</span>
+            <span class="s0"># Sometimes we are combining into a file which is one of the</span>
+            <span class="s0"># parallel files.  Skip that file.</span>
+            <span class="s2">if </span><span class="s1">data._debug.should(</span><span class="s3">'dataio'</span><span class="s1">):</span>
+                <span class="s1">data._debug.write(</span><span class="s3">&quot;Skipping combining ourself: %r&quot; </span><span class="s1">% (f,))</span>
+            <span class="s2">continue</span>
+        <span class="s2">if </span><span class="s1">data._debug.should(</span><span class="s3">'dataio'</span><span class="s1">):</span>
+            <span class="s1">data._debug.write(</span><span class="s3">&quot;Combining data file %r&quot; </span><span class="s1">% (f,))</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">new_data = CoverageData(f, debug=data._debug)</span>
+            <span class="s1">new_data.read()</span>
+        <span class="s2">except </span><span class="s1">CoverageException </span><span class="s2">as </span><span class="s1">exc:</span>
+            <span class="s2">if </span><span class="s1">data._warn:</span>
+                <span class="s0"># The CoverageException has the file name in it, so just</span>
+                <span class="s0"># use the message as the warning.</span>
+                <span class="s1">data._warn(str(exc))</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">data.update(new_data, aliases=aliases)</span>
+            <span class="s1">files_combined += </span><span class="s4">1</span>
+            <span class="s2">if not </span><span class="s1">keep:</span>
+                <span class="s2">if </span><span class="s1">data._debug.should(</span><span class="s3">'dataio'</span><span class="s1">):</span>
+                    <span class="s1">data._debug.write(</span><span class="s3">&quot;Deleting combined data file %r&quot; </span><span class="s1">% (f,))</span>
+                <span class="s1">file_be_gone(f)</span>
+
+    <span class="s2">if </span><span class="s1">strict </span><span class="s2">and not </span><span class="s1">files_combined:</span>
+        <span class="s2">raise </span><span class="s1">CoverageException(</span><span class="s3">&quot;No usable data files&quot;</span><span class="s1">)</span>
+</pre>
+</body>
+</html>

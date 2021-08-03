@@ -1,0 +1,180 @@
+<html>
+<head>
+<title>_next_gen.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+_next_gen.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+This is a Python 3.6 and later-only, keyword-only, and **provisional** API that 
+calls `attr.s` with different default values. 
+ 
+Provisional APIs that shall become &quot;import attrs&quot; one glorious day. 
+&quot;&quot;&quot;</span>
+
+<span class="s2">from </span><span class="s1">functools </span><span class="s2">import </span><span class="s1">partial</span>
+
+<span class="s2">from </span><span class="s1">attr.exceptions </span><span class="s2">import </span><span class="s1">UnannotatedAttributeError</span>
+
+<span class="s2">from </span><span class="s1">. </span><span class="s2">import </span><span class="s1">setters</span>
+<span class="s2">from </span><span class="s1">._make </span><span class="s2">import </span><span class="s1">NOTHING, _frozen_setattrs, attrib, attrs</span>
+
+
+<span class="s2">def </span><span class="s1">define(</span>
+    <span class="s1">maybe_cls=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">*,</span>
+    <span class="s1">these=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">repr=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">hash=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">init=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">slots=</span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s1">frozen=</span><span class="s2">False</span><span class="s1">,</span>
+    <span class="s1">weakref_slot=</span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s1">str=</span><span class="s2">False</span><span class="s1">,</span>
+    <span class="s1">auto_attribs=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">kw_only=</span><span class="s2">False</span><span class="s1">,</span>
+    <span class="s1">cache_hash=</span><span class="s2">False</span><span class="s1">,</span>
+    <span class="s1">auto_exc=</span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s1">eq=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">order=</span><span class="s2">False</span><span class="s1">,</span>
+    <span class="s1">auto_detect=</span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s1">getstate_setstate=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">on_setattr=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">field_transformer=</span><span class="s2">None</span><span class="s1">,</span>
+<span class="s1">):</span>
+    <span class="s0">r&quot;&quot;&quot; 
+    The only behavioral differences are the handling of the *auto_attribs* 
+    option: 
+ 
+    :param Optional[bool] auto_attribs: If set to `True` or `False`, it behaves 
+       exactly like `attr.s`. If left `None`, `attr.s` will try to guess: 
+ 
+       1. If all attributes are annotated and no `attr.ib` is found, it assumes 
+          *auto_attribs=True*. 
+       2. Otherwise it assumes *auto_attribs=False* and tries to collect 
+          `attr.ib`\ s. 
+ 
+    and that mutable classes (``frozen=False``) validate on ``__setattr__``. 
+ 
+    .. versionadded:: 20.1.0 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">do_it(cls, auto_attribs):</span>
+        <span class="s2">return </span><span class="s1">attrs(</span>
+            <span class="s1">maybe_cls=cls,</span>
+            <span class="s1">these=these,</span>
+            <span class="s1">repr=repr,</span>
+            <span class="s1">hash=hash,</span>
+            <span class="s1">init=init,</span>
+            <span class="s1">slots=slots,</span>
+            <span class="s1">frozen=frozen,</span>
+            <span class="s1">weakref_slot=weakref_slot,</span>
+            <span class="s1">str=str,</span>
+            <span class="s1">auto_attribs=auto_attribs,</span>
+            <span class="s1">kw_only=kw_only,</span>
+            <span class="s1">cache_hash=cache_hash,</span>
+            <span class="s1">auto_exc=auto_exc,</span>
+            <span class="s1">eq=eq,</span>
+            <span class="s1">order=order,</span>
+            <span class="s1">auto_detect=auto_detect,</span>
+            <span class="s1">collect_by_mro=</span><span class="s2">True</span><span class="s1">,</span>
+            <span class="s1">getstate_setstate=getstate_setstate,</span>
+            <span class="s1">on_setattr=on_setattr,</span>
+            <span class="s1">field_transformer=field_transformer,</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">wrap(cls):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Making this a wrapper ensures this code runs during class creation. 
+ 
+        We also ensure that frozen-ness of classes is inherited. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">nonlocal </span><span class="s1">frozen, on_setattr</span>
+
+        <span class="s1">had_on_setattr = on_setattr </span><span class="s2">not in </span><span class="s1">(</span><span class="s2">None</span><span class="s1">, setters.NO_OP)</span>
+
+        <span class="s0"># By default, mutable classes validate on setattr.</span>
+        <span class="s2">if </span><span class="s1">frozen </span><span class="s2">is False and </span><span class="s1">on_setattr </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">on_setattr = setters.validate</span>
+
+        <span class="s0"># However, if we subclass a frozen class, we inherit the immutability</span>
+        <span class="s0"># and disable on_setattr.</span>
+        <span class="s2">for </span><span class="s1">base_cls </span><span class="s2">in </span><span class="s1">cls.__bases__:</span>
+            <span class="s2">if </span><span class="s1">base_cls.__setattr__ </span><span class="s2">is </span><span class="s1">_frozen_setattrs:</span>
+                <span class="s2">if </span><span class="s1">had_on_setattr:</span>
+                    <span class="s2">raise </span><span class="s1">ValueError(</span>
+                        <span class="s3">&quot;Frozen classes can't use on_setattr &quot;</span>
+                        <span class="s3">&quot;(frozen-ness was inherited).&quot;</span>
+                    <span class="s1">)</span>
+
+                <span class="s1">on_setattr = setters.NO_OP</span>
+                <span class="s2">break</span>
+
+        <span class="s2">if </span><span class="s1">auto_attribs </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">do_it(cls, auto_attribs)</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">do_it(cls, </span><span class="s2">True</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">UnannotatedAttributeError:</span>
+            <span class="s2">return </span><span class="s1">do_it(cls, </span><span class="s2">False</span><span class="s1">)</span>
+
+    <span class="s0"># maybe_cls's type depends on the usage of the decorator.  It's a class</span>
+    <span class="s0"># if it's used as `@attrs` but ``None`` if used as `@attrs()`.</span>
+    <span class="s2">if </span><span class="s1">maybe_cls </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">wrap</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">wrap(maybe_cls)</span>
+
+
+<span class="s1">mutable = define</span>
+<span class="s1">frozen = partial(define, frozen=</span><span class="s2">True</span><span class="s1">, on_setattr=</span><span class="s2">None</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">field(</span>
+    <span class="s1">*,</span>
+    <span class="s1">default=NOTHING,</span>
+    <span class="s1">validator=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">repr=</span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s1">hash=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">init=</span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s1">metadata=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">converter=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">factory=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">kw_only=</span><span class="s2">False</span><span class="s1">,</span>
+    <span class="s1">eq=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">order=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">on_setattr=</span><span class="s2">None</span><span class="s1">,</span>
+<span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Identical to `attr.ib`, except keyword-only and with some arguments 
+    removed. 
+ 
+    .. versionadded:: 20.1.0 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">attrib(</span>
+        <span class="s1">default=default,</span>
+        <span class="s1">validator=validator,</span>
+        <span class="s1">repr=repr,</span>
+        <span class="s1">hash=hash,</span>
+        <span class="s1">init=init,</span>
+        <span class="s1">metadata=metadata,</span>
+        <span class="s1">converter=converter,</span>
+        <span class="s1">factory=factory,</span>
+        <span class="s1">kw_only=kw_only,</span>
+        <span class="s1">eq=eq,</span>
+        <span class="s1">order=order,</span>
+        <span class="s1">on_setattr=on_setattr,</span>
+    <span class="s1">)</span>
+</pre>
+</body>
+</html>

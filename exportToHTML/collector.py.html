@@ -1,0 +1,473 @@
+<html>
+<head>
+<title>collector.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+.s5 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+collector.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;Raw data collector for coverage.py.&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">env</span>
+<span class="s2">from </span><span class="s1">coverage.backward </span><span class="s2">import </span><span class="s1">litems, range     </span><span class="s0"># pylint: disable=redefined-builtin</span>
+<span class="s2">from </span><span class="s1">coverage.debug </span><span class="s2">import </span><span class="s1">short_stack</span>
+<span class="s2">from </span><span class="s1">coverage.disposition </span><span class="s2">import </span><span class="s1">FileDisposition</span>
+<span class="s2">from </span><span class="s1">coverage.misc </span><span class="s2">import </span><span class="s1">CoverageException, isolate_module</span>
+<span class="s2">from </span><span class="s1">coverage.pytracer </span><span class="s2">import </span><span class="s1">PyTracer</span>
+
+<span class="s1">os = isolate_module(os)</span>
+
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s0"># Use the C extension code when we can, for speed.</span>
+    <span class="s2">from </span><span class="s1">coverage.tracer </span><span class="s2">import </span><span class="s1">CTracer, CFileDisposition</span>
+<span class="s2">except </span><span class="s1">ImportError:</span>
+    <span class="s0"># Couldn't import the C extension, maybe it isn't built.</span>
+    <span class="s2">if </span><span class="s1">os.getenv(</span><span class="s3">'COVERAGE_TEST_TRACER'</span><span class="s1">) == </span><span class="s3">'c'</span><span class="s1">:</span>
+        <span class="s0"># During testing, we use the COVERAGE_TEST_TRACER environment variable</span>
+        <span class="s0"># to indicate that we've fiddled with the environment to test this</span>
+        <span class="s0"># fallback code.  If we thought we had a C tracer, but couldn't import</span>
+        <span class="s0"># it, then exit quickly and clearly instead of dribbling confusing</span>
+        <span class="s0"># errors. I'm using sys.exit here instead of an exception because an</span>
+        <span class="s0"># exception here causes all sorts of other noise in unittest.</span>
+        <span class="s1">sys.stderr.write(</span><span class="s3">&quot;*** COVERAGE_TEST_TRACER is 'c' but can't import CTracer!</span><span class="s4">\n</span><span class="s3">&quot;</span><span class="s1">)</span>
+        <span class="s1">sys.exit(</span><span class="s5">1</span><span class="s1">)</span>
+    <span class="s1">CTracer = </span><span class="s2">None</span>
+
+
+<span class="s2">class </span><span class="s1">Collector(object):</span>
+    <span class="s0">&quot;&quot;&quot;Collects trace data. 
+ 
+    Creates a Tracer object for each thread, since they track stack 
+    information.  Each Tracer points to the same shared data, contributing 
+    traced data points. 
+ 
+    When the Collector is started, it creates a Tracer for the current thread, 
+    and installs a function to create Tracers for each new thread started. 
+    When the Collector is stopped, all active Tracers are stopped. 
+ 
+    Threads started while the Collector is stopped will never have Tracers 
+    associated with them. 
+ 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0"># The stack of active Collectors.  Collectors are added here when started,</span>
+    <span class="s0"># and popped when stopped.  Collectors on the stack are paused when not</span>
+    <span class="s0"># the top, and resumed when they become the top again.</span>
+    <span class="s1">_collectors = []</span>
+
+    <span class="s0"># The concurrency settings we support here.</span>
+    <span class="s1">SUPPORTED_CONCURRENCIES = {</span><span class="s3">&quot;greenlet&quot;</span><span class="s1">, </span><span class="s3">&quot;eventlet&quot;</span><span class="s1">, </span><span class="s3">&quot;gevent&quot;</span><span class="s1">, </span><span class="s3">&quot;thread&quot;</span><span class="s1">}</span>
+
+    <span class="s2">def </span><span class="s1">__init__(</span>
+        <span class="s1">self, should_trace, check_include, should_start_context, file_mapper,</span>
+        <span class="s1">timid, branch, warn, concurrency,</span>
+    <span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Create a collector. 
+ 
+        `should_trace` is a function, taking a file name and a frame, and 
+        returning a `coverage.FileDisposition object`. 
+ 
+        `check_include` is a function taking a file name and a frame. It returns 
+        a boolean: True if the file should be traced, False if not. 
+ 
+        `should_start_context` is a function taking a frame, and returning a 
+        string. If the frame should be the start of a new context, the string 
+        is the new context. If the frame should not be the start of a new 
+        context, return None. 
+ 
+        `file_mapper` is a function taking a filename, and returning a Unicode 
+        filename.  The result is the name that will be recorded in the data 
+        file. 
+ 
+        If `timid` is true, then a slower simpler trace function will be 
+        used.  This is important for some environments where manipulation of 
+        tracing functions make the faster more sophisticated trace function not 
+        operate properly. 
+ 
+        If `branch` is true, then branches will be measured.  This involves 
+        collecting data on which statements followed each other (arcs).  Use 
+        `get_arc_data` to get the arc data. 
+ 
+        `warn` is a warning function, taking a single string message argument 
+        and an optional slug argument which will be a string or None, to be 
+        used if a warning needs to be issued. 
+ 
+        `concurrency` is a list of strings indicating the concurrency libraries 
+        in use.  Valid values are &quot;greenlet&quot;, &quot;eventlet&quot;, &quot;gevent&quot;, or &quot;thread&quot; 
+        (the default).  Of these four values, only one can be supplied.  Other 
+        values are ignored. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.should_trace = should_trace</span>
+        <span class="s1">self.check_include = check_include</span>
+        <span class="s1">self.should_start_context = should_start_context</span>
+        <span class="s1">self.file_mapper = file_mapper</span>
+        <span class="s1">self.warn = warn</span>
+        <span class="s1">self.branch = branch</span>
+        <span class="s1">self.threading = </span><span class="s2">None</span>
+        <span class="s1">self.covdata = </span><span class="s2">None</span>
+
+        <span class="s1">self.static_context = </span><span class="s2">None</span>
+
+        <span class="s1">self.origin = short_stack()</span>
+
+        <span class="s1">self.concur_id_func = </span><span class="s2">None</span>
+        <span class="s1">self.mapped_file_cache = {}</span>
+
+        <span class="s0"># We can handle a few concurrency options here, but only one at a time.</span>
+        <span class="s1">these_concurrencies = self.SUPPORTED_CONCURRENCIES.intersection(concurrency)</span>
+        <span class="s2">if </span><span class="s1">len(these_concurrencies) &gt; </span><span class="s5">1</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">CoverageException(</span><span class="s3">&quot;Conflicting concurrency settings: %s&quot; </span><span class="s1">% concurrency)</span>
+        <span class="s1">self.concurrency = these_concurrencies.pop() </span><span class="s2">if </span><span class="s1">these_concurrencies </span><span class="s2">else </span><span class="s3">''</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">self.concurrency == </span><span class="s3">&quot;greenlet&quot;</span><span class="s1">:</span>
+                <span class="s2">import </span><span class="s1">greenlet</span>
+                <span class="s1">self.concur_id_func = greenlet.getcurrent</span>
+            <span class="s2">elif </span><span class="s1">self.concurrency == </span><span class="s3">&quot;eventlet&quot;</span><span class="s1">:</span>
+                <span class="s2">import </span><span class="s1">eventlet.greenthread     </span><span class="s0"># pylint: disable=import-error,useless-suppression</span>
+                <span class="s1">self.concur_id_func = eventlet.greenthread.getcurrent</span>
+            <span class="s2">elif </span><span class="s1">self.concurrency == </span><span class="s3">&quot;gevent&quot;</span><span class="s1">:</span>
+                <span class="s2">import </span><span class="s1">gevent                   </span><span class="s0"># pylint: disable=import-error,useless-suppression</span>
+                <span class="s1">self.concur_id_func = gevent.getcurrent</span>
+            <span class="s2">elif </span><span class="s1">self.concurrency == </span><span class="s3">&quot;thread&quot; </span><span class="s2">or not </span><span class="s1">self.concurrency:</span>
+                <span class="s0"># It's important to import threading only if we need it.  If</span>
+                <span class="s0"># it's imported early, and the program being measured uses</span>
+                <span class="s0"># gevent, then gevent's monkey-patching won't work properly.</span>
+                <span class="s2">import </span><span class="s1">threading</span>
+                <span class="s1">self.threading = threading</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">raise </span><span class="s1">CoverageException(</span><span class="s3">&quot;Don't understand concurrency=%s&quot; </span><span class="s1">% concurrency)</span>
+        <span class="s2">except </span><span class="s1">ImportError:</span>
+            <span class="s2">raise </span><span class="s1">CoverageException(</span>
+                <span class="s3">&quot;Couldn't trace with concurrency=%s, the module isn't installed.&quot; </span><span class="s1">% (</span>
+                    <span class="s1">self.concurrency,</span>
+                <span class="s1">)</span>
+            <span class="s1">)</span>
+
+        <span class="s1">self.reset()</span>
+
+        <span class="s2">if </span><span class="s1">timid:</span>
+            <span class="s0"># Being timid: use the simple Python trace function.</span>
+            <span class="s1">self._trace_class = PyTracer</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s0"># Being fast: use the C Tracer if it is available, else the Python</span>
+            <span class="s0"># trace function.</span>
+            <span class="s1">self._trace_class = CTracer </span><span class="s2">or </span><span class="s1">PyTracer</span>
+
+        <span class="s2">if </span><span class="s1">self._trace_class </span><span class="s2">is </span><span class="s1">CTracer:</span>
+            <span class="s1">self.file_disposition_class = CFileDisposition</span>
+            <span class="s1">self.supports_plugins = </span><span class="s2">True</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.file_disposition_class = FileDisposition</span>
+            <span class="s1">self.supports_plugins = </span><span class="s2">False</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;&lt;Collector at 0x%x: %s&gt;&quot; </span><span class="s1">% (id(self), self.tracer_name())</span>
+
+    <span class="s2">def </span><span class="s1">use_data(self, covdata, context):</span>
+        <span class="s0">&quot;&quot;&quot;Use `covdata` for recording data.&quot;&quot;&quot;</span>
+        <span class="s1">self.covdata = covdata</span>
+        <span class="s1">self.static_context = context</span>
+        <span class="s1">self.covdata.set_context(self.static_context)</span>
+
+    <span class="s2">def </span><span class="s1">tracer_name(self):</span>
+        <span class="s0">&quot;&quot;&quot;Return the class name of the tracer we're using.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._trace_class.__name__</span>
+
+    <span class="s2">def </span><span class="s1">_clear_data(self):</span>
+        <span class="s0">&quot;&quot;&quot;Clear out existing data, but stay ready for more collection.&quot;&quot;&quot;</span>
+        <span class="s0"># We used to used self.data.clear(), but that would remove filename</span>
+        <span class="s0"># keys and data values that were still in use higher up the stack</span>
+        <span class="s0"># when we are called as part of switch_context.</span>
+        <span class="s2">for </span><span class="s1">d </span><span class="s2">in </span><span class="s1">self.data.values():</span>
+            <span class="s1">d.clear()</span>
+
+        <span class="s2">for </span><span class="s1">tracer </span><span class="s2">in </span><span class="s1">self.tracers:</span>
+            <span class="s1">tracer.reset_activity()</span>
+
+    <span class="s2">def </span><span class="s1">reset(self):</span>
+        <span class="s0">&quot;&quot;&quot;Clear collected data, and prepare to collect more.&quot;&quot;&quot;</span>
+        <span class="s0"># A dictionary mapping file names to dicts with line number keys (if not</span>
+        <span class="s0"># branch coverage), or mapping file names to dicts with line number</span>
+        <span class="s0"># pairs as keys (if branch coverage).</span>
+        <span class="s1">self.data = {}</span>
+
+        <span class="s0"># A dictionary mapping file names to file tracer plugin names that will</span>
+        <span class="s0"># handle them.</span>
+        <span class="s1">self.file_tracers = {}</span>
+
+        <span class="s1">self.disabled_plugins = set()</span>
+
+        <span class="s0"># The .should_trace_cache attribute is a cache from file names to</span>
+        <span class="s0"># coverage.FileDisposition objects, or None.  When a file is first</span>
+        <span class="s0"># considered for tracing, a FileDisposition is obtained from</span>
+        <span class="s0"># Coverage.should_trace.  Its .trace attribute indicates whether the</span>
+        <span class="s0"># file should be traced or not.  If it should be, a plugin with dynamic</span>
+        <span class="s0"># file names can decide not to trace it based on the dynamic file name</span>
+        <span class="s0"># being excluded by the inclusion rules, in which case the</span>
+        <span class="s0"># FileDisposition will be replaced by None in the cache.</span>
+        <span class="s2">if </span><span class="s1">env.PYPY:</span>
+            <span class="s2">import </span><span class="s1">__pypy__                     </span><span class="s0"># pylint: disable=import-error</span>
+            <span class="s0"># Alex Gaynor said:</span>
+            <span class="s0"># should_trace_cache is a strictly growing key: once a key is in</span>
+            <span class="s0"># it, it never changes.  Further, the keys used to access it are</span>
+            <span class="s0"># generally constant, given sufficient context. That is to say, at</span>
+            <span class="s0"># any given point _trace() is called, pypy is able to know the key.</span>
+            <span class="s0"># This is because the key is determined by the physical source code</span>
+            <span class="s0"># line, and that's invariant with the call site.</span>
+            <span class="s0">#</span>
+            <span class="s0"># This property of a dict with immutable keys, combined with</span>
+            <span class="s0"># call-site-constant keys is a match for PyPy's module dict,</span>
+            <span class="s0"># which is optimized for such workloads.</span>
+            <span class="s0">#</span>
+            <span class="s0"># This gives a 20% benefit on the workload described at</span>
+            <span class="s0"># https://bitbucket.org/pypy/pypy/issue/1871/10x-slower-than-cpython-under-coverage</span>
+            <span class="s1">self.should_trace_cache = __pypy__.newdict(</span><span class="s3">&quot;module&quot;</span><span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.should_trace_cache = {}</span>
+
+        <span class="s0"># Our active Tracers.</span>
+        <span class="s1">self.tracers = []</span>
+
+        <span class="s1">self._clear_data()</span>
+
+    <span class="s2">def </span><span class="s1">_start_tracer(self):</span>
+        <span class="s0">&quot;&quot;&quot;Start a new Tracer object, and store it in self.tracers.&quot;&quot;&quot;</span>
+        <span class="s1">tracer = self._trace_class()</span>
+        <span class="s1">tracer.data = self.data</span>
+        <span class="s1">tracer.trace_arcs = self.branch</span>
+        <span class="s1">tracer.should_trace = self.should_trace</span>
+        <span class="s1">tracer.should_trace_cache = self.should_trace_cache</span>
+        <span class="s1">tracer.warn = self.warn</span>
+
+        <span class="s2">if </span><span class="s1">hasattr(tracer, </span><span class="s3">'concur_id_func'</span><span class="s1">):</span>
+            <span class="s1">tracer.concur_id_func = self.concur_id_func</span>
+        <span class="s2">elif </span><span class="s1">self.concur_id_func:</span>
+            <span class="s2">raise </span><span class="s1">CoverageException(</span>
+                <span class="s3">&quot;Can't support concurrency=%s with %s, only threads are supported&quot; </span><span class="s1">% (</span>
+                    <span class="s1">self.concurrency, self.tracer_name(),</span>
+                <span class="s1">)</span>
+            <span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">hasattr(tracer, </span><span class="s3">'file_tracers'</span><span class="s1">):</span>
+            <span class="s1">tracer.file_tracers = self.file_tracers</span>
+        <span class="s2">if </span><span class="s1">hasattr(tracer, </span><span class="s3">'threading'</span><span class="s1">):</span>
+            <span class="s1">tracer.threading = self.threading</span>
+        <span class="s2">if </span><span class="s1">hasattr(tracer, </span><span class="s3">'check_include'</span><span class="s1">):</span>
+            <span class="s1">tracer.check_include = self.check_include</span>
+        <span class="s2">if </span><span class="s1">hasattr(tracer, </span><span class="s3">'should_start_context'</span><span class="s1">):</span>
+            <span class="s1">tracer.should_start_context = self.should_start_context</span>
+            <span class="s1">tracer.switch_context = self.switch_context</span>
+        <span class="s2">if </span><span class="s1">hasattr(tracer, </span><span class="s3">'disable_plugin'</span><span class="s1">):</span>
+            <span class="s1">tracer.disable_plugin = self.disable_plugin</span>
+
+        <span class="s1">fn = tracer.start()</span>
+        <span class="s1">self.tracers.append(tracer)</span>
+
+        <span class="s2">return </span><span class="s1">fn</span>
+
+    <span class="s0"># The trace function has to be set individually on each thread before</span>
+    <span class="s0"># execution begins.  Ironically, the only support the threading module has</span>
+    <span class="s0"># for running code before the thread main is the tracing function.  So we</span>
+    <span class="s0"># install this as a trace function, and the first time it's called, it does</span>
+    <span class="s0"># the real trace installation.</span>
+
+    <span class="s2">def </span><span class="s1">_installation_trace(self, frame, event, arg):</span>
+        <span class="s0">&quot;&quot;&quot;Called on new threads, installs the real tracer.&quot;&quot;&quot;</span>
+        <span class="s0"># Remove ourselves as the trace function.</span>
+        <span class="s1">sys.settrace(</span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s0"># Install the real tracer.</span>
+        <span class="s1">fn = self._start_tracer()</span>
+        <span class="s0"># Invoke the real trace function with the current event, to be sure</span>
+        <span class="s0"># not to lose an event.</span>
+        <span class="s2">if </span><span class="s1">fn:</span>
+            <span class="s1">fn = fn(frame, event, arg)</span>
+        <span class="s0"># Return the new trace function to continue tracing in this scope.</span>
+        <span class="s2">return </span><span class="s1">fn</span>
+
+    <span class="s2">def </span><span class="s1">start(self):</span>
+        <span class="s0">&quot;&quot;&quot;Start collecting trace information.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self._collectors:</span>
+            <span class="s1">self._collectors[-</span><span class="s5">1</span><span class="s1">].pause()</span>
+
+        <span class="s1">self.tracers = []</span>
+
+        <span class="s0"># Check to see whether we had a fullcoverage tracer installed. If so,</span>
+        <span class="s0"># get the stack frames it stashed away for us.</span>
+        <span class="s1">traces0 = []</span>
+        <span class="s1">fn0 = sys.gettrace()</span>
+        <span class="s2">if </span><span class="s1">fn0:</span>
+            <span class="s1">tracer0 = getattr(fn0, </span><span class="s3">'__self__'</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">tracer0:</span>
+                <span class="s1">traces0 = getattr(tracer0, </span><span class="s3">'traces'</span><span class="s1">, [])</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s0"># Install the tracer on this thread.</span>
+            <span class="s1">fn = self._start_tracer()</span>
+        <span class="s2">except</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">self._collectors:</span>
+                <span class="s1">self._collectors[-</span><span class="s5">1</span><span class="s1">].resume()</span>
+            <span class="s2">raise</span>
+
+        <span class="s0"># If _start_tracer succeeded, then we add ourselves to the global</span>
+        <span class="s0"># stack of collectors.</span>
+        <span class="s1">self._collectors.append(self)</span>
+
+        <span class="s0"># Replay all the events from fullcoverage into the new trace function.</span>
+        <span class="s2">for </span><span class="s1">args </span><span class="s2">in </span><span class="s1">traces0:</span>
+            <span class="s1">(frame, event, arg), lineno = args</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">fn(frame, event, arg, lineno=lineno)</span>
+            <span class="s2">except </span><span class="s1">TypeError:</span>
+                <span class="s2">raise </span><span class="s1">Exception(</span><span class="s3">&quot;fullcoverage must be run with the C trace function.&quot;</span><span class="s1">)</span>
+
+        <span class="s0"># Install our installation tracer in threading, to jump-start other</span>
+        <span class="s0"># threads.</span>
+        <span class="s2">if </span><span class="s1">self.threading:</span>
+            <span class="s1">self.threading.settrace(self._installation_trace)</span>
+
+    <span class="s2">def </span><span class="s1">stop(self):</span>
+        <span class="s0">&quot;&quot;&quot;Stop collecting trace information.&quot;&quot;&quot;</span>
+        <span class="s2">assert </span><span class="s1">self._collectors</span>
+        <span class="s2">if </span><span class="s1">self._collectors[-</span><span class="s5">1</span><span class="s1">] </span><span class="s2">is not </span><span class="s1">self:</span>
+            <span class="s1">print(</span><span class="s3">&quot;self._collectors:&quot;</span><span class="s1">)</span>
+            <span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">self._collectors:</span>
+                <span class="s1">print(</span><span class="s3">&quot;  {!r}</span><span class="s4">\n</span><span class="s3">{}&quot;</span><span class="s1">.format(c, c.origin))</span>
+        <span class="s2">assert </span><span class="s1">self._collectors[-</span><span class="s5">1</span><span class="s1">] </span><span class="s2">is </span><span class="s1">self, (</span>
+            <span class="s3">&quot;Expected current collector to be %r, but it's %r&quot; </span><span class="s1">% (self, self._collectors[-</span><span class="s5">1</span><span class="s1">])</span>
+        <span class="s1">)</span>
+
+        <span class="s1">self.pause()</span>
+
+        <span class="s0"># Remove this Collector from the stack, and resume the one underneath</span>
+        <span class="s0"># (if any).</span>
+        <span class="s1">self._collectors.pop()</span>
+        <span class="s2">if </span><span class="s1">self._collectors:</span>
+            <span class="s1">self._collectors[-</span><span class="s5">1</span><span class="s1">].resume()</span>
+
+    <span class="s2">def </span><span class="s1">pause(self):</span>
+        <span class="s0">&quot;&quot;&quot;Pause tracing, but be prepared to `resume`.&quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">tracer </span><span class="s2">in </span><span class="s1">self.tracers:</span>
+            <span class="s1">tracer.stop()</span>
+            <span class="s1">stats = tracer.get_stats()</span>
+            <span class="s2">if </span><span class="s1">stats:</span>
+                <span class="s1">print(</span><span class="s3">&quot;</span><span class="s4">\n</span><span class="s3">Coverage.py tracer stats:&quot;</span><span class="s1">)</span>
+                <span class="s2">for </span><span class="s1">k </span><span class="s2">in </span><span class="s1">sorted(stats.keys()):</span>
+                    <span class="s1">print(</span><span class="s3">&quot;%20s: %s&quot; </span><span class="s1">% (k, stats[k]))</span>
+        <span class="s2">if </span><span class="s1">self.threading:</span>
+            <span class="s1">self.threading.settrace(</span><span class="s2">None</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">resume(self):</span>
+        <span class="s0">&quot;&quot;&quot;Resume tracing after a `pause`.&quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">tracer </span><span class="s2">in </span><span class="s1">self.tracers:</span>
+            <span class="s1">tracer.start()</span>
+        <span class="s2">if </span><span class="s1">self.threading:</span>
+            <span class="s1">self.threading.settrace(self._installation_trace)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self._start_tracer()</span>
+
+    <span class="s2">def </span><span class="s1">_activity(self):</span>
+        <span class="s0">&quot;&quot;&quot;Has any activity been traced? 
+ 
+        Returns a boolean, True if any trace function was invoked. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">any(tracer.activity() </span><span class="s2">for </span><span class="s1">tracer </span><span class="s2">in </span><span class="s1">self.tracers)</span>
+
+    <span class="s2">def </span><span class="s1">switch_context(self, new_context):</span>
+        <span class="s0">&quot;&quot;&quot;Switch to a new dynamic context.&quot;&quot;&quot;</span>
+        <span class="s1">self.flush_data()</span>
+        <span class="s2">if </span><span class="s1">self.static_context:</span>
+            <span class="s1">context = self.static_context</span>
+            <span class="s2">if </span><span class="s1">new_context:</span>
+                <span class="s1">context += </span><span class="s3">&quot;|&quot; </span><span class="s1">+ new_context</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">context = new_context</span>
+        <span class="s1">self.covdata.set_context(context)</span>
+
+    <span class="s2">def </span><span class="s1">disable_plugin(self, disposition):</span>
+        <span class="s0">&quot;&quot;&quot;Disable the plugin mentioned in `disposition`.&quot;&quot;&quot;</span>
+        <span class="s1">file_tracer = disposition.file_tracer</span>
+        <span class="s1">plugin = file_tracer._coverage_plugin</span>
+        <span class="s1">plugin_name = plugin._coverage_plugin_name</span>
+        <span class="s1">self.warn(</span><span class="s3">&quot;Disabling plug-in {!r} due to previous exception&quot;</span><span class="s1">.format(plugin_name))</span>
+        <span class="s1">plugin._coverage_enabled = </span><span class="s2">False</span>
+        <span class="s1">disposition.trace = </span><span class="s2">False</span>
+
+    <span class="s2">def </span><span class="s1">cached_mapped_file(self, filename):</span>
+        <span class="s0">&quot;&quot;&quot;A locally cached version of file names mapped through file_mapper.&quot;&quot;&quot;</span>
+        <span class="s1">key = (type(filename), filename)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">self.mapped_file_cache[key]</span>
+        <span class="s2">except </span><span class="s1">KeyError:</span>
+            <span class="s2">return </span><span class="s1">self.mapped_file_cache.setdefault(key, self.file_mapper(filename))</span>
+
+    <span class="s2">def </span><span class="s1">mapped_file_dict(self, d):</span>
+        <span class="s0">&quot;&quot;&quot;Return a dict like d, but with keys modified by file_mapper.&quot;&quot;&quot;</span>
+        <span class="s0"># The call to litems() ensures that the GIL protects the dictionary</span>
+        <span class="s0"># iterator against concurrent modifications by tracers running</span>
+        <span class="s0"># in other threads. We try three times in case of concurrent</span>
+        <span class="s0"># access, hoping to get a clean copy.</span>
+        <span class="s1">runtime_err = </span><span class="s2">None</span>
+        <span class="s2">for </span><span class="s1">_ </span><span class="s2">in </span><span class="s1">range(</span><span class="s5">3</span><span class="s1">):</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">items = litems(d)</span>
+            <span class="s2">except </span><span class="s1">RuntimeError </span><span class="s2">as </span><span class="s1">ex:</span>
+                <span class="s1">runtime_err = ex</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">break</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">runtime_err</span>
+
+        <span class="s2">return </span><span class="s1">dict((self.cached_mapped_file(k), v) </span><span class="s2">for </span><span class="s1">k, v </span><span class="s2">in </span><span class="s1">items </span><span class="s2">if </span><span class="s1">v)</span>
+
+    <span class="s2">def </span><span class="s1">plugin_was_disabled(self, plugin):</span>
+        <span class="s0">&quot;&quot;&quot;Record that `plugin` was disabled during the run.&quot;&quot;&quot;</span>
+        <span class="s1">self.disabled_plugins.add(plugin._coverage_plugin_name)</span>
+
+    <span class="s2">def </span><span class="s1">flush_data(self):</span>
+        <span class="s0">&quot;&quot;&quot;Save the collected data to our associated `CoverageData`. 
+ 
+        Data may have also been saved along the way. This forces the 
+        last of the data to be saved. 
+ 
+        Returns True if there was data to save, False if not. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">self._activity():</span>
+            <span class="s2">return False</span>
+
+        <span class="s2">if </span><span class="s1">self.branch:</span>
+            <span class="s1">self.covdata.add_arcs(self.mapped_file_dict(self.data))</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.covdata.add_lines(self.mapped_file_dict(self.data))</span>
+
+        <span class="s1">file_tracers = {</span>
+            <span class="s1">k: v </span><span class="s2">for </span><span class="s1">k, v </span><span class="s2">in </span><span class="s1">self.file_tracers.items()</span>
+            <span class="s2">if </span><span class="s1">v </span><span class="s2">not in </span><span class="s1">self.disabled_plugins</span>
+        <span class="s1">}</span>
+        <span class="s1">self.covdata.add_file_tracers(self.mapped_file_dict(file_tracers))</span>
+
+        <span class="s1">self._clear_data()</span>
+        <span class="s2">return True</span>
+</pre>
+</body>
+</html>

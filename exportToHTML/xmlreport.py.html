@@ -1,0 +1,256 @@
+<html>
+<head>
+<title>xmlreport.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+xmlreport.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># coding: utf-8</span>
+<span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;XML reporting for coverage.py&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">os.path</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">time</span>
+<span class="s2">import </span><span class="s1">xml.dom.minidom</span>
+
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">env</span>
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">__url__, __version__, files</span>
+<span class="s2">from </span><span class="s1">coverage.backward </span><span class="s2">import </span><span class="s1">iitems</span>
+<span class="s2">from </span><span class="s1">coverage.misc </span><span class="s2">import </span><span class="s1">isolate_module</span>
+<span class="s2">from </span><span class="s1">coverage.report </span><span class="s2">import </span><span class="s1">get_analysis_to_report</span>
+
+<span class="s1">os = isolate_module(os)</span>
+
+
+<span class="s1">DTD_URL = </span><span class="s3">'https://raw.githubusercontent.com/cobertura/web/master/htdocs/xml/coverage-04.dtd'</span>
+
+
+<span class="s2">def </span><span class="s1">rate(hit, num):</span>
+    <span class="s0">&quot;&quot;&quot;Return the fraction of `hit`/`num`, as a string.&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">num == </span><span class="s4">0</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s3">&quot;1&quot;</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s3">&quot;%.4g&quot; </span><span class="s1">% (float(hit) / num)</span>
+
+
+<span class="s2">class </span><span class="s1">XmlReporter(object):</span>
+    <span class="s0">&quot;&quot;&quot;A reporter for writing Cobertura-style XML coverage results.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, coverage):</span>
+        <span class="s1">self.coverage = coverage</span>
+        <span class="s1">self.config = self.coverage.config</span>
+
+        <span class="s1">self.source_paths = set()</span>
+        <span class="s2">if </span><span class="s1">self.config.source:</span>
+            <span class="s2">for </span><span class="s1">src </span><span class="s2">in </span><span class="s1">self.config.source:</span>
+                <span class="s2">if </span><span class="s1">os.path.exists(src):</span>
+                    <span class="s2">if not </span><span class="s1">self.config.relative_files:</span>
+                        <span class="s1">src = files.canonical_filename(src)</span>
+                    <span class="s1">self.source_paths.add(src)</span>
+        <span class="s1">self.packages = {}</span>
+        <span class="s1">self.xml_out = </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">report(self, morfs, outfile=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Generate a Cobertura-compatible XML report for `morfs`. 
+ 
+        `morfs` is a list of modules or file names. 
+ 
+        `outfile` is a file object to write the XML to. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># Initial setup.</span>
+        <span class="s1">outfile = outfile </span><span class="s2">or </span><span class="s1">sys.stdout</span>
+        <span class="s1">has_arcs = self.coverage.get_data().has_arcs()</span>
+
+        <span class="s0"># Create the DOM that will store the data.</span>
+        <span class="s1">impl = xml.dom.minidom.getDOMImplementation()</span>
+        <span class="s1">self.xml_out = impl.createDocument(</span><span class="s2">None</span><span class="s1">, </span><span class="s3">&quot;coverage&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+
+        <span class="s0"># Write header stuff.</span>
+        <span class="s1">xcoverage = self.xml_out.documentElement</span>
+        <span class="s1">xcoverage.setAttribute(</span><span class="s3">&quot;version&quot;</span><span class="s1">, __version__)</span>
+        <span class="s1">xcoverage.setAttribute(</span><span class="s3">&quot;timestamp&quot;</span><span class="s1">, str(int(time.time()*</span><span class="s4">1000</span><span class="s1">)))</span>
+        <span class="s1">xcoverage.appendChild(self.xml_out.createComment(</span>
+            <span class="s3">&quot; Generated by coverage.py: %s &quot; </span><span class="s1">% __url__</span>
+            <span class="s1">))</span>
+        <span class="s1">xcoverage.appendChild(self.xml_out.createComment(</span><span class="s3">&quot; Based on %s &quot; </span><span class="s1">% DTD_URL))</span>
+
+        <span class="s0"># Call xml_file for each file in the data.</span>
+        <span class="s2">for </span><span class="s1">fr, analysis </span><span class="s2">in </span><span class="s1">get_analysis_to_report(self.coverage, morfs):</span>
+            <span class="s1">self.xml_file(fr, analysis, has_arcs)</span>
+
+        <span class="s1">xsources = self.xml_out.createElement(</span><span class="s3">&quot;sources&quot;</span><span class="s1">)</span>
+        <span class="s1">xcoverage.appendChild(xsources)</span>
+
+        <span class="s0"># Populate the XML DOM with the source info.</span>
+        <span class="s2">for </span><span class="s1">path </span><span class="s2">in </span><span class="s1">sorted(self.source_paths):</span>
+            <span class="s1">xsource = self.xml_out.createElement(</span><span class="s3">&quot;source&quot;</span><span class="s1">)</span>
+            <span class="s1">xsources.appendChild(xsource)</span>
+            <span class="s1">txt = self.xml_out.createTextNode(path)</span>
+            <span class="s1">xsource.appendChild(txt)</span>
+
+        <span class="s1">lnum_tot, lhits_tot = </span><span class="s4">0</span><span class="s1">, </span><span class="s4">0</span>
+        <span class="s1">bnum_tot, bhits_tot = </span><span class="s4">0</span><span class="s1">, </span><span class="s4">0</span>
+
+        <span class="s1">xpackages = self.xml_out.createElement(</span><span class="s3">&quot;packages&quot;</span><span class="s1">)</span>
+        <span class="s1">xcoverage.appendChild(xpackages)</span>
+
+        <span class="s0"># Populate the XML DOM with the package info.</span>
+        <span class="s2">for </span><span class="s1">pkg_name, pkg_data </span><span class="s2">in </span><span class="s1">sorted(iitems(self.packages)):</span>
+            <span class="s1">class_elts, lhits, lnum, bhits, bnum = pkg_data</span>
+            <span class="s1">xpackage = self.xml_out.createElement(</span><span class="s3">&quot;package&quot;</span><span class="s1">)</span>
+            <span class="s1">xpackages.appendChild(xpackage)</span>
+            <span class="s1">xclasses = self.xml_out.createElement(</span><span class="s3">&quot;classes&quot;</span><span class="s1">)</span>
+            <span class="s1">xpackage.appendChild(xclasses)</span>
+            <span class="s2">for </span><span class="s1">_, class_elt </span><span class="s2">in </span><span class="s1">sorted(iitems(class_elts)):</span>
+                <span class="s1">xclasses.appendChild(class_elt)</span>
+            <span class="s1">xpackage.setAttribute(</span><span class="s3">&quot;name&quot;</span><span class="s1">, pkg_name.replace(os.sep, </span><span class="s3">'.'</span><span class="s1">))</span>
+            <span class="s1">xpackage.setAttribute(</span><span class="s3">&quot;line-rate&quot;</span><span class="s1">, rate(lhits, lnum))</span>
+            <span class="s2">if </span><span class="s1">has_arcs:</span>
+                <span class="s1">branch_rate = rate(bhits, bnum)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">branch_rate = </span><span class="s3">&quot;0&quot;</span>
+            <span class="s1">xpackage.setAttribute(</span><span class="s3">&quot;branch-rate&quot;</span><span class="s1">, branch_rate)</span>
+            <span class="s1">xpackage.setAttribute(</span><span class="s3">&quot;complexity&quot;</span><span class="s1">, </span><span class="s3">&quot;0&quot;</span><span class="s1">)</span>
+
+            <span class="s1">lnum_tot += lnum</span>
+            <span class="s1">lhits_tot += lhits</span>
+            <span class="s1">bnum_tot += bnum</span>
+            <span class="s1">bhits_tot += bhits</span>
+
+        <span class="s1">xcoverage.setAttribute(</span><span class="s3">&quot;lines-valid&quot;</span><span class="s1">, str(lnum_tot))</span>
+        <span class="s1">xcoverage.setAttribute(</span><span class="s3">&quot;lines-covered&quot;</span><span class="s1">, str(lhits_tot))</span>
+        <span class="s1">xcoverage.setAttribute(</span><span class="s3">&quot;line-rate&quot;</span><span class="s1">, rate(lhits_tot, lnum_tot))</span>
+        <span class="s2">if </span><span class="s1">has_arcs:</span>
+            <span class="s1">xcoverage.setAttribute(</span><span class="s3">&quot;branches-valid&quot;</span><span class="s1">, str(bnum_tot))</span>
+            <span class="s1">xcoverage.setAttribute(</span><span class="s3">&quot;branches-covered&quot;</span><span class="s1">, str(bhits_tot))</span>
+            <span class="s1">xcoverage.setAttribute(</span><span class="s3">&quot;branch-rate&quot;</span><span class="s1">, rate(bhits_tot, bnum_tot))</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">xcoverage.setAttribute(</span><span class="s3">&quot;branches-covered&quot;</span><span class="s1">, </span><span class="s3">&quot;0&quot;</span><span class="s1">)</span>
+            <span class="s1">xcoverage.setAttribute(</span><span class="s3">&quot;branches-valid&quot;</span><span class="s1">, </span><span class="s3">&quot;0&quot;</span><span class="s1">)</span>
+            <span class="s1">xcoverage.setAttribute(</span><span class="s3">&quot;branch-rate&quot;</span><span class="s1">, </span><span class="s3">&quot;0&quot;</span><span class="s1">)</span>
+        <span class="s1">xcoverage.setAttribute(</span><span class="s3">&quot;complexity&quot;</span><span class="s1">, </span><span class="s3">&quot;0&quot;</span><span class="s1">)</span>
+
+        <span class="s0"># Write the output file.</span>
+        <span class="s1">outfile.write(serialize_xml(self.xml_out))</span>
+
+        <span class="s0"># Return the total percentage.</span>
+        <span class="s1">denom = lnum_tot + bnum_tot</span>
+        <span class="s2">if </span><span class="s1">denom == </span><span class="s4">0</span><span class="s1">:</span>
+            <span class="s1">pct = </span><span class="s4">0.0</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">pct = </span><span class="s4">100.0 </span><span class="s1">* (lhits_tot + bhits_tot) / denom</span>
+        <span class="s2">return </span><span class="s1">pct</span>
+
+    <span class="s2">def </span><span class="s1">xml_file(self, fr, analysis, has_arcs):</span>
+        <span class="s0">&quot;&quot;&quot;Add to the XML report for a single file.&quot;&quot;&quot;</span>
+
+        <span class="s2">if </span><span class="s1">self.config.skip_empty:</span>
+            <span class="s2">if </span><span class="s1">analysis.numbers.n_statements == </span><span class="s4">0</span><span class="s1">:</span>
+                <span class="s2">return</span>
+
+        <span class="s0"># Create the 'lines' and 'package' XML elements, which</span>
+        <span class="s0"># are populated later.  Note that a package == a directory.</span>
+        <span class="s1">filename = fr.filename.replace(</span><span class="s3">&quot;</span><span class="s5">\\</span><span class="s3">&quot;</span><span class="s1">, </span><span class="s3">&quot;/&quot;</span><span class="s1">)</span>
+        <span class="s2">for </span><span class="s1">source_path </span><span class="s2">in </span><span class="s1">self.source_paths:</span>
+            <span class="s1">source_path = files.canonical_filename(source_path)</span>
+            <span class="s2">if </span><span class="s1">filename.startswith(source_path.replace(</span><span class="s3">&quot;</span><span class="s5">\\</span><span class="s3">&quot;</span><span class="s1">, </span><span class="s3">&quot;/&quot;</span><span class="s1">) + </span><span class="s3">&quot;/&quot;</span><span class="s1">):</span>
+                <span class="s1">rel_name = filename[len(source_path)+</span><span class="s4">1</span><span class="s1">:]</span>
+                <span class="s2">break</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">rel_name = fr.relative_filename()</span>
+            <span class="s1">self.source_paths.add(fr.filename[:-len(rel_name)].rstrip(</span><span class="s3">r&quot;\/&quot;</span><span class="s1">))</span>
+
+        <span class="s1">dirname = os.path.dirname(rel_name) </span><span class="s2">or </span><span class="s3">u&quot;.&quot;</span>
+        <span class="s1">dirname = </span><span class="s3">&quot;/&quot;</span><span class="s1">.join(dirname.split(</span><span class="s3">&quot;/&quot;</span><span class="s1">)[:self.config.xml_package_depth])</span>
+        <span class="s1">package_name = dirname.replace(</span><span class="s3">&quot;/&quot;</span><span class="s1">, </span><span class="s3">&quot;.&quot;</span><span class="s1">)</span>
+
+        <span class="s1">package = self.packages.setdefault(package_name, [{}, </span><span class="s4">0</span><span class="s1">, </span><span class="s4">0</span><span class="s1">, </span><span class="s4">0</span><span class="s1">, </span><span class="s4">0</span><span class="s1">])</span>
+
+        <span class="s1">xclass = self.xml_out.createElement(</span><span class="s3">&quot;class&quot;</span><span class="s1">)</span>
+
+        <span class="s1">xclass.appendChild(self.xml_out.createElement(</span><span class="s3">&quot;methods&quot;</span><span class="s1">))</span>
+
+        <span class="s1">xlines = self.xml_out.createElement(</span><span class="s3">&quot;lines&quot;</span><span class="s1">)</span>
+        <span class="s1">xclass.appendChild(xlines)</span>
+
+        <span class="s1">xclass.setAttribute(</span><span class="s3">&quot;name&quot;</span><span class="s1">, os.path.relpath(rel_name, dirname))</span>
+        <span class="s1">xclass.setAttribute(</span><span class="s3">&quot;filename&quot;</span><span class="s1">, rel_name.replace(</span><span class="s3">&quot;</span><span class="s5">\\</span><span class="s3">&quot;</span><span class="s1">, </span><span class="s3">&quot;/&quot;</span><span class="s1">))</span>
+        <span class="s1">xclass.setAttribute(</span><span class="s3">&quot;complexity&quot;</span><span class="s1">, </span><span class="s3">&quot;0&quot;</span><span class="s1">)</span>
+
+        <span class="s1">branch_stats = analysis.branch_stats()</span>
+        <span class="s1">missing_branch_arcs = analysis.missing_branch_arcs()</span>
+
+        <span class="s0"># For each statement, create an XML 'line' element.</span>
+        <span class="s2">for </span><span class="s1">line </span><span class="s2">in </span><span class="s1">sorted(analysis.statements):</span>
+            <span class="s1">xline = self.xml_out.createElement(</span><span class="s3">&quot;line&quot;</span><span class="s1">)</span>
+            <span class="s1">xline.setAttribute(</span><span class="s3">&quot;number&quot;</span><span class="s1">, str(line))</span>
+
+            <span class="s0"># Q: can we get info about the number of times a statement is</span>
+            <span class="s0"># executed?  If so, that should be recorded here.</span>
+            <span class="s1">xline.setAttribute(</span><span class="s3">&quot;hits&quot;</span><span class="s1">, str(int(line </span><span class="s2">not in </span><span class="s1">analysis.missing)))</span>
+
+            <span class="s2">if </span><span class="s1">has_arcs:</span>
+                <span class="s2">if </span><span class="s1">line </span><span class="s2">in </span><span class="s1">branch_stats:</span>
+                    <span class="s1">total, taken = branch_stats[line]</span>
+                    <span class="s1">xline.setAttribute(</span><span class="s3">&quot;branch&quot;</span><span class="s1">, </span><span class="s3">&quot;true&quot;</span><span class="s1">)</span>
+                    <span class="s1">xline.setAttribute(</span>
+                        <span class="s3">&quot;condition-coverage&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;%d%% (%d/%d)&quot; </span><span class="s1">% (</span><span class="s4">100</span><span class="s1">*taken//total, taken, total)</span>
+                        <span class="s1">)</span>
+                <span class="s2">if </span><span class="s1">line </span><span class="s2">in </span><span class="s1">missing_branch_arcs:</span>
+                    <span class="s1">annlines = [</span><span class="s3">&quot;exit&quot; </span><span class="s2">if </span><span class="s1">b &lt; </span><span class="s4">0 </span><span class="s2">else </span><span class="s1">str(b) </span><span class="s2">for </span><span class="s1">b </span><span class="s2">in </span><span class="s1">missing_branch_arcs[line]]</span>
+                    <span class="s1">xline.setAttribute(</span><span class="s3">&quot;missing-branches&quot;</span><span class="s1">, </span><span class="s3">&quot;,&quot;</span><span class="s1">.join(annlines))</span>
+            <span class="s1">xlines.appendChild(xline)</span>
+
+        <span class="s1">class_lines = len(analysis.statements)</span>
+        <span class="s1">class_hits = class_lines - len(analysis.missing)</span>
+
+        <span class="s2">if </span><span class="s1">has_arcs:</span>
+            <span class="s1">class_branches = sum(t </span><span class="s2">for </span><span class="s1">t, k </span><span class="s2">in </span><span class="s1">branch_stats.values())</span>
+            <span class="s1">missing_branches = sum(t - k </span><span class="s2">for </span><span class="s1">t, k </span><span class="s2">in </span><span class="s1">branch_stats.values())</span>
+            <span class="s1">class_br_hits = class_branches - missing_branches</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">class_branches = </span><span class="s4">0.0</span>
+            <span class="s1">class_br_hits = </span><span class="s4">0.0</span>
+
+        <span class="s0"># Finalize the statistics that are collected in the XML DOM.</span>
+        <span class="s1">xclass.setAttribute(</span><span class="s3">&quot;line-rate&quot;</span><span class="s1">, rate(class_hits, class_lines))</span>
+        <span class="s2">if </span><span class="s1">has_arcs:</span>
+            <span class="s1">branch_rate = rate(class_br_hits, class_branches)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">branch_rate = </span><span class="s3">&quot;0&quot;</span>
+        <span class="s1">xclass.setAttribute(</span><span class="s3">&quot;branch-rate&quot;</span><span class="s1">, branch_rate)</span>
+
+        <span class="s1">package[</span><span class="s4">0</span><span class="s1">][rel_name] = xclass</span>
+        <span class="s1">package[</span><span class="s4">1</span><span class="s1">] += class_hits</span>
+        <span class="s1">package[</span><span class="s4">2</span><span class="s1">] += class_lines</span>
+        <span class="s1">package[</span><span class="s4">3</span><span class="s1">] += class_br_hits</span>
+        <span class="s1">package[</span><span class="s4">4</span><span class="s1">] += class_branches</span>
+
+
+<span class="s2">def </span><span class="s1">serialize_xml(dom):</span>
+    <span class="s0">&quot;&quot;&quot;Serialize a minidom node to XML.&quot;&quot;&quot;</span>
+    <span class="s1">out = dom.toprettyxml()</span>
+    <span class="s2">if </span><span class="s1">env.PY2:</span>
+        <span class="s1">out = out.encode(</span><span class="s3">&quot;utf8&quot;</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">out</span>
+</pre>
+</body>
+</html>

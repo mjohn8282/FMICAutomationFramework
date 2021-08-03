@@ -1,0 +1,76 @@
+2021-06-29 12:43:31 INFO     ************ Verifying Homepage Title ***********
+2021-06-29 12:43:31 INFO     ************ Verifying login***********
+2021-06-29 12:43:36 INFO     starting CheckHomepage_links
+2021-06-29 12:43:38 INFO     https://fmicdev.dat.com/Web/Home/HomePage.aspx?m=1820313&i=483&h=1# Status code 200
+2021-06-29 12:43:40 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/UserProfile.aspx&mi=127 Status code 200
+2021-06-29 12:43:42 INFO     https://fmicdev.dat.com/Web/Static/ContactUS.aspx Status code 200
+2021-06-29 12:43:43 INFO     https://fmicdev.dat.com/Web/Home/HomePage.aspx Status code 200
+2021-06-29 12:43:45 INFO     https://fmicdev.dat.com/Web/Home/HomePage.aspx?m=1820313&i=483&h=1# Status code 200
+2021-06-29 12:43:46 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/RTEstimator.aspx?u=18010902&mi=3 Status code 200
+2021-06-29 12:43:48 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/upload.aspx?u=18010902&mi=1 Status code 200
+2021-06-29 12:43:50 INFO     https://fmicdev.dat.com/Web/Home/HomePage.aspx?m=1820313&i=483&h=1# Status code 200
+2021-06-29 12:43:52 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=https%3A%2F%2Fsso.online.tableau.com%2Fpublic%2Fidp%2FSSO?u=18010902&mi=429 Status code 200
+2021-06-29 12:43:54 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/DownloadCompanyReports.aspx?u=18010902&mi=126 Status code 200
+2021-06-29 12:43:56 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/MyMarketIntelligenceResources.aspx?u=18010902&mi=433 Status code 200
+2021-06-29 12:43:58 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/VideoTutorial.aspx?u=18010902&mi=430 Status code 200
+2021-06-29 12:43:59 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=FMIC%5F2021%5FJuly%5FTL%5FIM%5Fdata%5Ftemplate.xlsx?u=18010902&mi=431 Status code 500
+2021-06-29 12:44:00 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=FMIC%5FTL%5FData%5FTemplate%20EUR%5FAug%202021.xlsx?u=18010902&mi=535 Status code 500
+2021-06-29 12:44:01 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=FMIC%5F3PL%5FTL%5F2021%5Fdata%5Ftemplate.xlsx?u=18010902&mi=536 Status code 500
+2021-06-29 12:44:02 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=LTL%5FEUROPE%5FData%5FTemplate%202021.xlsx?u=18010902&mi=537 Status code 500
+2021-06-29 12:44:03 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Allvideos/FMIC_LTL_2020_data_template.xlsx?u=18010902&mi=432 Status code 500
+2021-06-29 12:44:05 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/DataSubmission.aspx?u=18010902&mi=435 Status code 200
+2021-06-29 12:44:13 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/Admin/UserAdmin.aspx?u=18010902&mi=15 Status code 200
+2021-06-29 12:44:15 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/Admin/CompanyAdmin.aspx?u=18010902&mi=436 Status code 200
+2021-06-29 12:44:17 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/globalpages/submenus.aspx?menu=4&u=18010902&mi=437 Status code 200
+2021-06-29 12:44:19 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/UserProfile.aspx?u=18010902&mi=438 Status code 200
+2021-06-29 12:44:20 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=FMIC%20Use%20Policy.pdf?u=18010902&mi=166 Status code 500
+2021-06-29 12:44:22 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/Static/ContactUS.aspx?u=18010902&mi=439 Status code 200
+2021-06-29 12:44:23 INFO     https://fmicdev.dat.com/Web/Home/HomePage.aspx?m=1820313&i=483&h=1# Status code 200
+2021-06-29 12:44:27 INFO     ************ Verifying Homepage Title ***********
+2021-06-29 12:44:27 INFO     ************ Verifying login***********
+2021-06-29 12:44:35 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/RTEstimator.aspx&u=18010902&mi=1&ci=1 Status code 200
+2021-06-29 12:44:37 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/Upload.aspx&u=18010902&mi=2&ci=2 Status code 200
+2021-06-29 12:44:39 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=https%3A%2F%2Fsso.online.tableau.com%2Fpublic%2Fidp%2FSSO&u=18010902&mi=3&ci=3 Status code 200
+2021-06-29 12:44:41 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/DownloadCompanyReports.aspx&u=18010902&mi=4&ci=4 Status code 200
+2021-06-29 12:44:43 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/DownloadCompanyReports.aspx&u=18010902&mi=5&ci=5 Status code 200
+2021-06-29 12:44:45 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/DownloadCompanyReports.aspx&u=18010902&mi=6&ci=6 Status code 200
+2021-06-29 12:44:47 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/DownloadCompanyReports.aspx&u=18010902&mi=7&ci=7 Status code 200
+2021-06-29 12:44:49 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/globalpages/submenus.aspx?menu=465&u=18010902&mi=14&ci=14 Status code 200
+2021-06-29 12:44:51 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/globalpages/submenus.aspx?menu=459&u=18010902&mi=11&ci=11 Status code 200
+2021-06-29 12:44:53 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/globalpages/submenus.aspx?menu=476&u=18010902&mi=8&ci=8 Status code 200
+2021-06-29 12:44:57 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=https%3A%2F%2Fwww.podbean.com%2Feu%2Fpb-b5qub-d73b50&u=18010902&mi=15&ci=15 Status code 200
+2021-06-29 12:45:01 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=https%3A%2F%2Fwww.podbean.com%2Feu%2Fpb-w7mmf-d8a5f9&u=18010902&mi=17&ci=17 Status code 200
+2021-06-29 12:45:04 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=https%3A%2F%2Fwww.podbean.com%2Feu%2Fpb-nv2v5-da167d&u=18010902&mi=16&ci=16 Status code 200
+2021-06-29 12:45:06 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=https%3A%2F%2Fwww.dat.com%2Fresources%2Fpodcasts&u=18010902&mi=18&ci=18 Status code 403
+2021-06-29 12:45:07 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/globalpages/submenus.aspx?menu=527&u=18010902&mi=19&ci=19 Status code 200
+2021-06-29 12:45:09 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/globalpages/submenus.aspx?menu=530&u=18010902&mi=23&ci=23 Status code 200
+2021-06-29 12:45:11 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/globalpages/submenus.aspx?menu=516&u=18010902&mi=22&ci=22 Status code 200
+2021-06-29 12:45:13 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/DownloadCompanyReports.aspx&u=18010902&mi=6&ci=6 Status code 200
+2021-06-29 12:45:16 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/DownloadCompanyReports.aspx&u=18010902&mi=7&ci=7 Status code 200
+2021-06-29 12:45:18 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/globalpages/submenus.aspx?menu=465&u=18010902&mi=14&ci=14 Status code 200
+2021-06-29 12:45:20 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/globalpages/submenus.aspx?menu=459&u=18010902&mi=11&ci=11 Status code 200
+2021-06-29 12:45:21 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/globalpages/submenus.aspx?menu=476&u=18010902&mi=8&ci=8 Status code 200
+2021-06-29 12:45:23 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/DownloadCompanyReports.aspx&u=18010902&mi=9&ci=9 Status code 200
+2021-06-29 12:45:25 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/DownloadCompanyReports.aspx&u=18010902&mi=12&ci=12 Status code 200
+2021-06-29 12:45:27 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/globalpages/submenus.aspx?menu=440&u=18010902&mi=13&ci=13 Status code 200
+2021-06-29 12:45:29 INFO     https://fmicdev.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/submenus.aspx?menu=320&u=18010902&mi=10&ci=10 Status code 200
+2021-08-03 16:28:08 INFO     ************ Verifying Homepage Title ***********
+2021-08-03 16:28:08 INFO     ************ Verifying Homepage Title ***********
+2021-08-03 16:28:09 INFO     ************ Verifying login***********
+2021-08-03 16:28:09 INFO     ************ Verifying login***********
+2021-08-03 16:28:59 INFO     ************ Verifying Homepage Title ***********
+2021-08-03 16:28:59 INFO     ************ Verifying Homepage Title ***********
+2021-08-03 16:29:00 INFO     ************ Verifying login***********
+2021-08-03 16:29:00 INFO     ************ Verifying login***********
+2021-08-03 16:29:28 INFO     ************ Verifying Homepage Title ***********
+2021-08-03 16:29:29 INFO     ************ Verifying Homepage Title ***********
+2021-08-03 16:29:29 INFO     ************ Verifying login***********
+2021-08-03 16:29:29 INFO     ************ Verifying login***********
+2021-08-03 16:30:18 INFO     ************ Verifying Homepage Title ***********
+2021-08-03 16:30:18 INFO     ************ Verifying Homepage Title ***********
+2021-08-03 16:30:18 INFO     ************ Verifying login***********
+2021-08-03 16:30:18 INFO     ************ Verifying login***********
+2021-08-03 16:30:58 INFO     ************ Verifying Homepage Title ***********
+2021-08-03 16:30:58 INFO     ************ Verifying Homepage Title ***********
+2021-08-03 16:30:58 INFO     ************ Verifying login***********
+2021-08-03 16:30:58 INFO     ************ Verifying login***********

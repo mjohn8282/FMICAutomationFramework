@@ -1,0 +1,682 @@
+<html>
+<head>
+<title>style.scss</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #abb2bf;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+.s5 { color: #c678dd;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+style.scss</font>
+</center></td></tr></table>
+<pre><span class="s0">/* Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0 */</span>
+<span class="s0">/* For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt */</span>
+
+<span class="s0">// CSS styles for coverage.py HTML reports.</span>
+
+<span class="s0">// When you edit this file, you need to run &quot;make css&quot; to get the CSS file</span>
+<span class="s0">// generated, and then check in both the .scss and the .css files.</span>
+
+<span class="s0">// When working on the file, this command is useful:</span>
+<span class="s0">//      sass --watch --style=compact --sourcemap=none --no-cache coverage/htmlfiles/style.scss:htmlcov/style.css</span>
+<span class="s0">//</span>
+<span class="s0">// OR you can process sass purely in python with `pip install pysass`, then:</span>
+<span class="s0">//      pysassc --style=compact coverage/htmlfiles/style.scss coverage/htmlfiles/style.css</span>
+
+<span class="s0">// Ignore this comment, it's for the CSS output file:</span>
+<span class="s0">/* Don't edit this .css file. Edit the .scss file instead! */</span>
+
+<span class="s0">// Dimensions</span>
+<span class="s2">$left-gutter</span><span class="s1">: </span><span class="s3">3.5rem</span><span class="s1">;</span>
+
+
+<span class="s0">//</span>
+<span class="s0">// Declare colors and variables</span>
+<span class="s0">//</span>
+
+<span class="s2">$font-normal</span><span class="s1">:             -apple-system, BlinkMacSystemFont, </span><span class="s4">&quot;Segoe UI&quot;</span><span class="s1">, Roboto, Ubuntu, Cantarell, </span><span class="s4">&quot;Helvetica Neue&quot;</span><span class="s1">, sans-serif;</span>
+<span class="s2">$font-code</span><span class="s1">:               SFMono-Regular, Menlo, Monaco, Consolas, monospace;</span>
+
+<span class="s2">$off-button-lighten</span><span class="s1">:      </span><span class="s3">50%</span><span class="s1">;</span>
+<span class="s2">$hover-dark-amt</span><span class="s1">:          </span><span class="s3">95%</span><span class="s1">;</span>
+
+<span class="s2">$focus-color</span><span class="s1">:             </span><span class="s3">#007acc</span><span class="s1">;</span>
+
+<span class="s2">$mis-color</span><span class="s1">:               </span><span class="s3">#ff0000</span><span class="s1">;</span>
+<span class="s2">$run-color</span><span class="s1">:               </span><span class="s3">#00dd00</span><span class="s1">;</span>
+<span class="s2">$exc-color</span><span class="s1">:               </span><span class="s3">#808080</span><span class="s1">;</span>
+<span class="s2">$par-color</span><span class="s1">:               </span><span class="s3">#dddd00</span><span class="s1">;</span>
+
+<span class="s2">$light-bg</span><span class="s1">:                </span><span class="s3">#fff</span><span class="s1">;</span>
+<span class="s2">$light-fg</span><span class="s1">:                </span><span class="s3">#000</span><span class="s1">;</span>
+<span class="s2">$light-gray1</span><span class="s1">:             </span><span class="s3">#f8f8f8</span><span class="s1">;</span>
+<span class="s2">$light-gray2</span><span class="s1">:             </span><span class="s3">#eee</span><span class="s1">;</span>
+<span class="s2">$light-gray3</span><span class="s1">:             </span><span class="s3">#ccc</span><span class="s1">;</span>
+<span class="s2">$light-gray4</span><span class="s1">:             </span><span class="s3">#999</span><span class="s1">;</span>
+<span class="s2">$light-gray5</span><span class="s1">:             </span><span class="s3">#666</span><span class="s1">;</span>
+<span class="s2">$light-gray6</span><span class="s1">:             </span><span class="s3">#333</span><span class="s1">;</span>
+<span class="s2">$light-pln-bg</span><span class="s1">:            </span><span class="s2">$light-bg</span><span class="s1">;</span>
+<span class="s2">$light-mis-bg</span><span class="s1">:            </span><span class="s3">#fdd</span><span class="s1">;</span>
+<span class="s2">$light-run-bg</span><span class="s1">:            </span><span class="s3">#dfd</span><span class="s1">;</span>
+<span class="s2">$light-exc-bg</span><span class="s1">:            </span><span class="s2">$light-gray2</span><span class="s1">;</span>
+<span class="s2">$light-par-bg</span><span class="s1">:            </span><span class="s3">#ffa</span><span class="s1">;</span>
+<span class="s2">$light-token-com</span><span class="s1">:         </span><span class="s3">#008000</span><span class="s1">;</span>
+<span class="s2">$light-token-str</span><span class="s1">:         </span><span class="s3">#0451A5</span><span class="s1">;</span>
+<span class="s2">$light-context-bg-color</span><span class="s1">:  </span><span class="s3">#aef</span><span class="s1">;</span>
+
+<span class="s2">$dark-bg</span><span class="s1">:                 </span><span class="s3">#1e1e1e</span><span class="s1">;</span>
+<span class="s2">$dark-fg</span><span class="s1">:                 </span><span class="s3">#eee</span><span class="s1">;</span>
+<span class="s2">$dark-gray1</span><span class="s1">:              </span><span class="s3">#222</span><span class="s1">;</span>
+<span class="s2">$dark-gray2</span><span class="s1">:              </span><span class="s3">#333</span><span class="s1">;</span>
+<span class="s2">$dark-gray3</span><span class="s1">:              </span><span class="s3">#444</span><span class="s1">;</span>
+<span class="s2">$dark-gray4</span><span class="s1">:              </span><span class="s3">#777</span><span class="s1">;</span>
+<span class="s2">$dark-gray5</span><span class="s1">:              </span><span class="s3">#aaa</span><span class="s1">;</span>
+<span class="s2">$dark-gray6</span><span class="s1">:              </span><span class="s3">#ddd</span><span class="s1">;</span>
+<span class="s2">$dark-pln-bg</span><span class="s1">:             </span><span class="s2">$dark-bg</span><span class="s1">;</span>
+<span class="s2">$dark-mis-bg</span><span class="s1">:             </span><span class="s3">#4b1818</span><span class="s1">;</span>
+<span class="s2">$dark-run-bg</span><span class="s1">:             </span><span class="s3">#373d29</span><span class="s1">;</span>
+<span class="s2">$dark-exc-bg</span><span class="s1">:             </span><span class="s2">$dark-gray2</span><span class="s1">;</span>
+<span class="s2">$dark-par-bg</span><span class="s1">:             </span><span class="s3">#650</span><span class="s1">;</span>
+<span class="s2">$dark-token-com</span><span class="s1">:          </span><span class="s3">#6A9955</span><span class="s1">;</span>
+<span class="s2">$dark-token-str</span><span class="s1">:          </span><span class="s3">#9CDCFE</span><span class="s1">;</span>
+<span class="s2">$dark-context-bg-color</span><span class="s1">:   </span><span class="s3">#056</span><span class="s1">;</span>
+
+<span class="s0">//</span>
+<span class="s0">// Mixins and utilities</span>
+<span class="s0">//</span>
+<span class="s5">@mixin </span><span class="s2">background-dark</span><span class="s1">(</span><span class="s2">$color</span><span class="s1">) </span><span class="s3">{</span>
+    <span class="s3">@media (prefers-color-scheme: dark) {</span>
+        <span class="s3">background: $color;</span>
+    <span class="s3">}</span>
+<span class="s3">}</span>
+<span class="s5">@mixin </span><span class="s2">color-dark</span><span class="s1">(</span><span class="s2">$color</span><span class="s1">) </span><span class="s3">{</span>
+    <span class="s3">@media (prefers-color-scheme: dark) {</span>
+        <span class="s3">color: $color;</span>
+    <span class="s3">}</span>
+<span class="s3">}</span>
+<span class="s5">@mixin </span><span class="s2">border-color-dark</span><span class="s1">(</span><span class="s2">$color</span><span class="s1">) </span><span class="s3">{</span>
+    <span class="s3">@media (prefers-color-scheme: dark) {</span>
+        <span class="s3">border-color: $color;</span>
+    <span class="s3">}</span>
+<span class="s3">}</span>
+
+<span class="s0">// Add visual outline to navigable elements on focus improve accessibility.</span>
+<span class="s5">@mixin </span><span class="s2">focus-border </span><span class="s3">{</span>
+    <span class="s3">&amp;:active, &amp;:focus {</span>
+        <span class="s3">outline: 2px dashed $focus-color;</span>
+    <span class="s3">}</span>
+<span class="s3">}</span>
+
+<span class="s0">// Page-wide styles</span>
+<span class="s2">html</span><span class="s1">, </span><span class="s2">body</span><span class="s1">, </span><span class="s2">h1</span><span class="s1">, </span><span class="s2">h2</span><span class="s1">, </span><span class="s2">h3</span><span class="s1">, </span><span class="s2">p</span><span class="s1">, </span><span class="s2">table</span><span class="s1">, </span><span class="s2">td</span><span class="s1">, </span><span class="s2">th </span><span class="s3">{</span>
+    <span class="s3">margin: 0;</span>
+    <span class="s3">padding: 0;</span>
+    <span class="s3">border: 0;</span>
+    <span class="s3">font-weight: inherit;</span>
+    <span class="s3">font-style: inherit;</span>
+    <span class="s3">font-size: 100%;</span>
+    <span class="s3">font-family: inherit;</span>
+    <span class="s3">vertical-align: baseline;</span>
+<span class="s3">}</span>
+
+<span class="s0">// Set baseline grid to 16 pt.</span>
+<span class="s2">body </span><span class="s3">{</span>
+    <span class="s3">font-family: $font-normal;</span>
+    <span class="s3">font-size: 1em;</span>
+    <span class="s3">background: $light-bg;</span>
+    <span class="s3">color: $light-fg;</span>
+    <span class="s3">@include background-dark($dark-bg);</span>
+    <span class="s3">@include color-dark($dark-fg);</span>
+<span class="s3">}</span>
+
+<span class="s2">html</span><span class="s1">&gt;</span><span class="s2">body </span><span class="s3">{</span>
+    <span class="s3">font-size: 16px;</span>
+<span class="s3">}</span>
+
+<span class="s2">a </span><span class="s3">{</span>
+    <span class="s3">@include focus-border;</span>
+<span class="s3">}</span>
+
+<span class="s2">p </span><span class="s3">{</span>
+    <span class="s3">font-size: .875em;</span>
+    <span class="s3">line-height: 1.4em;</span>
+<span class="s3">}</span>
+
+<span class="s2">table </span><span class="s3">{</span>
+    <span class="s3">border-collapse: collapse;</span>
+<span class="s3">}</span>
+<span class="s2">td </span><span class="s3">{</span>
+    <span class="s3">vertical-align: top;</span>
+<span class="s3">}</span>
+<span class="s2">table tr.hidden </span><span class="s3">{</span>
+    <span class="s3">display: none !important;</span>
+<span class="s3">}</span>
+
+<span class="s2">p#no_rows </span><span class="s3">{</span>
+    <span class="s3">display: none;</span>
+    <span class="s3">font-size: 1.2em;</span>
+<span class="s3">}</span>
+
+<span class="s2">a.nav </span><span class="s3">{</span>
+    <span class="s3">text-decoration: none;</span>
+    <span class="s3">color: inherit;</span>
+
+    <span class="s3">&amp;:hover {</span>
+        <span class="s3">text-decoration: underline;</span>
+        <span class="s3">color: inherit;</span>
+    <span class="s3">}</span>
+<span class="s3">}</span>
+
+<span class="s0">// Page structure</span>
+<span class="s2">#header </span><span class="s3">{</span>
+    <span class="s3">background: $light-gray1;</span>
+    <span class="s3">@include background-dark(black);</span>
+    <span class="s3">width: 100%;</span>
+    <span class="s3">border-bottom: 1px solid $light-gray2;</span>
+    <span class="s3">@include border-color-dark($dark-gray2);</span>
+<span class="s3">}</span>
+
+<span class="s2">.indexfile #footer </span><span class="s3">{</span>
+    <span class="s3">margin: 1rem $left-gutter;</span>
+<span class="s3">}</span>
+
+<span class="s2">.pyfile #footer </span><span class="s3">{</span>
+    <span class="s3">margin: 1rem 1rem;</span>
+<span class="s3">}</span>
+
+<span class="s2">#footer .content </span><span class="s3">{</span>
+    <span class="s3">padding: 0;</span>
+    <span class="s3">color: $light-gray5;</span>
+    <span class="s3">@include color-dark($dark-gray5);</span>
+    <span class="s3">font-style: italic;</span>
+<span class="s3">}</span>
+
+<span class="s2">#index </span><span class="s3">{</span>
+    <span class="s3">margin: 1rem 0 0 $left-gutter;</span>
+<span class="s3">}</span>
+
+<span class="s0">// Header styles</span>
+<span class="s2">#header .content </span><span class="s3">{</span>
+    <span class="s3">padding: 1rem $left-gutter;</span>
+<span class="s3">}</span>
+
+<span class="s2">h1 </span><span class="s3">{</span>
+    <span class="s3">font-size: 1.25em;</span>
+    <span class="s3">display: inline-block;</span>
+<span class="s3">}</span>
+
+<span class="s2">#filter_container </span><span class="s3">{</span>
+    <span class="s3">float: right;</span>
+    <span class="s3">margin: 0 2em 0 0;</span>
+
+    <span class="s3">input {</span>
+        <span class="s3">width: 10em;</span>
+        <span class="s3">padding: 0.2em 0.5em;</span>
+        <span class="s3">border: 2px solid $light-gray3;</span>
+        <span class="s3">background: $light-bg;</span>
+        <span class="s3">color: $light-fg;</span>
+        <span class="s3">@include border-color-dark($dark-gray3);</span>
+        <span class="s3">@include background-dark($dark-bg);</span>
+        <span class="s3">@include color-dark($dark-fg);</span>
+        <span class="s3">&amp;:focus {</span>
+            <span class="s3">border-color: $focus-color;</span>
+        <span class="s3">}</span>
+    <span class="s3">}</span>
+<span class="s3">}</span>
+
+<span class="s2">h2.stats </span><span class="s3">{</span>
+    <span class="s3">margin-top: .5em;</span>
+    <span class="s3">font-size: 1em;</span>
+<span class="s3">}</span>
+<span class="s2">.stats button </span><span class="s3">{</span>
+    <span class="s3">font-family: inherit;</span>
+    <span class="s3">font-size: inherit;</span>
+    <span class="s3">border: 1px solid;</span>
+    <span class="s3">border-radius: .2em;</span>
+    <span class="s3">color: inherit;</span>
+    <span class="s3">padding: .1em .5em;</span>
+    <span class="s3">margin: 1px calc(.1em + 1px);</span>
+    <span class="s3">cursor: pointer;</span>
+    <span class="s3">border-color: $light-gray3;</span>
+    <span class="s3">@include border-color-dark($dark-gray3);</span>
+    <span class="s3">@include focus-border;</span>
+
+    <span class="s3">@include focus-border;</span>
+
+    <span class="s3">&amp;.run {</span>
+        <span class="s3">background: mix($light-run-bg, $light-bg, $off-button-lighten);</span>
+        <span class="s3">@include background-dark($dark-run-bg);</span>
+        <span class="s3">&amp;.show_run {</span>
+            <span class="s3">background: $light-run-bg;</span>
+            <span class="s3">@include background-dark($dark-run-bg);</span>
+            <span class="s3">border: 2px solid $run-color;</span>
+            <span class="s3">margin: 0 .1em;</span>
+        <span class="s3">}</span>
+    <span class="s3">}</span>
+    <span class="s3">&amp;.mis {</span>
+        <span class="s3">background: mix($light-mis-bg, $light-bg, $off-button-lighten);</span>
+        <span class="s3">@include background-dark($dark-mis-bg);</span>
+        <span class="s3">&amp;.show_mis {</span>
+            <span class="s3">background: $light-mis-bg;</span>
+            <span class="s3">@include background-dark($dark-mis-bg);</span>
+            <span class="s3">border: 2px solid $mis-color;</span>
+            <span class="s3">margin: 0 .1em;</span>
+        <span class="s3">}</span>
+    <span class="s3">}</span>
+    <span class="s3">&amp;.exc {</span>
+        <span class="s3">background: mix($light-exc-bg, $light-bg, $off-button-lighten);</span>
+        <span class="s3">@include background-dark($dark-exc-bg);</span>
+        <span class="s3">&amp;.show_exc {</span>
+            <span class="s3">background: $light-exc-bg;</span>
+            <span class="s3">@include background-dark($dark-exc-bg);</span>
+            <span class="s3">border: 2px solid $exc-color;</span>
+            <span class="s3">margin: 0 .1em;</span>
+        <span class="s3">}</span>
+    <span class="s3">}</span>
+    <span class="s3">&amp;.par {</span>
+        <span class="s3">background: mix($light-par-bg, $light-bg, $off-button-lighten);</span>
+        <span class="s3">@include background-dark($dark-par-bg);</span>
+        <span class="s3">&amp;.show_par {</span>
+            <span class="s3">background: $light-par-bg;</span>
+            <span class="s3">@include background-dark($dark-par-bg);</span>
+            <span class="s3">border: 2px solid $par-color;</span>
+            <span class="s3">margin: 0 .1em;</span>
+        <span class="s3">}</span>
+    <span class="s3">}</span>
+<span class="s3">}</span>
+
+<span class="s0">// Yellow post-it things.</span>
+<span class="s2">%popup </span><span class="s3">{</span>
+    <span class="s3">display: none;</span>
+    <span class="s3">position: absolute;</span>
+    <span class="s3">z-index: 999;</span>
+    <span class="s3">background: #ffffcc;</span>
+    <span class="s3">border: 1px solid #888;</span>
+    <span class="s3">border-radius: .2em;</span>
+    <span class="s3">color: #333;</span>
+    <span class="s3">padding: .25em .5em;</span>
+<span class="s3">}</span>
+
+<span class="s0">// Yellow post-it's in the text listings.</span>
+<span class="s2">%in-text-popup </span><span class="s3">{</span>
+    <span class="s3">@extend %popup;</span>
+    <span class="s3">white-space: normal;</span>
+    <span class="s3">float: right;</span>
+    <span class="s3">top: 1.75em;</span>
+    <span class="s3">right: 1em;</span>
+    <span class="s3">height: auto;</span>
+<span class="s3">}</span>
+
+<span class="s0">// Help panel</span>
+<span class="s2">#keyboard_icon </span><span class="s3">{</span>
+    <span class="s3">float: right;</span>
+    <span class="s3">margin: 5px;</span>
+    <span class="s3">cursor: pointer;</span>
+<span class="s3">}</span>
+
+<span class="s2">.help_panel </span><span class="s3">{</span>
+    <span class="s3">@extend %popup;</span>
+    <span class="s3">padding: .5em;</span>
+    <span class="s3">border: 1px solid #883;</span>
+
+    <span class="s3">.legend {</span>
+        <span class="s3">font-style: italic;</span>
+        <span class="s3">margin-bottom: 1em;</span>
+    <span class="s3">}</span>
+
+    <span class="s3">.indexfile &amp; {</span>
+        <span class="s3">width: 20em;</span>
+        <span class="s3">min-height: 4em;</span>
+    <span class="s3">}</span>
+
+    <span class="s3">.pyfile &amp; {</span>
+        <span class="s3">width: 16em;</span>
+        <span class="s3">min-height: 8em;</span>
+    <span class="s3">}</span>
+<span class="s3">}</span>
+
+<span class="s2">#panel_icon </span><span class="s3">{</span>
+    <span class="s3">float: right;</span>
+    <span class="s3">cursor: pointer;</span>
+<span class="s3">}</span>
+
+<span class="s2">.keyhelp </span><span class="s3">{</span>
+    <span class="s3">margin: .75em;</span>
+
+    <span class="s3">.key {</span>
+        <span class="s3">border: 1px solid black;</span>
+        <span class="s3">border-color: #888 #333 #333 #888;</span>
+        <span class="s3">padding: .1em .35em;</span>
+        <span class="s3">font-family: $font-code;</span>
+        <span class="s3">font-weight: bold;</span>
+        <span class="s3">background: #eee;</span>
+    <span class="s3">}</span>
+<span class="s3">}</span>
+
+<span class="s0">// Source file styles</span>
+
+<span class="s0">// The slim bar at the left edge of the source lines, colored by coverage.</span>
+<span class="s2">$border-indicator-width</span><span class="s1">: </span><span class="s3">.2em</span><span class="s1">;</span>
+
+<span class="s2">#source </span><span class="s3">{</span>
+    <span class="s3">padding: 1em 0 1em $left-gutter;</span>
+    <span class="s3">font-family: $font-code;</span>
+
+    <span class="s3">p {</span>
+        <span class="s3">// position relative makes position:absolute pop-ups appear in the right place.</span>
+        <span class="s3">position: relative;</span>
+        <span class="s3">white-space: pre;</span>
+
+        <span class="s3">* {</span>
+            <span class="s3">box-sizing: border-box;</span>
+        <span class="s3">}</span>
+
+        <span class="s3">.n {</span>
+            <span class="s3">float: left;</span>
+            <span class="s3">text-align: right;</span>
+            <span class="s3">width: $left-gutter;</span>
+            <span class="s3">box-sizing: border-box;</span>
+            <span class="s3">margin-left: -$left-gutter;</span>
+            <span class="s3">padding-right: 1em;</span>
+            <span class="s3">color: $light-gray4;</span>
+            <span class="s3">@include color-dark($dark-gray4);</span>
+
+            <span class="s3">a {</span>
+                <span class="s3">text-decoration: none;</span>
+                <span class="s3">color: $light-gray4;</span>
+                <span class="s3">@include color-dark($dark-gray4);</span>
+                <span class="s3">&amp;:hover {</span>
+                    <span class="s3">text-decoration: underline;</span>
+                    <span class="s3">color: $light-gray4;</span>
+                    <span class="s3">@include color-dark($dark-gray4);</span>
+                <span class="s3">}</span>
+            <span class="s3">}</span>
+        <span class="s3">}</span>
+
+        <span class="s3">&amp;.highlight .n {</span>
+            <span class="s3">background: #ffdd00;</span>
+        <span class="s3">}</span>
+
+        <span class="s3">.t {</span>
+            <span class="s3">display: inline-block;</span>
+            <span class="s3">width: 100%;</span>
+            <span class="s3">box-sizing: border-box;</span>
+            <span class="s3">margin-left: -.5em;</span>
+            <span class="s3">padding-left: .5em - $border-indicator-width;</span>
+            <span class="s3">border-left: $border-indicator-width solid $light-bg;</span>
+            <span class="s3">@include border-color-dark($dark-bg);</span>
+
+            <span class="s3">&amp;:hover {</span>
+                <span class="s3">background: mix($light-pln-bg, $light-fg, $hover-dark-amt);</span>
+                <span class="s3">@include background-dark(mix($dark-pln-bg, $dark-fg, $hover-dark-amt));</span>
+
+                <span class="s3">&amp; ~ .r .annotate.long {</span>
+                    <span class="s3">display: block;</span>
+                <span class="s3">}</span>
+            <span class="s3">}</span>
+
+            <span class="s3">// Syntax coloring</span>
+            <span class="s3">.com {</span>
+                <span class="s3">color: $light-token-com;</span>
+                <span class="s3">@include color-dark($dark-token-com);</span>
+                <span class="s3">font-style: italic;</span>
+                <span class="s3">line-height: 1px;</span>
+            <span class="s3">}</span>
+            <span class="s3">.key {</span>
+                <span class="s3">font-weight: bold;</span>
+                <span class="s3">line-height: 1px;</span>
+            <span class="s3">}</span>
+            <span class="s3">.str {</span>
+                <span class="s3">color: $light-token-str;</span>
+                <span class="s3">@include color-dark($dark-token-str);</span>
+            <span class="s3">}</span>
+        <span class="s3">}</span>
+
+        <span class="s3">&amp;.mis {</span>
+            <span class="s3">.t {</span>
+                <span class="s3">border-left: $border-indicator-width solid $mis-color;</span>
+            <span class="s3">}</span>
+
+            <span class="s3">&amp;.show_mis .t {</span>
+                <span class="s3">background: $light-mis-bg;</span>
+                <span class="s3">@include background-dark($dark-mis-bg);</span>
+
+                <span class="s3">&amp;:hover {</span>
+                    <span class="s3">background: mix($light-mis-bg, $light-fg, $hover-dark-amt);</span>
+                    <span class="s3">@include background-dark(mix($dark-mis-bg, $dark-fg, $hover-dark-amt));</span>
+                <span class="s3">}</span>
+            <span class="s3">}</span>
+        <span class="s3">}</span>
+
+        <span class="s3">&amp;.run {</span>
+            <span class="s3">.t {</span>
+                <span class="s3">border-left: $border-indicator-width solid $run-color;</span>
+            <span class="s3">}</span>
+
+            <span class="s3">&amp;.show_run .t {</span>
+                <span class="s3">background: $light-run-bg;</span>
+                <span class="s3">@include background-dark($dark-run-bg);</span>
+
+                <span class="s3">&amp;:hover {</span>
+                    <span class="s3">background: mix($light-run-bg, $light-fg, $hover-dark-amt);</span>
+                    <span class="s3">@include background-dark(mix($dark-run-bg, $dark-fg, $hover-dark-amt));</span>
+                <span class="s3">}</span>
+            <span class="s3">}</span>
+        <span class="s3">}</span>
+
+        <span class="s3">&amp;.exc {</span>
+            <span class="s3">.t {</span>
+                <span class="s3">border-left: $border-indicator-width solid $exc-color;</span>
+            <span class="s3">}</span>
+
+            <span class="s3">&amp;.show_exc .t {</span>
+                <span class="s3">background: $light-exc-bg;</span>
+                <span class="s3">@include background-dark($dark-exc-bg);</span>
+
+                <span class="s3">&amp;:hover {</span>
+                    <span class="s3">background: mix($light-exc-bg, $light-fg, $hover-dark-amt);</span>
+                    <span class="s3">@include background-dark(mix($dark-exc-bg, $dark-fg, $hover-dark-amt));</span>
+                <span class="s3">}</span>
+            <span class="s3">}</span>
+        <span class="s3">}</span>
+
+        <span class="s3">&amp;.par {</span>
+            <span class="s3">.t {</span>
+                <span class="s3">border-left: $border-indicator-width solid $par-color;</span>
+            <span class="s3">}</span>
+
+            <span class="s3">&amp;.show_par .t {</span>
+                <span class="s3">background: $light-par-bg;</span>
+                <span class="s3">@include background-dark($dark-par-bg);</span>
+
+                <span class="s3">&amp;:hover {</span>
+                    <span class="s3">background: mix($light-par-bg, $light-fg, $hover-dark-amt);</span>
+                    <span class="s3">@include background-dark(mix($dark-par-bg, $dark-fg, $hover-dark-amt));</span>
+                <span class="s3">}</span>
+            <span class="s3">}</span>
+
+        <span class="s3">}</span>
+
+        <span class="s3">.r {</span>
+            <span class="s3">position: absolute;</span>
+            <span class="s3">top: 0;</span>
+            <span class="s3">right: 2.5em;</span>
+            <span class="s3">font-family: $font-normal;</span>
+        <span class="s3">}</span>
+
+        <span class="s3">.annotate {</span>
+            <span class="s3">font-family: $font-normal;</span>
+            <span class="s3">color: $light-gray5;</span>
+            <span class="s3">@include color-dark($dark-gray6);</span>
+            <span class="s3">padding-right: .5em;</span>
+
+            <span class="s3">&amp;.short:hover ~ .long {</span>
+                <span class="s3">display: block;</span>
+            <span class="s3">}</span>
+
+            <span class="s3">&amp;.long {</span>
+                <span class="s3">@extend %in-text-popup;</span>
+                <span class="s3">width: 30em;</span>
+                <span class="s3">right: 2.5em;</span>
+            <span class="s3">}</span>
+        <span class="s3">}</span>
+
+        <span class="s3">input {</span>
+            <span class="s3">display: none;</span>
+
+            <span class="s3">&amp; ~ .r label.ctx {</span>
+                <span class="s3">cursor: pointer;</span>
+                <span class="s3">border-radius: .25em;</span>
+                <span class="s3">&amp;::before {</span>
+                    <span class="s3">content: &quot;▶ &quot;;</span>
+                <span class="s3">}</span>
+                <span class="s3">&amp;:hover {</span>
+                    <span class="s3">background: mix($light-context-bg-color, $light-bg, $off-button-lighten);</span>
+                    <span class="s3">@include background-dark(mix($dark-context-bg-color, $dark-bg, $off-button-lighten));</span>
+                    <span class="s3">color: $light-gray5;</span>
+                    <span class="s3">@include color-dark($dark-gray5);</span>
+                <span class="s3">}</span>
+            <span class="s3">}</span>
+
+            <span class="s3">&amp;:checked ~ .r label.ctx {</span>
+                <span class="s3">background: $light-context-bg-color;</span>
+                <span class="s3">@include background-dark($dark-context-bg-color);</span>
+                <span class="s3">color: $light-gray5;</span>
+                <span class="s3">@include color-dark($dark-gray5);</span>
+                <span class="s3">border-radius: .75em .75em 0 0;</span>
+                <span class="s3">padding: 0 .5em;</span>
+                <span class="s3">margin: -.25em 0;</span>
+                <span class="s3">&amp;::before {</span>
+                    <span class="s3">content: &quot;▼ &quot;;</span>
+                <span class="s3">}</span>
+            <span class="s3">}</span>
+
+            <span class="s3">&amp;:checked ~ .ctxs {</span>
+                <span class="s3">padding: .25em .5em;</span>
+                <span class="s3">overflow-y: scroll;</span>
+                <span class="s3">max-height: 10.5em;</span>
+            <span class="s3">}</span>
+        <span class="s3">}</span>
+
+        <span class="s3">label.ctx {</span>
+            <span class="s3">color: $light-gray4;</span>
+            <span class="s3">@include color-dark($dark-gray4);</span>
+            <span class="s3">display: inline-block;</span>
+            <span class="s3">padding: 0 .5em;</span>
+            <span class="s3">font-size: .8333em;   // 10/12</span>
+        <span class="s3">}</span>
+
+        <span class="s3">.ctxs {</span>
+            <span class="s3">display: block;</span>
+            <span class="s3">max-height: 0;</span>
+            <span class="s3">overflow-y: hidden;</span>
+            <span class="s3">transition: all .2s;</span>
+            <span class="s3">padding: 0 .5em;</span>
+            <span class="s3">font-family: $font-normal;</span>
+            <span class="s3">white-space: nowrap;</span>
+            <span class="s3">background: $light-context-bg-color;</span>
+            <span class="s3">@include background-dark($dark-context-bg-color);</span>
+            <span class="s3">border-radius: .25em;</span>
+            <span class="s3">margin-right: 1.75em;</span>
+            <span class="s3">span {</span>
+                <span class="s3">display: block;</span>
+                <span class="s3">text-align: right;</span>
+            <span class="s3">}</span>
+        <span class="s3">}</span>
+    <span class="s3">}</span>
+<span class="s3">}</span>
+
+
+<span class="s0">// index styles</span>
+<span class="s2">#index </span><span class="s3">{</span>
+    <span class="s3">font-family: $font-code;</span>
+    <span class="s3">font-size: 0.875em;</span>
+
+    <span class="s3">table.index {</span>
+        <span class="s3">margin-left: -.5em;</span>
+    <span class="s3">}</span>
+    <span class="s3">td, th {</span>
+        <span class="s3">text-align: right;</span>
+        <span class="s3">width: 5em;</span>
+        <span class="s3">padding: .25em .5em;</span>
+        <span class="s3">border-bottom: 1px solid $light-gray2;</span>
+        <span class="s3">@include border-color-dark($dark-gray2);</span>
+        <span class="s3">&amp;.name {</span>
+            <span class="s3">text-align: left;</span>
+            <span class="s3">width: auto;</span>
+        <span class="s3">}</span>
+    <span class="s3">}</span>
+    <span class="s3">th {</span>
+        <span class="s3">font-style: italic;</span>
+        <span class="s3">color: $light-gray6;</span>
+        <span class="s3">@include color-dark($dark-gray6);</span>
+        <span class="s3">cursor: pointer;</span>
+        <span class="s3">&amp;:hover {</span>
+            <span class="s3">background: $light-gray2;</span>
+            <span class="s3">@include background-dark($dark-gray2);</span>
+        <span class="s3">}</span>
+        <span class="s3">&amp;.headerSortDown, &amp;.headerSortUp {</span>
+            <span class="s3">white-space: nowrap;</span>
+            <span class="s3">background: $light-gray2;</span>
+            <span class="s3">@include background-dark($dark-gray2);</span>
+        <span class="s3">}</span>
+        <span class="s3">&amp;.headerSortDown:after {</span>
+            <span class="s3">content: &quot; ↑&quot;;</span>
+        <span class="s3">}</span>
+        <span class="s3">&amp;.headerSortUp:after {</span>
+            <span class="s3">content: &quot; ↓&quot;;</span>
+        <span class="s3">}</span>
+    <span class="s3">}</span>
+    <span class="s3">td.name a {</span>
+        <span class="s3">text-decoration: none;</span>
+        <span class="s3">color: inherit;</span>
+    <span class="s3">}</span>
+
+    <span class="s3">tr.total td, 
+    tr.total_dynamic td {</span>
+        <span class="s3">font-weight: bold;</span>
+        <span class="s3">border-top: 1px solid #ccc;</span>
+        <span class="s3">border-bottom: none;</span>
+    <span class="s3">}</span>
+    <span class="s3">tr.file:hover {</span>
+        <span class="s3">background: $light-gray2;</span>
+        <span class="s3">@include background-dark($dark-gray2);</span>
+        <span class="s3">td.name {</span>
+            <span class="s3">text-decoration: underline;</span>
+            <span class="s3">color: inherit;</span>
+        <span class="s3">}</span>
+    <span class="s3">}</span>
+<span class="s3">}</span>
+
+<span class="s0">// scroll marker styles</span>
+<span class="s2">#scroll_marker </span><span class="s3">{</span>
+    <span class="s3">position: fixed;</span>
+    <span class="s3">right: 0;</span>
+    <span class="s3">top: 0;</span>
+    <span class="s3">width: 16px;</span>
+    <span class="s3">height: 100%;</span>
+    <span class="s3">background: $light-bg;</span>
+    <span class="s3">border-left: 1px solid $light-gray2;</span>
+    <span class="s3">@include background-dark($dark-bg);</span>
+    <span class="s3">@include border-color-dark($dark-gray2);</span>
+    <span class="s3">will-change: transform; // for faster scrolling of fixed element in Chrome</span>
+
+    <span class="s3">.marker {</span>
+        <span class="s3">background: $light-gray3;</span>
+        <span class="s3">@include background-dark($dark-gray3);</span>
+        <span class="s3">position: absolute;</span>
+        <span class="s3">min-height: 3px;</span>
+        <span class="s3">width: 100%;</span>
+    <span class="s3">}</span>
+<span class="s3">}</span>
+</pre>
+</body>
+</html>

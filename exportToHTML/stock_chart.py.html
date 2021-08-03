@@ -1,0 +1,75 @@
+<html>
+<head>
+<title>stock_chart.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+stock_chart.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Sequence,</span>
+    <span class="s1">Alias,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">ExtensionList</span>
+
+<span class="s0">from </span><span class="s1">._chart </span><span class="s0">import </span><span class="s1">ChartBase</span>
+<span class="s0">from </span><span class="s1">.axis </span><span class="s0">import </span><span class="s1">TextAxis, NumericAxis, ChartLines</span>
+<span class="s0">from </span><span class="s1">.updown_bars </span><span class="s0">import </span><span class="s1">UpDownBars</span>
+<span class="s0">from </span><span class="s1">.label </span><span class="s0">import </span><span class="s1">DataLabelList</span>
+<span class="s0">from </span><span class="s1">.series </span><span class="s0">import </span><span class="s1">Series</span>
+
+
+<span class="s0">class </span><span class="s1">StockChart(ChartBase):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;stockChart&quot;</span>
+
+    <span class="s1">ser = Sequence(expected_type=Series) </span><span class="s2">#min 3, max4</span>
+    <span class="s1">dLbls = Typed(expected_type=DataLabelList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">dataLabels = Alias(</span><span class="s3">'dLbls'</span><span class="s1">)</span>
+    <span class="s1">dropLines = Typed(expected_type=ChartLines, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">hiLowLines = Typed(expected_type=ChartLines, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">upDownBars = Typed(expected_type=UpDownBars, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">x_axis = Typed(expected_type=TextAxis)</span>
+    <span class="s1">y_axis = Typed(expected_type=NumericAxis)</span>
+
+    <span class="s1">_series_type = </span><span class="s3">&quot;line&quot;</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'ser'</span><span class="s1">, </span><span class="s3">'dLbls'</span><span class="s1">, </span><span class="s3">'dropLines'</span><span class="s1">, </span><span class="s3">'hiLowLines'</span><span class="s1">, </span><span class="s3">'upDownBars'</span><span class="s1">,</span>
+                    <span class="s3">'axId'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">ser=(),</span>
+                 <span class="s1">dLbls=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dropLines=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">hiLowLines=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">upDownBars=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">**kw</span>
+                <span class="s1">):</span>
+        <span class="s1">self.ser = ser</span>
+        <span class="s1">self.dLbls = dLbls</span>
+        <span class="s1">self.dropLines = dropLines</span>
+        <span class="s1">self.hiLowLines = hiLowLines</span>
+        <span class="s1">self.upDownBars = upDownBars</span>
+        <span class="s1">self.x_axis = TextAxis()</span>
+        <span class="s1">self.y_axis = NumericAxis()</span>
+        <span class="s1">super(StockChart, self).__init__(**kw)</span>
+</pre>
+</body>
+</html>

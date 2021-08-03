@@ -1,0 +1,218 @@
+<html>
+<head>
+<title>path.pyi</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #d19a66;}
+.s3 { color: #98c379;}
+.s4 { color: #5c6370;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+path.pyi</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Any, AnyStr, Callable, ContextManager, Generic, IO, Iterable, Iterator, List, Optional, Text, Type, Union</span>
+<span class="s0">from </span><span class="s1">typing_extensions </span><span class="s0">import </span><span class="s1">Final, Literal</span>
+<span class="s0">import </span><span class="s1">os</span>
+<span class="s0">import </span><span class="s1">sys</span>
+
+<span class="s0">class </span><span class="s1">_FNMatcher(Generic[AnyStr]):</span>
+    <span class="s1">pattern: AnyStr = ...</span>
+    <span class="s0">def </span><span class="s1">__init__(self, pattern: AnyStr) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+    <span class="s0">def </span><span class="s1">__call__(self, path: local) -&gt; bool: ...</span>
+
+<span class="s0">class </span><span class="s1">_Stat:</span>
+    <span class="s1">path: Final[local] = ...</span>
+    <span class="s1">mode: Final[int]</span>
+    <span class="s1">ino: Final[int]</span>
+    <span class="s1">dev: Final[int]</span>
+    <span class="s1">nlink: Final[int]</span>
+    <span class="s1">uid: Final[int]</span>
+    <span class="s1">gid: Final[int]</span>
+    <span class="s1">size: Final[int]</span>
+    <span class="s1">atime: Final[float]</span>
+    <span class="s1">mtime: Final[float]</span>
+    <span class="s1">ctime: Final[float]</span>
+    <span class="s1">atime_ns: Final[int]</span>
+    <span class="s1">mtime_ns: Final[int]</span>
+    <span class="s1">ctime_ns: Final[int]</span>
+    <span class="s0">if </span><span class="s1">sys.version_info &gt;= (</span><span class="s2">3</span><span class="s1">, </span><span class="s2">8</span><span class="s1">) </span><span class="s0">and </span><span class="s1">sys.platform == </span><span class="s3">&quot;win32&quot;</span><span class="s1">:</span>
+        <span class="s1">reparse_tag: Final[int]</span>
+    <span class="s1">blocks: Final[int]</span>
+    <span class="s1">blksize: Final[int]</span>
+    <span class="s1">rdev: Final[int]</span>
+    <span class="s1">flags: Final[int]</span>
+    <span class="s1">gen: Final[int]</span>
+    <span class="s1">birthtime: Final[int]</span>
+    <span class="s1">rsize: Final[int]</span>
+    <span class="s1">creator: Final[int]</span>
+    <span class="s1">type: Final[int]</span>
+    <span class="s0">if </span><span class="s1">sys.platform != </span><span class="s3">'win32'</span><span class="s1">:</span>
+        <span class="s1">@property</span>
+        <span class="s0">def </span><span class="s1">owner(self) -&gt; str: ...</span>
+        <span class="s1">@property</span>
+        <span class="s0">def </span><span class="s1">group(self) -&gt; str: ...</span>
+    <span class="s0">def </span><span class="s1">isdir(self) -&gt; bool: ...</span>
+    <span class="s0">def </span><span class="s1">isfile(self) -&gt; bool: ...</span>
+    <span class="s0">def </span><span class="s1">islink(self) -&gt; bool: ...</span>
+
+
+<span class="s0">if </span><span class="s1">sys.version_info &gt;= (</span><span class="s2">3</span><span class="s1">, </span><span class="s2">6</span><span class="s1">):</span>
+    <span class="s1">_PathLike = os.PathLike</span>
+<span class="s0">else</span><span class="s1">:</span>
+    <span class="s0">class </span><span class="s1">_PathLike(Generic[AnyStr]):</span>
+        <span class="s0">def </span><span class="s1">__fspath__(self) -&gt; AnyStr: ...</span>
+<span class="s1">_PathType = Union[bytes, Text, _PathLike[str], _PathLike[bytes], local]</span>
+
+<span class="s0">class </span><span class="s1">local(_PathLike[str]):</span>
+    <span class="s0">class </span><span class="s1">ImportMismatchError(ImportError): ...</span>
+
+    <span class="s1">sep: Final[str]</span>
+    <span class="s1">strpath: Final[str]</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, path: _PathType = ..., expanduser: bool = ...) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+    <span class="s0">def </span><span class="s1">__hash__(self) -&gt; int: ...</span>
+    <span class="s0">def </span><span class="s1">__eq__(self, other: object) -&gt; bool: ...</span>
+    <span class="s0">def </span><span class="s1">__ne__(self, other: object) -&gt; bool: ...</span>
+    <span class="s0">def </span><span class="s1">__lt__(self, other: object) -&gt; bool: ...</span>
+    <span class="s0">def </span><span class="s1">__gt__(self, other: object) -&gt; bool: ...</span>
+    <span class="s0">def </span><span class="s1">__add__(self, other: object) -&gt; local: ...</span>
+    <span class="s0">def </span><span class="s1">__cmp__(self, other: object) -&gt; int: ...</span>
+    <span class="s0">def </span><span class="s1">__div__(self, other: _PathType) -&gt; local: ...</span>
+    <span class="s0">def </span><span class="s1">__truediv__(self, other: _PathType) -&gt; local: ...</span>
+    <span class="s0">def </span><span class="s1">__fspath__(self) -&gt; str: ...</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s0">def </span><span class="s1">get_temproot(cls) -&gt; local: ...</span>
+    <span class="s1">@classmethod</span>
+    <span class="s0">def </span><span class="s1">make_numbered_dir(</span>
+        <span class="s1">cls,</span>
+        <span class="s1">prefix: str = ...,</span>
+        <span class="s1">rootdir: Optional[local] = ...,</span>
+        <span class="s1">keep: Optional[int] = ...,</span>
+        <span class="s1">lock_timeout: int = ...,</span>
+    <span class="s1">) -&gt; local: ...</span>
+    <span class="s1">@classmethod</span>
+    <span class="s0">def </span><span class="s1">mkdtemp(cls, rootdir: Optional[local] = ...) -&gt; local: ...</span>
+    <span class="s1">@classmethod</span>
+    <span class="s0">def </span><span class="s1">sysfind(</span>
+        <span class="s1">cls,</span>
+        <span class="s1">name: _PathType,</span>
+        <span class="s1">checker: Optional[Callable[[local], bool]] = ...,</span>
+        <span class="s1">paths: Optional[Iterable[_PathType]] = ...,</span>
+    <span class="s1">) -&gt; Optional[local]: ...</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">basename(self) -&gt; str: ...</span>
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">dirname(self) -&gt; str: ...</span>
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">purebasename(self) -&gt; str: ...</span>
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">ext(self) -&gt; str: ...</span>
+
+    <span class="s0">def </span><span class="s1">as_cwd(self) -&gt; ContextManager[Optional[local]]: ...</span>
+    <span class="s0">def </span><span class="s1">atime(self) -&gt; float: ...</span>
+    <span class="s0">def </span><span class="s1">bestrelpath(self, dest: local) -&gt; str: ...</span>
+    <span class="s0">def </span><span class="s1">chdir(self) -&gt; local: ...</span>
+    <span class="s0">def </span><span class="s1">check(</span>
+        <span class="s1">self,</span>
+        <span class="s1">*,</span>
+        <span class="s1">basename: int = ..., notbasename: int = ...,</span>
+        <span class="s1">basestarts: int = ..., notbasestarts: int = ...,</span>
+        <span class="s1">dir: int = ..., notdir: int = ...,</span>
+        <span class="s1">dotfile: int = ..., notdotfile: int = ...,</span>
+        <span class="s1">endswith: int = ..., notendswith: int = ...,</span>
+        <span class="s1">exists: int = ..., notexists: int = ...,</span>
+        <span class="s1">ext: int = ..., notext: int = ...,</span>
+        <span class="s1">file: int = ..., notfile: int = ...,</span>
+        <span class="s1">fnmatch: int = ..., notfnmatch: int = ...,</span>
+        <span class="s1">link: int = ..., notlink: int = ...,</span>
+        <span class="s1">relto: int = ..., notrelto: int = ...,</span>
+     <span class="s1">) -&gt; bool: ...</span>
+    <span class="s0">def </span><span class="s1">chmod(self, mode: int, rec: Union[int, str, Text, Callable[[local], bool]] = ...) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+    <span class="s0">if </span><span class="s1">sys.platform != </span><span class="s3">'win32'</span><span class="s1">:</span>
+        <span class="s0">def </span><span class="s1">chown(self, user: Union[int, str], group: Union[int, str], rec: int = ...) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+    <span class="s0">def </span><span class="s1">common(self, other: local) -&gt; Optional[local]: ...</span>
+    <span class="s0">def </span><span class="s1">computehash(self, hashtype: str = ..., chunksize: int = ...) -&gt; str: ...</span>
+    <span class="s0">def </span><span class="s1">copy(self, target: local, mode: bool = ..., stat: bool = ...) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+    <span class="s0">def </span><span class="s1">dirpath(self, *args: _PathType, abs: int = ...) -&gt; local: ...</span>
+    <span class="s0">def </span><span class="s1">dump(self, obj: Any, bin: Optional[int] = ...) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+    <span class="s0">def </span><span class="s1">ensure(self, *args: _PathType, dir: int = ...) -&gt; local: ...</span>
+    <span class="s0">def </span><span class="s1">ensure_dir(self, *args: _PathType) -&gt; local: ...</span>
+    <span class="s0">def </span><span class="s1">exists(self) -&gt; bool: ...</span>
+    <span class="s0">def </span><span class="s1">fnmatch(self, pattern: str): _FNMatcher</span>
+    <span class="s0">def </span><span class="s1">isdir(self) -&gt; bool: ...</span>
+    <span class="s0">def </span><span class="s1">isfile(self) -&gt; bool: ...</span>
+    <span class="s0">def </span><span class="s1">islink(self) -&gt; bool: ...</span>
+    <span class="s0">def </span><span class="s1">join(self, *args: _PathType, abs: int = ...) -&gt; local: ...</span>
+    <span class="s0">def </span><span class="s1">listdir(</span>
+        <span class="s1">self,</span>
+        <span class="s1">fil: Optional[Union[str, Text, Callable[[local], bool]]] = ...,</span>
+        <span class="s1">sort: Optional[bool] = ...,</span>
+    <span class="s1">) -&gt; List[local]: ...</span>
+    <span class="s0">def </span><span class="s1">load(self) -&gt; Any: ...</span>
+    <span class="s0">def </span><span class="s1">lstat(self) -&gt; _Stat: ...</span>
+    <span class="s0">def </span><span class="s1">mkdir(self, *args: _PathType) -&gt; local: ...</span>
+    <span class="s0">if </span><span class="s1">sys.platform != </span><span class="s3">'win32'</span><span class="s1">:</span>
+        <span class="s0">def </span><span class="s1">mklinkto(self, oldname: Union[str, local]) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+        <span class="s0">def </span><span class="s1">mksymlinkto(self, value: local, absolute: int = ...) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+    <span class="s0">def </span><span class="s1">move(self, target: local) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+    <span class="s0">def </span><span class="s1">mtime(self) -&gt; float: ...</span>
+    <span class="s0">def </span><span class="s1">new(</span>
+        <span class="s1">self,</span>
+        <span class="s1">*,</span>
+        <span class="s1">drive: str = ...,</span>
+        <span class="s1">dirname: str = ...,</span>
+        <span class="s1">basename: str = ...,</span>
+        <span class="s1">purebasename: str = ...,</span>
+        <span class="s1">ext: str = ...,</span>
+    <span class="s1">) -&gt; local: ...</span>
+    <span class="s0">def </span><span class="s1">open(self, mode: str = ..., ensure: bool = ..., encoding: Optional[str] = ...) -&gt; IO[Any]: ...</span>
+    <span class="s0">def </span><span class="s1">parts(self, reverse: bool = ...) -&gt; List[local]: ...</span>
+    <span class="s0">def </span><span class="s1">pyimport(</span>
+        <span class="s1">self,</span>
+        <span class="s1">modname: Optional[str] = ...,</span>
+        <span class="s1">ensuresyspath: Union[bool, Literal[</span><span class="s3">&quot;append&quot;</span><span class="s1">, </span><span class="s3">&quot;importlib&quot;</span><span class="s1">]] = ...,</span>
+    <span class="s1">) -&gt; Any: ...</span>
+    <span class="s0">def </span><span class="s1">pypkgpath(self) -&gt; Optional[local]: ...</span>
+    <span class="s0">def </span><span class="s1">read(self, mode: str = ...) -&gt; Union[Text, bytes]: ...</span>
+    <span class="s0">def </span><span class="s1">read_binary(self) -&gt; bytes: ...</span>
+    <span class="s0">def </span><span class="s1">read_text(self, encoding: str) -&gt; Text: ...</span>
+    <span class="s0">def </span><span class="s1">readlines(self, cr: int = ...) -&gt; List[str]: ...</span>
+    <span class="s0">if </span><span class="s1">sys.platform != </span><span class="s3">'win32'</span><span class="s1">:</span>
+        <span class="s0">def </span><span class="s1">readlink(self) -&gt; str: ...</span>
+    <span class="s0">def </span><span class="s1">realpath(self) -&gt; local: ...</span>
+    <span class="s0">def </span><span class="s1">relto(self, relpath: Union[str, local]) -&gt; str: ...</span>
+    <span class="s0">def </span><span class="s1">remove(self, rec: int = ..., ignore_errors: bool = ...) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+    <span class="s0">def </span><span class="s1">rename(self, target: _PathType) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+    <span class="s0">def </span><span class="s1">samefile(self, other: _PathType) -&gt; bool: ...</span>
+    <span class="s0">def </span><span class="s1">setmtime(self, mtime: Optional[float] = ...) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+    <span class="s0">def </span><span class="s1">size(self) -&gt; int: ...</span>
+    <span class="s0">def </span><span class="s1">stat(self, raising: bool = ...) -&gt; _Stat: ...</span>
+    <span class="s0">def </span><span class="s1">sysexec(self, *argv: Any, **popen_opts: Any) -&gt; Text: ...</span>
+    <span class="s0">def </span><span class="s1">visit(</span>
+        <span class="s1">self,</span>
+        <span class="s1">fil: Optional[Union[str, Text, Callable[[local], bool]]] = ...,</span>
+        <span class="s1">rec: Optional[Union[Literal[</span><span class="s2">1</span><span class="s1">, </span><span class="s0">True</span><span class="s1">], str, Text, Callable[[local], bool]]] = ...,</span>
+        <span class="s1">ignore: Type[Exception] = ...,</span>
+        <span class="s1">bf: bool = ...,</span>
+        <span class="s1">sort: bool = ...,</span>
+    <span class="s1">) -&gt; Iterator[local]: ...</span>
+    <span class="s0">def </span><span class="s1">write(self, data: Any, mode: str = ..., ensure: bool = ...) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+    <span class="s0">def </span><span class="s1">write_binary(self, data: bytes, ensure: bool = ...) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+    <span class="s0">def </span><span class="s1">write_text(self, data: Union[str, Text], encoding: str, ensure: bool = ...) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+
+
+<span class="s4"># Untyped types below here.</span>
+<span class="s1">svnwc: Any</span>
+<span class="s1">svnurl: Any</span>
+<span class="s1">SvnAuth: Any</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,994 @@
+<html>
+<head>
+<title>worksheet.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+worksheet.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s3">&quot;&quot;&quot;Worksheet is the 2nd-level container in Excel.&quot;&quot;&quot;</span>
+
+
+<span class="s2"># Python stdlib imports</span>
+<span class="s0">from </span><span class="s1">itertools </span><span class="s0">import </span><span class="s1">islice, product</span>
+<span class="s0">from </span><span class="s1">operator </span><span class="s0">import </span><span class="s1">attrgetter</span>
+<span class="s0">import </span><span class="s1">re</span>
+<span class="s0">from </span><span class="s1">inspect </span><span class="s0">import </span><span class="s1">isgenerator</span>
+<span class="s0">from </span><span class="s1">warnings </span><span class="s0">import </span><span class="s1">warn</span>
+
+<span class="s2"># compatibility imports</span>
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">unicode,</span>
+    <span class="s1">range,</span>
+    <span class="s1">basestring,</span>
+    <span class="s1">deprecated,</span>
+    <span class="s1">safe_string</span>
+<span class="s1">)</span>
+
+<span class="s2"># package imports</span>
+<span class="s0">from </span><span class="s1">openpyexcel.utils </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">coordinate_from_string,</span>
+    <span class="s1">column_index_from_string,</span>
+    <span class="s1">get_column_letter,</span>
+    <span class="s1">range_boundaries,</span>
+    <span class="s1">rows_from_range,</span>
+    <span class="s1">coordinate_to_tuple,</span>
+    <span class="s1">absolute_coordinate,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.utils.cell </span><span class="s0">import </span><span class="s1">COORD_RE</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.cell </span><span class="s0">import </span><span class="s1">Cell</span>
+<span class="s0">from </span><span class="s1">openpyexcel.utils.exceptions </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">SheetTitleException,</span>
+    <span class="s1">NamedRangeException</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.utils.units </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">points_to_pixels,</span>
+    <span class="s1">DEFAULT_COLUMN_WIDTH,</span>
+    <span class="s1">DEFAULT_ROW_HEIGHT,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.formatting.formatting </span><span class="s0">import </span><span class="s1">ConditionalFormattingList</span>
+<span class="s0">from </span><span class="s1">openpyexcel.packaging.relationship </span><span class="s0">import </span><span class="s1">RelationshipList</span>
+<span class="s0">from </span><span class="s1">openpyexcel.workbook.child </span><span class="s0">import </span><span class="s1">_WorkbookChild</span>
+<span class="s0">from </span><span class="s1">openpyexcel.workbook.defined_name </span><span class="s0">import </span><span class="s1">COL_RANGE_RE, ROW_RANGE_RE</span>
+<span class="s0">from </span><span class="s1">openpyexcel.utils.bound_dictionary </span><span class="s0">import </span><span class="s1">BoundDictionary</span>
+
+<span class="s0">from </span><span class="s1">.datavalidation </span><span class="s0">import </span><span class="s1">DataValidationList</span>
+<span class="s0">from </span><span class="s1">.page </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">PrintPageSetup,</span>
+    <span class="s1">PageMargins,</span>
+    <span class="s1">PrintOptions,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">.dimensions </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">ColumnDimension,</span>
+    <span class="s1">RowDimension,</span>
+    <span class="s1">DimensionHolder,</span>
+    <span class="s1">SheetFormatProperties,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">.protection </span><span class="s0">import </span><span class="s1">SheetProtection</span>
+<span class="s0">from </span><span class="s1">.filters </span><span class="s0">import </span><span class="s1">AutoFilter, SortState</span>
+<span class="s0">from </span><span class="s1">.views </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">SheetView,</span>
+    <span class="s1">Pane,</span>
+    <span class="s1">Selection,</span>
+    <span class="s1">SheetViewList,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">.cell_range </span><span class="s0">import </span><span class="s1">MultiCellRange, CellRange</span>
+<span class="s0">from </span><span class="s1">.properties </span><span class="s0">import </span><span class="s1">WorksheetProperties</span>
+<span class="s0">from </span><span class="s1">.pagebreak </span><span class="s0">import </span><span class="s1">PageBreak</span>
+
+
+<span class="s1">@deprecated(</span><span class="s3">&quot;Use the worksheet.values property&quot;</span><span class="s1">)</span>
+<span class="s0">def </span><span class="s1">flatten(results):</span>
+    <span class="s2">&quot;&quot;&quot;Return cell values row-by-row&quot;&quot;&quot;</span>
+
+    <span class="s0">for </span><span class="s1">row </span><span class="s0">in </span><span class="s1">results:</span>
+        <span class="s0">yield</span><span class="s1">(c.value </span><span class="s0">for </span><span class="s1">c </span><span class="s0">in </span><span class="s1">row)</span>
+
+
+<span class="s0">class </span><span class="s1">Worksheet(_WorkbookChild):</span>
+    <span class="s2">&quot;&quot;&quot;Represents a worksheet. 
+ 
+    Do not create worksheets yourself, 
+    use :func:`openpyexcel.workbook.Workbook.create_sheet` instead 
+ 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">_rel_type = </span><span class="s3">&quot;worksheet&quot;</span>
+    <span class="s1">_path = </span><span class="s3">&quot;/xl/worksheets/sheet{0}.xml&quot;</span>
+    <span class="s1">mime_type = </span><span class="s3">&quot;application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml&quot;</span>
+
+    <span class="s1">BREAK_NONE = </span><span class="s4">0</span>
+    <span class="s1">BREAK_ROW = </span><span class="s4">1</span>
+    <span class="s1">BREAK_COLUMN = </span><span class="s4">2</span>
+
+    <span class="s1">SHEETSTATE_VISIBLE = </span><span class="s3">'visible'</span>
+    <span class="s1">SHEETSTATE_HIDDEN = </span><span class="s3">'hidden'</span>
+    <span class="s1">SHEETSTATE_VERYHIDDEN = </span><span class="s3">'veryHidden'</span>
+
+    <span class="s2"># Paper size</span>
+    <span class="s1">PAPERSIZE_LETTER = </span><span class="s3">'1'</span>
+    <span class="s1">PAPERSIZE_LETTER_SMALL = </span><span class="s3">'2'</span>
+    <span class="s1">PAPERSIZE_TABLOID = </span><span class="s3">'3'</span>
+    <span class="s1">PAPERSIZE_LEDGER = </span><span class="s3">'4'</span>
+    <span class="s1">PAPERSIZE_LEGAL = </span><span class="s3">'5'</span>
+    <span class="s1">PAPERSIZE_STATEMENT = </span><span class="s3">'6'</span>
+    <span class="s1">PAPERSIZE_EXECUTIVE = </span><span class="s3">'7'</span>
+    <span class="s1">PAPERSIZE_A3 = </span><span class="s3">'8'</span>
+    <span class="s1">PAPERSIZE_A4 = </span><span class="s3">'9'</span>
+    <span class="s1">PAPERSIZE_A4_SMALL = </span><span class="s3">'10'</span>
+    <span class="s1">PAPERSIZE_A5 = </span><span class="s3">'11'</span>
+
+    <span class="s2"># Page orientation</span>
+    <span class="s1">ORIENTATION_PORTRAIT = </span><span class="s3">'portrait'</span>
+    <span class="s1">ORIENTATION_LANDSCAPE = </span><span class="s3">'landscape'</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, parent, title=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">_WorkbookChild.__init__(self, parent, title)</span>
+        <span class="s1">self._setup()</span>
+
+    <span class="s0">def </span><span class="s1">_setup(self):</span>
+        <span class="s1">self.row_dimensions = DimensionHolder(worksheet=self,</span>
+                                              <span class="s1">default_factory=self._add_row)</span>
+        <span class="s1">self.column_dimensions = DimensionHolder(worksheet=self,</span>
+                                                 <span class="s1">default_factory=self._add_column)</span>
+        <span class="s1">self.page_breaks = PageBreak()</span>
+        <span class="s1">self._cells = {}</span>
+        <span class="s1">self._charts = []</span>
+        <span class="s1">self._images = []</span>
+        <span class="s1">self._rels = RelationshipList()</span>
+        <span class="s1">self._drawing = </span><span class="s0">None</span>
+        <span class="s1">self._comments = []</span>
+        <span class="s1">self.merged_cells = MultiCellRange()</span>
+        <span class="s1">self._tables = []</span>
+        <span class="s1">self._pivots = []</span>
+        <span class="s1">self.data_validations = DataValidationList()</span>
+        <span class="s1">self._hyperlinks = []</span>
+        <span class="s1">self.sheet_state = </span><span class="s3">'visible'</span>
+        <span class="s1">self.page_setup = PrintPageSetup(worksheet=self)</span>
+        <span class="s1">self.print_options = PrintOptions()</span>
+        <span class="s1">self._print_rows = </span><span class="s0">None</span>
+        <span class="s1">self._print_cols = </span><span class="s0">None</span>
+        <span class="s1">self._print_area = </span><span class="s0">None</span>
+        <span class="s1">self.page_margins = PageMargins()</span>
+        <span class="s1">self.views = SheetViewList()</span>
+        <span class="s1">self.protection = SheetProtection()</span>
+
+        <span class="s1">self._current_row = </span><span class="s4">0</span>
+        <span class="s1">self.auto_filter = AutoFilter()</span>
+        <span class="s1">self.sort_state = SortState()</span>
+        <span class="s1">self.paper_size = </span><span class="s0">None</span>
+        <span class="s1">self.formula_attributes = {}</span>
+        <span class="s1">self.orientation = </span><span class="s0">None</span>
+        <span class="s1">self.conditional_formatting = ConditionalFormattingList()</span>
+        <span class="s1">self.legacy_drawing = </span><span class="s0">None</span>
+        <span class="s1">self.sheet_properties = WorksheetProperties()</span>
+        <span class="s1">self.sheet_format = SheetFormatProperties()</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">sheet_view(self):</span>
+        <span class="s0">return </span><span class="s1">self.views.sheetView[</span><span class="s4">0</span><span class="s1">]</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">selected_cell(self):</span>
+        <span class="s0">return </span><span class="s1">self.sheet_view.selection[</span><span class="s4">0</span><span class="s1">].sqref</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">active_cell(self):</span>
+        <span class="s0">return </span><span class="s1">self.sheet_view.selection[</span><span class="s4">0</span><span class="s1">].activeCell</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">show_gridlines(self):</span>
+        <span class="s0">return </span><span class="s1">self.sheet_view.showGridLines</span>
+
+
+    <span class="s3">&quot;&quot;&quot; To keep compatibility with previous versions&quot;&quot;&quot;</span>
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">show_summary_below(self):</span>
+        <span class="s0">return </span><span class="s1">self.sheet_properties.outlinePr.summaryBelow</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">show_summary_right(self):</span>
+        <span class="s0">return </span><span class="s1">self.sheet_properties.outlinePr.summaryRight</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">vba_code(self):</span>
+        <span class="s0">for </span><span class="s1">attr </span><span class="s0">in </span><span class="s1">(</span><span class="s3">&quot;codeName&quot;</span><span class="s1">, </span><span class="s3">&quot;enableFormatConditionsCalculation&quot;</span><span class="s1">,</span>
+                     <span class="s3">&quot;filterMode&quot;</span><span class="s1">, </span><span class="s3">&quot;published&quot;</span><span class="s1">, </span><span class="s3">&quot;syncHorizontal&quot;</span><span class="s1">, </span><span class="s3">&quot;syncRef&quot;</span><span class="s1">,</span>
+                     <span class="s3">&quot;syncVertical&quot;</span><span class="s1">, </span><span class="s3">&quot;transitionEvaluation&quot;</span><span class="s1">, </span><span class="s3">&quot;transitionEntry&quot;</span><span class="s1">):</span>
+            <span class="s1">value = getattr(self.sheet_properties, attr)</span>
+            <span class="s0">if </span><span class="s1">value </span><span class="s0">is not None</span><span class="s1">:</span>
+                <span class="s0">yield </span><span class="s1">attr, safe_string(value)</span>
+
+    <span class="s1">@vba_code.setter</span>
+    <span class="s0">def </span><span class="s1">vba_code(self, value):</span>
+        <span class="s0">for </span><span class="s1">k, v </span><span class="s0">in </span><span class="s1">value.items():</span>
+            <span class="s0">if </span><span class="s1">k </span><span class="s0">in </span><span class="s1">(</span><span class="s3">&quot;codeName&quot;</span><span class="s1">, </span><span class="s3">&quot;enableFormatConditionsCalculation&quot;</span><span class="s1">,</span>
+                     <span class="s3">&quot;filterMode&quot;</span><span class="s1">, </span><span class="s3">&quot;published&quot;</span><span class="s1">, </span><span class="s3">&quot;syncHorizontal&quot;</span><span class="s1">, </span><span class="s3">&quot;syncRef&quot;</span><span class="s1">,</span>
+                     <span class="s3">&quot;syncVertical&quot;</span><span class="s1">, </span><span class="s3">&quot;transitionEvaluation&quot;</span><span class="s1">, </span><span class="s3">&quot;transitionEntry&quot;</span><span class="s1">):</span>
+                <span class="s1">setattr(self.sheet_properties, k, v)</span>
+
+    <span class="s3">&quot;&quot;&quot; End To keep compatibility with previous versions&quot;&quot;&quot;</span>
+
+
+    <span class="s1">@deprecated(</span><span class="s3">&quot;Use the ws.values property&quot;</span><span class="s1">)</span>
+    <span class="s0">def </span><span class="s1">get_cell_collection(self):</span>
+        <span class="s2">&quot;&quot;&quot;Return an unordered list of the cells in this worksheet.&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self._cells.values()</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">freeze_panes(self):</span>
+        <span class="s0">if </span><span class="s1">self.sheet_view.pane </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">self.sheet_view.pane.topLeftCell</span>
+
+    <span class="s1">@freeze_panes.setter</span>
+    <span class="s0">def </span><span class="s1">freeze_panes(self, topLeftCell=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s0">if </span><span class="s1">isinstance(topLeftCell, Cell):</span>
+            <span class="s1">topLeftCell = topLeftCell.coordinate</span>
+        <span class="s0">if </span><span class="s1">topLeftCell == </span><span class="s3">'A1'</span><span class="s1">:</span>
+            <span class="s1">topLeftCell = </span><span class="s0">None</span>
+
+        <span class="s0">if not </span><span class="s1">topLeftCell:</span>
+            <span class="s1">self.sheet_view.pane = </span><span class="s0">None</span>
+            <span class="s0">return</span>
+
+        <span class="s1">row, column = coordinate_to_tuple(topLeftCell)</span>
+
+        <span class="s1">view = self.sheet_view</span>
+        <span class="s1">view.pane = Pane(topLeftCell=topLeftCell,</span>
+                        <span class="s1">activePane=</span><span class="s3">&quot;topRight&quot;</span><span class="s1">,</span>
+                        <span class="s1">state=</span><span class="s3">&quot;frozen&quot;</span><span class="s1">)</span>
+        <span class="s1">view.selection[</span><span class="s4">0</span><span class="s1">].pane = </span><span class="s3">&quot;topRight&quot;</span>
+
+        <span class="s0">if </span><span class="s1">column &gt; </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s1">view.pane.xSplit = column - </span><span class="s4">1</span>
+        <span class="s0">if </span><span class="s1">row &gt; </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s1">view.pane.ySplit = row - </span><span class="s4">1</span>
+            <span class="s1">view.pane.activePane = </span><span class="s3">'bottomLeft'</span>
+            <span class="s1">view.selection[</span><span class="s4">0</span><span class="s1">].pane = </span><span class="s3">&quot;bottomLeft&quot;</span>
+            <span class="s0">if </span><span class="s1">column &gt; </span><span class="s4">1</span><span class="s1">:</span>
+                <span class="s1">view.selection[</span><span class="s4">0</span><span class="s1">].pane = </span><span class="s3">&quot;bottomRight&quot;</span>
+                <span class="s1">view.pane.activePane = </span><span class="s3">'bottomRight'</span>
+
+        <span class="s0">if </span><span class="s1">row &gt; </span><span class="s4">1 </span><span class="s0">and </span><span class="s1">column &gt; </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s1">sel = list(view.selection)</span>
+            <span class="s1">sel.insert(</span><span class="s4">0</span><span class="s1">, Selection(pane=</span><span class="s3">&quot;topRight&quot;</span><span class="s1">, activeCell=</span><span class="s0">None</span><span class="s1">, sqref=</span><span class="s0">None</span><span class="s1">))</span>
+            <span class="s1">sel.insert(</span><span class="s4">1</span><span class="s1">, Selection(pane=</span><span class="s3">&quot;bottomLeft&quot;</span><span class="s1">, activeCell=</span><span class="s0">None</span><span class="s1">, sqref=</span><span class="s0">None</span><span class="s1">))</span>
+            <span class="s1">view.selection = sel</span>
+
+
+    <span class="s1">@deprecated(</span><span class="s3">&quot;Set print titles rows or columns directly&quot;</span><span class="s1">)</span>
+    <span class="s0">def </span><span class="s1">add_print_title(self, n, rows_or_cols=</span><span class="s3">'rows'</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; Print Titles are rows or columns that are repeated on each printed sheet. 
+        This adds n rows or columns at the top or left of the sheet 
+        &quot;&quot;&quot;</span>
+
+        <span class="s1">scope = self.parent.get_index(self)</span>
+
+        <span class="s0">if </span><span class="s1">rows_or_cols == </span><span class="s3">'cols'</span><span class="s1">:</span>
+            <span class="s1">self.print_title_cols = </span><span class="s3">'A:%s' </span><span class="s1">% get_column_letter(n)</span>
+
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">self.print_title_rows = </span><span class="s3">'1:%d' </span><span class="s1">% n</span>
+
+
+    <span class="s0">def </span><span class="s1">cell(self, row, column, value=</span><span class="s0">None</span><span class="s1">, cached_value=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Returns a cell object based on the given coordinates. 
+ 
+        Usage: cell(row=15, column=1, value=5) 
+ 
+        Calling `cell` creates cells in memory when they 
+        are first accessed. 
+ 
+        :param row: row index of the cell (e.g. 4) 
+        :type row: int 
+ 
+        :param column: column index of the cell (e.g. 3) 
+        :type column: int 
+ 
+        :param value: value of the cell (e.g. 5) 
+        :type value: numeric or time or string or bool or none 
+ 
+        :rtype: openpyexcel.cell.cell.Cell 
+        &quot;&quot;&quot;</span>
+
+        <span class="s0">if </span><span class="s1">row &lt; </span><span class="s4">1 </span><span class="s0">or </span><span class="s1">column &lt; </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;Row or column values must be at least 1&quot;</span><span class="s1">)</span>
+
+        <span class="s1">cell = self._get_cell(row, column)</span>
+        <span class="s0">if </span><span class="s1">value </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">cell.value = value</span>
+
+        <span class="s0">if </span><span class="s1">value </span><span class="s0">or </span><span class="s1">cached_value:</span>
+            <span class="s2"># Update the cached value if requested even if the value is not changed</span>
+            <span class="s1">cell.cached_value = cached_value</span>
+
+        <span class="s0">return </span><span class="s1">cell</span>
+
+
+    <span class="s0">def </span><span class="s1">_get_cell(self, row, column):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Internal method for getting a cell from a worksheet. 
+        Will create a new cell if one doesn't already exist. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">coordinate = (row, column)</span>
+        <span class="s0">if not </span><span class="s1">coordinate </span><span class="s0">in </span><span class="s1">self._cells:</span>
+            <span class="s1">cell = Cell(self, row=row, col_idx=column)</span>
+            <span class="s1">self._add_cell(cell)</span>
+        <span class="s0">return </span><span class="s1">self._cells[coordinate]</span>
+
+
+    <span class="s0">def </span><span class="s1">_add_cell(self, cell):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Internal method for adding cell objects. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">column = cell.col_idx</span>
+        <span class="s1">row = cell.row</span>
+        <span class="s1">self._current_row = max(row, self._current_row)</span>
+        <span class="s1">self._cells[(row, column)] = cell</span>
+
+
+    <span class="s0">def </span><span class="s1">__getitem__(self, key):</span>
+        <span class="s2">&quot;&quot;&quot;Convenience access by Excel style coordinates 
+ 
+        The key can be a single cell coordinate 'A1', a range of cells 'A1:D25', 
+        individual rows or columns 'A', 4 or ranges of rows or columns 'A:D', 
+        4:10. 
+ 
+        Single cells will always be created if they do not exist. 
+ 
+        Returns either a single cell or a tuple of rows or columns. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">isinstance(key, slice):</span>
+            <span class="s0">if not </span><span class="s1">all([key.start, key.stop]):</span>
+                <span class="s0">raise </span><span class="s1">IndexError(</span><span class="s3">&quot;{0} is not a valid coordinate or range&quot;</span><span class="s1">.format(key))</span>
+            <span class="s1">key = </span><span class="s3">&quot;{0}:{1}&quot;</span><span class="s1">.format(key.start, key.stop)</span>
+
+        <span class="s0">if </span><span class="s1">isinstance(key, int):</span>
+            <span class="s1">key = str(key</span>
+                      <span class="s1">)</span>
+        <span class="s1">min_col, min_row, max_col, max_row = range_boundaries(key)</span>
+
+        <span class="s0">if not </span><span class="s1">any([min_col, min_row, max_col, max_row]):</span>
+            <span class="s0">raise </span><span class="s1">IndexError(</span><span class="s3">&quot;{0} is not a valid coordinate or range&quot;</span><span class="s1">.format(key))</span>
+
+        <span class="s0">if not </span><span class="s1">min_row:</span>
+            <span class="s1">cols = tuple(self.iter_cols(min_col, max_col))</span>
+            <span class="s0">if </span><span class="s1">min_col == max_col:</span>
+                <span class="s1">cols = cols[</span><span class="s4">0</span><span class="s1">]</span>
+            <span class="s0">return </span><span class="s1">cols</span>
+        <span class="s0">if not </span><span class="s1">min_col:</span>
+            <span class="s1">rows = tuple(self.iter_rows(min_col=min_col, min_row=min_row,</span>
+                                        <span class="s1">max_col=self.max_column, max_row=max_row))</span>
+            <span class="s0">if </span><span class="s1">min_row == max_row:</span>
+                <span class="s1">rows = rows[</span><span class="s4">0</span><span class="s1">]</span>
+            <span class="s0">return </span><span class="s1">rows</span>
+        <span class="s0">if </span><span class="s3">&quot;:&quot; </span><span class="s0">not in </span><span class="s1">key:</span>
+            <span class="s0">return </span><span class="s1">self._get_cell(min_row, min_col)</span>
+        <span class="s0">return </span><span class="s1">tuple(self.iter_rows(min_row=min_row, min_col=min_col,</span>
+                                    <span class="s1">max_row=max_row, max_col=max_col))</span>
+
+
+    <span class="s0">def </span><span class="s1">__setitem__(self, key, value):</span>
+        <span class="s1">self[key].value = value</span>
+
+
+    <span class="s0">def </span><span class="s1">__iter__(self):</span>
+        <span class="s0">return </span><span class="s1">self.iter_rows()</span>
+
+
+    <span class="s0">def </span><span class="s1">__delitem__(self, key):</span>
+        <span class="s1">row, column = coordinate_to_tuple(key)</span>
+        <span class="s0">if </span><span class="s1">(row, column) </span><span class="s0">in </span><span class="s1">self._cells:</span>
+            <span class="s0">del </span><span class="s1">self._cells[(row, column)]</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">min_row(self):</span>
+        <span class="s2">&quot;&quot;&quot;The minimium row index containing data (1-based) 
+ 
+        :type: int 
+        &quot;&quot;&quot;</span>
+        <span class="s1">min_row = </span><span class="s4">1</span>
+        <span class="s0">if </span><span class="s1">self._cells:</span>
+            <span class="s1">rows = set(c[</span><span class="s4">0</span><span class="s1">] </span><span class="s0">for </span><span class="s1">c </span><span class="s0">in </span><span class="s1">self._cells)</span>
+            <span class="s1">min_row = min(rows)</span>
+        <span class="s0">return </span><span class="s1">min_row</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">max_row(self):</span>
+        <span class="s2">&quot;&quot;&quot;The maximum row index containing data (1-based) 
+ 
+        :type: int 
+        &quot;&quot;&quot;</span>
+        <span class="s1">max_row = </span><span class="s4">1</span>
+        <span class="s0">if </span><span class="s1">self._cells:</span>
+            <span class="s1">rows = set(c[</span><span class="s4">0</span><span class="s1">] </span><span class="s0">for </span><span class="s1">c </span><span class="s0">in </span><span class="s1">self._cells)</span>
+            <span class="s1">max_row = max(rows)</span>
+        <span class="s0">return </span><span class="s1">max_row</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">min_column(self):</span>
+        <span class="s2">&quot;&quot;&quot;The minimum column index containing data (1-based) 
+ 
+        :type: int 
+        &quot;&quot;&quot;</span>
+        <span class="s1">min_col = </span><span class="s4">1</span>
+        <span class="s0">if </span><span class="s1">self._cells:</span>
+            <span class="s1">cols = set(c[</span><span class="s4">1</span><span class="s1">] </span><span class="s0">for </span><span class="s1">c </span><span class="s0">in </span><span class="s1">self._cells)</span>
+            <span class="s1">min_col = min(cols)</span>
+        <span class="s0">return </span><span class="s1">min_col</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">max_column(self):</span>
+        <span class="s2">&quot;&quot;&quot;The maximum column index containing data (1-based) 
+ 
+        :type: int 
+        &quot;&quot;&quot;</span>
+        <span class="s1">max_col = </span><span class="s4">1</span>
+        <span class="s0">if </span><span class="s1">self._cells:</span>
+            <span class="s1">cols = set(c[</span><span class="s4">1</span><span class="s1">] </span><span class="s0">for </span><span class="s1">c </span><span class="s0">in </span><span class="s1">self._cells)</span>
+            <span class="s1">max_col = max(cols)</span>
+        <span class="s0">return </span><span class="s1">max_col</span>
+
+
+    <span class="s0">def </span><span class="s1">calculate_dimension(self):</span>
+        <span class="s2">&quot;&quot;&quot;Return the minimum bounding range for all cells containing data (ex. 'A1:M24') 
+ 
+        :rtype: string 
+        &quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">self._cells:</span>
+            <span class="s1">rows = set()</span>
+            <span class="s1">cols = set()</span>
+            <span class="s0">for </span><span class="s1">row, col </span><span class="s0">in </span><span class="s1">self._cells:</span>
+                <span class="s1">rows.add(row)</span>
+                <span class="s1">cols.add(col)</span>
+            <span class="s1">max_row = max(rows)</span>
+            <span class="s1">max_col = max(cols)</span>
+            <span class="s1">min_col = min(cols)</span>
+            <span class="s1">min_row = min(rows)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s3">&quot;A1:A1&quot;</span>
+
+        <span class="s0">return </span><span class="s3">'%s%d:%s%d' </span><span class="s1">% (</span>
+            <span class="s1">get_column_letter(min_col), min_row,</span>
+            <span class="s1">get_column_letter(max_col), max_row</span>
+        <span class="s1">)</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">dimensions(self):</span>
+        <span class="s2">&quot;&quot;&quot;Returns the result of :func:`calculate_dimension`&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self.calculate_dimension()</span>
+
+
+    <span class="s0">def </span><span class="s1">iter_rows(self, range_string=</span><span class="s0">None</span><span class="s1">, min_row=</span><span class="s0">None</span><span class="s1">, max_row=</span><span class="s0">None</span><span class="s1">, min_col=</span><span class="s0">None</span><span class="s1">, max_col=</span><span class="s0">None</span><span class="s1">,</span>
+                  <span class="s1">row_offset=</span><span class="s4">0</span><span class="s1">, column_offset=</span><span class="s4">0</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Produces cells from the worksheet, by row. Specify the iteration range 
+        using indices of rows and columns. 
+ 
+        If no indices are specified the range starts at A1. 
+ 
+        If no cells are in the worksheet an empty tuple will be returned. 
+ 
+        :param range_string: range string (e.g. 'A1:B2') *deprecated* 
+        :type range_string: string 
+ 
+        :param min_col: smallest column index (1-based index) 
+        :type min_col: int 
+ 
+        :param min_row: smallest row index (1-based index) 
+        :type min_row: int 
+ 
+        :param max_col: largest column index (1-based index) 
+        :type max_col: int 
+ 
+        :param max_row: smallest row index (1-based index) 
+        :type max_row: int 
+ 
+        :param row_offset: added to min_row and max_row (e.g. 4) 
+        :type row_offset: int 
+ 
+        :param column_offset: added to min_col and max_col (e.g. 3) 
+        :type column_offset: int 
+ 
+        :rtype: generator 
+        &quot;&quot;&quot;</span>
+
+        <span class="s0">if </span><span class="s1">range_string </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">warn(</span><span class="s3">&quot;Using a range string with iter_rows is deprecated. Use ws[range_string]&quot;</span><span class="s1">)</span>
+            <span class="s1">min_col, min_row, max_col, max_row = range_boundaries(range_string.upper())</span>
+
+        <span class="s0">if </span><span class="s1">self._current_row == </span><span class="s4">0 </span><span class="s0">and not </span><span class="s1">any([min_col, min_row, max_col, max_row ]):</span>
+            <span class="s0">return </span><span class="s1">()</span>
+
+        <span class="s1">min_col = min_col </span><span class="s0">or </span><span class="s4">1</span>
+        <span class="s1">min_row = min_row </span><span class="s0">or </span><span class="s4">1</span>
+        <span class="s1">max_col = max_col </span><span class="s0">or </span><span class="s1">self.max_column</span>
+        <span class="s1">max_row = max_row </span><span class="s0">or </span><span class="s1">self.max_row</span>
+
+        <span class="s0">if </span><span class="s1">max_col </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">max_col += column_offset</span>
+        <span class="s0">if </span><span class="s1">max_row </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">max_row += row_offset</span>
+        <span class="s0">return </span><span class="s1">self._cells_by_row(min_col + column_offset,</span>
+                                  <span class="s1">min_row + row_offset,</span>
+                                  <span class="s1">max_col,</span>
+                                  <span class="s1">max_row)</span>
+
+
+    <span class="s0">def </span><span class="s1">_cells_by_row(self, min_col, min_row, max_col, max_row):</span>
+        <span class="s0">for </span><span class="s1">row </span><span class="s0">in </span><span class="s1">range(min_row, max_row + </span><span class="s4">1</span><span class="s1">):</span>
+            <span class="s0">yield </span><span class="s1">tuple(self.cell(row=row, column=column)</span>
+                    <span class="s0">for </span><span class="s1">column </span><span class="s0">in </span><span class="s1">range(min_col, max_col + </span><span class="s4">1</span><span class="s1">))</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">rows(self):</span>
+        <span class="s2">&quot;&quot;&quot;Produces all cells in the worksheet, by row (see :func:`iter_rows`) 
+ 
+        :type: generator 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self.iter_rows()</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">values(self):</span>
+        <span class="s2">&quot;&quot;&quot;Produces all cell values in the worksheet, by row 
+ 
+        :type: generator 
+        &quot;&quot;&quot;</span>
+        <span class="s0">for </span><span class="s1">row </span><span class="s0">in </span><span class="s1">self.iter_rows():</span>
+            <span class="s0">yield </span><span class="s1">tuple(c.value </span><span class="s0">for </span><span class="s1">c </span><span class="s0">in </span><span class="s1">row)</span>
+
+
+    <span class="s0">def </span><span class="s1">iter_cols(self, min_col=</span><span class="s0">None</span><span class="s1">, max_col=</span><span class="s0">None</span><span class="s1">, min_row=</span><span class="s0">None</span><span class="s1">, max_row=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Produces cells from the worksheet, by column. Specify the iteration range 
+        using indices of rows and columns. 
+ 
+        If no indices are specified the range starts at A1. 
+ 
+        If no cells are in the worksheet an empty tuple will be returned. 
+ 
+        :param min_col: smallest column index (1-based index) 
+        :type min_col: int 
+ 
+        :param min_row: smallest row index (1-based index) 
+        :type min_row: int 
+ 
+        :param max_col: largest column index (1-based index) 
+        :type max_col: int 
+ 
+        :param max_row: largest row index (1-based index) 
+        :type max_row: int 
+ 
+        :rtype: generator 
+        &quot;&quot;&quot;</span>
+
+        <span class="s0">if </span><span class="s1">self._current_row == </span><span class="s4">0 </span><span class="s0">and not </span><span class="s1">any([min_col, min_row, max_col, max_row ]):</span>
+            <span class="s0">return </span><span class="s1">()</span>
+
+        <span class="s1">min_col = min_col </span><span class="s0">or </span><span class="s4">1</span>
+        <span class="s1">min_row = min_row </span><span class="s0">or </span><span class="s4">1</span>
+        <span class="s1">max_col = max_col </span><span class="s0">or </span><span class="s1">self.max_column</span>
+        <span class="s1">max_row = max_row </span><span class="s0">or </span><span class="s1">self.max_row</span>
+
+        <span class="s0">return </span><span class="s1">self._cells_by_col(</span>
+            <span class="s1">min_col, min_row, max_col, max_row</span>
+        <span class="s1">)</span>
+
+
+    <span class="s0">def </span><span class="s1">_cells_by_col(self, min_col, min_row, max_col, max_row):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Get cells by column 
+        &quot;&quot;&quot;</span>
+        <span class="s0">for </span><span class="s1">column </span><span class="s0">in </span><span class="s1">range(min_col, max_col+</span><span class="s4">1</span><span class="s1">):</span>
+            <span class="s0">yield </span><span class="s1">tuple(self.cell(row=row, column=column)</span>
+                        <span class="s0">for </span><span class="s1">row </span><span class="s0">in </span><span class="s1">range(min_row, max_row+</span><span class="s4">1</span><span class="s1">))</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">columns(self):</span>
+        <span class="s2">&quot;&quot;&quot;Produces all cells in the worksheet, by column  (see :func:`iter_cols`)&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self.iter_cols()</span>
+
+
+    <span class="s1">@deprecated(</span><span class="s3">&quot;&quot;&quot; 
+    Use ws.iter_rows() or ws.iter_cols() depending whether you 
+    want rows or columns returned. 
+    &quot;&quot;&quot;</span><span class="s1">)</span>
+    <span class="s0">def </span><span class="s1">get_squared_range(self, min_col, min_row, max_col, max_row):</span>
+        <span class="s2">&quot;&quot;&quot;Returns a 2D array of cells. Will create any cells within the 
+        boundaries that do not already exist 
+ 
+        :param min_col: smallest column index (1-based index) 
+        :type min_col: int 
+ 
+        :param min_row: smallest row index (1-based index) 
+        :type min_row: int 
+ 
+        :param max_col: largest column index (1-based index) 
+        :type max_col: int 
+ 
+        :param max_row: largest row index (1-based index) 
+        :type max_row: int 
+ 
+        :rtype: generator 
+        &quot;&quot;&quot;</span>
+
+        <span class="s0">return </span><span class="s1">self._cells_by_row(min_col, min_row, max_col, max_row)</span>
+
+
+    <span class="s1">@deprecated(</span><span class="s3">&quot;&quot;&quot;Ranges are workbook objects. Use wb.defined_names[range_name]&quot;&quot;&quot;</span><span class="s1">)</span>
+    <span class="s0">def </span><span class="s1">get_named_range(self, range_name):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Returns a 2D array of cells, with optional row and column offsets. 
+ 
+        :param range_name: `named range` name 
+        :type range_name: string 
+ 
+        :rtype: tuple[tuple[openpyexcel.cell.cell.Cell]] 
+        &quot;&quot;&quot;</span>
+        <span class="s1">defn = self.parent.defined_names[range_name]</span>
+        <span class="s0">if </span><span class="s1">defn.localSheetId </span><span class="s0">and </span><span class="s1">defn.localSheetId != self.parent.get_index(self):</span>
+            <span class="s1">msg = </span><span class="s3">&quot;{0} not available in this worksheet&quot;</span><span class="s1">.format(range_name)</span>
+            <span class="s0">raise </span><span class="s1">KeyError(msg)</span>
+
+        <span class="s0">if </span><span class="s1">defn.type != </span><span class="s3">&quot;RANGE&quot;</span><span class="s1">:</span>
+            <span class="s1">msg = </span><span class="s3">'{0} refers to a value, not a range'</span><span class="s1">.format(range_name)</span>
+            <span class="s0">raise </span><span class="s1">NameError(msg)</span>
+
+        <span class="s1">result = []</span>
+        <span class="s0">for </span><span class="s1">title, cells_range </span><span class="s0">in </span><span class="s1">defn.destinations:</span>
+            <span class="s1">ws = self.parent[title]</span>
+            <span class="s0">if </span><span class="s1">ws != self:</span>
+                <span class="s0">raise </span><span class="s1">NamedRangeException(</span><span class="s3">&quot;Range includes cells from another worksheet&quot;</span><span class="s1">)</span>
+
+            <span class="s1">rows = ws[cells_range]</span>
+            <span class="s0">if </span><span class="s1">isinstance(rows, Cell):</span>
+                <span class="s1">rows = [(rows, )]</span>
+
+            <span class="s0">for </span><span class="s1">row </span><span class="s0">in </span><span class="s1">rows:</span>
+                <span class="s1">result.extend(row)</span>
+
+        <span class="s0">return </span><span class="s1">tuple(result)</span>
+
+
+    <span class="s0">def </span><span class="s1">set_printer_settings(self, paper_size, orientation):</span>
+        <span class="s2">&quot;&quot;&quot;Set printer settings &quot;&quot;&quot;</span>
+
+        <span class="s1">self.page_setup.paperSize = paper_size</span>
+        <span class="s0">if </span><span class="s1">orientation </span><span class="s0">not in </span><span class="s1">(self.ORIENTATION_PORTRAIT, self.ORIENTATION_LANDSCAPE):</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;Values should be %s or %s&quot; </span><span class="s1">% (self.ORIENTATION_PORTRAIT, self.ORIENTATION_LANDSCAPE))</span>
+        <span class="s1">self.page_setup.orientation = orientation</span>
+
+
+    <span class="s0">def </span><span class="s1">add_data_validation(self, data_validation):</span>
+        <span class="s2">&quot;&quot;&quot; Add a data-validation object to the sheet.  The data-validation 
+            object defines the type of data-validation to be applied and the 
+            cell or range of cells it should apply to. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.data_validations.append(data_validation)</span>
+
+
+    <span class="s0">def </span><span class="s1">add_chart(self, chart, anchor=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Add a chart to the sheet 
+        Optionally provide a cell for the top-left anchor 
+        &quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">anchor </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">chart.anchor = anchor</span>
+        <span class="s1">self._charts.append(chart)</span>
+
+
+    <span class="s0">def </span><span class="s1">add_image(self, img, anchor=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Add an image to the sheet. 
+        Optionally provide a cell for the top-left anchor 
+        &quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">anchor </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">img.anchor = anchor</span>
+        <span class="s1">self._images.append(img)</span>
+
+
+    <span class="s0">def </span><span class="s1">add_table(self, table):</span>
+        <span class="s1">self._tables.append(table)</span>
+
+
+    <span class="s0">def </span><span class="s1">add_pivot(self, pivot):</span>
+        <span class="s1">self._pivots.append(pivot)</span>
+
+
+    <span class="s0">def </span><span class="s1">merge_cells(self, range_string=</span><span class="s0">None</span><span class="s1">, start_row=</span><span class="s0">None</span><span class="s1">, start_column=</span><span class="s0">None</span><span class="s1">, end_row=</span><span class="s0">None</span><span class="s1">, end_column=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">cr = CellRange(range_string=range_string, min_col=start_column, min_row=start_row,</span>
+                      <span class="s1">max_col=end_column, max_row=end_row)</span>
+        <span class="s3">&quot;&quot;&quot; Set merge on a cell range.  Range is a cell range (e.g. A1:E1) &quot;&quot;&quot;</span>
+
+        <span class="s1">self.merged_cells.add(cr.coord)</span>
+        <span class="s1">self._clean_merge_range(cr)</span>
+
+
+    <span class="s0">def </span><span class="s1">_clean_merge_range(self, cr):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Remove all but the top left-cell from a range of merged cells 
+        &quot;&quot;&quot;</span>
+
+        <span class="s1">min_col, min_row, max_col, max_row = cr.bounds</span>
+        <span class="s1">rows = range(min_row, max_row+</span><span class="s4">1</span><span class="s1">)</span>
+        <span class="s1">cols = range(min_col, max_col+</span><span class="s4">1</span><span class="s1">)</span>
+        <span class="s1">cells = product(rows, cols)</span>
+
+        <span class="s0">for </span><span class="s1">c </span><span class="s0">in </span><span class="s1">islice(cells, </span><span class="s4">1</span><span class="s1">, </span><span class="s0">None</span><span class="s1">):</span>
+            <span class="s0">if </span><span class="s1">c </span><span class="s0">in </span><span class="s1">self._cells:</span>
+                <span class="s0">del </span><span class="s1">self._cells[c]</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s1">@deprecated(</span><span class="s3">&quot;Use ws.merged_cells.ranges&quot;</span><span class="s1">)</span>
+    <span class="s0">def </span><span class="s1">merged_cell_ranges(self):</span>
+        <span class="s2">&quot;&quot;&quot;Return a copy of cell ranges&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self.merged_cells.ranges[:]</span>
+
+
+    <span class="s0">def </span><span class="s1">unmerge_cells(self, range_string=</span><span class="s0">None</span><span class="s1">, start_row=</span><span class="s0">None</span><span class="s1">, start_column=</span><span class="s0">None</span><span class="s1">, end_row=</span><span class="s0">None</span><span class="s1">, end_column=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; Remove merge on a cell range.  Range is a cell range (e.g. A1:E1) &quot;&quot;&quot;</span>
+        <span class="s1">cr = CellRange(range_string=range_string, min_col=start_column, min_row=start_row,</span>
+                      <span class="s1">max_col=end_column, max_row=end_row)</span>
+
+        <span class="s0">if </span><span class="s1">cr.coord </span><span class="s0">not in </span><span class="s1">self.merged_cells:</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;Cell range {0} is not merged&quot;</span><span class="s1">.format(cr.coord))</span>
+
+        <span class="s1">self.merged_cells.remove(cr)</span>
+
+
+    <span class="s0">def </span><span class="s1">append(self, iterable):</span>
+        <span class="s2">&quot;&quot;&quot;Appends a group of values at the bottom of the current sheet. 
+ 
+        * If it's a list: all values are added in order, starting from the first column 
+        * If it's a dict: values are assigned to the columns indicated by the keys (numbers or letters) 
+ 
+        :param iterable: list, range or generator, or dict containing values to append 
+        :type iterable: list|tuple|range|generator or dict 
+ 
+        Usage: 
+ 
+        * append(['This is A1', 'This is B1', 'This is C1']) 
+        * **or** append({'A' : 'This is A1', 'C' : 'This is C1'}) 
+        * **or** append({1 : 'This is A1', 3 : 'This is C1'}) 
+ 
+        :raise: TypeError when iterable is neither a list/tuple nor a dict 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">row_idx = self._current_row + </span><span class="s4">1</span>
+
+        <span class="s0">if </span><span class="s1">(isinstance(iterable, (list, tuple, range))</span>
+            <span class="s0">or </span><span class="s1">isgenerator(iterable)):</span>
+            <span class="s0">for </span><span class="s1">col_idx, content </span><span class="s0">in </span><span class="s1">enumerate(iterable, </span><span class="s4">1</span><span class="s1">):</span>
+                <span class="s0">if </span><span class="s1">isinstance(content, Cell):</span>
+                    <span class="s2"># compatible with write-only mode</span>
+                    <span class="s1">cell = content</span>
+                    <span class="s0">if </span><span class="s1">cell.parent </span><span class="s0">and </span><span class="s1">cell.parent != self:</span>
+                        <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;Cells cannot be copied from other worksheets&quot;</span><span class="s1">)</span>
+                    <span class="s1">cell.parent = self</span>
+                    <span class="s1">cell.col_idx = col_idx</span>
+                    <span class="s1">cell.row = row_idx</span>
+                <span class="s0">else</span><span class="s1">:</span>
+                    <span class="s1">cell = Cell(self, row=row_idx, col_idx=col_idx, value=content)</span>
+                <span class="s1">self._cells[(row_idx, col_idx)] = cell</span>
+
+        <span class="s0">elif </span><span class="s1">isinstance(iterable, dict):</span>
+            <span class="s0">for </span><span class="s1">col_idx, content </span><span class="s0">in </span><span class="s1">iterable.items():</span>
+                <span class="s0">if </span><span class="s1">isinstance(col_idx, basestring):</span>
+                    <span class="s1">col_idx = column_index_from_string(col_idx)</span>
+                <span class="s1">cell = Cell(self, row=row_idx, col_idx=col_idx, value=content)</span>
+                <span class="s1">self._cells[(row_idx, col_idx)] = cell</span>
+
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">self._invalid_row(iterable)</span>
+
+        <span class="s1">self._current_row = row_idx</span>
+
+
+    <span class="s0">def </span><span class="s1">_move_cells(self, min_row=</span><span class="s0">None</span><span class="s1">, min_col=</span><span class="s0">None</span><span class="s1">, offset=</span><span class="s4">0</span><span class="s1">, row_or_col=</span><span class="s3">&quot;row&quot;</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Move either rows or columns around by the offset 
+        &quot;&quot;&quot;</span>
+        <span class="s1">reverse = offset &gt; </span><span class="s4">0 </span><span class="s2"># start at the end if inserting</span>
+
+        <span class="s2"># need to make affected ranges contiguous</span>
+        <span class="s1">cells = self.iter_rows(min_row=min_row)</span>
+
+        <span class="s0">if </span><span class="s1">row_or_col == </span><span class="s3">'col'</span><span class="s1">:</span>
+            <span class="s1">cells = self.iter_cols(min_col=min_col)</span>
+        <span class="s1">cells = list(cells)</span>
+
+        <span class="s1">cells = sorted(self._cells.values(), key=attrgetter(row_or_col), reverse=reverse)</span>
+
+        <span class="s0">for </span><span class="s1">cell </span><span class="s0">in </span><span class="s1">cells:</span>
+            <span class="s0">if </span><span class="s1">min_row </span><span class="s0">and </span><span class="s1">cell.row &lt; min_row:</span>
+                <span class="s0">continue</span>
+            <span class="s0">elif </span><span class="s1">min_col </span><span class="s0">and </span><span class="s1">cell.col_idx &lt; min_col:</span>
+                <span class="s0">continue</span>
+
+            <span class="s0">del </span><span class="s1">self._cells[(cell.row, cell.col_idx)] </span><span class="s2"># remove old ref</span>
+
+            <span class="s1">val = getattr(cell, row_or_col)</span>
+            <span class="s1">setattr(cell, row_or_col, val+offset) </span><span class="s2"># calculate new coords</span>
+
+            <span class="s1">self._cells[(cell.row, cell.col_idx)] = cell </span><span class="s2"># add new ref</span>
+
+
+    <span class="s0">def </span><span class="s1">insert_rows(self, idx, amount=</span><span class="s4">1</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Insert row or rows before row==idx 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self._move_cells(min_row=idx, offset=amount, row_or_col=</span><span class="s3">&quot;row&quot;</span><span class="s1">)</span>
+        <span class="s1">self._current_row = self.max_row</span>
+
+
+    <span class="s0">def </span><span class="s1">insert_cols(self, idx, amount=</span><span class="s4">1</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Insert column or columns before col==idx 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self._move_cells(min_col=idx, offset=amount, row_or_col=</span><span class="s3">&quot;col_idx&quot;</span><span class="s1">)</span>
+
+
+    <span class="s0">def </span><span class="s1">delete_rows(self, idx, amount=</span><span class="s4">1</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Delete row or rows from row==idx 
+        &quot;&quot;&quot;</span>
+
+        <span class="s1">remainder = _gutter(idx, amount, self.max_row)</span>
+
+        <span class="s1">self._move_cells(min_row=idx+amount, offset=-amount, row_or_col=</span><span class="s3">&quot;row&quot;</span><span class="s1">)</span>
+
+        <span class="s0">for </span><span class="s1">row </span><span class="s0">in </span><span class="s1">remainder:</span>
+            <span class="s0">for </span><span class="s1">col </span><span class="s0">in </span><span class="s1">range(self.min_column, self.max_column+</span><span class="s4">1</span><span class="s1">):</span>
+                <span class="s0">if </span><span class="s1">(row, col) </span><span class="s0">in </span><span class="s1">self._cells:</span>
+                    <span class="s0">del </span><span class="s1">self._cells[row, col]</span>
+        <span class="s1">self._current_row = self.max_row</span>
+        <span class="s0">if not </span><span class="s1">self._cells:</span>
+            <span class="s1">self._current_row = </span><span class="s4">0</span>
+
+
+    <span class="s0">def </span><span class="s1">delete_cols(self, idx, amount=</span><span class="s4">1</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Delete column or columns from col==idx 
+        &quot;&quot;&quot;</span>
+
+        <span class="s1">remainder = _gutter(idx, amount, self.max_column)</span>
+
+        <span class="s1">self._move_cells(min_col=idx+amount, offset=-amount, row_or_col=</span><span class="s3">&quot;col_idx&quot;</span><span class="s1">)</span>
+
+        <span class="s0">for </span><span class="s1">col </span><span class="s0">in </span><span class="s1">remainder:</span>
+            <span class="s0">for </span><span class="s1">row </span><span class="s0">in </span><span class="s1">range(self.min_row, self.max_row+</span><span class="s4">1</span><span class="s1">):</span>
+                <span class="s0">if </span><span class="s1">(row, col) </span><span class="s0">in </span><span class="s1">self._cells:</span>
+                    <span class="s0">del </span><span class="s1">self._cells[row, col]</span>
+
+
+    <span class="s0">def </span><span class="s1">_invalid_row(self, iterable):</span>
+        <span class="s0">raise </span><span class="s1">TypeError(</span><span class="s3">'Value must be a list, tuple, range or generator, or a dict. Supplied value is {0}'</span><span class="s1">.format(</span>
+            <span class="s1">type(iterable))</span>
+                        <span class="s1">)</span>
+
+
+    <span class="s0">def </span><span class="s1">_add_column(self):</span>
+        <span class="s2">&quot;&quot;&quot;Dimension factory for column information&quot;&quot;&quot;</span>
+
+        <span class="s0">return </span><span class="s1">ColumnDimension(self)</span>
+
+    <span class="s0">def </span><span class="s1">_add_row(self):</span>
+        <span class="s2">&quot;&quot;&quot;Dimension factory for row information&quot;&quot;&quot;</span>
+
+        <span class="s0">return </span><span class="s1">RowDimension(self)</span>
+
+
+    <span class="s0">def </span><span class="s1">_write(self):</span>
+        <span class="s0">from </span><span class="s1">openpyexcel.drawing.spreadsheet_drawing </span><span class="s0">import </span><span class="s1">SpreadsheetDrawing</span>
+        <span class="s0">from </span><span class="s1">openpyexcel.writer.worksheet </span><span class="s0">import </span><span class="s1">write_worksheet</span>
+        <span class="s1">self._drawing = SpreadsheetDrawing()</span>
+        <span class="s1">self._drawing.charts = self._charts</span>
+        <span class="s1">self._drawing.images = self._images</span>
+        <span class="s0">return </span><span class="s1">write_worksheet(self)</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">print_title_rows(self):</span>
+        <span class="s2">&quot;&quot;&quot;Rows to be printed at the top of every page (ex: '1:3')&quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">self._print_rows:</span>
+            <span class="s0">return </span><span class="s1">self._print_rows</span>
+
+
+    <span class="s1">@print_title_rows.setter</span>
+    <span class="s0">def </span><span class="s1">print_title_rows(self, rows):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Set rows to be printed on the top of every page 
+        format `1:3` 
+        &quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">rows </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s0">if not </span><span class="s1">ROW_RANGE_RE.match(rows):</span>
+                <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;Print title rows must be the form 1:3&quot;</span><span class="s1">)</span>
+        <span class="s1">self._print_rows = rows</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">print_title_cols(self):</span>
+        <span class="s2">&quot;&quot;&quot;Columns to be printed at the left side of every page (ex: 'A:C')&quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">self._print_cols:</span>
+            <span class="s0">return </span><span class="s1">self._print_cols</span>
+
+
+    <span class="s1">@print_title_cols.setter</span>
+    <span class="s0">def </span><span class="s1">print_title_cols(self, cols):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Set cols to be printed on the left of every page 
+        format ``A:C` 
+        &quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">cols </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s0">if not </span><span class="s1">COL_RANGE_RE.match(cols):</span>
+                <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;Print title cols must be the form C:D&quot;</span><span class="s1">)</span>
+        <span class="s1">self._print_cols = cols</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">print_titles(self):</span>
+        <span class="s0">if </span><span class="s1">self.print_title_cols </span><span class="s0">and </span><span class="s1">self.print_title_rows:</span>
+            <span class="s0">return </span><span class="s3">&quot;,&quot;</span><span class="s1">.join([self.print_title_rows, self.print_title_cols])</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">self.print_title_rows </span><span class="s0">or </span><span class="s1">self.print_title_cols</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">print_area(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        The print area for the worksheet, or None if not set. To set, supply a range 
+        like 'A1:D4' or a list of ranges. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self._print_area</span>
+
+
+    <span class="s1">@print_area.setter</span>
+    <span class="s0">def </span><span class="s1">print_area(self, value):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Range of cells in the form A1:D4 or list of ranges 
+        &quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">isinstance(value, basestring):</span>
+            <span class="s1">value = [value]</span>
+
+        <span class="s1">self._print_area = [absolute_coordinate(v) </span><span class="s0">for </span><span class="s1">v </span><span class="s0">in </span><span class="s1">value]</span>
+
+
+<span class="s0">def </span><span class="s1">_gutter(idx, offset, max_val):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    When deleting rows and columns are deleted we rely on overwriting. 
+    This may not be the case for a large offset on small set of cells: 
+    range(cells_to_delete) &gt; range(cell_to_be_moved) 
+    &quot;&quot;&quot;</span>
+    <span class="s1">gutter = range(max(max_val+</span><span class="s4">1</span><span class="s1">-offset, idx), min(idx+offset, max_val)+</span><span class="s4">1</span><span class="s1">)</span>
+    <span class="s0">return </span><span class="s1">gutter</span>
+</pre>
+</body>
+</html>

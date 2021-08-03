@@ -1,0 +1,43 @@
+<html>
+<head>
+<title>xml.pyi</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+xml.pyi</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">ClassVar, Generic, Iterable, Text, Type, Union</span>
+<span class="s0">from </span><span class="s1">typing_extensions </span><span class="s0">import </span><span class="s1">Final</span>
+
+<span class="s0">class </span><span class="s1">raw:</span>
+    <span class="s1">uniobj: Final[Text]</span>
+    <span class="s0">def </span><span class="s1">__init__(self, uniobj: Text) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+
+<span class="s0">class </span><span class="s1">_NamespaceMetaclass(type):</span>
+    <span class="s0">def </span><span class="s1">__getattr__(self, name: str) -&gt; Type[Tag]: ...</span>
+
+<span class="s0">class </span><span class="s1">Namespace(metaclass=_NamespaceMetaclass): ...</span>
+
+<span class="s0">class </span><span class="s1">Tag(list):</span>
+    <span class="s0">class </span><span class="s1">Attr:</span>
+        <span class="s0">def </span><span class="s1">__getattr__(self, attr: str) -&gt; Text: ...</span>
+    <span class="s1">attr: Final[Attr]</span>
+    <span class="s0">def </span><span class="s1">__init__(self, *args: Union[Text, raw, Tag, Iterable[Tag]], **kwargs: Union[Text, raw]) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+    <span class="s0">def </span><span class="s1">unicode(self, indent: int = ...) -&gt; Text: ...</span>
+
+<span class="s0">class </span><span class="s1">html(Namespace):</span>
+    <span class="s0">class </span><span class="s1">Style:</span>
+        <span class="s0">def </span><span class="s1">__init__(self, **kw: Union[str, Text]) -&gt; </span><span class="s0">None</span><span class="s1">: ...</span>
+    <span class="s1">style: ClassVar[Style]</span>
+
+<span class="s0">def </span><span class="s1">escape(ustring: Union[str, Text]) -&gt; Text: ...</span>
+</pre>
+</body>
+</html>

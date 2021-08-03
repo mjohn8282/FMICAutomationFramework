@@ -1,0 +1,175 @@
+<html>
+<head>
+<title>tests.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+.s5 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+tests.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># coding: utf-8</span>
+<span class="s0">&quot;&quot;&quot; 
+ 
+    webencodings.tests 
+    ~~~~~~~~~~~~~~~~~~ 
+ 
+    A basic test suite for Encoding. 
+ 
+    :copyright: Copyright 2012 by Simon Sapin 
+    :license: BSD, see LICENSE for details. 
+ 
+&quot;&quot;&quot;</span>
+
+<span class="s2">from </span><span class="s1">__future__ </span><span class="s2">import </span><span class="s1">unicode_literals</span>
+
+<span class="s2">from </span><span class="s1">. </span><span class="s2">import </span><span class="s1">(lookup, LABELS, decode, encode, iter_decode, iter_encode,</span>
+               <span class="s1">IncrementalDecoder, IncrementalEncoder, UTF8)</span>
+
+
+<span class="s2">def </span><span class="s1">assert_raises(exception, function, *args, **kwargs):</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">function(*args, **kwargs)</span>
+    <span class="s2">except </span><span class="s1">exception:</span>
+        <span class="s2">return</span>
+    <span class="s2">else</span><span class="s1">:  </span><span class="s0"># pragma: no cover</span>
+        <span class="s2">raise </span><span class="s1">AssertionError(</span><span class="s3">'Did not raise %s.' </span><span class="s1">% exception)</span>
+
+
+<span class="s2">def </span><span class="s1">test_labels():</span>
+    <span class="s2">assert </span><span class="s1">lookup(</span><span class="s3">'utf-8'</span><span class="s1">).name == </span><span class="s3">'utf-8'</span>
+    <span class="s2">assert </span><span class="s1">lookup(</span><span class="s3">'Utf-8'</span><span class="s1">).name == </span><span class="s3">'utf-8'</span>
+    <span class="s2">assert </span><span class="s1">lookup(</span><span class="s3">'UTF-8'</span><span class="s1">).name == </span><span class="s3">'utf-8'</span>
+    <span class="s2">assert </span><span class="s1">lookup(</span><span class="s3">'utf8'</span><span class="s1">).name == </span><span class="s3">'utf-8'</span>
+    <span class="s2">assert </span><span class="s1">lookup(</span><span class="s3">'utf8'</span><span class="s1">).name == </span><span class="s3">'utf-8'</span>
+    <span class="s2">assert </span><span class="s1">lookup(</span><span class="s3">'utf8 '</span><span class="s1">).name == </span><span class="s3">'utf-8'</span>
+    <span class="s2">assert </span><span class="s1">lookup(</span><span class="s3">' </span><span class="s4">\r\n</span><span class="s3">utf8</span><span class="s4">\t</span><span class="s3">'</span><span class="s1">).name == </span><span class="s3">'utf-8'</span>
+    <span class="s2">assert </span><span class="s1">lookup(</span><span class="s3">'u8'</span><span class="s1">) </span><span class="s2">is None  </span><span class="s0"># Python label.</span>
+    <span class="s2">assert </span><span class="s1">lookup(</span><span class="s3">'utf-8 '</span><span class="s1">) </span><span class="s2">is None  </span><span class="s0"># Non-ASCII white space.</span>
+
+    <span class="s2">assert </span><span class="s1">lookup(</span><span class="s3">'US-ASCII'</span><span class="s1">).name == </span><span class="s3">'windows-1252'</span>
+    <span class="s2">assert </span><span class="s1">lookup(</span><span class="s3">'iso-8859-1'</span><span class="s1">).name == </span><span class="s3">'windows-1252'</span>
+    <span class="s2">assert </span><span class="s1">lookup(</span><span class="s3">'latin1'</span><span class="s1">).name == </span><span class="s3">'windows-1252'</span>
+    <span class="s2">assert </span><span class="s1">lookup(</span><span class="s3">'LATIN1'</span><span class="s1">).name == </span><span class="s3">'windows-1252'</span>
+    <span class="s2">assert </span><span class="s1">lookup(</span><span class="s3">'latin-1'</span><span class="s1">) </span><span class="s2">is None</span>
+    <span class="s2">assert </span><span class="s1">lookup(</span><span class="s3">'LATİN1'</span><span class="s1">) </span><span class="s2">is None  </span><span class="s0"># ASCII-only case insensitivity.</span>
+
+
+<span class="s2">def </span><span class="s1">test_all_labels():</span>
+    <span class="s2">for </span><span class="s1">label </span><span class="s2">in </span><span class="s1">LABELS:</span>
+        <span class="s2">assert </span><span class="s1">decode(</span><span class="s3">b''</span><span class="s1">, label) == (</span><span class="s3">''</span><span class="s1">, lookup(label))</span>
+        <span class="s2">assert </span><span class="s1">encode(</span><span class="s3">''</span><span class="s1">, label) == </span><span class="s3">b''</span>
+        <span class="s2">for </span><span class="s1">repeat </span><span class="s2">in </span><span class="s1">[</span><span class="s5">0</span><span class="s1">, </span><span class="s5">1</span><span class="s1">, </span><span class="s5">12</span><span class="s1">]:</span>
+            <span class="s1">output, _ = iter_decode([</span><span class="s3">b''</span><span class="s1">] * repeat, label)</span>
+            <span class="s2">assert </span><span class="s1">list(output) == []</span>
+            <span class="s2">assert </span><span class="s1">list(iter_encode([</span><span class="s3">''</span><span class="s1">] * repeat, label)) == []</span>
+        <span class="s1">decoder = IncrementalDecoder(label)</span>
+        <span class="s2">assert </span><span class="s1">decoder.decode(</span><span class="s3">b''</span><span class="s1">) == </span><span class="s3">''</span>
+        <span class="s2">assert </span><span class="s1">decoder.decode(</span><span class="s3">b''</span><span class="s1">, final=</span><span class="s2">True</span><span class="s1">) == </span><span class="s3">''</span>
+        <span class="s1">encoder = IncrementalEncoder(label)</span>
+        <span class="s2">assert </span><span class="s1">encoder.encode(</span><span class="s3">''</span><span class="s1">) == </span><span class="s3">b''</span>
+        <span class="s2">assert </span><span class="s1">encoder.encode(</span><span class="s3">''</span><span class="s1">, final=</span><span class="s2">True</span><span class="s1">) == </span><span class="s3">b''</span>
+    <span class="s0"># All encoding names are valid labels too:</span>
+    <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">set(LABELS.values()):</span>
+        <span class="s2">assert </span><span class="s1">lookup(name).name == name</span>
+
+
+<span class="s2">def </span><span class="s1">test_invalid_label():</span>
+    <span class="s1">assert_raises(LookupError, decode, </span><span class="s3">b'</span><span class="s4">\xEF\xBB\xBF\xc3\xa9</span><span class="s3">'</span><span class="s1">, </span><span class="s3">'invalid'</span><span class="s1">)</span>
+    <span class="s1">assert_raises(LookupError, encode, </span><span class="s3">'é'</span><span class="s1">, </span><span class="s3">'invalid'</span><span class="s1">)</span>
+    <span class="s1">assert_raises(LookupError, iter_decode, [], </span><span class="s3">'invalid'</span><span class="s1">)</span>
+    <span class="s1">assert_raises(LookupError, iter_encode, [], </span><span class="s3">'invalid'</span><span class="s1">)</span>
+    <span class="s1">assert_raises(LookupError, IncrementalDecoder, </span><span class="s3">'invalid'</span><span class="s1">)</span>
+    <span class="s1">assert_raises(LookupError, IncrementalEncoder, </span><span class="s3">'invalid'</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">test_decode():</span>
+    <span class="s2">assert </span><span class="s1">decode(</span><span class="s3">b'</span><span class="s4">\x80</span><span class="s3">'</span><span class="s1">, </span><span class="s3">'latin1'</span><span class="s1">) == (</span><span class="s3">'€'</span><span class="s1">, lookup(</span><span class="s3">'latin1'</span><span class="s1">))</span>
+    <span class="s2">assert </span><span class="s1">decode(</span><span class="s3">b'</span><span class="s4">\x80</span><span class="s3">'</span><span class="s1">, lookup(</span><span class="s3">'latin1'</span><span class="s1">)) == (</span><span class="s3">'€'</span><span class="s1">, lookup(</span><span class="s3">'latin1'</span><span class="s1">))</span>
+    <span class="s2">assert </span><span class="s1">decode(</span><span class="s3">b'</span><span class="s4">\xc3\xa9</span><span class="s3">'</span><span class="s1">, </span><span class="s3">'utf8'</span><span class="s1">) == (</span><span class="s3">'é'</span><span class="s1">, lookup(</span><span class="s3">'utf8'</span><span class="s1">))</span>
+    <span class="s2">assert </span><span class="s1">decode(</span><span class="s3">b'</span><span class="s4">\xc3\xa9</span><span class="s3">'</span><span class="s1">, UTF8) == (</span><span class="s3">'é'</span><span class="s1">, lookup(</span><span class="s3">'utf8'</span><span class="s1">))</span>
+    <span class="s2">assert </span><span class="s1">decode(</span><span class="s3">b'</span><span class="s4">\xc3\xa9</span><span class="s3">'</span><span class="s1">, </span><span class="s3">'ascii'</span><span class="s1">) == (</span><span class="s3">'Ã©'</span><span class="s1">, lookup(</span><span class="s3">'ascii'</span><span class="s1">))</span>
+    <span class="s2">assert </span><span class="s1">decode(</span><span class="s3">b'</span><span class="s4">\xEF\xBB\xBF\xc3\xa9</span><span class="s3">'</span><span class="s1">, </span><span class="s3">'ascii'</span><span class="s1">) == (</span><span class="s3">'é'</span><span class="s1">, lookup(</span><span class="s3">'utf8'</span><span class="s1">))  </span><span class="s0"># UTF-8 with BOM</span>
+
+    <span class="s2">assert </span><span class="s1">decode(</span><span class="s3">b'</span><span class="s4">\xFE\xFF\x00\xe9</span><span class="s3">'</span><span class="s1">, </span><span class="s3">'ascii'</span><span class="s1">) == (</span><span class="s3">'é'</span><span class="s1">, lookup(</span><span class="s3">'utf-16be'</span><span class="s1">))  </span><span class="s0"># UTF-16-BE with BOM</span>
+    <span class="s2">assert </span><span class="s1">decode(</span><span class="s3">b'</span><span class="s4">\xFF\xFE\xe9\x00</span><span class="s3">'</span><span class="s1">, </span><span class="s3">'ascii'</span><span class="s1">) == (</span><span class="s3">'é'</span><span class="s1">, lookup(</span><span class="s3">'utf-16le'</span><span class="s1">))  </span><span class="s0"># UTF-16-LE with BOM</span>
+    <span class="s2">assert </span><span class="s1">decode(</span><span class="s3">b'</span><span class="s4">\xFE\xFF\xe9\x00</span><span class="s3">'</span><span class="s1">, </span><span class="s3">'ascii'</span><span class="s1">) == (</span><span class="s3">'</span><span class="s4">\ue900</span><span class="s3">'</span><span class="s1">, lookup(</span><span class="s3">'utf-16be'</span><span class="s1">))</span>
+    <span class="s2">assert </span><span class="s1">decode(</span><span class="s3">b'</span><span class="s4">\xFF\xFE\x00\xe9</span><span class="s3">'</span><span class="s1">, </span><span class="s3">'ascii'</span><span class="s1">) == (</span><span class="s3">'</span><span class="s4">\ue900</span><span class="s3">'</span><span class="s1">, lookup(</span><span class="s3">'utf-16le'</span><span class="s1">))</span>
+
+    <span class="s2">assert </span><span class="s1">decode(</span><span class="s3">b'</span><span class="s4">\x00\xe9</span><span class="s3">'</span><span class="s1">, </span><span class="s3">'UTF-16BE'</span><span class="s1">) == (</span><span class="s3">'é'</span><span class="s1">, lookup(</span><span class="s3">'utf-16be'</span><span class="s1">))</span>
+    <span class="s2">assert </span><span class="s1">decode(</span><span class="s3">b'</span><span class="s4">\xe9\x00</span><span class="s3">'</span><span class="s1">, </span><span class="s3">'UTF-16LE'</span><span class="s1">) == (</span><span class="s3">'é'</span><span class="s1">, lookup(</span><span class="s3">'utf-16le'</span><span class="s1">))</span>
+    <span class="s2">assert </span><span class="s1">decode(</span><span class="s3">b'</span><span class="s4">\xe9\x00</span><span class="s3">'</span><span class="s1">, </span><span class="s3">'UTF-16'</span><span class="s1">) == (</span><span class="s3">'é'</span><span class="s1">, lookup(</span><span class="s3">'utf-16le'</span><span class="s1">))</span>
+
+    <span class="s2">assert </span><span class="s1">decode(</span><span class="s3">b'</span><span class="s4">\xe9\x00</span><span class="s3">'</span><span class="s1">, </span><span class="s3">'UTF-16BE'</span><span class="s1">) == (</span><span class="s3">'</span><span class="s4">\ue900</span><span class="s3">'</span><span class="s1">, lookup(</span><span class="s3">'utf-16be'</span><span class="s1">))</span>
+    <span class="s2">assert </span><span class="s1">decode(</span><span class="s3">b'</span><span class="s4">\x00\xe9</span><span class="s3">'</span><span class="s1">, </span><span class="s3">'UTF-16LE'</span><span class="s1">) == (</span><span class="s3">'</span><span class="s4">\ue900</span><span class="s3">'</span><span class="s1">, lookup(</span><span class="s3">'utf-16le'</span><span class="s1">))</span>
+    <span class="s2">assert </span><span class="s1">decode(</span><span class="s3">b'</span><span class="s4">\x00\xe9</span><span class="s3">'</span><span class="s1">, </span><span class="s3">'UTF-16'</span><span class="s1">) == (</span><span class="s3">'</span><span class="s4">\ue900</span><span class="s3">'</span><span class="s1">, lookup(</span><span class="s3">'utf-16le'</span><span class="s1">))</span>
+
+
+<span class="s2">def </span><span class="s1">test_encode():</span>
+    <span class="s2">assert </span><span class="s1">encode(</span><span class="s3">'é'</span><span class="s1">, </span><span class="s3">'latin1'</span><span class="s1">) == </span><span class="s3">b'</span><span class="s4">\xe9</span><span class="s3">'</span>
+    <span class="s2">assert </span><span class="s1">encode(</span><span class="s3">'é'</span><span class="s1">, </span><span class="s3">'utf8'</span><span class="s1">) == </span><span class="s3">b'</span><span class="s4">\xc3\xa9</span><span class="s3">'</span>
+    <span class="s2">assert </span><span class="s1">encode(</span><span class="s3">'é'</span><span class="s1">, </span><span class="s3">'utf8'</span><span class="s1">) == </span><span class="s3">b'</span><span class="s4">\xc3\xa9</span><span class="s3">'</span>
+    <span class="s2">assert </span><span class="s1">encode(</span><span class="s3">'é'</span><span class="s1">, </span><span class="s3">'utf-16'</span><span class="s1">) == </span><span class="s3">b'</span><span class="s4">\xe9\x00</span><span class="s3">'</span>
+    <span class="s2">assert </span><span class="s1">encode(</span><span class="s3">'é'</span><span class="s1">, </span><span class="s3">'utf-16le'</span><span class="s1">) == </span><span class="s3">b'</span><span class="s4">\xe9\x00</span><span class="s3">'</span>
+    <span class="s2">assert </span><span class="s1">encode(</span><span class="s3">'é'</span><span class="s1">, </span><span class="s3">'utf-16be'</span><span class="s1">) == </span><span class="s3">b'</span><span class="s4">\x00\xe9</span><span class="s3">'</span>
+
+
+<span class="s2">def </span><span class="s1">test_iter_decode():</span>
+    <span class="s2">def </span><span class="s1">iter_decode_to_string(input, fallback_encoding):</span>
+        <span class="s1">output, _encoding = iter_decode(input, fallback_encoding)</span>
+        <span class="s2">return </span><span class="s3">''</span><span class="s1">.join(output)</span>
+    <span class="s2">assert </span><span class="s1">iter_decode_to_string([], </span><span class="s3">'latin1'</span><span class="s1">) == </span><span class="s3">''</span>
+    <span class="s2">assert </span><span class="s1">iter_decode_to_string([</span><span class="s3">b''</span><span class="s1">], </span><span class="s3">'latin1'</span><span class="s1">) == </span><span class="s3">''</span>
+    <span class="s2">assert </span><span class="s1">iter_decode_to_string([</span><span class="s3">b'</span><span class="s4">\xe9</span><span class="s3">'</span><span class="s1">], </span><span class="s3">'latin1'</span><span class="s1">) == </span><span class="s3">'é'</span>
+    <span class="s2">assert </span><span class="s1">iter_decode_to_string([</span><span class="s3">b'hello'</span><span class="s1">], </span><span class="s3">'latin1'</span><span class="s1">) == </span><span class="s3">'hello'</span>
+    <span class="s2">assert </span><span class="s1">iter_decode_to_string([</span><span class="s3">b'he'</span><span class="s1">, </span><span class="s3">b'llo'</span><span class="s1">], </span><span class="s3">'latin1'</span><span class="s1">) == </span><span class="s3">'hello'</span>
+    <span class="s2">assert </span><span class="s1">iter_decode_to_string([</span><span class="s3">b'hell'</span><span class="s1">, </span><span class="s3">b'o'</span><span class="s1">], </span><span class="s3">'latin1'</span><span class="s1">) == </span><span class="s3">'hello'</span>
+    <span class="s2">assert </span><span class="s1">iter_decode_to_string([</span><span class="s3">b'</span><span class="s4">\xc3\xa9</span><span class="s3">'</span><span class="s1">], </span><span class="s3">'latin1'</span><span class="s1">) == </span><span class="s3">'Ã©'</span>
+    <span class="s2">assert </span><span class="s1">iter_decode_to_string([</span><span class="s3">b'</span><span class="s4">\xEF\xBB\xBF\xc3\xa9</span><span class="s3">'</span><span class="s1">], </span><span class="s3">'latin1'</span><span class="s1">) == </span><span class="s3">'é'</span>
+    <span class="s2">assert </span><span class="s1">iter_decode_to_string([</span>
+        <span class="s3">b'</span><span class="s4">\xEF\xBB\xBF</span><span class="s3">'</span><span class="s1">, </span><span class="s3">b'</span><span class="s4">\xc3</span><span class="s3">'</span><span class="s1">, </span><span class="s3">b'</span><span class="s4">\xa9</span><span class="s3">'</span><span class="s1">], </span><span class="s3">'latin1'</span><span class="s1">) == </span><span class="s3">'é'</span>
+    <span class="s2">assert </span><span class="s1">iter_decode_to_string([</span>
+        <span class="s3">b'</span><span class="s4">\xEF\xBB\xBF</span><span class="s3">'</span><span class="s1">, </span><span class="s3">b'a'</span><span class="s1">, </span><span class="s3">b'</span><span class="s4">\xc3</span><span class="s3">'</span><span class="s1">], </span><span class="s3">'latin1'</span><span class="s1">) == </span><span class="s3">'a</span><span class="s4">\uFFFD</span><span class="s3">'</span>
+    <span class="s2">assert </span><span class="s1">iter_decode_to_string([</span>
+        <span class="s3">b''</span><span class="s1">, </span><span class="s3">b'</span><span class="s4">\xEF</span><span class="s3">'</span><span class="s1">, </span><span class="s3">b''</span><span class="s1">, </span><span class="s3">b''</span><span class="s1">, </span><span class="s3">b'</span><span class="s4">\xBB\xBF\xc3</span><span class="s3">'</span><span class="s1">, </span><span class="s3">b'</span><span class="s4">\xa9</span><span class="s3">'</span><span class="s1">], </span><span class="s3">'latin1'</span><span class="s1">) == </span><span class="s3">'é'</span>
+    <span class="s2">assert </span><span class="s1">iter_decode_to_string([</span><span class="s3">b'</span><span class="s4">\xEF\xBB\xBF</span><span class="s3">'</span><span class="s1">], </span><span class="s3">'latin1'</span><span class="s1">) == </span><span class="s3">''</span>
+    <span class="s2">assert </span><span class="s1">iter_decode_to_string([</span><span class="s3">b'</span><span class="s4">\xEF\xBB</span><span class="s3">'</span><span class="s1">], </span><span class="s3">'latin1'</span><span class="s1">) == </span><span class="s3">'ï»'</span>
+    <span class="s2">assert </span><span class="s1">iter_decode_to_string([</span><span class="s3">b'</span><span class="s4">\xFE\xFF\x00\xe9</span><span class="s3">'</span><span class="s1">], </span><span class="s3">'latin1'</span><span class="s1">) == </span><span class="s3">'é'</span>
+    <span class="s2">assert </span><span class="s1">iter_decode_to_string([</span><span class="s3">b'</span><span class="s4">\xFF\xFE\xe9\x00</span><span class="s3">'</span><span class="s1">], </span><span class="s3">'latin1'</span><span class="s1">) == </span><span class="s3">'é'</span>
+    <span class="s2">assert </span><span class="s1">iter_decode_to_string([</span>
+        <span class="s3">b''</span><span class="s1">, </span><span class="s3">b'</span><span class="s4">\xFF</span><span class="s3">'</span><span class="s1">, </span><span class="s3">b''</span><span class="s1">, </span><span class="s3">b''</span><span class="s1">, </span><span class="s3">b'</span><span class="s4">\xFE\xe9</span><span class="s3">'</span><span class="s1">, </span><span class="s3">b'</span><span class="s4">\x00</span><span class="s3">'</span><span class="s1">], </span><span class="s3">'latin1'</span><span class="s1">) == </span><span class="s3">'é'</span>
+    <span class="s2">assert </span><span class="s1">iter_decode_to_string([</span>
+        <span class="s3">b''</span><span class="s1">, </span><span class="s3">b'h</span><span class="s4">\xe9</span><span class="s3">'</span><span class="s1">, </span><span class="s3">b'llo'</span><span class="s1">], </span><span class="s3">'x-user-defined'</span><span class="s1">) == </span><span class="s3">'h</span><span class="s4">\uF7E9</span><span class="s3">llo'</span>
+
+
+<span class="s2">def </span><span class="s1">test_iter_encode():</span>
+    <span class="s2">assert </span><span class="s3">b''</span><span class="s1">.join(iter_encode([], </span><span class="s3">'latin1'</span><span class="s1">)) == </span><span class="s3">b''</span>
+    <span class="s2">assert </span><span class="s3">b''</span><span class="s1">.join(iter_encode([</span><span class="s3">''</span><span class="s1">], </span><span class="s3">'latin1'</span><span class="s1">)) == </span><span class="s3">b''</span>
+    <span class="s2">assert </span><span class="s3">b''</span><span class="s1">.join(iter_encode([</span><span class="s3">'é'</span><span class="s1">], </span><span class="s3">'latin1'</span><span class="s1">)) == </span><span class="s3">b'</span><span class="s4">\xe9</span><span class="s3">'</span>
+    <span class="s2">assert </span><span class="s3">b''</span><span class="s1">.join(iter_encode([</span><span class="s3">''</span><span class="s1">, </span><span class="s3">'é'</span><span class="s1">, </span><span class="s3">''</span><span class="s1">, </span><span class="s3">''</span><span class="s1">], </span><span class="s3">'latin1'</span><span class="s1">)) == </span><span class="s3">b'</span><span class="s4">\xe9</span><span class="s3">'</span>
+    <span class="s2">assert </span><span class="s3">b''</span><span class="s1">.join(iter_encode([</span><span class="s3">''</span><span class="s1">, </span><span class="s3">'é'</span><span class="s1">, </span><span class="s3">''</span><span class="s1">, </span><span class="s3">''</span><span class="s1">], </span><span class="s3">'utf-16'</span><span class="s1">)) == </span><span class="s3">b'</span><span class="s4">\xe9\x00</span><span class="s3">'</span>
+    <span class="s2">assert </span><span class="s3">b''</span><span class="s1">.join(iter_encode([</span><span class="s3">''</span><span class="s1">, </span><span class="s3">'é'</span><span class="s1">, </span><span class="s3">''</span><span class="s1">, </span><span class="s3">''</span><span class="s1">], </span><span class="s3">'utf-16le'</span><span class="s1">)) == </span><span class="s3">b'</span><span class="s4">\xe9\x00</span><span class="s3">'</span>
+    <span class="s2">assert </span><span class="s3">b''</span><span class="s1">.join(iter_encode([</span><span class="s3">''</span><span class="s1">, </span><span class="s3">'é'</span><span class="s1">, </span><span class="s3">''</span><span class="s1">, </span><span class="s3">''</span><span class="s1">], </span><span class="s3">'utf-16be'</span><span class="s1">)) == </span><span class="s3">b'</span><span class="s4">\x00\xe9</span><span class="s3">'</span>
+    <span class="s2">assert </span><span class="s3">b''</span><span class="s1">.join(iter_encode([</span>
+        <span class="s3">''</span><span class="s1">, </span><span class="s3">'h</span><span class="s4">\uF7E9</span><span class="s3">'</span><span class="s1">, </span><span class="s3">''</span><span class="s1">, </span><span class="s3">'llo'</span><span class="s1">], </span><span class="s3">'x-user-defined'</span><span class="s1">)) == </span><span class="s3">b'h</span><span class="s4">\xe9</span><span class="s3">llo'</span>
+
+
+<span class="s2">def </span><span class="s1">test_x_user_defined():</span>
+    <span class="s1">encoded = </span><span class="s3">b'2,</span><span class="s4">\x0c\x0b\x1a</span><span class="s3">O</span><span class="s4">\xd9</span><span class="s3">#</span><span class="s4">\xcb\x0f\xc9\xbb</span><span class="s3">t</span><span class="s4">\xcf\xa8\xca</span><span class="s3">'</span>
+    <span class="s1">decoded = </span><span class="s3">'2,</span><span class="s4">\x0c\x0b\x1a</span><span class="s3">O</span><span class="s4">\uf7d9</span><span class="s3">#</span><span class="s4">\uf7cb\x0f\uf7c9\uf7bb</span><span class="s3">t</span><span class="s4">\uf7cf\uf7a8\uf7ca</span><span class="s3">'</span>
+    <span class="s1">encoded = </span><span class="s3">b'aa'</span>
+    <span class="s1">decoded = </span><span class="s3">'aa'</span>
+    <span class="s2">assert </span><span class="s1">decode(encoded, </span><span class="s3">'x-user-defined'</span><span class="s1">) == (decoded, lookup(</span><span class="s3">'x-user-defined'</span><span class="s1">))</span>
+    <span class="s2">assert </span><span class="s1">encode(decoded, </span><span class="s3">'x-user-defined'</span><span class="s1">) == encoded</span>
+</pre>
+</body>
+</html>

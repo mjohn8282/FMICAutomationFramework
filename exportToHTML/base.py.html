@@ -1,0 +1,290 @@
+<html>
+<head>
+<title>base.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+base.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+
+<span class="s3">&quot;&quot;&quot; 
+Based on Python Cookbook 3rd Edition, 8.13 
+http://chimera.labs.oreilly.com/books/1230000000393/ch08.html#_discussion_130 
+&quot;&quot;&quot;</span>
+
+<span class="s0">import </span><span class="s1">datetime</span>
+<span class="s0">import </span><span class="s1">re</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">basestring, bytes, long</span>
+<span class="s0">from </span><span class="s1">openpyexcel.utils.datetime </span><span class="s0">import </span><span class="s1">from_ISO8601</span>
+
+<span class="s0">from </span><span class="s1">.namespace </span><span class="s0">import </span><span class="s1">namespaced</span>
+
+<span class="s0">class </span><span class="s1">Descriptor(object):</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, name=</span><span class="s0">None</span><span class="s1">, **kw):</span>
+        <span class="s1">self.name = name</span>
+        <span class="s0">for </span><span class="s1">k, v </span><span class="s0">in </span><span class="s1">kw.items():</span>
+            <span class="s1">setattr(self, k, v)</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s1">instance.__dict__[self.name] = value</span>
+
+
+<span class="s0">class </span><span class="s1">Typed(Descriptor):</span>
+    <span class="s2">&quot;&quot;&quot;Values must of a particular type&quot;&quot;&quot;</span>
+
+    <span class="s1">expected_type = type(</span><span class="s0">None</span><span class="s1">)</span>
+    <span class="s1">allow_none = </span><span class="s0">False</span>
+    <span class="s1">nested = </span><span class="s0">False</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, *args, **kw):</span>
+        <span class="s1">super(Typed, self).__init__(*args, **kw)</span>
+        <span class="s1">self.__doc__ = </span><span class="s3">&quot;Values must be of type {0}&quot;</span><span class="s1">.format(self.expected_type)</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s0">if not </span><span class="s1">isinstance(value, self.expected_type):</span>
+            <span class="s0">if </span><span class="s1">(</span><span class="s0">not </span><span class="s1">self.allow_none</span>
+                <span class="s0">or </span><span class="s1">(self.allow_none </span><span class="s0">and </span><span class="s1">value </span><span class="s0">is not None</span><span class="s1">)):</span>
+                <span class="s0">raise </span><span class="s1">TypeError(</span><span class="s3">'expected ' </span><span class="s1">+ str(self.expected_type))</span>
+        <span class="s1">super(Typed, self).__set__(instance, value)</span>
+
+    <span class="s0">def </span><span class="s1">__repr__(self):</span>
+        <span class="s0">return  </span><span class="s1">self.__doc__</span>
+
+
+<span class="s0">def </span><span class="s1">_convert(expected_type, value):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Check value is of or can be converted to expected type. 
+    &quot;&quot;&quot;</span>
+    <span class="s0">if not </span><span class="s1">isinstance(value, expected_type):</span>
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s1">value = expected_type(value)</span>
+        <span class="s0">except</span><span class="s1">:</span>
+            <span class="s0">raise </span><span class="s1">TypeError(</span><span class="s3">'expected ' </span><span class="s1">+ str(expected_type))</span>
+    <span class="s0">return </span><span class="s1">value</span>
+
+
+<span class="s0">class </span><span class="s1">Convertible(Typed):</span>
+    <span class="s2">&quot;&quot;&quot;Values must be convertible to a particular type&quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s0">if </span><span class="s1">((self.allow_none </span><span class="s0">and </span><span class="s1">value </span><span class="s0">is not None</span><span class="s1">)</span>
+            <span class="s0">or not </span><span class="s1">self.allow_none):</span>
+            <span class="s1">value = _convert(self.expected_type, value)</span>
+        <span class="s1">super(Convertible, self).__set__(instance, value)</span>
+
+
+<span class="s0">class </span><span class="s1">Max(Convertible):</span>
+    <span class="s2">&quot;&quot;&quot;Values must be less than a `max` value&quot;&quot;&quot;</span>
+
+    <span class="s1">expected_type = float</span>
+    <span class="s1">allow_none = </span><span class="s0">False</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, **kw):</span>
+        <span class="s0">if </span><span class="s3">'max' </span><span class="s0">not in </span><span class="s1">kw </span><span class="s0">and not </span><span class="s1">hasattr(self, </span><span class="s3">'max'</span><span class="s1">):</span>
+            <span class="s0">raise </span><span class="s1">TypeError(</span><span class="s3">'missing max value'</span><span class="s1">)</span>
+        <span class="s1">super(Max, self).__init__(**kw)</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s0">if </span><span class="s1">((self.allow_none </span><span class="s0">and </span><span class="s1">value </span><span class="s0">is not None</span><span class="s1">)</span>
+            <span class="s0">or not </span><span class="s1">self.allow_none):</span>
+            <span class="s1">value = _convert(self.expected_type, value)</span>
+            <span class="s0">if </span><span class="s1">value &gt; self.max:</span>
+                <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">'Max value is {0}'</span><span class="s1">.format(self.max))</span>
+        <span class="s1">super(Max, self).__set__(instance, value)</span>
+
+
+<span class="s0">class </span><span class="s1">Min(Convertible):</span>
+    <span class="s2">&quot;&quot;&quot;Values must be greater than a `min` value&quot;&quot;&quot;</span>
+
+    <span class="s1">expected_type = float</span>
+    <span class="s1">allow_none = </span><span class="s0">False</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, **kw):</span>
+        <span class="s0">if </span><span class="s3">'min' </span><span class="s0">not in </span><span class="s1">kw </span><span class="s0">and not </span><span class="s1">hasattr(self, </span><span class="s3">'min'</span><span class="s1">):</span>
+            <span class="s0">raise </span><span class="s1">TypeError(</span><span class="s3">'missing min value'</span><span class="s1">)</span>
+        <span class="s1">super(Min, self).__init__(**kw)</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s0">if </span><span class="s1">((self.allow_none </span><span class="s0">and </span><span class="s1">value </span><span class="s0">is not None</span><span class="s1">)</span>
+            <span class="s0">or not </span><span class="s1">self.allow_none):</span>
+            <span class="s1">value = _convert(self.expected_type, value)</span>
+            <span class="s0">if </span><span class="s1">value &lt; self.min:</span>
+                <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">'Min value is {0}'</span><span class="s1">.format(self.min))</span>
+        <span class="s1">super(Min, self).__set__(instance, value)</span>
+
+
+<span class="s0">class </span><span class="s1">MinMax(Min, Max):</span>
+    <span class="s2">&quot;&quot;&quot;Values must be greater than `min` value and less than a `max` one&quot;&quot;&quot;</span>
+    <span class="s0">pass</span>
+
+
+<span class="s0">class </span><span class="s1">Set(Descriptor):</span>
+    <span class="s2">&quot;&quot;&quot;Value can only be from a set of know values&quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, name=</span><span class="s0">None</span><span class="s1">, **kw):</span>
+        <span class="s0">if not </span><span class="s3">'values' </span><span class="s0">in </span><span class="s1">kw:</span>
+            <span class="s0">raise </span><span class="s1">TypeError(</span><span class="s3">&quot;missing set of values&quot;</span><span class="s1">)</span>
+        <span class="s1">kw[</span><span class="s3">'values'</span><span class="s1">] = set(kw[</span><span class="s3">'values'</span><span class="s1">])</span>
+        <span class="s1">super(Set, self).__init__(name, **kw)</span>
+        <span class="s1">self.__doc__ = </span><span class="s3">&quot;Value must be one of {0}&quot;</span><span class="s1">.format(self.values)</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s0">if </span><span class="s1">value </span><span class="s0">not in </span><span class="s1">self.values:</span>
+            <span class="s0">raise </span><span class="s1">ValueError(self.__doc__)</span>
+        <span class="s1">super(Set, self).__set__(instance, value)</span>
+
+
+<span class="s0">class </span><span class="s1">NoneSet(Set):</span>
+
+    <span class="s2">&quot;&quot;&quot;'none' will be treated as None&quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, name=</span><span class="s0">None</span><span class="s1">, **kw):</span>
+        <span class="s1">super(NoneSet, self).__init__(name, **kw)</span>
+        <span class="s1">self.values.add(</span><span class="s0">None</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s0">if </span><span class="s1">value == </span><span class="s3">'none'</span><span class="s1">:</span>
+            <span class="s1">value = </span><span class="s0">None</span>
+        <span class="s1">super(NoneSet, self).__set__(instance, value)</span>
+
+
+<span class="s0">class </span><span class="s1">Integer(Convertible):</span>
+
+    <span class="s1">expected_type = long</span>
+
+
+<span class="s0">class </span><span class="s1">Float(Convertible):</span>
+
+    <span class="s1">expected_type = float</span>
+
+
+<span class="s0">class </span><span class="s1">Bool(Convertible):</span>
+
+    <span class="s1">expected_type = bool</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s0">if </span><span class="s1">isinstance(value, str):</span>
+            <span class="s0">if </span><span class="s1">value </span><span class="s0">in </span><span class="s1">(</span><span class="s3">'false'</span><span class="s1">, </span><span class="s3">'f'</span><span class="s1">, </span><span class="s3">'0'</span><span class="s1">):</span>
+                <span class="s1">value = </span><span class="s0">False</span>
+        <span class="s1">super(Bool, self).__set__(instance, value)</span>
+
+
+<span class="s0">class </span><span class="s1">String(Typed):</span>
+
+    <span class="s1">expected_type = basestring</span>
+
+
+<span class="s0">class </span><span class="s1">Text(String, Convertible):</span>
+
+    <span class="s0">pass</span>
+
+
+<span class="s0">class </span><span class="s1">ASCII(Typed):</span>
+
+    <span class="s1">expected_type = bytes</span>
+
+
+<span class="s0">class </span><span class="s1">Tuple(Typed):</span>
+
+    <span class="s1">expected_type = tuple</span>
+
+
+<span class="s0">class </span><span class="s1">Length(Descriptor):</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, name=</span><span class="s0">None</span><span class="s1">, **kw):</span>
+        <span class="s0">if </span><span class="s3">&quot;length&quot; </span><span class="s0">not in </span><span class="s1">kw:</span>
+            <span class="s0">raise </span><span class="s1">TypeError(</span><span class="s3">&quot;value length must be supplied&quot;</span><span class="s1">)</span>
+        <span class="s1">super(Length, self).__init__(**kw)</span>
+
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s0">if </span><span class="s1">len(value) != self.length:</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;Value must be length {0}&quot;</span><span class="s1">.format(self.length))</span>
+        <span class="s1">super(Length, self).__set__(instance, value)</span>
+
+
+<span class="s0">class </span><span class="s1">Default(Typed):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    When called returns an instance of the expected type. 
+    Additional default values can be passed in to the descriptor 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, name=</span><span class="s0">None</span><span class="s1">, **kw):</span>
+        <span class="s0">if </span><span class="s3">&quot;defaults&quot; </span><span class="s0">not in </span><span class="s1">kw:</span>
+            <span class="s1">kw[</span><span class="s3">'defaults'</span><span class="s1">] = {}</span>
+        <span class="s1">super(Default, self).__init__(**kw)</span>
+
+    <span class="s0">def </span><span class="s1">__call__(self):</span>
+        <span class="s0">return </span><span class="s1">self.expected_type()</span>
+
+
+<span class="s0">class </span><span class="s1">Alias(Descriptor):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Aliases can be used when either the desired attribute name is not allowed 
+    or confusing in Python (eg. &quot;type&quot;) or a more descriptve name is desired 
+    (eg. &quot;underline&quot; for &quot;u&quot;) 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, alias):</span>
+        <span class="s1">self.alias = alias</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s1">setattr(instance, self.alias, value)</span>
+
+    <span class="s0">def </span><span class="s1">__get__(self, instance, cls):</span>
+        <span class="s0">return </span><span class="s1">getattr(instance, self.alias)</span>
+
+
+<span class="s0">class </span><span class="s1">MatchPattern(Descriptor):</span>
+    <span class="s2">&quot;&quot;&quot;Values must match a regex pattern &quot;&quot;&quot;</span>
+    <span class="s1">allow_none = </span><span class="s0">False</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, name=</span><span class="s0">None</span><span class="s1">, **kw):</span>
+        <span class="s0">if </span><span class="s3">'pattern' </span><span class="s0">not in </span><span class="s1">kw </span><span class="s0">and not </span><span class="s1">hasattr(self, </span><span class="s3">'pattern'</span><span class="s1">):</span>
+            <span class="s0">raise </span><span class="s1">TypeError(</span><span class="s3">'missing pattern value'</span><span class="s1">)</span>
+
+        <span class="s1">super(MatchPattern, self).__init__(name, **kw)</span>
+        <span class="s1">self.test_pattern = re.compile(self.pattern, re.VERBOSE)</span>
+
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+
+        <span class="s0">if </span><span class="s1">value </span><span class="s0">is None and not </span><span class="s1">self.allow_none:</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;Value must not be none&quot;</span><span class="s1">)</span>
+
+        <span class="s0">if </span><span class="s1">((self.allow_none </span><span class="s0">and </span><span class="s1">value </span><span class="s0">is not None</span><span class="s1">)</span>
+            <span class="s0">or not </span><span class="s1">self.allow_none):</span>
+            <span class="s0">if not </span><span class="s1">self.test_pattern.match(value):</span>
+                <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">'Value does not match pattern {0}'</span><span class="s1">.format(self.pattern))</span>
+
+        <span class="s1">super(MatchPattern, self).__set__(instance, value)</span>
+
+
+<span class="s0">class </span><span class="s1">DateTime(Typed):</span>
+
+    <span class="s1">expected_type = datetime.datetime</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s0">if </span><span class="s1">value </span><span class="s0">is not None and </span><span class="s1">isinstance(value, basestring):</span>
+            <span class="s0">try</span><span class="s1">:</span>
+                <span class="s1">value = from_ISO8601(value)</span>
+            <span class="s0">except </span><span class="s1">ValueError:</span>
+                <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;Value must be ISO datetime format&quot;</span><span class="s1">)</span>
+        <span class="s1">super(DateTime, self).__set__(instance, value)</span>
+</pre>
+</body>
+</html>

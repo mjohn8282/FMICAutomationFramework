@@ -1,0 +1,94 @@
+<html>
+<head>
+<title>brain_random.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_random.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+<span class="s2">import </span><span class="s1">random</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">MANAGER, helpers</span>
+
+<span class="s1">ACCEPTED_ITERABLES_FOR_SAMPLE = (astroid.List, astroid.Set, astroid.Tuple)</span>
+
+
+<span class="s2">def </span><span class="s1">_clone_node_with_lineno(node, parent, lineno):</span>
+    <span class="s1">cls = node.__class__</span>
+    <span class="s1">other_fields = node._other_fields</span>
+    <span class="s1">_astroid_fields = node._astroid_fields</span>
+    <span class="s1">init_params = {</span><span class="s3">&quot;lineno&quot;</span><span class="s1">: lineno, </span><span class="s3">&quot;col_offset&quot;</span><span class="s1">: node.col_offset, </span><span class="s3">&quot;parent&quot;</span><span class="s1">: parent}</span>
+    <span class="s1">postinit_params = {param: getattr(node, param) </span><span class="s2">for </span><span class="s1">param </span><span class="s2">in </span><span class="s1">_astroid_fields}</span>
+    <span class="s2">if </span><span class="s1">other_fields:</span>
+        <span class="s1">init_params.update({param: getattr(node, param) </span><span class="s2">for </span><span class="s1">param </span><span class="s2">in </span><span class="s1">other_fields})</span>
+    <span class="s1">new_node = cls(**init_params)</span>
+    <span class="s2">if </span><span class="s1">hasattr(node, </span><span class="s3">&quot;postinit&quot;</span><span class="s1">) </span><span class="s2">and </span><span class="s1">_astroid_fields:</span>
+        <span class="s1">new_node.postinit(**postinit_params)</span>
+    <span class="s2">return </span><span class="s1">new_node</span>
+
+
+<span class="s2">def </span><span class="s1">infer_random_sample(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s2">if </span><span class="s1">len(node.args) != </span><span class="s4">2</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">astroid.UseInferenceDefault</span>
+
+    <span class="s1">length = node.args[</span><span class="s4">1</span><span class="s1">]</span>
+    <span class="s2">if not </span><span class="s1">isinstance(length, astroid.Const):</span>
+        <span class="s2">raise </span><span class="s1">astroid.UseInferenceDefault</span>
+    <span class="s2">if not </span><span class="s1">isinstance(length.value, int):</span>
+        <span class="s2">raise </span><span class="s1">astroid.UseInferenceDefault</span>
+
+    <span class="s1">inferred_sequence = helpers.safe_infer(node.args[</span><span class="s4">0</span><span class="s1">], context=context)</span>
+    <span class="s2">if not </span><span class="s1">inferred_sequence:</span>
+        <span class="s2">raise </span><span class="s1">astroid.UseInferenceDefault</span>
+
+    <span class="s2">if not </span><span class="s1">isinstance(inferred_sequence, ACCEPTED_ITERABLES_FOR_SAMPLE):</span>
+        <span class="s2">raise </span><span class="s1">astroid.UseInferenceDefault</span>
+
+    <span class="s2">if </span><span class="s1">length.value &gt; len(inferred_sequence.elts):</span>
+        <span class="s0"># In this case, this will raise a ValueError</span>
+        <span class="s2">raise </span><span class="s1">astroid.UseInferenceDefault</span>
+
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">elts = random.sample(inferred_sequence.elts, length.value)</span>
+    <span class="s2">except </span><span class="s1">ValueError </span><span class="s2">as </span><span class="s1">exc:</span>
+        <span class="s2">raise </span><span class="s1">astroid.UseInferenceDefault </span><span class="s2">from </span><span class="s1">exc</span>
+
+    <span class="s1">new_node = astroid.List(</span>
+        <span class="s1">lineno=node.lineno, col_offset=node.col_offset, parent=node.scope()</span>
+    <span class="s1">)</span>
+    <span class="s1">new_elts = [</span>
+        <span class="s1">_clone_node_with_lineno(elt, parent=new_node, lineno=new_node.lineno)</span>
+        <span class="s2">for </span><span class="s1">elt </span><span class="s2">in </span><span class="s1">elts</span>
+    <span class="s1">]</span>
+    <span class="s1">new_node.postinit(new_elts)</span>
+    <span class="s2">return </span><span class="s1">iter((new_node,))</span>
+
+
+<span class="s2">def </span><span class="s1">_looks_like_random_sample(node):</span>
+    <span class="s1">func = node.func</span>
+    <span class="s2">if </span><span class="s1">isinstance(func, astroid.Attribute):</span>
+        <span class="s2">return </span><span class="s1">func.attrname == </span><span class="s3">&quot;sample&quot;</span>
+    <span class="s2">if </span><span class="s1">isinstance(func, astroid.Name):</span>
+        <span class="s2">return </span><span class="s1">func.name == </span><span class="s3">&quot;sample&quot;</span>
+    <span class="s2">return False</span>
+
+
+<span class="s1">MANAGER.register_transform(</span>
+    <span class="s1">astroid.Call, astroid.inference_tip(infer_random_sample), _looks_like_random_sample</span>
+<span class="s1">)</span>
+</pre>
+</body>
+</html>

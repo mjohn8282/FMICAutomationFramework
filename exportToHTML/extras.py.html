@@ -1,0 +1,80 @@
+<html>
+<head>
+<title>extras.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+.s3 { color: #c678dd;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+extras.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># This Source Code Form is subject to the terms of the Mozilla Public</span>
+<span class="s0"># License, v. 2.0. If a copy of the MPL was not distributed with this</span>
+<span class="s0"># file, You can obtain one at http://mozilla.org/MPL/2.0/.</span>
+
+<span class="s1">FORMAT_HTML = </span><span class="s2">&quot;html&quot;</span>
+<span class="s1">FORMAT_IMAGE = </span><span class="s2">&quot;image&quot;</span>
+<span class="s1">FORMAT_JSON = </span><span class="s2">&quot;json&quot;</span>
+<span class="s1">FORMAT_TEXT = </span><span class="s2">&quot;text&quot;</span>
+<span class="s1">FORMAT_URL = </span><span class="s2">&quot;url&quot;</span>
+<span class="s1">FORMAT_VIDEO = </span><span class="s2">&quot;video&quot;</span>
+
+
+<span class="s3">def </span><span class="s1">extra(content, format_type, name=</span><span class="s3">None</span><span class="s1">, mime_type=</span><span class="s3">None</span><span class="s1">, extension=</span><span class="s3">None</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="s1">: name,</span>
+        <span class="s2">&quot;format_type&quot;</span><span class="s1">: format_type,</span>
+        <span class="s2">&quot;content&quot;</span><span class="s1">: content,</span>
+        <span class="s2">&quot;mime_type&quot;</span><span class="s1">: mime_type,</span>
+        <span class="s2">&quot;extension&quot;</span><span class="s1">: extension,</span>
+    <span class="s1">}</span>
+
+
+<span class="s3">def </span><span class="s1">html(content):</span>
+    <span class="s3">return </span><span class="s1">extra(content, FORMAT_HTML)</span>
+
+
+<span class="s3">def </span><span class="s1">image(content, name=</span><span class="s2">&quot;Image&quot;</span><span class="s1">, mime_type=</span><span class="s2">&quot;image/png&quot;</span><span class="s1">, extension=</span><span class="s2">&quot;png&quot;</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">extra(content, FORMAT_IMAGE, name, mime_type, extension)</span>
+
+
+<span class="s3">def </span><span class="s1">png(content, name=</span><span class="s2">&quot;Image&quot;</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">image(content, name, mime_type=</span><span class="s2">&quot;image/png&quot;</span><span class="s1">, extension=</span><span class="s2">&quot;png&quot;</span><span class="s1">)</span>
+
+
+<span class="s3">def </span><span class="s1">jpg(content, name=</span><span class="s2">&quot;Image&quot;</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">image(content, name, mime_type=</span><span class="s2">&quot;image/jpeg&quot;</span><span class="s1">, extension=</span><span class="s2">&quot;jpg&quot;</span><span class="s1">)</span>
+
+
+<span class="s3">def </span><span class="s1">svg(content, name=</span><span class="s2">&quot;Image&quot;</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">image(content, name, mime_type=</span><span class="s2">&quot;image/svg+xml&quot;</span><span class="s1">, extension=</span><span class="s2">&quot;svg&quot;</span><span class="s1">)</span>
+
+
+<span class="s3">def </span><span class="s1">json(content, name=</span><span class="s2">&quot;JSON&quot;</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">extra(content, FORMAT_JSON, name, </span><span class="s2">&quot;application/json&quot;</span><span class="s1">, </span><span class="s2">&quot;json&quot;</span><span class="s1">)</span>
+
+
+<span class="s3">def </span><span class="s1">text(content, name=</span><span class="s2">&quot;Text&quot;</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">extra(content, FORMAT_TEXT, name, </span><span class="s2">&quot;text/plain&quot;</span><span class="s1">, </span><span class="s2">&quot;txt&quot;</span><span class="s1">)</span>
+
+
+<span class="s3">def </span><span class="s1">url(content, name=</span><span class="s2">&quot;URL&quot;</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">extra(content, FORMAT_URL, name)</span>
+
+
+<span class="s3">def </span><span class="s1">video(content, name=</span><span class="s2">&quot;Video&quot;</span><span class="s1">, mime_type=</span><span class="s2">&quot;video/mp4&quot;</span><span class="s1">, extension=</span><span class="s2">&quot;mp4&quot;</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">extra(content, FORMAT_VIDEO, name, mime_type, extension)</span>
+
+
+<span class="s3">def </span><span class="s1">mp4(content, name=</span><span class="s2">&quot;Video&quot;</span><span class="s1">):</span>
+    <span class="s3">return </span><span class="s1">video(content, name)</span>
+</pre>
+</body>
+</html>

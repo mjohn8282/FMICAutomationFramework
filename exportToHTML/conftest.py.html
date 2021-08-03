@@ -1,0 +1,82 @@
+<html>
+<head>
+<title>conftest.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+conftest.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s2">import </span><span class="s1">pytest</span>
+
+<span class="s0"># Global objects under tests</span>
+
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">Workbook():</span>
+    <span class="s0">&quot;&quot;&quot;Workbook Class&quot;&quot;&quot;</span>
+    <span class="s2">from </span><span class="s1">openpyexcel </span><span class="s2">import </span><span class="s1">Workbook</span>
+    <span class="s2">return </span><span class="s1">Workbook</span>
+
+
+<span class="s1">@pytest.fixture</span>
+<span class="s2">def </span><span class="s1">Worksheet():</span>
+    <span class="s0">&quot;&quot;&quot;Worksheet Class&quot;&quot;&quot;</span>
+    <span class="s2">from </span><span class="s1">openpyexcel.worksheet </span><span class="s2">import </span><span class="s1">Worksheet</span>
+    <span class="s2">return </span><span class="s1">Worksheet</span>
+
+
+<span class="s0"># Global fixtures</span>
+
+
+<span class="s0">### Markers ###</span>
+
+<span class="s2">def </span><span class="s1">pytest_runtest_setup(item):</span>
+    <span class="s2">if </span><span class="s1">isinstance(item, pytest.Function):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">from </span><span class="s1">PIL </span><span class="s2">import </span><span class="s1">Image</span>
+        <span class="s2">except </span><span class="s1">ImportError:</span>
+            <span class="s1">Image = </span><span class="s2">False</span>
+        <span class="s2">if </span><span class="s1">item.get_closest_marker(</span><span class="s3">&quot;pil_required&quot;</span><span class="s1">) </span><span class="s2">and </span><span class="s1">Image </span><span class="s2">is False</span><span class="s1">:</span>
+            <span class="s1">pytest.skip(</span><span class="s3">&quot;PIL must be installed&quot;</span><span class="s1">)</span>
+        <span class="s2">elif </span><span class="s1">item.get_closest_marker(</span><span class="s3">&quot;pil_not_installed&quot;</span><span class="s1">) </span><span class="s2">and </span><span class="s1">Image:</span>
+            <span class="s1">pytest.skip(</span><span class="s3">&quot;PIL is installed&quot;</span><span class="s1">)</span>
+        <span class="s2">elif </span><span class="s1">item.get_closest_marker(</span><span class="s3">&quot;not_py33&quot;</span><span class="s1">):</span>
+            <span class="s1">pytest.skip(</span><span class="s3">&quot;Ordering is not a given in Python 3&quot;</span><span class="s1">)</span>
+        <span class="s2">elif </span><span class="s1">item.get_closest_marker(</span><span class="s3">&quot;defusedxml_required&quot;</span><span class="s1">):</span>
+            <span class="s2">from </span><span class="s1">openpyexcel </span><span class="s2">import </span><span class="s1">DEFUSEDXML</span>
+            <span class="s2">if not </span><span class="s1">DEFUSEDXML:</span>
+                <span class="s1">pytest.skip(</span><span class="s3">&quot;defusedxml is required to guard against these vulnerabilities&quot;</span><span class="s1">)</span>
+        <span class="s2">elif </span><span class="s1">item.get_closest_marker(</span><span class="s3">&quot;lxml_required&quot;</span><span class="s1">):</span>
+            <span class="s2">from </span><span class="s1">openpyexcel </span><span class="s2">import </span><span class="s1">LXML</span>
+            <span class="s2">if not </span><span class="s1">LXML:</span>
+                <span class="s1">pytest.skip(</span><span class="s3">&quot;LXML is required for some features such as schema validation&quot;</span><span class="s1">)</span>
+        <span class="s2">elif </span><span class="s1">item.get_closest_marker(</span><span class="s3">&quot;lxml_buffering&quot;</span><span class="s1">):</span>
+            <span class="s2">from </span><span class="s1">lxml.etree </span><span class="s2">import </span><span class="s1">LIBXML_VERSION</span>
+            <span class="s2">if </span><span class="s1">LIBXML_VERSION &lt; (</span><span class="s4">3</span><span class="s1">, </span><span class="s4">4</span><span class="s1">, </span><span class="s4">0</span><span class="s1">, </span><span class="s4">0</span><span class="s1">):</span>
+                <span class="s1">pytest.skip(</span><span class="s3">&quot;LXML &gt;= 3.4 is required&quot;</span><span class="s1">)</span>
+        <span class="s2">elif </span><span class="s1">item.get_closest_marker(</span><span class="s3">&quot;no_lxml&quot;</span><span class="s1">):</span>
+            <span class="s2">from </span><span class="s1">openpyexcel </span><span class="s2">import </span><span class="s1">LXML</span>
+            <span class="s2">if </span><span class="s1">LXML:</span>
+                <span class="s1">pytest.skip(</span><span class="s3">&quot;LXML has a different interface&quot;</span><span class="s1">)</span>
+        <span class="s2">elif </span><span class="s1">item.get_closest_marker(</span><span class="s3">&quot;numpy_required&quot;</span><span class="s1">):</span>
+            <span class="s2">from </span><span class="s1">openpyexcel </span><span class="s2">import </span><span class="s1">NUMPY</span>
+            <span class="s2">if not </span><span class="s1">NUMPY:</span>
+                <span class="s1">pytest.skip(</span><span class="s3">&quot;Numpy must be installed&quot;</span><span class="s1">)</span>
+        <span class="s2">elif </span><span class="s1">item.get_closest_marker(</span><span class="s3">&quot;pandas_required&quot;</span><span class="s1">):</span>
+            <span class="s2">from </span><span class="s1">openpyexcel </span><span class="s2">import </span><span class="s1">PANDAS</span>
+            <span class="s2">if not </span><span class="s1">PANDAS:</span>
+                <span class="s1">pytest.skip(</span><span class="s3">&quot;Pandas must be installed&quot;</span><span class="s1">)</span>
+</pre>
+</body>
+</html>

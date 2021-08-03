@@ -1,0 +1,167 @@
+<html>
+<head>
+<title>release.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+release.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># -*- coding: utf-8 -*-</span>
+
+<span class="s0"># (The MIT License)</span>
+<span class="s0">#</span>
+<span class="s0"># Copyright (c) 2014 Kura</span>
+<span class="s0">#</span>
+<span class="s0"># Permission is hereby granted, free of charge, to any person obtaining a copy</span>
+<span class="s0"># of this software and associated documentation files (the 'Software'), to deal</span>
+<span class="s0"># in the Software without restriction, including without limitation the rights</span>
+<span class="s0"># to use, copy, modify, merge, publish, distribute, sublicense, and/or sell</span>
+<span class="s0"># copies of the Software, and to permit persons to whom the Software is</span>
+<span class="s0"># furnished to do so, subject to the following conditions:</span>
+<span class="s0">#</span>
+<span class="s0"># The above copyright notice and this permission notice shall be included in</span>
+<span class="s0"># all copies or substantial portions of the Software.</span>
+<span class="s0">#</span>
+<span class="s0"># THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR</span>
+<span class="s0"># IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,</span>
+<span class="s0"># FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE</span>
+<span class="s0"># AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER</span>
+<span class="s0"># LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,</span>
+<span class="s0"># OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE</span>
+<span class="s0"># SOFTWARE.</span>
+
+
+<span class="s2">from </span><span class="s1">datetime </span><span class="s2">import </span><span class="s1">datetime</span>
+
+
+<span class="s2">class </span><span class="s1">Release(object):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    A release file from PyPI. 
+ 
+    :param release_id: A release id. 
+    :param pypi_dict: A dictionary of a release file. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, release_id, pypi_dict):</span>
+        <span class="s1">self._release = pypi_dict</span>
+        <span class="s1">self._release[</span><span class="s3">'release_id'</span><span class="s1">] = release_id</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;&lt;Release {0}&gt;&quot;</span><span class="s1">.format(self.release_id)</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">release_id(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; v = &quot;0.1.0&quot; 
+            &gt;&gt;&gt; r = package.release(v) 
+            &gt;&gt;&gt; r[0].release_id 
+            u'0.1.0' 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._release[</span><span class="s3">'release_id'</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">uploaded(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; v = &quot;0.1.0&quot; 
+            &gt;&gt;&gt; r = package.release(v) 
+            &gt;&gt;&gt; r.uploaded 
+            datetime.datime(2014, 8, 7, 21, 26, 19) 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">datetime.strptime(self._release[</span><span class="s3">'upload_time'</span><span class="s1">],</span>
+                                 <span class="s3">'%Y-%m-%dT%H:%M:%S'</span><span class="s1">)</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">python_version(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; v = &quot;0.1.0&quot; 
+            &gt;&gt;&gt; r = package.release(v) 
+            &gt;&gt;&gt; r.python_version 
+            u'2.7' 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._release[</span><span class="s3">'python_version'</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">url(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; v = &quot;0.1.0&quot; 
+            &gt;&gt;&gt; r = package.release(v) 
+            &gt;&gt;&gt; r.url 
+            u'https://pypi.python.org/packages/2.7/y/yarg/yarg...' 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._release[</span><span class="s3">'url'</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">md5_digest(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; v = &quot;0.1.0&quot; 
+            &gt;&gt;&gt; r = package.release(v) 
+            &gt;&gt;&gt; r.md5_digest 
+            u'bec88e1c1765ca6177360e8f37b44c5c' 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._release[</span><span class="s3">'md5_digest'</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">filename(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; v = &quot;0.1.0&quot; 
+            &gt;&gt;&gt; r = package.release(v) 
+            &gt;&gt;&gt; r.filename 
+            u'yarg-0.1.0-py27-none-any.whl' 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._release[</span><span class="s3">'filename'</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">size(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; v = &quot;0.1.0&quot; 
+            &gt;&gt;&gt; r = package.release(v) 
+            &gt;&gt;&gt; r.size 
+            52941 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._release[</span><span class="s3">'size'</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">package_type(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; v = &quot;0.1.0&quot; 
+            &gt;&gt;&gt; r = package.release(v) 
+            &gt;&gt;&gt; r.package_type 
+            u'wheel' 
+        &quot;&quot;&quot;</span>
+        <span class="s1">mapping = {</span><span class="s3">'bdist_egg'</span><span class="s1">: </span><span class="s3">u'egg'</span><span class="s1">, </span><span class="s3">'bdist_wheel'</span><span class="s1">: </span><span class="s3">u'wheel'</span><span class="s1">,</span>
+                   <span class="s3">'sdist'</span><span class="s1">: </span><span class="s3">u'source'</span><span class="s1">}</span>
+        <span class="s1">ptype = self._release[</span><span class="s3">'packagetype'</span><span class="s1">]</span>
+        <span class="s2">if </span><span class="s1">ptype </span><span class="s2">in </span><span class="s1">mapping.keys():</span>
+            <span class="s2">return </span><span class="s1">mapping[ptype]</span>
+        <span class="s2">return </span><span class="s1">ptype</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">has_sig(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; v = &quot;0.1.0&quot; 
+            &gt;&gt;&gt; r = package.release(v) 
+            &gt;&gt;&gt; r.has_sig 
+            True 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._release[</span><span class="s3">'has_sig'</span><span class="s1">]</span>
+</pre>
+</body>
+</html>

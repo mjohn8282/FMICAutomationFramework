@@ -1,0 +1,800 @@
+<html>
+<head>
+<title>settings.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+settings.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot;isort/settings.py. 
+ 
+Defines how the default settings for isort should be loaded 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">configparser</span>
+<span class="s2">import </span><span class="s1">fnmatch</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">posixpath</span>
+<span class="s2">import </span><span class="s1">re</span>
+<span class="s2">import </span><span class="s1">stat</span>
+<span class="s2">import </span><span class="s1">subprocess  </span><span class="s0"># nosec: Needed for gitignore support.</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">from </span><span class="s1">functools </span><span class="s2">import </span><span class="s1">lru_cache</span>
+<span class="s2">from </span><span class="s1">pathlib </span><span class="s2">import </span><span class="s1">Path</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Any, Callable, Dict, FrozenSet, Iterable, List, Optional, Pattern, Set, Tuple</span>
+<span class="s2">from </span><span class="s1">warnings </span><span class="s2">import </span><span class="s1">warn</span>
+
+<span class="s2">from </span><span class="s1">. </span><span class="s2">import </span><span class="s1">stdlibs</span>
+<span class="s2">from </span><span class="s1">._future </span><span class="s2">import </span><span class="s1">dataclass, field</span>
+<span class="s2">from </span><span class="s1">._vendored </span><span class="s2">import </span><span class="s1">toml</span>
+<span class="s2">from </span><span class="s1">.exceptions </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">FormattingPluginDoesNotExist,</span>
+    <span class="s1">InvalidSettingsPath,</span>
+    <span class="s1">ProfileDoesNotExist,</span>
+    <span class="s1">UnsupportedSettings,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">.profiles </span><span class="s2">import </span><span class="s1">profiles</span>
+<span class="s2">from </span><span class="s1">.sections </span><span class="s2">import </span><span class="s1">DEFAULT </span><span class="s2">as </span><span class="s1">SECTION_DEFAULTS</span>
+<span class="s2">from </span><span class="s1">.sections </span><span class="s2">import </span><span class="s1">FIRSTPARTY, FUTURE, LOCALFOLDER, STDLIB, THIRDPARTY</span>
+<span class="s2">from </span><span class="s1">.wrap_modes </span><span class="s2">import </span><span class="s1">WrapModes</span>
+<span class="s2">from </span><span class="s1">.wrap_modes </span><span class="s2">import </span><span class="s1">from_string </span><span class="s2">as </span><span class="s1">wrap_mode_from_string</span>
+
+<span class="s1">_SHEBANG_RE = re.compile(</span><span class="s3">br&quot;^#!.*\bpython[23w]?\b&quot;</span><span class="s1">)</span>
+<span class="s1">SUPPORTED_EXTENSIONS = frozenset({</span><span class="s3">&quot;py&quot;</span><span class="s1">, </span><span class="s3">&quot;pyi&quot;</span><span class="s1">, </span><span class="s3">&quot;pyx&quot;</span><span class="s1">, </span><span class="s3">&quot;pxd&quot;</span><span class="s1">})</span>
+<span class="s1">BLOCKED_EXTENSIONS = frozenset({</span><span class="s3">&quot;pex&quot;</span><span class="s1">})</span>
+<span class="s1">FILE_SKIP_COMMENTS: Tuple[str, ...] = (</span>
+    <span class="s3">&quot;isort:&quot; </span><span class="s1">+ </span><span class="s3">&quot;skip_file&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;isort: &quot; </span><span class="s1">+ </span><span class="s3">&quot;skip_file&quot;</span><span class="s1">,</span>
+<span class="s1">)  </span><span class="s0"># Concatenated to avoid this file being skipped</span>
+<span class="s1">MAX_CONFIG_SEARCH_DEPTH: int = </span><span class="s4">25  </span><span class="s0"># The number of parent directories to for a config file within</span>
+<span class="s1">STOP_CONFIG_SEARCH_ON_DIRS: Tuple[str, ...] = (</span><span class="s3">&quot;.git&quot;</span><span class="s1">, </span><span class="s3">&quot;.hg&quot;</span><span class="s1">)</span>
+<span class="s1">VALID_PY_TARGETS: Tuple[str, ...] = tuple(</span>
+    <span class="s1">target.replace(</span><span class="s3">&quot;py&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">) </span><span class="s2">for </span><span class="s1">target </span><span class="s2">in </span><span class="s1">dir(stdlibs) </span><span class="s2">if not </span><span class="s1">target.startswith(</span><span class="s3">&quot;_&quot;</span><span class="s1">)</span>
+<span class="s1">)</span>
+<span class="s1">CONFIG_SOURCES: Tuple[str, ...] = (</span>
+    <span class="s3">&quot;.isort.cfg&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;pyproject.toml&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;setup.cfg&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;tox.ini&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;.editorconfig&quot;</span><span class="s1">,</span>
+<span class="s1">)</span>
+<span class="s1">DEFAULT_SKIP: FrozenSet[str] = frozenset(</span>
+    <span class="s1">{</span>
+        <span class="s3">&quot;.venv&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;venv&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;.tox&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;.eggs&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;.git&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;.hg&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;.mypy_cache&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;.nox&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;.svn&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;.bzr&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;_build&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;buck-out&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;build&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;dist&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;.pants.d&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;.direnv&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;node_modules&quot;</span><span class="s1">,</span>
+    <span class="s1">}</span>
+<span class="s1">)</span>
+
+<span class="s1">CONFIG_SECTIONS: Dict[str, Tuple[str, ...]] = {</span>
+    <span class="s3">&quot;.isort.cfg&quot;</span><span class="s1">: (</span><span class="s3">&quot;settings&quot;</span><span class="s1">, </span><span class="s3">&quot;isort&quot;</span><span class="s1">),</span>
+    <span class="s3">&quot;pyproject.toml&quot;</span><span class="s1">: (</span><span class="s3">&quot;tool.isort&quot;</span><span class="s1">,),</span>
+    <span class="s3">&quot;setup.cfg&quot;</span><span class="s1">: (</span><span class="s3">&quot;isort&quot;</span><span class="s1">, </span><span class="s3">&quot;tool:isort&quot;</span><span class="s1">),</span>
+    <span class="s3">&quot;tox.ini&quot;</span><span class="s1">: (</span><span class="s3">&quot;isort&quot;</span><span class="s1">, </span><span class="s3">&quot;tool:isort&quot;</span><span class="s1">),</span>
+    <span class="s3">&quot;.editorconfig&quot;</span><span class="s1">: (</span><span class="s3">&quot;*&quot;</span><span class="s1">, </span><span class="s3">&quot;*.py&quot;</span><span class="s1">, </span><span class="s3">&quot;**.py&quot;</span><span class="s1">, </span><span class="s3">&quot;*.{py}&quot;</span><span class="s1">),</span>
+<span class="s1">}</span>
+<span class="s1">FALLBACK_CONFIG_SECTIONS: Tuple[str, ...] = (</span><span class="s3">&quot;isort&quot;</span><span class="s1">, </span><span class="s3">&quot;tool:isort&quot;</span><span class="s1">, </span><span class="s3">&quot;tool.isort&quot;</span><span class="s1">)</span>
+
+<span class="s1">IMPORT_HEADING_PREFIX = </span><span class="s3">&quot;import_heading_&quot;</span>
+<span class="s1">KNOWN_PREFIX = </span><span class="s3">&quot;known_&quot;</span>
+<span class="s1">KNOWN_SECTION_MAPPING: Dict[str, str] = {</span>
+    <span class="s1">STDLIB: </span><span class="s3">&quot;STANDARD_LIBRARY&quot;</span><span class="s1">,</span>
+    <span class="s1">FUTURE: </span><span class="s3">&quot;FUTURE_LIBRARY&quot;</span><span class="s1">,</span>
+    <span class="s1">FIRSTPARTY: </span><span class="s3">&quot;FIRST_PARTY&quot;</span><span class="s1">,</span>
+    <span class="s1">THIRDPARTY: </span><span class="s3">&quot;THIRD_PARTY&quot;</span><span class="s1">,</span>
+    <span class="s1">LOCALFOLDER: </span><span class="s3">&quot;LOCAL_FOLDER&quot;</span><span class="s1">,</span>
+<span class="s1">}</span>
+
+<span class="s1">RUNTIME_SOURCE = </span><span class="s3">&quot;runtime&quot;</span>
+
+<span class="s1">DEPRECATED_SETTINGS = (</span><span class="s3">&quot;not_skip&quot;</span><span class="s1">, </span><span class="s3">&quot;keep_direct_and_as_imports&quot;</span><span class="s1">)</span>
+
+<span class="s1">_STR_BOOLEAN_MAPPING = {</span>
+    <span class="s3">&quot;y&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s3">&quot;yes&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s3">&quot;t&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s3">&quot;on&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s3">&quot;1&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s3">&quot;true&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s3">&quot;n&quot;</span><span class="s1">: </span><span class="s2">False</span><span class="s1">,</span>
+    <span class="s3">&quot;no&quot;</span><span class="s1">: </span><span class="s2">False</span><span class="s1">,</span>
+    <span class="s3">&quot;f&quot;</span><span class="s1">: </span><span class="s2">False</span><span class="s1">,</span>
+    <span class="s3">&quot;off&quot;</span><span class="s1">: </span><span class="s2">False</span><span class="s1">,</span>
+    <span class="s3">&quot;0&quot;</span><span class="s1">: </span><span class="s2">False</span><span class="s1">,</span>
+    <span class="s3">&quot;false&quot;</span><span class="s1">: </span><span class="s2">False</span><span class="s1">,</span>
+<span class="s1">}</span>
+
+
+<span class="s1">@dataclass(frozen=</span><span class="s2">True</span><span class="s1">)</span>
+<span class="s2">class </span><span class="s1">_Config:</span>
+    <span class="s0">&quot;&quot;&quot;Defines the data schema and defaults used for isort configuration. 
+ 
+    NOTE: known lists, such as known_standard_library, are intentionally not complete as they are 
+    dynamically determined later on. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">py_version: str = </span><span class="s3">&quot;3&quot;</span>
+    <span class="s1">force_to_top: FrozenSet[str] = frozenset()</span>
+    <span class="s1">skip: FrozenSet[str] = DEFAULT_SKIP</span>
+    <span class="s1">extend_skip: FrozenSet[str] = frozenset()</span>
+    <span class="s1">skip_glob: FrozenSet[str] = frozenset()</span>
+    <span class="s1">extend_skip_glob: FrozenSet[str] = frozenset()</span>
+    <span class="s1">skip_gitignore: bool = </span><span class="s2">False</span>
+    <span class="s1">line_length: int = </span><span class="s4">79</span>
+    <span class="s1">wrap_length: int = </span><span class="s4">0</span>
+    <span class="s1">line_ending: str = </span><span class="s3">&quot;&quot;</span>
+    <span class="s1">sections: Tuple[str, ...] = SECTION_DEFAULTS</span>
+    <span class="s1">no_sections: bool = </span><span class="s2">False</span>
+    <span class="s1">known_future_library: FrozenSet[str] = frozenset((</span><span class="s3">&quot;__future__&quot;</span><span class="s1">,))</span>
+    <span class="s1">known_third_party: FrozenSet[str] = frozenset()</span>
+    <span class="s1">known_first_party: FrozenSet[str] = frozenset()</span>
+    <span class="s1">known_local_folder: FrozenSet[str] = frozenset()</span>
+    <span class="s1">known_standard_library: FrozenSet[str] = frozenset()</span>
+    <span class="s1">extra_standard_library: FrozenSet[str] = frozenset()</span>
+    <span class="s1">known_other: Dict[str, FrozenSet[str]] = field(default_factory=dict)</span>
+    <span class="s1">multi_line_output: WrapModes = WrapModes.GRID  </span><span class="s0"># type: ignore</span>
+    <span class="s1">forced_separate: Tuple[str, ...] = ()</span>
+    <span class="s1">indent: str = </span><span class="s3">&quot; &quot; </span><span class="s1">* </span><span class="s4">4</span>
+    <span class="s1">comment_prefix: str = </span><span class="s3">&quot;  #&quot;</span>
+    <span class="s1">length_sort: bool = </span><span class="s2">False</span>
+    <span class="s1">length_sort_straight: bool = </span><span class="s2">False</span>
+    <span class="s1">length_sort_sections: FrozenSet[str] = frozenset()</span>
+    <span class="s1">add_imports: FrozenSet[str] = frozenset()</span>
+    <span class="s1">remove_imports: FrozenSet[str] = frozenset()</span>
+    <span class="s1">append_only: bool = </span><span class="s2">False</span>
+    <span class="s1">reverse_relative: bool = </span><span class="s2">False</span>
+    <span class="s1">force_single_line: bool = </span><span class="s2">False</span>
+    <span class="s1">single_line_exclusions: Tuple[str, ...] = ()</span>
+    <span class="s1">default_section: str = THIRDPARTY</span>
+    <span class="s1">import_headings: Dict[str, str] = field(default_factory=dict)</span>
+    <span class="s1">balanced_wrapping: bool = </span><span class="s2">False</span>
+    <span class="s1">use_parentheses: bool = </span><span class="s2">False</span>
+    <span class="s1">order_by_type: bool = </span><span class="s2">True</span>
+    <span class="s1">atomic: bool = </span><span class="s2">False</span>
+    <span class="s1">lines_after_imports: int = -</span><span class="s4">1</span>
+    <span class="s1">lines_between_sections: int = </span><span class="s4">1</span>
+    <span class="s1">lines_between_types: int = </span><span class="s4">0</span>
+    <span class="s1">combine_as_imports: bool = </span><span class="s2">False</span>
+    <span class="s1">combine_star: bool = </span><span class="s2">False</span>
+    <span class="s1">include_trailing_comma: bool = </span><span class="s2">False</span>
+    <span class="s1">from_first: bool = </span><span class="s2">False</span>
+    <span class="s1">verbose: bool = </span><span class="s2">False</span>
+    <span class="s1">quiet: bool = </span><span class="s2">False</span>
+    <span class="s1">force_adds: bool = </span><span class="s2">False</span>
+    <span class="s1">force_alphabetical_sort_within_sections: bool = </span><span class="s2">False</span>
+    <span class="s1">force_alphabetical_sort: bool = </span><span class="s2">False</span>
+    <span class="s1">force_grid_wrap: int = </span><span class="s4">0</span>
+    <span class="s1">force_sort_within_sections: bool = </span><span class="s2">False</span>
+    <span class="s1">lexicographical: bool = </span><span class="s2">False</span>
+    <span class="s1">group_by_package: bool = </span><span class="s2">False</span>
+    <span class="s1">ignore_whitespace: bool = </span><span class="s2">False</span>
+    <span class="s1">no_lines_before: FrozenSet[str] = frozenset()</span>
+    <span class="s1">no_inline_sort: bool = </span><span class="s2">False</span>
+    <span class="s1">ignore_comments: bool = </span><span class="s2">False</span>
+    <span class="s1">case_sensitive: bool = </span><span class="s2">False</span>
+    <span class="s1">sources: Tuple[Dict[str, Any], ...] = ()</span>
+    <span class="s1">virtual_env: str = </span><span class="s3">&quot;&quot;</span>
+    <span class="s1">conda_env: str = </span><span class="s3">&quot;&quot;</span>
+    <span class="s1">ensure_newline_before_comments: bool = </span><span class="s2">False</span>
+    <span class="s1">directory: str = </span><span class="s3">&quot;&quot;</span>
+    <span class="s1">profile: str = </span><span class="s3">&quot;&quot;</span>
+    <span class="s1">honor_noqa: bool = </span><span class="s2">False</span>
+    <span class="s1">src_paths: Tuple[Path, ...] = ()</span>
+    <span class="s1">old_finders: bool = </span><span class="s2">False</span>
+    <span class="s1">remove_redundant_aliases: bool = </span><span class="s2">False</span>
+    <span class="s1">float_to_top: bool = </span><span class="s2">False</span>
+    <span class="s1">filter_files: bool = </span><span class="s2">False</span>
+    <span class="s1">formatter: str = </span><span class="s3">&quot;&quot;</span>
+    <span class="s1">formatting_function: Optional[Callable[[str, str, object], str]] = </span><span class="s2">None</span>
+    <span class="s1">color_output: bool = </span><span class="s2">False</span>
+    <span class="s1">treat_comments_as_code: FrozenSet[str] = frozenset()</span>
+    <span class="s1">treat_all_comments_as_code: bool = </span><span class="s2">False</span>
+    <span class="s1">supported_extensions: FrozenSet[str] = SUPPORTED_EXTENSIONS</span>
+    <span class="s1">blocked_extensions: FrozenSet[str] = BLOCKED_EXTENSIONS</span>
+    <span class="s1">constants: FrozenSet[str] = frozenset()</span>
+    <span class="s1">classes: FrozenSet[str] = frozenset()</span>
+    <span class="s1">variables: FrozenSet[str] = frozenset()</span>
+    <span class="s1">dedup_headings: bool = </span><span class="s2">False</span>
+    <span class="s1">only_sections: bool = </span><span class="s2">False</span>
+    <span class="s1">only_modified: bool = </span><span class="s2">False</span>
+    <span class="s1">combine_straight_imports: bool = </span><span class="s2">False</span>
+    <span class="s1">auto_identify_namespace_packages: bool = </span><span class="s2">True</span>
+    <span class="s1">namespace_packages: FrozenSet[str] = frozenset()</span>
+    <span class="s1">follow_links: bool = </span><span class="s2">True</span>
+    <span class="s1">indented_import_headings: bool = </span><span class="s2">True</span>
+    <span class="s1">honor_case_in_force_sorted_sections: bool = </span><span class="s2">False</span>
+    <span class="s1">sort_relative_in_force_sorted_sections: bool = </span><span class="s2">False</span>
+    <span class="s1">overwrite_in_place: bool = </span><span class="s2">False</span>
+    <span class="s1">reverse_sort: bool = </span><span class="s2">False</span>
+    <span class="s1">star_first: bool = </span><span class="s2">False</span>
+    <span class="s1">import_dependencies = Dict[str, str]</span>
+
+    <span class="s2">def </span><span class="s1">__post_init__(self):</span>
+        <span class="s1">py_version = self.py_version</span>
+        <span class="s2">if </span><span class="s1">py_version == </span><span class="s3">&quot;auto&quot;</span><span class="s1">:  </span><span class="s0"># pragma: no cover</span>
+            <span class="s2">if </span><span class="s1">sys.version_info.major == </span><span class="s4">2 </span><span class="s2">and </span><span class="s1">sys.version_info.minor &lt;= </span><span class="s4">6</span><span class="s1">:</span>
+                <span class="s1">py_version = </span><span class="s3">&quot;2&quot;</span>
+            <span class="s2">elif </span><span class="s1">sys.version_info.major == </span><span class="s4">3 </span><span class="s2">and </span><span class="s1">(</span>
+                <span class="s1">sys.version_info.minor &lt;= </span><span class="s4">5 </span><span class="s2">or </span><span class="s1">sys.version_info.minor &gt;= </span><span class="s4">9</span>
+            <span class="s1">):</span>
+                <span class="s1">py_version = </span><span class="s3">&quot;3&quot;</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">py_version = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">sys.version_info.major</span><span class="s5">}{</span><span class="s1">sys.version_info.minor</span><span class="s5">}</span><span class="s3">&quot;</span>
+
+        <span class="s2">if </span><span class="s1">py_version </span><span class="s2">not in </span><span class="s1">VALID_PY_TARGETS:</span>
+            <span class="s2">raise </span><span class="s1">ValueError(</span>
+                <span class="s3">f&quot;The python version </span><span class="s5">{</span><span class="s1">py_version</span><span class="s5">} </span><span class="s3">is not supported. &quot;</span>
+                <span class="s3">&quot;You can set a python version with the -py or --python-version flag. &quot;</span>
+                <span class="s3">f&quot;The following versions are supported: </span><span class="s5">{</span><span class="s1">VALID_PY_TARGETS</span><span class="s5">}</span><span class="s3">&quot;</span>
+            <span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">py_version != </span><span class="s3">&quot;all&quot;</span><span class="s1">:</span>
+            <span class="s1">object.__setattr__(self, </span><span class="s3">&quot;py_version&quot;</span><span class="s1">, </span><span class="s3">f&quot;py</span><span class="s5">{</span><span class="s1">py_version</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">)</span>
+
+        <span class="s2">if not </span><span class="s1">self.known_standard_library:</span>
+            <span class="s1">object.__setattr__(</span>
+                <span class="s1">self, </span><span class="s3">&quot;known_standard_library&quot;</span><span class="s1">, frozenset(getattr(stdlibs, self.py_version).stdlib)</span>
+            <span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">self.multi_line_output == WrapModes.VERTICAL_GRID_GROUPED_NO_COMMA:  </span><span class="s0"># type: ignore</span>
+            <span class="s1">vertical_grid_grouped = WrapModes.VERTICAL_GRID_GROUPED  </span><span class="s0"># type: ignore</span>
+            <span class="s1">object.__setattr__(self, </span><span class="s3">&quot;multi_line_output&quot;</span><span class="s1">, vertical_grid_grouped)</span>
+        <span class="s2">if </span><span class="s1">self.force_alphabetical_sort:</span>
+            <span class="s1">object.__setattr__(self, </span><span class="s3">&quot;force_alphabetical_sort_within_sections&quot;</span><span class="s1">, </span><span class="s2">True</span><span class="s1">)</span>
+            <span class="s1">object.__setattr__(self, </span><span class="s3">&quot;no_sections&quot;</span><span class="s1">, </span><span class="s2">True</span><span class="s1">)</span>
+            <span class="s1">object.__setattr__(self, </span><span class="s3">&quot;lines_between_types&quot;</span><span class="s1">, </span><span class="s4">1</span><span class="s1">)</span>
+            <span class="s1">object.__setattr__(self, </span><span class="s3">&quot;from_first&quot;</span><span class="s1">, </span><span class="s2">True</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">self.wrap_length &gt; self.line_length:</span>
+            <span class="s2">raise </span><span class="s1">ValueError(</span>
+                <span class="s3">&quot;wrap_length must be set lower than or equal to line_length: &quot;</span>
+                <span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">self.wrap_length</span><span class="s5">} </span><span class="s3">&gt; </span><span class="s5">{</span><span class="s1">self.line_length</span><span class="s5">}</span><span class="s3">.&quot;</span>
+            <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__hash__(self):</span>
+        <span class="s2">return </span><span class="s1">id(self)</span>
+
+
+<span class="s1">_DEFAULT_SETTINGS = {**vars(_Config()), </span><span class="s3">&quot;source&quot;</span><span class="s1">: </span><span class="s3">&quot;defaults&quot;</span><span class="s1">}</span>
+
+
+<span class="s2">class </span><span class="s1">Config(_Config):</span>
+    <span class="s2">def </span><span class="s1">__init__(</span>
+        <span class="s1">self,</span>
+        <span class="s1">settings_file: str = </span><span class="s3">&quot;&quot;</span><span class="s1">,</span>
+        <span class="s1">settings_path: str = </span><span class="s3">&quot;&quot;</span><span class="s1">,</span>
+        <span class="s1">config: Optional[_Config] = </span><span class="s2">None</span><span class="s1">,</span>
+        <span class="s1">**config_overrides,</span>
+    <span class="s1">):</span>
+        <span class="s1">self._known_patterns: Optional[List[Tuple[Pattern[str], str]]] = </span><span class="s2">None</span>
+        <span class="s1">self._section_comments: Optional[Tuple[str, ...]] = </span><span class="s2">None</span>
+        <span class="s1">self._skips: Optional[FrozenSet[str]] = </span><span class="s2">None</span>
+        <span class="s1">self._skip_globs: Optional[FrozenSet[str]] = </span><span class="s2">None</span>
+
+        <span class="s2">if </span><span class="s1">config:</span>
+            <span class="s1">config_vars = vars(config).copy()</span>
+            <span class="s1">config_vars.update(config_overrides)</span>
+            <span class="s1">config_vars[</span><span class="s3">&quot;py_version&quot;</span><span class="s1">] = config_vars[</span><span class="s3">&quot;py_version&quot;</span><span class="s1">].replace(</span><span class="s3">&quot;py&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+            <span class="s1">config_vars.pop(</span><span class="s3">&quot;_known_patterns&quot;</span><span class="s1">)</span>
+            <span class="s1">config_vars.pop(</span><span class="s3">&quot;_section_comments&quot;</span><span class="s1">)</span>
+            <span class="s1">config_vars.pop(</span><span class="s3">&quot;_skips&quot;</span><span class="s1">)</span>
+            <span class="s1">config_vars.pop(</span><span class="s3">&quot;_skip_globs&quot;</span><span class="s1">)</span>
+            <span class="s1">super().__init__(**config_vars)  </span><span class="s0"># type: ignore</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># We can't use self.quiet to conditionally show warnings before super.__init__() is called</span>
+        <span class="s0"># at the end of this method. _Config is also frozen so setting self.quiet isn't possible.</span>
+        <span class="s0"># Therefore we extract quiet early here in a variable and use that in warning conditions.</span>
+        <span class="s1">quiet = config_overrides.get(</span><span class="s3">&quot;quiet&quot;</span><span class="s1">, </span><span class="s2">False</span><span class="s1">)</span>
+
+        <span class="s1">sources: List[Dict[str, Any]] = [_DEFAULT_SETTINGS]</span>
+
+        <span class="s1">config_settings: Dict[str, Any]</span>
+        <span class="s1">project_root: str</span>
+        <span class="s2">if </span><span class="s1">settings_file:</span>
+            <span class="s1">config_settings = _get_config_data(</span>
+                <span class="s1">settings_file,</span>
+                <span class="s1">CONFIG_SECTIONS.get(os.path.basename(settings_file), FALLBACK_CONFIG_SECTIONS),</span>
+            <span class="s1">)</span>
+            <span class="s1">project_root = os.path.dirname(settings_file)</span>
+            <span class="s2">if not </span><span class="s1">config_settings </span><span class="s2">and not </span><span class="s1">quiet:</span>
+                <span class="s1">warn(</span>
+                    <span class="s3">f&quot;A custom settings file was specified: </span><span class="s5">{</span><span class="s1">settings_file</span><span class="s5">} </span><span class="s3">but no configuration &quot;</span>
+                    <span class="s3">&quot;was found inside. This can happen when [settings] is used as the config &quot;</span>
+                    <span class="s3">&quot;header instead of [isort]. &quot;</span>
+                    <span class="s3">&quot;See: https://pycqa.github.io/isort/docs/configuration/config_files&quot;</span>
+                    <span class="s3">&quot;/#custom_config_files for more information.&quot;</span>
+                <span class="s1">)</span>
+        <span class="s2">elif </span><span class="s1">settings_path:</span>
+            <span class="s2">if not </span><span class="s1">os.path.exists(settings_path):</span>
+                <span class="s2">raise </span><span class="s1">InvalidSettingsPath(settings_path)</span>
+
+            <span class="s1">settings_path = os.path.abspath(settings_path)</span>
+            <span class="s1">project_root, config_settings = _find_config(settings_path)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">config_settings = {}</span>
+            <span class="s1">project_root = os.getcwd()</span>
+
+        <span class="s1">profile_name = config_overrides.get(</span><span class="s3">&quot;profile&quot;</span><span class="s1">, config_settings.get(</span><span class="s3">&quot;profile&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">))</span>
+        <span class="s1">profile: Dict[str, Any] = {}</span>
+        <span class="s2">if </span><span class="s1">profile_name:</span>
+            <span class="s2">if </span><span class="s1">profile_name </span><span class="s2">not in </span><span class="s1">profiles:</span>
+                <span class="s2">import </span><span class="s1">pkg_resources</span>
+
+                <span class="s2">for </span><span class="s1">plugin </span><span class="s2">in </span><span class="s1">pkg_resources.iter_entry_points(</span><span class="s3">&quot;isort.profiles&quot;</span><span class="s1">):</span>
+                    <span class="s1">profiles.setdefault(plugin.name, plugin.load())</span>
+
+            <span class="s2">if </span><span class="s1">profile_name </span><span class="s2">not in </span><span class="s1">profiles:</span>
+                <span class="s2">raise </span><span class="s1">ProfileDoesNotExist(profile_name)</span>
+
+            <span class="s1">profile = profiles[profile_name].copy()</span>
+            <span class="s1">profile[</span><span class="s3">&quot;source&quot;</span><span class="s1">] = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">profile_name</span><span class="s5">} </span><span class="s3">profile&quot;</span>
+            <span class="s1">sources.append(profile)</span>
+
+        <span class="s2">if </span><span class="s1">config_settings:</span>
+            <span class="s1">sources.append(config_settings)</span>
+        <span class="s2">if </span><span class="s1">config_overrides:</span>
+            <span class="s1">config_overrides[</span><span class="s3">&quot;source&quot;</span><span class="s1">] = RUNTIME_SOURCE</span>
+            <span class="s1">sources.append(config_overrides)</span>
+
+        <span class="s1">combined_config = {**profile, **config_settings, **config_overrides}</span>
+        <span class="s2">if </span><span class="s3">&quot;indent&quot; </span><span class="s2">in </span><span class="s1">combined_config:</span>
+            <span class="s1">indent = str(combined_config[</span><span class="s3">&quot;indent&quot;</span><span class="s1">])</span>
+            <span class="s2">if </span><span class="s1">indent.isdigit():</span>
+                <span class="s1">indent = </span><span class="s3">&quot; &quot; </span><span class="s1">* int(indent)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">indent = indent.strip(</span><span class="s3">&quot;'&quot;</span><span class="s1">).strip(</span><span class="s3">'&quot;'</span><span class="s1">)</span>
+                <span class="s2">if </span><span class="s1">indent.lower() == </span><span class="s3">&quot;tab&quot;</span><span class="s1">:</span>
+                    <span class="s1">indent = </span><span class="s3">&quot;</span><span class="s5">\t</span><span class="s3">&quot;</span>
+            <span class="s1">combined_config[</span><span class="s3">&quot;indent&quot;</span><span class="s1">] = indent</span>
+
+        <span class="s1">known_other = {}</span>
+        <span class="s1">import_headings = {}</span>
+        <span class="s2">for </span><span class="s1">key, value </span><span class="s2">in </span><span class="s1">tuple(combined_config.items()):</span>
+            <span class="s0"># Collect all known sections beyond those that have direct entries</span>
+            <span class="s2">if </span><span class="s1">key.startswith(KNOWN_PREFIX) </span><span class="s2">and </span><span class="s1">key </span><span class="s2">not in </span><span class="s1">(</span>
+                <span class="s3">&quot;known_standard_library&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;known_future_library&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;known_third_party&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;known_first_party&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;known_local_folder&quot;</span><span class="s1">,</span>
+            <span class="s1">):</span>
+                <span class="s1">import_heading = key[len(KNOWN_PREFIX) :].lower()</span>
+                <span class="s1">maps_to_section = import_heading.upper()</span>
+                <span class="s1">combined_config.pop(key)</span>
+                <span class="s2">if </span><span class="s1">maps_to_section </span><span class="s2">in </span><span class="s1">KNOWN_SECTION_MAPPING:</span>
+                    <span class="s1">section_name = </span><span class="s3">f&quot;known_</span><span class="s5">{</span><span class="s1">KNOWN_SECTION_MAPPING[maps_to_section].lower()</span><span class="s5">}</span><span class="s3">&quot;</span>
+                    <span class="s2">if </span><span class="s1">section_name </span><span class="s2">in </span><span class="s1">combined_config </span><span class="s2">and not </span><span class="s1">quiet:</span>
+                        <span class="s1">warn(</span>
+                            <span class="s3">f&quot;Can't set both </span><span class="s5">{</span><span class="s1">key</span><span class="s5">} </span><span class="s3">and </span><span class="s5">{</span><span class="s1">section_name</span><span class="s5">} </span><span class="s3">in the same config file.</span><span class="s5">\n</span><span class="s3">&quot;</span>
+                            <span class="s3">f&quot;Default to </span><span class="s5">{</span><span class="s1">section_name</span><span class="s5">} </span><span class="s3">if unsure.&quot;</span>
+                            <span class="s3">&quot;</span><span class="s5">\n\n</span><span class="s3">&quot;</span>
+                            <span class="s3">&quot;See: https://pycqa.github.io/isort/&quot;</span>
+                            <span class="s3">&quot;#custom-sections-and-ordering.&quot;</span>
+                        <span class="s1">)</span>
+                    <span class="s2">else</span><span class="s1">:</span>
+                        <span class="s1">combined_config[section_name] = frozenset(value)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">known_other[import_heading] = frozenset(value)</span>
+                    <span class="s2">if </span><span class="s1">maps_to_section </span><span class="s2">not in </span><span class="s1">combined_config.get(</span><span class="s3">&quot;sections&quot;</span><span class="s1">, ()) </span><span class="s2">and not </span><span class="s1">quiet:</span>
+                        <span class="s1">warn(</span>
+                            <span class="s3">f&quot;`</span><span class="s5">{</span><span class="s1">key</span><span class="s5">}</span><span class="s3">` setting is defined, but </span><span class="s5">{</span><span class="s1">maps_to_section</span><span class="s5">} </span><span class="s3">is not&quot;</span>
+                            <span class="s3">&quot; included in `sections` config option:&quot;</span>
+                            <span class="s3">f&quot; </span><span class="s5">{</span><span class="s1">combined_config.get(</span><span class="s3">'sections'</span><span class="s1">, SECTION_DEFAULTS)</span><span class="s5">}</span><span class="s3">.</span><span class="s5">\n\n</span><span class="s3">&quot;</span>
+                            <span class="s3">&quot;See: https://pycqa.github.io/isort/&quot;</span>
+                            <span class="s3">&quot;#custom-sections-and-ordering.&quot;</span>
+                        <span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">key.startswith(IMPORT_HEADING_PREFIX):</span>
+                <span class="s1">import_headings[key[len(IMPORT_HEADING_PREFIX) :].lower()] = str(value)</span>
+
+            <span class="s0"># Coerce all provided config values into their correct type</span>
+            <span class="s1">default_value = _DEFAULT_SETTINGS.get(key, </span><span class="s2">None</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">default_value </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s2">continue</span>
+
+            <span class="s1">combined_config[key] = type(default_value)(value)</span>
+
+        <span class="s2">for </span><span class="s1">section </span><span class="s2">in </span><span class="s1">combined_config.get(</span><span class="s3">&quot;sections&quot;</span><span class="s1">, ()):</span>
+            <span class="s2">if </span><span class="s1">section </span><span class="s2">in </span><span class="s1">SECTION_DEFAULTS:</span>
+                <span class="s2">continue</span>
+
+            <span class="s2">if not </span><span class="s1">section.lower() </span><span class="s2">in </span><span class="s1">known_other:</span>
+                <span class="s1">config_keys = </span><span class="s3">&quot;, &quot;</span><span class="s1">.join(known_other.keys())</span>
+                <span class="s1">warn(</span>
+                    <span class="s3">f&quot;`sections` setting includes </span><span class="s5">{</span><span class="s1">section</span><span class="s5">}</span><span class="s3">, but no known_</span><span class="s5">{</span><span class="s1">section.lower()</span><span class="s5">} </span><span class="s3">&quot;</span>
+                    <span class="s3">&quot;is defined. &quot;</span>
+                    <span class="s3">f&quot;The following known_SECTION config options are defined: </span><span class="s5">{</span><span class="s1">config_keys</span><span class="s5">}</span><span class="s3">.&quot;</span>
+                <span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s3">&quot;directory&quot; </span><span class="s2">not in </span><span class="s1">combined_config:</span>
+            <span class="s1">combined_config[</span><span class="s3">&quot;directory&quot;</span><span class="s1">] = (</span>
+                <span class="s1">os.path.dirname(config_settings[</span><span class="s3">&quot;source&quot;</span><span class="s1">])</span>
+                <span class="s2">if </span><span class="s1">config_settings.get(</span><span class="s3">&quot;source&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+                <span class="s2">else </span><span class="s1">os.getcwd()</span>
+            <span class="s1">)</span>
+
+        <span class="s1">path_root = Path(combined_config.get(</span><span class="s3">&quot;directory&quot;</span><span class="s1">, project_root)).resolve()</span>
+        <span class="s1">path_root = path_root </span><span class="s2">if </span><span class="s1">path_root.is_dir() </span><span class="s2">else </span><span class="s1">path_root.parent</span>
+        <span class="s2">if </span><span class="s3">&quot;src_paths&quot; </span><span class="s2">not in </span><span class="s1">combined_config:</span>
+            <span class="s1">combined_config[</span><span class="s3">&quot;src_paths&quot;</span><span class="s1">] = (path_root / </span><span class="s3">&quot;src&quot;</span><span class="s1">, path_root)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">src_paths: List[Path] = []</span>
+            <span class="s2">for </span><span class="s1">src_path </span><span class="s2">in </span><span class="s1">combined_config.get(</span><span class="s3">&quot;src_paths&quot;</span><span class="s1">, ()):</span>
+                <span class="s1">full_path = path_root / src_path</span>
+                <span class="s2">if </span><span class="s1">full_path </span><span class="s2">not in </span><span class="s1">src_paths:</span>
+                    <span class="s1">src_paths.append(full_path)</span>
+
+            <span class="s1">combined_config[</span><span class="s3">&quot;src_paths&quot;</span><span class="s1">] = tuple(src_paths)</span>
+
+        <span class="s2">if </span><span class="s3">&quot;formatter&quot; </span><span class="s2">in </span><span class="s1">combined_config:</span>
+            <span class="s2">import </span><span class="s1">pkg_resources</span>
+
+            <span class="s2">for </span><span class="s1">plugin </span><span class="s2">in </span><span class="s1">pkg_resources.iter_entry_points(</span><span class="s3">&quot;isort.formatters&quot;</span><span class="s1">):</span>
+                <span class="s2">if </span><span class="s1">plugin.name == combined_config[</span><span class="s3">&quot;formatter&quot;</span><span class="s1">]:</span>
+                    <span class="s1">combined_config[</span><span class="s3">&quot;formatting_function&quot;</span><span class="s1">] = plugin.load()</span>
+                    <span class="s2">break</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">raise </span><span class="s1">FormattingPluginDoesNotExist(combined_config[</span><span class="s3">&quot;formatter&quot;</span><span class="s1">])</span>
+
+        <span class="s0"># Remove any config values that are used for creating config object but</span>
+        <span class="s0"># aren't defined in dataclass</span>
+        <span class="s1">combined_config.pop(</span><span class="s3">&quot;source&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s1">combined_config.pop(</span><span class="s3">&quot;sources&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s1">combined_config.pop(</span><span class="s3">&quot;runtime_src_paths&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+
+        <span class="s1">deprecated_options_used = [</span>
+            <span class="s1">option </span><span class="s2">for </span><span class="s1">option </span><span class="s2">in </span><span class="s1">combined_config </span><span class="s2">if </span><span class="s1">option </span><span class="s2">in </span><span class="s1">DEPRECATED_SETTINGS</span>
+        <span class="s1">]</span>
+        <span class="s2">if </span><span class="s1">deprecated_options_used:</span>
+            <span class="s2">for </span><span class="s1">deprecated_option </span><span class="s2">in </span><span class="s1">deprecated_options_used:</span>
+                <span class="s1">combined_config.pop(deprecated_option)</span>
+            <span class="s2">if not </span><span class="s1">quiet:</span>
+                <span class="s1">warn(</span>
+                    <span class="s3">&quot;W0503: Deprecated config options were used: &quot;</span>
+                    <span class="s3">f&quot;</span><span class="s5">{</span><span class="s3">', '</span><span class="s1">.join(deprecated_options_used)</span><span class="s5">}</span><span class="s3">.&quot;</span>
+                    <span class="s3">&quot;Please see the 5.0.0 upgrade guide: bit.ly/isortv5.&quot;</span>
+                <span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">known_other:</span>
+            <span class="s1">combined_config[</span><span class="s3">&quot;known_other&quot;</span><span class="s1">] = known_other</span>
+        <span class="s2">if </span><span class="s1">import_headings:</span>
+            <span class="s2">for </span><span class="s1">import_heading_key </span><span class="s2">in </span><span class="s1">import_headings:</span>
+                <span class="s1">combined_config.pop(</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">IMPORT_HEADING_PREFIX</span><span class="s5">}{</span><span class="s1">import_heading_key</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">)</span>
+            <span class="s1">combined_config[</span><span class="s3">&quot;import_headings&quot;</span><span class="s1">] = import_headings</span>
+
+        <span class="s1">unsupported_config_errors = {}</span>
+        <span class="s2">for </span><span class="s1">option </span><span class="s2">in </span><span class="s1">set(combined_config.keys()).difference(</span>
+            <span class="s1">getattr(_Config, </span><span class="s3">&quot;__dataclass_fields__&quot;</span><span class="s1">, {}).keys()</span>
+        <span class="s1">):</span>
+            <span class="s2">for </span><span class="s1">source </span><span class="s2">in </span><span class="s1">reversed(sources):</span>
+                <span class="s2">if </span><span class="s1">option </span><span class="s2">in </span><span class="s1">source:</span>
+                    <span class="s1">unsupported_config_errors[option] = {</span>
+                        <span class="s3">&quot;value&quot;</span><span class="s1">: source[option],</span>
+                        <span class="s3">&quot;source&quot;</span><span class="s1">: source[</span><span class="s3">&quot;source&quot;</span><span class="s1">],</span>
+                    <span class="s1">}</span>
+        <span class="s2">if </span><span class="s1">unsupported_config_errors:</span>
+            <span class="s2">raise </span><span class="s1">UnsupportedSettings(unsupported_config_errors)</span>
+
+        <span class="s1">super().__init__(sources=tuple(sources), **combined_config)  </span><span class="s0"># type: ignore</span>
+
+    <span class="s2">def </span><span class="s1">is_supported_filetype(self, file_name: str):</span>
+        <span class="s1">_root, ext = os.path.splitext(file_name)</span>
+        <span class="s1">ext = ext.lstrip(</span><span class="s3">&quot;.&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">ext </span><span class="s2">in </span><span class="s1">self.supported_extensions:</span>
+            <span class="s2">return True</span>
+        <span class="s2">if </span><span class="s1">ext </span><span class="s2">in </span><span class="s1">self.blocked_extensions:</span>
+            <span class="s2">return False</span>
+
+        <span class="s0"># Skip editor backup files.</span>
+        <span class="s2">if </span><span class="s1">file_name.endswith(</span><span class="s3">&quot;~&quot;</span><span class="s1">):</span>
+            <span class="s2">return False</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">stat.S_ISFIFO(os.stat(file_name).st_mode):</span>
+                <span class="s2">return False</span>
+        <span class="s2">except </span><span class="s1">OSError:</span>
+            <span class="s2">pass</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">with </span><span class="s1">open(file_name, </span><span class="s3">&quot;rb&quot;</span><span class="s1">) </span><span class="s2">as </span><span class="s1">fp:</span>
+                <span class="s1">line = fp.readline(</span><span class="s4">100</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">OSError:</span>
+            <span class="s2">return False</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">bool(_SHEBANG_RE.match(line))</span>
+
+    <span class="s2">def </span><span class="s1">is_skipped(self, file_path: Path) -&gt; bool:</span>
+        <span class="s0">&quot;&quot;&quot;Returns True if the file and/or folder should be skipped based on current settings.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.directory </span><span class="s2">and </span><span class="s1">Path(self.directory) </span><span class="s2">in </span><span class="s1">file_path.resolve().parents:</span>
+            <span class="s1">file_name = os.path.relpath(file_path.resolve(), self.directory)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">file_name = str(file_path)</span>
+
+        <span class="s1">os_path = str(file_path)</span>
+
+        <span class="s2">if </span><span class="s1">self.skip_gitignore:</span>
+            <span class="s2">if </span><span class="s1">file_path.name == </span><span class="s3">&quot;.git&quot;</span><span class="s1">:  </span><span class="s0"># pragma: no cover</span>
+                <span class="s2">return True</span>
+
+            <span class="s1">result = subprocess.run(  </span><span class="s0"># nosec # skipcq: PYL-W1510</span>
+                <span class="s1">[</span><span class="s3">&quot;git&quot;</span><span class="s1">, </span><span class="s3">&quot;-C&quot;</span><span class="s1">, str(file_path.parent), </span><span class="s3">&quot;check-ignore&quot;</span><span class="s1">, </span><span class="s3">&quot;--quiet&quot;</span><span class="s1">, os_path]</span>
+            <span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">result.returncode == </span><span class="s4">0</span><span class="s1">:</span>
+                <span class="s2">return True</span>
+
+        <span class="s1">normalized_path = os_path.replace(</span><span class="s3">&quot;</span><span class="s5">\\</span><span class="s3">&quot;</span><span class="s1">, </span><span class="s3">&quot;/&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">normalized_path[</span><span class="s4">1</span><span class="s1">:</span><span class="s4">2</span><span class="s1">] == </span><span class="s3">&quot;:&quot;</span><span class="s1">:</span>
+            <span class="s1">normalized_path = normalized_path[</span><span class="s4">2</span><span class="s1">:]</span>
+
+        <span class="s2">for </span><span class="s1">skip_path </span><span class="s2">in </span><span class="s1">self.skips:</span>
+            <span class="s2">if </span><span class="s1">posixpath.abspath(normalized_path) == posixpath.abspath(</span>
+                <span class="s1">skip_path.replace(</span><span class="s3">&quot;</span><span class="s5">\\</span><span class="s3">&quot;</span><span class="s1">, </span><span class="s3">&quot;/&quot;</span><span class="s1">)</span>
+            <span class="s1">):</span>
+                <span class="s2">return True</span>
+
+        <span class="s1">position = os.path.split(file_name)</span>
+        <span class="s2">while </span><span class="s1">position[</span><span class="s4">1</span><span class="s1">]:</span>
+            <span class="s2">if </span><span class="s1">position[</span><span class="s4">1</span><span class="s1">] </span><span class="s2">in </span><span class="s1">self.skips:</span>
+                <span class="s2">return True</span>
+            <span class="s1">position = os.path.split(position[</span><span class="s4">0</span><span class="s1">])</span>
+
+        <span class="s2">for </span><span class="s1">glob </span><span class="s2">in </span><span class="s1">self.skip_globs:</span>
+            <span class="s2">if </span><span class="s1">fnmatch.fnmatch(file_name, glob) </span><span class="s2">or </span><span class="s1">fnmatch.fnmatch(</span><span class="s3">&quot;/&quot; </span><span class="s1">+ file_name, glob):</span>
+                <span class="s2">return True</span>
+
+        <span class="s2">if not </span><span class="s1">(os.path.isfile(os_path) </span><span class="s2">or </span><span class="s1">os.path.isdir(os_path) </span><span class="s2">or </span><span class="s1">os.path.islink(os_path)):</span>
+            <span class="s2">return True</span>
+
+        <span class="s2">return False</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">known_patterns(self):</span>
+        <span class="s2">if </span><span class="s1">self._known_patterns </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">self._known_patterns</span>
+
+        <span class="s1">self._known_patterns = []</span>
+        <span class="s1">pattern_sections = [STDLIB] + [section </span><span class="s2">for </span><span class="s1">section </span><span class="s2">in </span><span class="s1">self.sections </span><span class="s2">if </span><span class="s1">section != STDLIB]</span>
+        <span class="s2">for </span><span class="s1">placement </span><span class="s2">in </span><span class="s1">reversed(pattern_sections):</span>
+            <span class="s1">known_placement = KNOWN_SECTION_MAPPING.get(placement, placement).lower()</span>
+            <span class="s1">config_key = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">KNOWN_PREFIX</span><span class="s5">}{</span><span class="s1">known_placement</span><span class="s5">}</span><span class="s3">&quot;</span>
+            <span class="s1">known_modules = getattr(self, config_key, self.known_other.get(known_placement, ()))</span>
+            <span class="s1">extra_modules = getattr(self, </span><span class="s3">f&quot;extra_</span><span class="s5">{</span><span class="s1">known_placement</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">, ())</span>
+            <span class="s1">all_modules = set(extra_modules).union(known_modules)</span>
+            <span class="s1">known_patterns = [</span>
+                <span class="s1">pattern</span>
+                <span class="s2">for </span><span class="s1">known_pattern </span><span class="s2">in </span><span class="s1">all_modules</span>
+                <span class="s2">for </span><span class="s1">pattern </span><span class="s2">in </span><span class="s1">self._parse_known_pattern(known_pattern)</span>
+            <span class="s1">]</span>
+            <span class="s2">for </span><span class="s1">known_pattern </span><span class="s2">in </span><span class="s1">known_patterns:</span>
+                <span class="s1">regexp = </span><span class="s3">&quot;^&quot; </span><span class="s1">+ known_pattern.replace(</span><span class="s3">&quot;*&quot;</span><span class="s1">, </span><span class="s3">&quot;.*&quot;</span><span class="s1">).replace(</span><span class="s3">&quot;?&quot;</span><span class="s1">, </span><span class="s3">&quot;.?&quot;</span><span class="s1">) + </span><span class="s3">&quot;$&quot;</span>
+                <span class="s1">self._known_patterns.append((re.compile(regexp), placement))</span>
+
+        <span class="s2">return </span><span class="s1">self._known_patterns</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">section_comments(self) -&gt; Tuple[str, ...]:</span>
+        <span class="s2">if </span><span class="s1">self._section_comments </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">self._section_comments</span>
+
+        <span class="s1">self._section_comments = tuple(</span><span class="s3">f&quot;# </span><span class="s5">{</span><span class="s1">heading</span><span class="s5">}</span><span class="s3">&quot; </span><span class="s2">for </span><span class="s1">heading </span><span class="s2">in </span><span class="s1">self.import_headings.values())</span>
+        <span class="s2">return </span><span class="s1">self._section_comments</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">skips(self) -&gt; FrozenSet[str]:</span>
+        <span class="s2">if </span><span class="s1">self._skips </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">self._skips</span>
+
+        <span class="s1">self._skips = self.skip.union(self.extend_skip)</span>
+        <span class="s2">return </span><span class="s1">self._skips</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">skip_globs(self) -&gt; FrozenSet[str]:</span>
+        <span class="s2">if </span><span class="s1">self._skip_globs </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">self._skip_globs</span>
+
+        <span class="s1">self._skip_globs = self.skip_glob.union(self.extend_skip_glob)</span>
+        <span class="s2">return </span><span class="s1">self._skip_globs</span>
+
+    <span class="s2">def </span><span class="s1">_parse_known_pattern(self, pattern: str) -&gt; List[str]:</span>
+        <span class="s0">&quot;&quot;&quot;Expand pattern if identified as a directory and return found sub packages&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">pattern.endswith(os.path.sep):</span>
+            <span class="s1">patterns = [</span>
+                <span class="s1">filename</span>
+                <span class="s2">for </span><span class="s1">filename </span><span class="s2">in </span><span class="s1">os.listdir(os.path.join(self.directory, pattern))</span>
+                <span class="s2">if </span><span class="s1">os.path.isdir(os.path.join(self.directory, pattern, filename))</span>
+            <span class="s1">]</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">patterns = [pattern]</span>
+
+        <span class="s2">return </span><span class="s1">patterns</span>
+
+
+<span class="s2">def </span><span class="s1">_get_str_to_type_converter(setting_name: str) -&gt; Callable[[str], Any]:</span>
+    <span class="s1">type_converter: Callable[[str], Any] = type(_DEFAULT_SETTINGS.get(setting_name, </span><span class="s3">&quot;&quot;</span><span class="s1">))</span>
+    <span class="s2">if </span><span class="s1">type_converter == WrapModes:</span>
+        <span class="s1">type_converter = wrap_mode_from_string</span>
+    <span class="s2">return </span><span class="s1">type_converter</span>
+
+
+<span class="s2">def </span><span class="s1">_as_list(value: str) -&gt; List[str]:</span>
+    <span class="s2">if </span><span class="s1">isinstance(value, list):</span>
+        <span class="s2">return </span><span class="s1">[item.strip() </span><span class="s2">for </span><span class="s1">item </span><span class="s2">in </span><span class="s1">value]</span>
+    <span class="s1">filtered = [item.strip() </span><span class="s2">for </span><span class="s1">item </span><span class="s2">in </span><span class="s1">value.replace(</span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">&quot;</span><span class="s1">, </span><span class="s3">&quot;,&quot;</span><span class="s1">).split(</span><span class="s3">&quot;,&quot;</span><span class="s1">) </span><span class="s2">if </span><span class="s1">item.strip()]</span>
+    <span class="s2">return </span><span class="s1">filtered</span>
+
+
+<span class="s2">def </span><span class="s1">_abspaths(cwd: str, values: Iterable[str]) -&gt; Set[str]:</span>
+    <span class="s1">paths = {</span>
+        <span class="s1">os.path.join(cwd, value)</span>
+        <span class="s2">if not </span><span class="s1">value.startswith(os.path.sep) </span><span class="s2">and </span><span class="s1">value.endswith(os.path.sep)</span>
+        <span class="s2">else </span><span class="s1">value</span>
+        <span class="s2">for </span><span class="s1">value </span><span class="s2">in </span><span class="s1">values</span>
+    <span class="s1">}</span>
+    <span class="s2">return </span><span class="s1">paths</span>
+
+
+<span class="s1">@lru_cache()</span>
+<span class="s2">def </span><span class="s1">_find_config(path: str) -&gt; Tuple[str, Dict[str, Any]]:</span>
+    <span class="s1">current_directory = path</span>
+    <span class="s1">tries = </span><span class="s4">0</span>
+    <span class="s2">while </span><span class="s1">current_directory </span><span class="s2">and </span><span class="s1">tries &lt; MAX_CONFIG_SEARCH_DEPTH:</span>
+        <span class="s2">for </span><span class="s1">config_file_name </span><span class="s2">in </span><span class="s1">CONFIG_SOURCES:</span>
+            <span class="s1">potential_config_file = os.path.join(current_directory, config_file_name)</span>
+            <span class="s2">if </span><span class="s1">os.path.isfile(potential_config_file):</span>
+                <span class="s1">config_data: Dict[str, Any]</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">config_data = _get_config_data(</span>
+                        <span class="s1">potential_config_file, CONFIG_SECTIONS[config_file_name]</span>
+                    <span class="s1">)</span>
+                <span class="s2">except </span><span class="s1">Exception:</span>
+                    <span class="s1">warn(</span><span class="s3">f&quot;Failed to pull configuration information from </span><span class="s5">{</span><span class="s1">potential_config_file</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">)</span>
+                    <span class="s1">config_data = {}</span>
+                <span class="s2">if </span><span class="s1">config_data:</span>
+                    <span class="s2">return </span><span class="s1">(current_directory, config_data)</span>
+
+        <span class="s2">for </span><span class="s1">stop_dir </span><span class="s2">in </span><span class="s1">STOP_CONFIG_SEARCH_ON_DIRS:</span>
+            <span class="s2">if </span><span class="s1">os.path.isdir(os.path.join(current_directory, stop_dir)):</span>
+                <span class="s2">return </span><span class="s1">(current_directory, {})</span>
+
+        <span class="s1">new_directory = os.path.split(current_directory)[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s2">if </span><span class="s1">new_directory == current_directory:</span>
+            <span class="s2">break</span>
+
+        <span class="s1">current_directory = new_directory</span>
+        <span class="s1">tries += </span><span class="s4">1</span>
+
+    <span class="s2">return </span><span class="s1">(path, {})</span>
+
+
+<span class="s1">@lru_cache()</span>
+<span class="s2">def </span><span class="s1">_get_config_data(file_path: str, sections: Tuple[str]) -&gt; Dict[str, Any]:</span>
+    <span class="s1">settings: Dict[str, Any] = {}</span>
+
+    <span class="s2">with </span><span class="s1">open(file_path, encoding=</span><span class="s3">&quot;utf-8&quot;</span><span class="s1">) </span><span class="s2">as </span><span class="s1">config_file:</span>
+        <span class="s2">if </span><span class="s1">file_path.endswith(</span><span class="s3">&quot;.toml&quot;</span><span class="s1">):</span>
+            <span class="s1">config = toml.load(config_file)</span>
+            <span class="s2">for </span><span class="s1">section </span><span class="s2">in </span><span class="s1">sections:</span>
+                <span class="s1">config_section = config</span>
+                <span class="s2">for </span><span class="s1">key </span><span class="s2">in </span><span class="s1">section.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">):</span>
+                    <span class="s1">config_section = config_section.get(key, {})</span>
+                <span class="s1">settings.update(config_section)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">file_path.endswith(</span><span class="s3">&quot;.editorconfig&quot;</span><span class="s1">):</span>
+                <span class="s1">line = </span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">&quot;</span>
+                <span class="s1">last_position = config_file.tell()</span>
+                <span class="s2">while </span><span class="s1">line:</span>
+                    <span class="s1">line = config_file.readline()</span>
+                    <span class="s2">if </span><span class="s3">&quot;[&quot; </span><span class="s2">in </span><span class="s1">line:</span>
+                        <span class="s1">config_file.seek(last_position)</span>
+                        <span class="s2">break</span>
+                    <span class="s1">last_position = config_file.tell()</span>
+
+            <span class="s1">config = configparser.ConfigParser(strict=</span><span class="s2">False</span><span class="s1">)</span>
+            <span class="s1">config.read_file(config_file)</span>
+            <span class="s2">for </span><span class="s1">section </span><span class="s2">in </span><span class="s1">sections:</span>
+                <span class="s2">if </span><span class="s1">section.startswith(</span><span class="s3">&quot;*.{&quot;</span><span class="s1">) </span><span class="s2">and </span><span class="s1">section.endswith(</span><span class="s3">&quot;}&quot;</span><span class="s1">):</span>
+                    <span class="s1">extension = section[len(</span><span class="s3">&quot;*.{&quot;</span><span class="s1">) : -</span><span class="s4">1</span><span class="s1">]</span>
+                    <span class="s2">for </span><span class="s1">config_key </span><span class="s2">in </span><span class="s1">config.keys():</span>
+                        <span class="s2">if </span><span class="s1">(</span>
+                            <span class="s1">config_key.startswith(</span><span class="s3">&quot;*.{&quot;</span><span class="s1">)</span>
+                            <span class="s2">and </span><span class="s1">config_key.endswith(</span><span class="s3">&quot;}&quot;</span><span class="s1">)</span>
+                            <span class="s2">and </span><span class="s1">extension</span>
+                            <span class="s2">in </span><span class="s1">map(</span>
+                                <span class="s2">lambda </span><span class="s1">text: text.strip(), config_key[len(</span><span class="s3">&quot;*.{&quot;</span><span class="s1">) : -</span><span class="s4">1</span><span class="s1">].split(</span><span class="s3">&quot;,&quot;</span><span class="s1">)</span>
+                            <span class="s1">)</span>
+                        <span class="s1">):</span>
+                            <span class="s1">settings.update(config.items(config_key))</span>
+
+                <span class="s2">elif </span><span class="s1">config.has_section(section):</span>
+                    <span class="s1">settings.update(config.items(section))</span>
+
+    <span class="s2">if </span><span class="s1">settings:</span>
+        <span class="s1">settings[</span><span class="s3">&quot;source&quot;</span><span class="s1">] = file_path</span>
+
+        <span class="s2">if </span><span class="s1">file_path.endswith(</span><span class="s3">&quot;.editorconfig&quot;</span><span class="s1">):</span>
+            <span class="s1">indent_style = settings.pop(</span><span class="s3">&quot;indent_style&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">).strip()</span>
+            <span class="s1">indent_size = settings.pop(</span><span class="s3">&quot;indent_size&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">).strip()</span>
+            <span class="s2">if </span><span class="s1">indent_size == </span><span class="s3">&quot;tab&quot;</span><span class="s1">:</span>
+                <span class="s1">indent_size = settings.pop(</span><span class="s3">&quot;tab_width&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">).strip()</span>
+
+            <span class="s2">if </span><span class="s1">indent_style == </span><span class="s3">&quot;space&quot;</span><span class="s1">:</span>
+                <span class="s1">settings[</span><span class="s3">&quot;indent&quot;</span><span class="s1">] = </span><span class="s3">&quot; &quot; </span><span class="s1">* (indent_size </span><span class="s2">and </span><span class="s1">int(indent_size) </span><span class="s2">or </span><span class="s4">4</span><span class="s1">)</span>
+
+            <span class="s2">elif </span><span class="s1">indent_style == </span><span class="s3">&quot;tab&quot;</span><span class="s1">:</span>
+                <span class="s1">settings[</span><span class="s3">&quot;indent&quot;</span><span class="s1">] = </span><span class="s3">&quot;</span><span class="s5">\t</span><span class="s3">&quot; </span><span class="s1">* (indent_size </span><span class="s2">and </span><span class="s1">int(indent_size) </span><span class="s2">or </span><span class="s4">1</span><span class="s1">)</span>
+
+            <span class="s1">max_line_length = settings.pop(</span><span class="s3">&quot;max_line_length&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">).strip()</span>
+            <span class="s2">if </span><span class="s1">max_line_length </span><span class="s2">and </span><span class="s1">(max_line_length == </span><span class="s3">&quot;off&quot; </span><span class="s2">or </span><span class="s1">max_line_length.isdigit()):</span>
+                <span class="s1">settings[</span><span class="s3">&quot;line_length&quot;</span><span class="s1">] = (</span>
+                    <span class="s1">float(</span><span class="s3">&quot;inf&quot;</span><span class="s1">) </span><span class="s2">if </span><span class="s1">max_line_length == </span><span class="s3">&quot;off&quot; </span><span class="s2">else </span><span class="s1">int(max_line_length)</span>
+                <span class="s1">)</span>
+            <span class="s1">settings = {</span>
+                <span class="s1">key: value</span>
+                <span class="s2">for </span><span class="s1">key, value </span><span class="s2">in </span><span class="s1">settings.items()</span>
+                <span class="s2">if </span><span class="s1">key </span><span class="s2">in </span><span class="s1">_DEFAULT_SETTINGS.keys() </span><span class="s2">or </span><span class="s1">key.startswith(KNOWN_PREFIX)</span>
+            <span class="s1">}</span>
+
+        <span class="s2">for </span><span class="s1">key, value </span><span class="s2">in </span><span class="s1">settings.items():</span>
+            <span class="s1">existing_value_type = _get_str_to_type_converter(key)</span>
+            <span class="s2">if </span><span class="s1">existing_value_type == tuple:</span>
+                <span class="s1">settings[key] = tuple(_as_list(value))</span>
+            <span class="s2">elif </span><span class="s1">existing_value_type == frozenset:</span>
+                <span class="s1">settings[key] = frozenset(_as_list(settings.get(key)))  </span><span class="s0"># type: ignore</span>
+            <span class="s2">elif </span><span class="s1">existing_value_type == bool:</span>
+                <span class="s0"># Only some configuration formats support native boolean values.</span>
+                <span class="s2">if not </span><span class="s1">isinstance(value, bool):</span>
+                    <span class="s1">value = _as_bool(value)</span>
+                <span class="s1">settings[key] = value</span>
+            <span class="s2">elif </span><span class="s1">key.startswith(KNOWN_PREFIX):</span>
+                <span class="s1">settings[key] = _abspaths(os.path.dirname(file_path), _as_list(value))</span>
+            <span class="s2">elif </span><span class="s1">key == </span><span class="s3">&quot;force_grid_wrap&quot;</span><span class="s1">:</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">result = existing_value_type(value)</span>
+                <span class="s2">except </span><span class="s1">ValueError:  </span><span class="s0"># backwards compatibility for true / false force grid wrap</span>
+                    <span class="s1">result = </span><span class="s4">0 </span><span class="s2">if </span><span class="s1">value.lower().strip() == </span><span class="s3">&quot;false&quot; </span><span class="s2">else </span><span class="s4">2</span>
+                <span class="s1">settings[key] = result</span>
+            <span class="s2">elif </span><span class="s1">key == </span><span class="s3">&quot;comment_prefix&quot;</span><span class="s1">:</span>
+                <span class="s1">settings[key] = str(value).strip(</span><span class="s3">&quot;'&quot;</span><span class="s1">).strip(</span><span class="s3">'&quot;'</span><span class="s1">)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">settings[key] = existing_value_type(value)</span>
+
+    <span class="s2">return </span><span class="s1">settings</span>
+
+
+<span class="s2">def </span><span class="s1">_as_bool(value: str) -&gt; bool:</span>
+    <span class="s0">&quot;&quot;&quot;Given a string value that represents True or False, returns the Boolean equivalent. 
+    Heavily inspired from distutils strtobool. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">_STR_BOOLEAN_MAPPING[value.lower()]</span>
+    <span class="s2">except </span><span class="s1">KeyError:</span>
+        <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s3">f&quot;invalid truth value </span><span class="s5">{</span><span class="s1">value</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">)</span>
+
+
+<span class="s1">DEFAULT_CONFIG = Config()</span>
+</pre>
+</body>
+</html>

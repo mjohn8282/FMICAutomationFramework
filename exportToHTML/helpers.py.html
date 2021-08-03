@@ -1,0 +1,322 @@
+<html>
+<head>
+<title>helpers.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+helpers.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2015-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015-2016 Ceridwen &lt;ceridwenv@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Bryce Guinta &lt;bryce.paul.guinta@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020-2021 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Simon Hewitt &lt;si@sjhewitt.co.uk&gt;</span>
+<span class="s0"># Copyright (c) 2020 Bryce Guinta &lt;bryce.guinta@protonmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Ram Rachum &lt;ram@rachum.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+
+<span class="s0">&quot;&quot;&quot; 
+Various helper utilities. 
+&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">builtins </span><span class="s2">as </span><span class="s1">builtins_mod</span>
+
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">bases</span>
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">context </span><span class="s2">as </span><span class="s1">contextmod</span>
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">exceptions, manager, nodes, raw_building, scoped_nodes, util</span>
+
+<span class="s1">BUILTINS = builtins_mod.__name__</span>
+
+
+<span class="s2">def </span><span class="s1">_build_proxy_class(cls_name, builtins):</span>
+    <span class="s1">proxy = raw_building.build_class(cls_name)</span>
+    <span class="s1">proxy.parent = builtins</span>
+    <span class="s2">return </span><span class="s1">proxy</span>
+
+
+<span class="s2">def </span><span class="s1">_function_type(function, builtins):</span>
+    <span class="s2">if </span><span class="s1">isinstance(function, scoped_nodes.Lambda):</span>
+        <span class="s2">if </span><span class="s1">function.root().name == BUILTINS:</span>
+            <span class="s1">cls_name = </span><span class="s3">&quot;builtin_function_or_method&quot;</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">cls_name = </span><span class="s3">&quot;function&quot;</span>
+    <span class="s2">elif </span><span class="s1">isinstance(function, bases.BoundMethod):</span>
+        <span class="s1">cls_name = </span><span class="s3">&quot;method&quot;</span>
+    <span class="s2">elif </span><span class="s1">isinstance(function, bases.UnboundMethod):</span>
+        <span class="s1">cls_name = </span><span class="s3">&quot;function&quot;</span>
+    <span class="s2">return </span><span class="s1">_build_proxy_class(cls_name, builtins)</span>
+
+
+<span class="s2">def </span><span class="s1">_object_type(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s1">astroid_manager = manager.AstroidManager()</span>
+    <span class="s1">builtins = astroid_manager.builtins_module</span>
+    <span class="s1">context = context </span><span class="s2">or </span><span class="s1">contextmod.InferenceContext()</span>
+
+    <span class="s2">for </span><span class="s1">inferred </span><span class="s2">in </span><span class="s1">node.infer(context=context):</span>
+        <span class="s2">if </span><span class="s1">isinstance(inferred, scoped_nodes.ClassDef):</span>
+            <span class="s2">if </span><span class="s1">inferred.newstyle:</span>
+                <span class="s1">metaclass = inferred.metaclass(context=context)</span>
+                <span class="s2">if </span><span class="s1">metaclass:</span>
+                    <span class="s2">yield </span><span class="s1">metaclass</span>
+                    <span class="s2">continue</span>
+            <span class="s2">yield </span><span class="s1">builtins.getattr(</span><span class="s3">&quot;type&quot;</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s2">elif </span><span class="s1">isinstance(inferred, (scoped_nodes.Lambda, bases.UnboundMethod)):</span>
+            <span class="s2">yield </span><span class="s1">_function_type(inferred, builtins)</span>
+        <span class="s2">elif </span><span class="s1">isinstance(inferred, scoped_nodes.Module):</span>
+            <span class="s2">yield </span><span class="s1">_build_proxy_class(</span><span class="s3">&quot;module&quot;</span><span class="s1">, builtins)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">yield </span><span class="s1">inferred._proxied</span>
+
+
+<span class="s2">def </span><span class="s1">object_type(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Obtain the type of the given node 
+ 
+    This is used to implement the ``type`` builtin, which means that it's 
+    used for inferring type calls, as well as used in a couple of other places 
+    in the inference. 
+    The node will be inferred first, so this function can support all 
+    sorts of objects, as long as they support inference. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">types = set(_object_type(node, context))</span>
+    <span class="s2">except </span><span class="s1">exceptions.InferenceError:</span>
+        <span class="s2">return </span><span class="s1">util.Uninferable</span>
+    <span class="s2">if </span><span class="s1">len(types) &gt; </span><span class="s4">1 </span><span class="s2">or not </span><span class="s1">types:</span>
+        <span class="s2">return </span><span class="s1">util.Uninferable</span>
+    <span class="s2">return </span><span class="s1">list(types)[</span><span class="s4">0</span><span class="s1">]</span>
+
+
+<span class="s2">def </span><span class="s1">_object_type_is_subclass(obj_type, class_or_seq, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s2">if not </span><span class="s1">isinstance(class_or_seq, (tuple, list)):</span>
+        <span class="s1">class_seq = (class_or_seq,)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">class_seq = class_or_seq</span>
+
+    <span class="s2">if </span><span class="s1">obj_type </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+        <span class="s2">return </span><span class="s1">util.Uninferable</span>
+
+    <span class="s0"># Instances are not types</span>
+    <span class="s1">class_seq = [</span>
+        <span class="s1">item </span><span class="s2">if not </span><span class="s1">isinstance(item, bases.Instance) </span><span class="s2">else </span><span class="s1">util.Uninferable</span>
+        <span class="s2">for </span><span class="s1">item </span><span class="s2">in </span><span class="s1">class_seq</span>
+    <span class="s1">]</span>
+    <span class="s0"># strict compatibility with issubclass</span>
+    <span class="s0"># issubclass(type, (object, 1)) evaluates to true</span>
+    <span class="s0"># issubclass(object, (1, type)) raises TypeError</span>
+    <span class="s2">for </span><span class="s1">klass </span><span class="s2">in </span><span class="s1">class_seq:</span>
+        <span class="s2">if </span><span class="s1">klass </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+            <span class="s2">raise </span><span class="s1">exceptions.AstroidTypeError(</span><span class="s3">&quot;arg 2 must be a type or tuple of types&quot;</span><span class="s1">)</span>
+
+        <span class="s2">for </span><span class="s1">obj_subclass </span><span class="s2">in </span><span class="s1">obj_type.mro():</span>
+            <span class="s2">if </span><span class="s1">obj_subclass == klass:</span>
+                <span class="s2">return True</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">object_isinstance(node, class_or_seq, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Check if a node 'isinstance' any node in class_or_seq 
+ 
+    :param node: A given node 
+    :param class_or_seq: Union[nodes.NodeNG, Sequence[nodes.NodeNG]] 
+    :rtype: bool 
+ 
+    :raises AstroidTypeError: if the given ``classes_or_seq`` are not types 
+    &quot;&quot;&quot;</span>
+    <span class="s1">obj_type = object_type(node, context)</span>
+    <span class="s2">if </span><span class="s1">obj_type </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+        <span class="s2">return </span><span class="s1">util.Uninferable</span>
+    <span class="s2">return </span><span class="s1">_object_type_is_subclass(obj_type, class_or_seq, context=context)</span>
+
+
+<span class="s2">def </span><span class="s1">object_issubclass(node, class_or_seq, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Check if a type is a subclass of any node in class_or_seq 
+ 
+    :param node: A given node 
+    :param class_or_seq: Union[Nodes.NodeNG, Sequence[nodes.NodeNG]] 
+    :rtype: bool 
+ 
+    :raises AstroidTypeError: if the given ``classes_or_seq`` are not types 
+    :raises AstroidError: if the type of the given node cannot be inferred 
+        or its type's mro doesn't work 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if not </span><span class="s1">isinstance(node, nodes.ClassDef):</span>
+        <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">node</span><span class="s5">} </span><span class="s3">needs to be a ClassDef node&quot;</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">_object_type_is_subclass(node, class_or_seq, context=context)</span>
+
+
+<span class="s2">def </span><span class="s1">safe_infer(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Return the inferred value for the given node. 
+ 
+    Return None if inference failed or if there is some ambiguity (more than 
+    one node has been inferred). 
+    &quot;&quot;&quot;</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">inferit = node.infer(context=context)</span>
+        <span class="s1">value = next(inferit)</span>
+    <span class="s2">except </span><span class="s1">exceptions.InferenceError:</span>
+        <span class="s2">return None</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">next(inferit)</span>
+        <span class="s2">return None  </span><span class="s0"># None if there is ambiguity on the inferred node</span>
+    <span class="s2">except </span><span class="s1">exceptions.InferenceError:</span>
+        <span class="s2">return None  </span><span class="s0"># there is some kind of ambiguity</span>
+    <span class="s2">except </span><span class="s1">StopIteration:</span>
+        <span class="s2">return </span><span class="s1">value</span>
+
+
+<span class="s2">def </span><span class="s1">has_known_bases(klass, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Return true if all base classes of a class could be inferred.&quot;&quot;&quot;</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">klass._all_bases_known</span>
+    <span class="s2">except </span><span class="s1">AttributeError:</span>
+        <span class="s2">pass</span>
+    <span class="s2">for </span><span class="s1">base </span><span class="s2">in </span><span class="s1">klass.bases:</span>
+        <span class="s1">result = safe_infer(base, context=context)</span>
+        <span class="s0"># TODO: check for A-&gt;B-&gt;A-&gt;B pattern in class structure too?</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s2">not </span><span class="s1">isinstance(result, scoped_nodes.ClassDef)</span>
+            <span class="s2">or </span><span class="s1">result </span><span class="s2">is </span><span class="s1">klass</span>
+            <span class="s2">or not </span><span class="s1">has_known_bases(result, context=context)</span>
+        <span class="s1">):</span>
+            <span class="s1">klass._all_bases_known = </span><span class="s2">False</span>
+            <span class="s2">return False</span>
+    <span class="s1">klass._all_bases_known = </span><span class="s2">True</span>
+    <span class="s2">return True</span>
+
+
+<span class="s2">def </span><span class="s1">_type_check(type1, type2):</span>
+    <span class="s2">if not </span><span class="s1">all(map(has_known_bases, (type1, type2))):</span>
+        <span class="s2">raise </span><span class="s1">exceptions._NonDeducibleTypeHierarchy</span>
+
+    <span class="s2">if not </span><span class="s1">all([type1.newstyle, type2.newstyle]):</span>
+        <span class="s2">return False</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">type1 </span><span class="s2">in </span><span class="s1">type2.mro()[:-</span><span class="s4">1</span><span class="s1">]</span>
+    <span class="s2">except </span><span class="s1">exceptions.MroError </span><span class="s2">as </span><span class="s1">e:</span>
+        <span class="s0"># The MRO is invalid.</span>
+        <span class="s2">raise </span><span class="s1">exceptions._NonDeducibleTypeHierarchy </span><span class="s2">from </span><span class="s1">e</span>
+
+
+<span class="s2">def </span><span class="s1">is_subtype(type1, type2):</span>
+    <span class="s0">&quot;&quot;&quot;Check if *type1* is a subtype of *type2*.&quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">_type_check(type1=type2, type2=type1)</span>
+
+
+<span class="s2">def </span><span class="s1">is_supertype(type1, type2):</span>
+    <span class="s0">&quot;&quot;&quot;Check if *type2* is a supertype of *type1*.&quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">_type_check(type1, type2)</span>
+
+
+<span class="s2">def </span><span class="s1">class_instance_as_index(node):</span>
+    <span class="s0">&quot;&quot;&quot;Get the value as an index for the given instance. 
+ 
+    If an instance provides an __index__ method, then it can 
+    be used in some scenarios where an integer is expected, 
+    for instance when multiplying or subscripting a list. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">context = contextmod.InferenceContext()</span>
+    <span class="s1">context.callcontext = contextmod.CallContext(args=[node])</span>
+
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">for </span><span class="s1">inferred </span><span class="s2">in </span><span class="s1">node.igetattr(</span><span class="s3">&quot;__index__&quot;</span><span class="s1">, context=context):</span>
+            <span class="s2">if not </span><span class="s1">isinstance(inferred, bases.BoundMethod):</span>
+                <span class="s2">continue</span>
+
+            <span class="s2">for </span><span class="s1">result </span><span class="s2">in </span><span class="s1">inferred.infer_call_result(node, context=context):</span>
+                <span class="s2">if </span><span class="s1">isinstance(result, nodes.Const) </span><span class="s2">and </span><span class="s1">isinstance(result.value, int):</span>
+                    <span class="s2">return </span><span class="s1">result</span>
+    <span class="s2">except </span><span class="s1">exceptions.InferenceError:</span>
+        <span class="s2">pass</span>
+    <span class="s2">return None</span>
+
+
+<span class="s2">def </span><span class="s1">object_len(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Infer length of given node object 
+ 
+    :param Union[nodes.ClassDef, nodes.Instance] node: 
+    :param node: Node to infer length of 
+ 
+    :raises AstroidTypeError: If an invalid node is returned 
+        from __len__ method or no __len__ method exists 
+    :raises InferenceError: If the given node cannot be inferred 
+        or if multiple nodes are inferred or if the code executed in python 
+        would result in a infinite recursive check for length 
+    :rtype int: Integer length of node 
+    &quot;&quot;&quot;</span>
+    <span class="s0"># pylint: disable=import-outside-toplevel; circular import</span>
+    <span class="s2">from </span><span class="s1">astroid.objects </span><span class="s2">import </span><span class="s1">FrozenSet</span>
+
+    <span class="s1">inferred_node = safe_infer(node, context=context)</span>
+
+    <span class="s0"># prevent self referential length calls from causing a recursion error</span>
+    <span class="s0"># see https://github.com/PyCQA/astroid/issues/777</span>
+    <span class="s1">node_frame = node.frame()</span>
+    <span class="s2">if </span><span class="s1">(</span>
+        <span class="s1">isinstance(node_frame, scoped_nodes.FunctionDef)</span>
+        <span class="s2">and </span><span class="s1">node_frame.name == </span><span class="s3">&quot;__len__&quot;</span>
+        <span class="s2">and </span><span class="s1">inferred_node </span><span class="s2">is not None</span>
+        <span class="s2">and </span><span class="s1">inferred_node._proxied == node_frame.parent</span>
+    <span class="s1">):</span>
+        <span class="s1">message = (</span>
+            <span class="s3">&quot;Self referential __len__ function will &quot;</span>
+            <span class="s3">&quot;cause a RecursionError on line {} of {}&quot;</span><span class="s1">.format(</span>
+                <span class="s1">node.lineno, node.root().file</span>
+            <span class="s1">)</span>
+        <span class="s1">)</span>
+        <span class="s2">raise </span><span class="s1">exceptions.InferenceError(message)</span>
+
+    <span class="s2">if </span><span class="s1">inferred_node </span><span class="s2">is None or </span><span class="s1">inferred_node </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+        <span class="s2">raise </span><span class="s1">exceptions.InferenceError(node=node)</span>
+    <span class="s2">if </span><span class="s1">isinstance(inferred_node, nodes.Const) </span><span class="s2">and </span><span class="s1">isinstance(</span>
+        <span class="s1">inferred_node.value, (bytes, str)</span>
+    <span class="s1">):</span>
+        <span class="s2">return </span><span class="s1">len(inferred_node.value)</span>
+    <span class="s2">if </span><span class="s1">isinstance(inferred_node, (nodes.List, nodes.Set, nodes.Tuple, FrozenSet)):</span>
+        <span class="s2">return </span><span class="s1">len(inferred_node.elts)</span>
+    <span class="s2">if </span><span class="s1">isinstance(inferred_node, nodes.Dict):</span>
+        <span class="s2">return </span><span class="s1">len(inferred_node.items)</span>
+
+    <span class="s1">node_type = object_type(inferred_node, context=context)</span>
+    <span class="s2">if not </span><span class="s1">node_type:</span>
+        <span class="s2">raise </span><span class="s1">exceptions.InferenceError(node=node)</span>
+
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">len_call = next(node_type.igetattr(</span><span class="s3">&quot;__len__&quot;</span><span class="s1">, context=context))</span>
+    <span class="s2">except </span><span class="s1">exceptions.AttributeInferenceError </span><span class="s2">as </span><span class="s1">e:</span>
+        <span class="s2">raise </span><span class="s1">exceptions.AstroidTypeError(</span>
+            <span class="s3">f&quot;object of type '</span><span class="s5">{</span><span class="s1">node_type.pytype()</span><span class="s5">}</span><span class="s3">' has no len()&quot;</span>
+        <span class="s1">) </span><span class="s2">from </span><span class="s1">e</span>
+
+    <span class="s1">result_of_len = next(len_call.infer_call_result(node, context))</span>
+    <span class="s2">if </span><span class="s1">(</span>
+        <span class="s1">isinstance(result_of_len, nodes.Const)</span>
+        <span class="s2">and </span><span class="s1">result_of_len.pytype() == </span><span class="s3">&quot;builtins.int&quot;</span>
+    <span class="s1">):</span>
+        <span class="s2">return </span><span class="s1">result_of_len.value</span>
+    <span class="s2">if </span><span class="s1">isinstance(result_of_len, bases.Instance) </span><span class="s2">and </span><span class="s1">result_of_len.is_subtype_of(</span>
+        <span class="s3">&quot;builtins.int&quot;</span>
+    <span class="s1">):</span>
+        <span class="s0"># Fake a result as we don't know the arguments of the instance call.</span>
+        <span class="s2">return </span><span class="s4">0</span>
+    <span class="s2">raise </span><span class="s1">exceptions.AstroidTypeError(</span>
+        <span class="s3">f&quot;'</span><span class="s5">{</span><span class="s1">result_of_len</span><span class="s5">}</span><span class="s3">' object cannot be interpreted as an integer&quot;</span>
+    <span class="s1">)</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,484 @@
+<html>
+<head>
+<title>runner.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+runner.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot;Basic collect and runtest protocol implementations.&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">bdb</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Callable</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">cast</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Dict</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Generic</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">List</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Optional</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Tuple</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Type</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">TYPE_CHECKING</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">TypeVar</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Union</span>
+
+<span class="s2">import </span><span class="s1">attr</span>
+
+<span class="s2">from </span><span class="s1">.reports </span><span class="s2">import </span><span class="s1">BaseReport</span>
+<span class="s2">from </span><span class="s1">.reports </span><span class="s2">import </span><span class="s1">CollectErrorRepr</span>
+<span class="s2">from </span><span class="s1">.reports </span><span class="s2">import </span><span class="s1">CollectReport</span>
+<span class="s2">from </span><span class="s1">.reports </span><span class="s2">import </span><span class="s1">TestReport</span>
+<span class="s2">from </span><span class="s1">_pytest </span><span class="s2">import </span><span class="s1">timing</span>
+<span class="s2">from </span><span class="s1">_pytest._code.code </span><span class="s2">import </span><span class="s1">ExceptionChainRepr</span>
+<span class="s2">from </span><span class="s1">_pytest._code.code </span><span class="s2">import </span><span class="s1">ExceptionInfo</span>
+<span class="s2">from </span><span class="s1">_pytest._code.code </span><span class="s2">import </span><span class="s1">TerminalRepr</span>
+<span class="s2">from </span><span class="s1">_pytest.compat </span><span class="s2">import </span><span class="s1">final</span>
+<span class="s2">from </span><span class="s1">_pytest.config.argparsing </span><span class="s2">import </span><span class="s1">Parser</span>
+<span class="s2">from </span><span class="s1">_pytest.nodes </span><span class="s2">import </span><span class="s1">Collector</span>
+<span class="s2">from </span><span class="s1">_pytest.nodes </span><span class="s2">import </span><span class="s1">Item</span>
+<span class="s2">from </span><span class="s1">_pytest.nodes </span><span class="s2">import </span><span class="s1">Node</span>
+<span class="s2">from </span><span class="s1">_pytest.outcomes </span><span class="s2">import </span><span class="s1">Exit</span>
+<span class="s2">from </span><span class="s1">_pytest.outcomes </span><span class="s2">import </span><span class="s1">Skipped</span>
+<span class="s2">from </span><span class="s1">_pytest.outcomes </span><span class="s2">import </span><span class="s1">TEST_OUTCOME</span>
+
+<span class="s2">if </span><span class="s1">TYPE_CHECKING:</span>
+    <span class="s2">from </span><span class="s1">typing_extensions </span><span class="s2">import </span><span class="s1">Literal</span>
+
+    <span class="s2">from </span><span class="s1">_pytest.main </span><span class="s2">import </span><span class="s1">Session</span>
+    <span class="s2">from </span><span class="s1">_pytest.terminal </span><span class="s2">import </span><span class="s1">TerminalReporter</span>
+
+<span class="s0">#</span>
+<span class="s0"># pytest plugin hooks.</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_addoption(parser: Parser) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+    <span class="s1">group = parser.getgroup(</span><span class="s3">&quot;terminal reporting&quot;</span><span class="s1">, </span><span class="s3">&quot;reporting&quot;</span><span class="s1">, after=</span><span class="s3">&quot;general&quot;</span><span class="s1">)</span>
+    <span class="s1">group.addoption(</span>
+        <span class="s3">&quot;--durations&quot;</span><span class="s1">,</span>
+        <span class="s1">action=</span><span class="s3">&quot;store&quot;</span><span class="s1">,</span>
+        <span class="s1">type=int,</span>
+        <span class="s1">default=</span><span class="s2">None</span><span class="s1">,</span>
+        <span class="s1">metavar=</span><span class="s3">&quot;N&quot;</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;show N slowest setup/test durations (N=0 for all).&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">group.addoption(</span>
+        <span class="s3">&quot;--durations-min&quot;</span><span class="s1">,</span>
+        <span class="s1">action=</span><span class="s3">&quot;store&quot;</span><span class="s1">,</span>
+        <span class="s1">type=float,</span>
+        <span class="s1">default=</span><span class="s4">0.005</span><span class="s1">,</span>
+        <span class="s1">metavar=</span><span class="s3">&quot;N&quot;</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Minimal duration in seconds for inclusion in slowest list. Default 0.005&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_terminal_summary(terminalreporter: </span><span class="s3">&quot;TerminalReporter&quot;</span><span class="s1">) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+    <span class="s1">durations = terminalreporter.config.option.durations</span>
+    <span class="s1">durations_min = terminalreporter.config.option.durations_min</span>
+    <span class="s1">verbose = terminalreporter.config.getvalue(</span><span class="s3">&quot;verbose&quot;</span><span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">durations </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s2">return</span>
+    <span class="s1">tr = terminalreporter</span>
+    <span class="s1">dlist = []</span>
+    <span class="s2">for </span><span class="s1">replist </span><span class="s2">in </span><span class="s1">tr.stats.values():</span>
+        <span class="s2">for </span><span class="s1">rep </span><span class="s2">in </span><span class="s1">replist:</span>
+            <span class="s2">if </span><span class="s1">hasattr(rep, </span><span class="s3">&quot;duration&quot;</span><span class="s1">):</span>
+                <span class="s1">dlist.append(rep)</span>
+    <span class="s2">if not </span><span class="s1">dlist:</span>
+        <span class="s2">return</span>
+    <span class="s1">dlist.sort(key=</span><span class="s2">lambda </span><span class="s1">x: x.duration, reverse=</span><span class="s2">True</span><span class="s1">)  </span><span class="s0"># type: ignore[no-any-return]</span>
+    <span class="s2">if not </span><span class="s1">durations:</span>
+        <span class="s1">tr.write_sep(</span><span class="s3">&quot;=&quot;</span><span class="s1">, </span><span class="s3">&quot;slowest durations&quot;</span><span class="s1">)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">tr.write_sep(</span><span class="s3">&quot;=&quot;</span><span class="s1">, </span><span class="s3">&quot;slowest %s durations&quot; </span><span class="s1">% durations)</span>
+        <span class="s1">dlist = dlist[:durations]</span>
+
+    <span class="s2">for </span><span class="s1">i, rep </span><span class="s2">in </span><span class="s1">enumerate(dlist):</span>
+        <span class="s2">if </span><span class="s1">verbose &lt; </span><span class="s4">2 </span><span class="s2">and </span><span class="s1">rep.duration &lt; durations_min:</span>
+            <span class="s1">tr.write_line(</span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+            <span class="s1">tr.write_line(</span>
+                <span class="s3">&quot;(%s durations &lt; %gs hidden.  Use -vv to show these durations.)&quot;</span>
+                <span class="s1">% (len(dlist) - i, durations_min)</span>
+            <span class="s1">)</span>
+            <span class="s2">break</span>
+        <span class="s1">tr.write_line(</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">rep.duration</span><span class="s5">:</span><span class="s3">02.2f</span><span class="s5">}</span><span class="s3">s </span><span class="s5">{</span><span class="s1">rep.when</span><span class="s5">:</span><span class="s3">&lt;8</span><span class="s5">} {</span><span class="s1">rep.nodeid</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_sessionstart(session: </span><span class="s3">&quot;Session&quot;</span><span class="s1">) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+    <span class="s1">session._setupstate = SetupState()</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_sessionfinish(session: </span><span class="s3">&quot;Session&quot;</span><span class="s1">) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+    <span class="s1">session._setupstate.teardown_all()</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_runtest_protocol(item: Item, nextitem: Optional[Item]) -&gt; bool:</span>
+    <span class="s1">ihook = item.ihook</span>
+    <span class="s1">ihook.pytest_runtest_logstart(nodeid=item.nodeid, location=item.location)</span>
+    <span class="s1">runtestprotocol(item, nextitem=nextitem)</span>
+    <span class="s1">ihook.pytest_runtest_logfinish(nodeid=item.nodeid, location=item.location)</span>
+    <span class="s2">return True</span>
+
+
+<span class="s2">def </span><span class="s1">runtestprotocol(</span>
+    <span class="s1">item: Item, log: bool = </span><span class="s2">True</span><span class="s1">, nextitem: Optional[Item] = </span><span class="s2">None</span>
+<span class="s1">) -&gt; List[TestReport]:</span>
+    <span class="s1">hasrequest = hasattr(item, </span><span class="s3">&quot;_request&quot;</span><span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">hasrequest </span><span class="s2">and not </span><span class="s1">item._request:  </span><span class="s0"># type: ignore[attr-defined]</span>
+        <span class="s1">item._initrequest()  </span><span class="s0"># type: ignore[attr-defined]</span>
+    <span class="s1">rep = call_and_report(item, </span><span class="s3">&quot;setup&quot;</span><span class="s1">, log)</span>
+    <span class="s1">reports = [rep]</span>
+    <span class="s2">if </span><span class="s1">rep.passed:</span>
+        <span class="s2">if </span><span class="s1">item.config.getoption(</span><span class="s3">&quot;setupshow&quot;</span><span class="s1">, </span><span class="s2">False</span><span class="s1">):</span>
+            <span class="s1">show_test_item(item)</span>
+        <span class="s2">if not </span><span class="s1">item.config.getoption(</span><span class="s3">&quot;setuponly&quot;</span><span class="s1">, </span><span class="s2">False</span><span class="s1">):</span>
+            <span class="s1">reports.append(call_and_report(item, </span><span class="s3">&quot;call&quot;</span><span class="s1">, log))</span>
+    <span class="s1">reports.append(call_and_report(item, </span><span class="s3">&quot;teardown&quot;</span><span class="s1">, log, nextitem=nextitem))</span>
+    <span class="s0"># After all teardown hooks have been called</span>
+    <span class="s0"># want funcargs and request info to go away.</span>
+    <span class="s2">if </span><span class="s1">hasrequest:</span>
+        <span class="s1">item._request = </span><span class="s2">False  </span><span class="s0"># type: ignore[attr-defined]</span>
+        <span class="s1">item.funcargs = </span><span class="s2">None  </span><span class="s0"># type: ignore[attr-defined]</span>
+    <span class="s2">return </span><span class="s1">reports</span>
+
+
+<span class="s2">def </span><span class="s1">show_test_item(item: Item) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+    <span class="s0">&quot;&quot;&quot;Show test function, parameters and the fixtures of the test item.&quot;&quot;&quot;</span>
+    <span class="s1">tw = item.config.get_terminal_writer()</span>
+    <span class="s1">tw.line()</span>
+    <span class="s1">tw.write(</span><span class="s3">&quot; &quot; </span><span class="s1">* </span><span class="s4">8</span><span class="s1">)</span>
+    <span class="s1">tw.write(item.nodeid)</span>
+    <span class="s1">used_fixtures = sorted(getattr(item, </span><span class="s3">&quot;fixturenames&quot;</span><span class="s1">, []))</span>
+    <span class="s2">if </span><span class="s1">used_fixtures:</span>
+        <span class="s1">tw.write(</span><span class="s3">&quot; (fixtures used: {})&quot;</span><span class="s1">.format(</span><span class="s3">&quot;, &quot;</span><span class="s1">.join(used_fixtures)))</span>
+    <span class="s1">tw.flush()</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_runtest_setup(item: Item) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+    <span class="s1">_update_current_test_var(item, </span><span class="s3">&quot;setup&quot;</span><span class="s1">)</span>
+    <span class="s1">item.session._setupstate.prepare(item)</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_runtest_call(item: Item) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+    <span class="s1">_update_current_test_var(item, </span><span class="s3">&quot;call&quot;</span><span class="s1">)</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">del </span><span class="s1">sys.last_type</span>
+        <span class="s2">del </span><span class="s1">sys.last_value</span>
+        <span class="s2">del </span><span class="s1">sys.last_traceback</span>
+    <span class="s2">except </span><span class="s1">AttributeError:</span>
+        <span class="s2">pass</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">item.runtest()</span>
+    <span class="s2">except </span><span class="s1">Exception </span><span class="s2">as </span><span class="s1">e:</span>
+        <span class="s0"># Store trace info to allow postmortem debugging</span>
+        <span class="s1">sys.last_type = type(e)</span>
+        <span class="s1">sys.last_value = e</span>
+        <span class="s2">assert </span><span class="s1">e.__traceback__ </span><span class="s2">is not None</span>
+        <span class="s0"># Skip *this* frame</span>
+        <span class="s1">sys.last_traceback = e.__traceback__.tb_next</span>
+        <span class="s2">raise </span><span class="s1">e</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_runtest_teardown(item: Item, nextitem: Optional[Item]) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+    <span class="s1">_update_current_test_var(item, </span><span class="s3">&quot;teardown&quot;</span><span class="s1">)</span>
+    <span class="s1">item.session._setupstate.teardown_exact(item, nextitem)</span>
+    <span class="s1">_update_current_test_var(item, </span><span class="s2">None</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_update_current_test_var(</span>
+    <span class="s1">item: Item, when: Optional[</span><span class="s3">&quot;Literal['setup', 'call', 'teardown']&quot;</span><span class="s1">]</span>
+<span class="s1">) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+    <span class="s0">&quot;&quot;&quot;Update :envvar:`PYTEST_CURRENT_TEST` to reflect the current item and stage. 
+ 
+    If ``when`` is None, delete ``PYTEST_CURRENT_TEST`` from the environment. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">var_name = </span><span class="s3">&quot;PYTEST_CURRENT_TEST&quot;</span>
+    <span class="s2">if </span><span class="s1">when:</span>
+        <span class="s1">value = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">item.nodeid</span><span class="s5">} </span><span class="s3">(</span><span class="s5">{</span><span class="s1">when</span><span class="s5">}</span><span class="s3">)&quot;</span>
+        <span class="s0"># don't allow null bytes on environment variables (see #2644, #2957)</span>
+        <span class="s1">value = value.replace(</span><span class="s3">&quot;</span><span class="s5">\x00</span><span class="s3">&quot;</span><span class="s1">, </span><span class="s3">&quot;(null)&quot;</span><span class="s1">)</span>
+        <span class="s1">os.environ[var_name] = value</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">os.environ.pop(var_name)</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_report_teststatus(report: BaseReport) -&gt; Optional[Tuple[str, str, str]]:</span>
+    <span class="s2">if </span><span class="s1">report.when </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;setup&quot;</span><span class="s1">, </span><span class="s3">&quot;teardown&quot;</span><span class="s1">):</span>
+        <span class="s2">if </span><span class="s1">report.failed:</span>
+            <span class="s0">#      category, shortletter, verbose-word</span>
+            <span class="s2">return </span><span class="s3">&quot;error&quot;</span><span class="s1">, </span><span class="s3">&quot;E&quot;</span><span class="s1">, </span><span class="s3">&quot;ERROR&quot;</span>
+        <span class="s2">elif </span><span class="s1">report.skipped:</span>
+            <span class="s2">return </span><span class="s3">&quot;skipped&quot;</span><span class="s1">, </span><span class="s3">&quot;s&quot;</span><span class="s1">, </span><span class="s3">&quot;SKIPPED&quot;</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s3">&quot;&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span>
+    <span class="s2">return None</span>
+
+
+<span class="s0">#</span>
+<span class="s0"># Implementation</span>
+
+
+<span class="s2">def </span><span class="s1">call_and_report(</span>
+    <span class="s1">item: Item, when: </span><span class="s3">&quot;Literal['setup', 'call', 'teardown']&quot;</span><span class="s1">, log: bool = </span><span class="s2">True</span><span class="s1">, **kwds</span>
+<span class="s1">) -&gt; TestReport:</span>
+    <span class="s1">call = call_runtest_hook(item, when, **kwds)</span>
+    <span class="s1">hook = item.ihook</span>
+    <span class="s1">report: TestReport = hook.pytest_runtest_makereport(item=item, call=call)</span>
+    <span class="s2">if </span><span class="s1">log:</span>
+        <span class="s1">hook.pytest_runtest_logreport(report=report)</span>
+    <span class="s2">if </span><span class="s1">check_interactive_exception(call, report):</span>
+        <span class="s1">hook.pytest_exception_interact(node=item, call=call, report=report)</span>
+    <span class="s2">return </span><span class="s1">report</span>
+
+
+<span class="s2">def </span><span class="s1">check_interactive_exception(call: </span><span class="s3">&quot;CallInfo[object]&quot;</span><span class="s1">, report: BaseReport) -&gt; bool:</span>
+    <span class="s0">&quot;&quot;&quot;Check whether the call raised an exception that should be reported as 
+    interactive.&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">call.excinfo </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s0"># Didn't raise.</span>
+        <span class="s2">return False</span>
+    <span class="s2">if </span><span class="s1">hasattr(report, </span><span class="s3">&quot;wasxfail&quot;</span><span class="s1">):</span>
+        <span class="s0"># Exception was expected.</span>
+        <span class="s2">return False</span>
+    <span class="s2">if </span><span class="s1">isinstance(call.excinfo.value, (Skipped, bdb.BdbQuit)):</span>
+        <span class="s0"># Special control flow exception.</span>
+        <span class="s2">return False</span>
+    <span class="s2">return True</span>
+
+
+<span class="s2">def </span><span class="s1">call_runtest_hook(</span>
+    <span class="s1">item: Item, when: </span><span class="s3">&quot;Literal['setup', 'call', 'teardown']&quot;</span><span class="s1">, **kwds</span>
+<span class="s1">) -&gt; </span><span class="s3">&quot;CallInfo[None]&quot;</span><span class="s1">:</span>
+    <span class="s2">if </span><span class="s1">when == </span><span class="s3">&quot;setup&quot;</span><span class="s1">:</span>
+        <span class="s1">ihook: Callable[..., </span><span class="s2">None</span><span class="s1">] = item.ihook.pytest_runtest_setup</span>
+    <span class="s2">elif </span><span class="s1">when == </span><span class="s3">&quot;call&quot;</span><span class="s1">:</span>
+        <span class="s1">ihook = item.ihook.pytest_runtest_call</span>
+    <span class="s2">elif </span><span class="s1">when == </span><span class="s3">&quot;teardown&quot;</span><span class="s1">:</span>
+        <span class="s1">ihook = item.ihook.pytest_runtest_teardown</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">assert False</span><span class="s1">, </span><span class="s3">f&quot;Unhandled runtest hook case: </span><span class="s5">{</span><span class="s1">when</span><span class="s5">}</span><span class="s3">&quot;</span>
+    <span class="s1">reraise: Tuple[Type[BaseException], ...] = (Exit,)</span>
+    <span class="s2">if not </span><span class="s1">item.config.getoption(</span><span class="s3">&quot;usepdb&quot;</span><span class="s1">, </span><span class="s2">False</span><span class="s1">):</span>
+        <span class="s1">reraise += (KeyboardInterrupt,)</span>
+    <span class="s2">return </span><span class="s1">CallInfo.from_call(</span>
+        <span class="s2">lambda</span><span class="s1">: ihook(item=item, **kwds), when=when, reraise=reraise</span>
+    <span class="s1">)</span>
+
+
+<span class="s1">TResult = TypeVar(</span><span class="s3">&quot;TResult&quot;</span><span class="s1">, covariant=</span><span class="s2">True</span><span class="s1">)</span>
+
+
+<span class="s1">@final</span>
+<span class="s1">@attr.s(repr=</span><span class="s2">False</span><span class="s1">)</span>
+<span class="s2">class </span><span class="s1">CallInfo(Generic[TResult]):</span>
+    <span class="s0">&quot;&quot;&quot;Result/Exception info a function invocation. 
+ 
+    :param T result: 
+        The return value of the call, if it didn't raise. Can only be 
+        accessed if excinfo is None. 
+    :param Optional[ExceptionInfo] excinfo: 
+        The captured exception of the call, if it raised. 
+    :param float start: 
+        The system time when the call started, in seconds since the epoch. 
+    :param float stop: 
+        The system time when the call ended, in seconds since the epoch. 
+    :param float duration: 
+        The call duration, in seconds. 
+    :param str when: 
+        The context of invocation: &quot;setup&quot;, &quot;call&quot;, &quot;teardown&quot;, ... 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">_result = attr.ib(type=</span><span class="s3">&quot;Optional[TResult]&quot;</span><span class="s1">)</span>
+    <span class="s1">excinfo = attr.ib(type=Optional[ExceptionInfo[BaseException]])</span>
+    <span class="s1">start = attr.ib(type=float)</span>
+    <span class="s1">stop = attr.ib(type=float)</span>
+    <span class="s1">duration = attr.ib(type=float)</span>
+    <span class="s1">when = attr.ib(type=</span><span class="s3">&quot;Literal['collect', 'setup', 'call', 'teardown']&quot;</span><span class="s1">)</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">result(self) -&gt; TResult:</span>
+        <span class="s2">if </span><span class="s1">self.excinfo </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">AttributeError(</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">self</span><span class="s5">!r} </span><span class="s3">has no valid result&quot;</span><span class="s1">)</span>
+        <span class="s0"># The cast is safe because an exception wasn't raised, hence</span>
+        <span class="s0"># _result has the expected function return type (which may be</span>
+        <span class="s0">#  None, that's why a cast and not an assert).</span>
+        <span class="s2">return </span><span class="s1">cast(TResult, self._result)</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s2">def </span><span class="s1">from_call(</span>
+        <span class="s1">cls,</span>
+        <span class="s1">func: </span><span class="s3">&quot;Callable[[], TResult]&quot;</span><span class="s1">,</span>
+        <span class="s1">when: </span><span class="s3">&quot;Literal['collect', 'setup', 'call', 'teardown']&quot;</span><span class="s1">,</span>
+        <span class="s1">reraise: Optional[</span>
+            <span class="s1">Union[Type[BaseException], Tuple[Type[BaseException], ...]]</span>
+        <span class="s1">] = </span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">) -&gt; </span><span class="s3">&quot;CallInfo[TResult]&quot;</span><span class="s1">:</span>
+        <span class="s1">excinfo = </span><span class="s2">None</span>
+        <span class="s1">start = timing.time()</span>
+        <span class="s1">precise_start = timing.perf_counter()</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">result: Optional[TResult] = func()</span>
+        <span class="s2">except </span><span class="s1">BaseException:</span>
+            <span class="s1">excinfo = ExceptionInfo.from_current()</span>
+            <span class="s2">if </span><span class="s1">reraise </span><span class="s2">is not None and </span><span class="s1">isinstance(excinfo.value, reraise):</span>
+                <span class="s2">raise</span>
+            <span class="s1">result = </span><span class="s2">None</span>
+        <span class="s0"># use the perf counter</span>
+        <span class="s1">precise_stop = timing.perf_counter()</span>
+        <span class="s1">duration = precise_stop - precise_start</span>
+        <span class="s1">stop = timing.time()</span>
+        <span class="s2">return </span><span class="s1">cls(</span>
+            <span class="s1">start=start,</span>
+            <span class="s1">stop=stop,</span>
+            <span class="s1">duration=duration,</span>
+            <span class="s1">when=when,</span>
+            <span class="s1">result=result,</span>
+            <span class="s1">excinfo=excinfo,</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self) -&gt; str:</span>
+        <span class="s2">if </span><span class="s1">self.excinfo </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s3">f&quot;&lt;CallInfo when=</span><span class="s5">{</span><span class="s1">self.when</span><span class="s5">!r} </span><span class="s3">result: </span><span class="s5">{</span><span class="s1">self._result</span><span class="s5">!r}</span><span class="s3">&gt;&quot;</span>
+        <span class="s2">return </span><span class="s3">f&quot;&lt;CallInfo when=</span><span class="s5">{</span><span class="s1">self.when</span><span class="s5">!r} </span><span class="s3">excinfo=</span><span class="s5">{</span><span class="s1">self.excinfo</span><span class="s5">!r}</span><span class="s3">&gt;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_runtest_makereport(item: Item, call: CallInfo[</span><span class="s2">None</span><span class="s1">]) -&gt; TestReport:</span>
+    <span class="s2">return </span><span class="s1">TestReport.from_item_and_call(item, call)</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_make_collect_report(collector: Collector) -&gt; CollectReport:</span>
+    <span class="s1">call = CallInfo.from_call(</span><span class="s2">lambda</span><span class="s1">: list(collector.collect()), </span><span class="s3">&quot;collect&quot;</span><span class="s1">)</span>
+    <span class="s1">longrepr: Union[</span><span class="s2">None</span><span class="s1">, Tuple[str, int, str], str, TerminalRepr] = </span><span class="s2">None</span>
+    <span class="s2">if not </span><span class="s1">call.excinfo:</span>
+        <span class="s1">outcome: Literal[</span><span class="s3">&quot;passed&quot;</span><span class="s1">, </span><span class="s3">&quot;skipped&quot;</span><span class="s1">, </span><span class="s3">&quot;failed&quot;</span><span class="s1">] = </span><span class="s3">&quot;passed&quot;</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">skip_exceptions = [Skipped]</span>
+        <span class="s1">unittest = sys.modules.get(</span><span class="s3">&quot;unittest&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">unittest </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s0"># Type ignored because unittest is loaded dynamically.</span>
+            <span class="s1">skip_exceptions.append(unittest.SkipTest)  </span><span class="s0"># type: ignore</span>
+        <span class="s2">if </span><span class="s1">isinstance(call.excinfo.value, tuple(skip_exceptions)):</span>
+            <span class="s1">outcome = </span><span class="s3">&quot;skipped&quot;</span>
+            <span class="s1">r_ = collector._repr_failure_py(call.excinfo, </span><span class="s3">&quot;line&quot;</span><span class="s1">)</span>
+            <span class="s2">assert </span><span class="s1">isinstance(r_, ExceptionChainRepr), repr(r_)</span>
+            <span class="s1">r = r_.reprcrash</span>
+            <span class="s2">assert </span><span class="s1">r</span>
+            <span class="s1">longrepr = (str(r.path), r.lineno, r.message)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">outcome = </span><span class="s3">&quot;failed&quot;</span>
+            <span class="s1">errorinfo = collector.repr_failure(call.excinfo)</span>
+            <span class="s2">if not </span><span class="s1">hasattr(errorinfo, </span><span class="s3">&quot;toterminal&quot;</span><span class="s1">):</span>
+                <span class="s2">assert </span><span class="s1">isinstance(errorinfo, str)</span>
+                <span class="s1">errorinfo = CollectErrorRepr(errorinfo)</span>
+            <span class="s1">longrepr = errorinfo</span>
+    <span class="s1">result = call.result </span><span class="s2">if not </span><span class="s1">call.excinfo </span><span class="s2">else None</span>
+    <span class="s1">rep = CollectReport(collector.nodeid, outcome, longrepr, result)</span>
+    <span class="s1">rep.call = call  </span><span class="s0"># type: ignore # see collect_one_node</span>
+    <span class="s2">return </span><span class="s1">rep</span>
+
+
+<span class="s2">class </span><span class="s1">SetupState:</span>
+    <span class="s0">&quot;&quot;&quot;Shared state for setting up/tearing down test items or collectors.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self):</span>
+        <span class="s1">self.stack: List[Node] = []</span>
+        <span class="s1">self._finalizers: Dict[Node, List[Callable[[], object]]] = {}</span>
+
+    <span class="s2">def </span><span class="s1">addfinalizer(self, finalizer: Callable[[], object], colitem) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot;Attach a finalizer to the given colitem.&quot;&quot;&quot;</span>
+        <span class="s2">assert </span><span class="s1">colitem </span><span class="s2">and not </span><span class="s1">isinstance(colitem, tuple)</span>
+        <span class="s2">assert </span><span class="s1">callable(finalizer)</span>
+        <span class="s0"># assert colitem in self.stack  # some unit tests don't setup stack :/</span>
+        <span class="s1">self._finalizers.setdefault(colitem, []).append(finalizer)</span>
+
+    <span class="s2">def </span><span class="s1">_pop_and_teardown(self):</span>
+        <span class="s1">colitem = self.stack.pop()</span>
+        <span class="s1">self._teardown_with_finalization(colitem)</span>
+
+    <span class="s2">def </span><span class="s1">_callfinalizers(self, colitem) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">finalizers = self._finalizers.pop(colitem, </span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s1">exc = </span><span class="s2">None</span>
+        <span class="s2">while </span><span class="s1">finalizers:</span>
+            <span class="s1">fin = finalizers.pop()</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">fin()</span>
+            <span class="s2">except </span><span class="s1">TEST_OUTCOME </span><span class="s2">as </span><span class="s1">e:</span>
+                <span class="s0"># XXX Only first exception will be seen by user,</span>
+                <span class="s0">#     ideally all should be reported.</span>
+                <span class="s2">if </span><span class="s1">exc </span><span class="s2">is None</span><span class="s1">:</span>
+                    <span class="s1">exc = e</span>
+        <span class="s2">if </span><span class="s1">exc:</span>
+            <span class="s2">raise </span><span class="s1">exc</span>
+
+    <span class="s2">def </span><span class="s1">_teardown_with_finalization(self, colitem) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">self._callfinalizers(colitem)</span>
+        <span class="s1">colitem.teardown()</span>
+        <span class="s2">for </span><span class="s1">colitem </span><span class="s2">in </span><span class="s1">self._finalizers:</span>
+            <span class="s2">assert </span><span class="s1">colitem </span><span class="s2">in </span><span class="s1">self.stack</span>
+
+    <span class="s2">def </span><span class="s1">teardown_all(self) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s2">while </span><span class="s1">self.stack:</span>
+            <span class="s1">self._pop_and_teardown()</span>
+        <span class="s2">for </span><span class="s1">key </span><span class="s2">in </span><span class="s1">list(self._finalizers):</span>
+            <span class="s1">self._teardown_with_finalization(key)</span>
+        <span class="s2">assert not </span><span class="s1">self._finalizers</span>
+
+    <span class="s2">def </span><span class="s1">teardown_exact(self, item, nextitem) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">needed_collectors = nextitem </span><span class="s2">and </span><span class="s1">nextitem.listchain() </span><span class="s2">or </span><span class="s1">[]</span>
+        <span class="s1">self._teardown_towards(needed_collectors)</span>
+
+    <span class="s2">def </span><span class="s1">_teardown_towards(self, needed_collectors) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">exc = </span><span class="s2">None</span>
+        <span class="s2">while </span><span class="s1">self.stack:</span>
+            <span class="s2">if </span><span class="s1">self.stack == needed_collectors[: len(self.stack)]:</span>
+                <span class="s2">break</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">self._pop_and_teardown()</span>
+            <span class="s2">except </span><span class="s1">TEST_OUTCOME </span><span class="s2">as </span><span class="s1">e:</span>
+                <span class="s0"># XXX Only first exception will be seen by user,</span>
+                <span class="s0">#     ideally all should be reported.</span>
+                <span class="s2">if </span><span class="s1">exc </span><span class="s2">is None</span><span class="s1">:</span>
+                    <span class="s1">exc = e</span>
+        <span class="s2">if </span><span class="s1">exc:</span>
+            <span class="s2">raise </span><span class="s1">exc</span>
+
+    <span class="s2">def </span><span class="s1">prepare(self, colitem) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot;Setup objects along the collector chain to the test-method.&quot;&quot;&quot;</span>
+
+        <span class="s0"># Check if the last collection node has raised an error.</span>
+        <span class="s2">for </span><span class="s1">col </span><span class="s2">in </span><span class="s1">self.stack:</span>
+            <span class="s2">if </span><span class="s1">hasattr(col, </span><span class="s3">&quot;_prepare_exc&quot;</span><span class="s1">):</span>
+                <span class="s1">exc = col._prepare_exc  </span><span class="s0"># type: ignore[attr-defined]</span>
+                <span class="s2">raise </span><span class="s1">exc</span>
+
+        <span class="s1">needed_collectors = colitem.listchain()</span>
+        <span class="s2">for </span><span class="s1">col </span><span class="s2">in </span><span class="s1">needed_collectors[len(self.stack) :]:</span>
+            <span class="s1">self.stack.append(col)</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">col.setup()</span>
+            <span class="s2">except </span><span class="s1">TEST_OUTCOME </span><span class="s2">as </span><span class="s1">e:</span>
+                <span class="s1">col._prepare_exc = e  </span><span class="s0"># type: ignore[attr-defined]</span>
+                <span class="s2">raise </span><span class="s1">e</span>
+
+
+<span class="s2">def </span><span class="s1">collect_one_node(collector: Collector) -&gt; CollectReport:</span>
+    <span class="s1">ihook = collector.ihook</span>
+    <span class="s1">ihook.pytest_collectstart(collector=collector)</span>
+    <span class="s1">rep: CollectReport = ihook.pytest_make_collect_report(collector=collector)</span>
+    <span class="s1">call = rep.__dict__.pop(</span><span class="s3">&quot;call&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">call </span><span class="s2">and </span><span class="s1">check_interactive_exception(call, rep):</span>
+        <span class="s1">ihook.pytest_exception_interact(node=collector, call=call, report=rep)</span>
+    <span class="s2">return </span><span class="s1">rep</span>
+</pre>
+</body>
+</html>

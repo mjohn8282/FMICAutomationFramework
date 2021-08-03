@@ -1,0 +1,471 @@
+<html>
+<head>
+<title>tokenizer.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+.s5 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+tokenizer.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+This module contains a tokenizer for Excel formulae. 
+ 
+The tokenizer is based on the Javascript tokenizer found at 
+http://ewbi.blogs.com/develops/2004/12/excel_formula_p.html written by Eric 
+Bachtal 
+&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">re</span>
+
+
+<span class="s2">class </span><span class="s1">TokenizerError(Exception):</span>
+    <span class="s0">&quot;&quot;&quot;Base class for all Tokenizer errors.&quot;&quot;&quot;</span>
+
+
+<span class="s2">class </span><span class="s1">Tokenizer(object):</span>
+
+    <span class="s0">&quot;&quot;&quot; 
+    A tokenizer for Excel worksheet formulae. 
+ 
+    Converts a unicode string representing an Excel formula (in A1 notation) 
+    into a sequence of `Token` objects. 
+ 
+    `formula`: The unicode string to tokenize 
+ 
+    Tokenizer defines a method `._parse()` to parse the formula into tokens, 
+    which can then be accessed through the `.items` attribute. 
+ 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">SN_RE = re.compile(</span><span class="s3">&quot;^[1-9](</span><span class="s4">\\</span><span class="s3">.[0-9]+)?[Ee]$&quot;</span><span class="s1">)  </span><span class="s0"># Scientific notation</span>
+    <span class="s1">WSPACE_RE = re.compile(</span><span class="s3">r&quot;[ \n]+&quot;</span><span class="s1">)</span>
+    <span class="s1">STRING_REGEXES = {</span>
+        <span class="s0"># Inside a string, all characters are treated as literals, except for</span>
+        <span class="s0"># the quote character used to start the string. That character, when</span>
+        <span class="s0"># doubled is treated as a single character in the string. If an</span>
+        <span class="s0"># unmatched quote appears, the string is terminated.</span>
+        <span class="s3">'&quot;'</span><span class="s1">: re.compile(</span><span class="s3">'&quot;(?:[^&quot;]*&quot;&quot;)*[^&quot;]*&quot;(?!&quot;)'</span><span class="s1">),</span>
+        <span class="s3">&quot;'&quot;</span><span class="s1">: re.compile(</span><span class="s3">&quot;'(?:[^']*'')*[^']*'(?!')&quot;</span><span class="s1">),</span>
+    <span class="s1">}</span>
+    <span class="s1">ERROR_CODES = (</span><span class="s3">&quot;#NULL!&quot;</span><span class="s1">, </span><span class="s3">&quot;#DIV/0!&quot;</span><span class="s1">, </span><span class="s3">&quot;#VALUE!&quot;</span><span class="s1">, </span><span class="s3">&quot;#REF!&quot;</span><span class="s1">, </span><span class="s3">&quot;#NAME?&quot;</span><span class="s1">,</span>
+                   <span class="s3">&quot;#NUM!&quot;</span><span class="s1">, </span><span class="s3">&quot;#N/A&quot;</span><span class="s1">, </span><span class="s3">&quot;#GETTING_DATA&quot;</span><span class="s1">)</span>
+    <span class="s1">TOKEN_ENDERS = </span><span class="s3">',;}) +-*/^&amp;=&gt;&lt;%'  </span><span class="s0"># Each of these characters, marks the</span>
+                                       <span class="s0"># end of an operand token</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, formula):</span>
+        <span class="s1">self.formula = formula</span>
+        <span class="s1">self.items = []</span>
+        <span class="s1">self.token_stack = []  </span><span class="s0"># Used to keep track of arrays, functions, and</span>
+                               <span class="s0"># parentheses</span>
+        <span class="s1">self.offset = </span><span class="s5">0  </span><span class="s0"># How many chars have we read</span>
+        <span class="s1">self.token = []  </span><span class="s0"># Used to build up token values char by char</span>
+        <span class="s1">self._parse()</span>
+
+    <span class="s2">def </span><span class="s1">_parse(self):</span>
+        <span class="s0">&quot;&quot;&quot;Populate self.items with the tokens from the formula.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.offset:</span>
+            <span class="s2">return  </span><span class="s0"># Already parsed!</span>
+        <span class="s2">if not </span><span class="s1">self.formula:</span>
+            <span class="s2">return</span>
+        <span class="s2">elif </span><span class="s1">self.formula[</span><span class="s5">0</span><span class="s1">] == </span><span class="s3">'='</span><span class="s1">:</span>
+            <span class="s1">self.offset += </span><span class="s5">1</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.items.append(Token(self.formula, Token.LITERAL))</span>
+            <span class="s2">return</span>
+        <span class="s1">consumers = (</span>
+            <span class="s1">(</span><span class="s3">'&quot;</span><span class="s4">\'</span><span class="s3">'</span><span class="s1">, self._parse_string),</span>
+            <span class="s1">(</span><span class="s3">'['</span><span class="s1">, self._parse_brackets),</span>
+            <span class="s1">(</span><span class="s3">'#'</span><span class="s1">, self._parse_error),</span>
+            <span class="s1">(</span><span class="s3">' '</span><span class="s1">, self._parse_whitespace),</span>
+            <span class="s1">(</span><span class="s3">'</span><span class="s4">\n</span><span class="s3">'</span><span class="s1">, self._parse_whitespace),</span>
+            <span class="s1">(</span><span class="s3">'+-*/^&amp;=&gt;&lt;%'</span><span class="s1">, self._parse_operator),</span>
+            <span class="s1">(</span><span class="s3">'{('</span><span class="s1">, self._parse_opener),</span>
+            <span class="s1">(</span><span class="s3">')}'</span><span class="s1">, self._parse_closer),</span>
+            <span class="s1">(</span><span class="s3">';,'</span><span class="s1">, self._parse_separator),</span>
+        <span class="s1">)</span>
+        <span class="s1">dispatcher = {}  </span><span class="s0"># maps chars to the specific parsing function</span>
+        <span class="s2">for </span><span class="s1">chars, consumer </span><span class="s2">in </span><span class="s1">consumers:</span>
+            <span class="s1">dispatcher.update(dict.fromkeys(chars, consumer))</span>
+        <span class="s2">while </span><span class="s1">self.offset &lt; len(self.formula):</span>
+            <span class="s2">if </span><span class="s1">self.check_scientific_notation():  </span><span class="s0"># May consume one character</span>
+                <span class="s2">continue</span>
+            <span class="s1">curr_char = self.formula[self.offset]</span>
+            <span class="s2">if </span><span class="s1">curr_char </span><span class="s2">in </span><span class="s1">self.TOKEN_ENDERS:</span>
+                <span class="s1">self.save_token()</span>
+            <span class="s2">if </span><span class="s1">curr_char </span><span class="s2">in </span><span class="s1">dispatcher:</span>
+                <span class="s1">self.offset += dispatcher[curr_char]()</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s0"># TODO: this can probably be sped up using a regex to get to</span>
+                <span class="s0"># the next interesting character</span>
+                <span class="s1">self.token.append(curr_char)</span>
+                <span class="s1">self.offset += </span><span class="s5">1</span>
+        <span class="s1">self.save_token()</span>
+
+    <span class="s2">def </span><span class="s1">_parse_string(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Parse a &quot;-delimited string or '-delimited link. 
+ 
+        The offset must be pointing to either a single quote (&quot;'&quot;) or double 
+        quote ('&quot;') character. The strings are parsed according to Excel 
+        rules where to escape the delimiter you just double it up. E.g., 
+        &quot;abc&quot;&quot;def&quot; in Excel is parsed as 'abc&quot;def' in Python. 
+ 
+        Returns the number of characters matched. (Does not update 
+        self.offset) 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.assert_empty_token(can_follow=</span><span class="s3">':'</span><span class="s1">)</span>
+        <span class="s1">delim = self.formula[self.offset]</span>
+        <span class="s2">assert </span><span class="s1">delim </span><span class="s2">in </span><span class="s1">(</span><span class="s3">'&quot;'</span><span class="s1">, </span><span class="s3">&quot;'&quot;</span><span class="s1">)</span>
+        <span class="s1">regex = self.STRING_REGEXES[delim]</span>
+        <span class="s1">match = regex.match(self.formula[self.offset:])</span>
+        <span class="s2">if </span><span class="s1">match </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">subtype = </span><span class="s3">&quot;string&quot; </span><span class="s2">if </span><span class="s1">delim == </span><span class="s3">'&quot;' </span><span class="s2">else </span><span class="s3">'link'</span>
+            <span class="s2">raise </span><span class="s1">TokenizerError(</span>
+                <span class="s3">&quot;Reached end of formula while parsing %s in %s&quot; </span><span class="s1">%</span>
+                <span class="s1">(subtype, self.formula))</span>
+        <span class="s1">match = match.group(</span><span class="s5">0</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">delim == </span><span class="s3">'&quot;'</span><span class="s1">:</span>
+            <span class="s1">self.items.append(Token.make_operand(match))</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.token.append(match)</span>
+        <span class="s2">return </span><span class="s1">len(match)</span>
+
+    <span class="s2">def </span><span class="s1">_parse_brackets(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Consume all the text between square brackets []. 
+ 
+        Returns the number of characters matched. (Does not update 
+        self.offset) 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s2">assert </span><span class="s1">self.formula[self.offset] == </span><span class="s3">'['</span>
+        <span class="s1">lefts = [(t.start(), </span><span class="s5">1</span><span class="s1">) </span><span class="s2">for </span><span class="s1">t </span><span class="s2">in </span><span class="s1">re.finditer(</span><span class="s3">r&quot;\[&quot;</span><span class="s1">, self.formula)]</span>
+        <span class="s1">rights = [(t.start(), -</span><span class="s5">1</span><span class="s1">) </span><span class="s2">for </span><span class="s1">t </span><span class="s2">in </span><span class="s1">re.finditer(</span><span class="s3">r&quot;\]&quot;</span><span class="s1">, self.formula)]</span>
+
+        <span class="s1">open_count = </span><span class="s5">0</span>
+        <span class="s2">for </span><span class="s1">idx, open_close </span><span class="s2">in </span><span class="s1">sorted(lefts + rights):</span>
+            <span class="s1">open_count += open_close</span>
+            <span class="s2">if </span><span class="s1">open_count == </span><span class="s5">0</span><span class="s1">:</span>
+                <span class="s1">outer_right = idx + </span><span class="s5">1</span>
+                <span class="s1">self.token.append(self.formula[self.offset:outer_right])</span>
+                <span class="s2">return </span><span class="s1">outer_right - self.offset</span>
+
+        <span class="s2">raise </span><span class="s1">TokenizerError(</span><span class="s3">&quot;Encountered unmatched '[' in %s&quot; </span><span class="s1">% self.formula)</span>
+
+    <span class="s2">def </span><span class="s1">_parse_error(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Consume the text following a '#' as an error. 
+ 
+        Looks for a match in self.ERROR_CODES and returns the number of 
+        characters matched. (Does not update self.offset) 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.assert_empty_token(can_follow=</span><span class="s3">'!'</span><span class="s1">)</span>
+        <span class="s2">assert </span><span class="s1">self.formula[self.offset] == </span><span class="s3">'#'</span>
+        <span class="s1">subformula = self.formula[self.offset:]</span>
+        <span class="s2">for </span><span class="s1">err </span><span class="s2">in </span><span class="s1">self.ERROR_CODES:</span>
+            <span class="s2">if </span><span class="s1">subformula.startswith(err):</span>
+                <span class="s1">self.items.append(Token.make_operand(</span><span class="s3">''</span><span class="s1">.join(self.token) + err))</span>
+                <span class="s2">del </span><span class="s1">self.token[:]</span>
+                <span class="s2">return </span><span class="s1">len(err)</span>
+        <span class="s2">raise </span><span class="s1">TokenizerError(</span>
+            <span class="s3">&quot;Invalid error code at position %d in '%s'&quot; </span><span class="s1">%</span>
+            <span class="s1">(self.offset, self.formula))</span>
+
+    <span class="s2">def </span><span class="s1">_parse_whitespace(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Consume a string of consecutive spaces. 
+ 
+        Returns the number of spaces found. (Does not update self.offset). 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s2">assert </span><span class="s1">self.formula[self.offset] </span><span class="s2">in </span><span class="s1">(</span><span class="s3">' '</span><span class="s1">, </span><span class="s3">'</span><span class="s4">\n</span><span class="s3">'</span><span class="s1">)</span>
+        <span class="s1">self.items.append(Token(self.formula[self.offset], Token.WSPACE))</span>
+        <span class="s2">return </span><span class="s1">self.WSPACE_RE.match(self.formula[self.offset:]).end()</span>
+
+    <span class="s2">def </span><span class="s1">_parse_operator(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Consume the characters constituting an operator. 
+ 
+        Returns the number of characters consumed. (Does not update 
+        self.offset) 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.formula[self.offset:self.offset + </span><span class="s5">2</span><span class="s1">] </span><span class="s2">in </span><span class="s1">(</span><span class="s3">'&gt;='</span><span class="s1">, </span><span class="s3">'&lt;='</span><span class="s1">, </span><span class="s3">'&lt;&gt;'</span><span class="s1">):</span>
+            <span class="s1">self.items.append(Token(</span>
+                <span class="s1">self.formula[self.offset:self.offset + </span><span class="s5">2</span><span class="s1">],</span>
+                <span class="s1">Token.OP_IN</span>
+            <span class="s1">))</span>
+            <span class="s2">return </span><span class="s5">2</span>
+        <span class="s1">curr_char = self.formula[self.offset]  </span><span class="s0"># guaranteed to be 1 char</span>
+        <span class="s2">assert </span><span class="s1">curr_char </span><span class="s2">in </span><span class="s3">'%*/^&amp;=&gt;&lt;+-'</span>
+        <span class="s2">if </span><span class="s1">curr_char == </span><span class="s3">'%'</span><span class="s1">:</span>
+            <span class="s1">token = Token(</span><span class="s3">'%'</span><span class="s1">, Token.OP_POST)</span>
+        <span class="s2">elif </span><span class="s1">curr_char </span><span class="s2">in </span><span class="s3">&quot;*/^&amp;=&gt;&lt;&quot;</span><span class="s1">:</span>
+            <span class="s1">token = Token(curr_char, Token.OP_IN)</span>
+        <span class="s0"># From here on, curr_char is guaranteed to be in '+-'</span>
+        <span class="s2">elif not </span><span class="s1">self.items:</span>
+            <span class="s1">token = Token(curr_char, Token.OP_PRE)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">prev = next((i </span><span class="s2">for </span><span class="s1">i </span><span class="s2">in </span><span class="s1">reversed(self.items)</span>
+                         <span class="s2">if </span><span class="s1">i.type != Token.WSPACE), </span><span class="s2">None</span><span class="s1">)</span>
+            <span class="s1">is_infix = prev </span><span class="s2">and </span><span class="s1">(</span>
+                <span class="s1">prev.subtype == Token.CLOSE</span>
+                <span class="s2">or </span><span class="s1">prev.type == Token.OP_POST</span>
+                <span class="s2">or </span><span class="s1">prev.type == Token.OPERAND</span>
+            <span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">is_infix:</span>
+                <span class="s1">token = Token(curr_char, Token.OP_IN)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">token = Token(curr_char, Token.OP_PRE)</span>
+        <span class="s1">self.items.append(token)</span>
+        <span class="s2">return </span><span class="s5">1</span>
+
+    <span class="s2">def </span><span class="s1">_parse_opener(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Consumes a ( or { character. 
+ 
+        Returns the number of characters consumed. (Does not update 
+        self.offset) 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s2">assert </span><span class="s1">self.formula[self.offset] </span><span class="s2">in </span><span class="s1">(</span><span class="s3">'('</span><span class="s1">, </span><span class="s3">'{'</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">self.formula[self.offset] == </span><span class="s3">'{'</span><span class="s1">:</span>
+            <span class="s1">self.assert_empty_token()</span>
+            <span class="s1">token = Token.make_subexp(</span><span class="s3">&quot;{&quot;</span><span class="s1">)</span>
+        <span class="s2">elif </span><span class="s1">self.token:</span>
+            <span class="s1">token_value = </span><span class="s3">&quot;&quot;</span><span class="s1">.join(self.token) + </span><span class="s3">'('</span>
+            <span class="s2">del </span><span class="s1">self.token[:]</span>
+            <span class="s1">token = Token.make_subexp(token_value)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">token = Token.make_subexp(</span><span class="s3">&quot;(&quot;</span><span class="s1">)</span>
+        <span class="s1">self.items.append(token)</span>
+        <span class="s1">self.token_stack.append(token)</span>
+        <span class="s2">return </span><span class="s5">1</span>
+
+    <span class="s2">def </span><span class="s1">_parse_closer(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Consumes a } or ) character. 
+ 
+        Returns the number of characters consumed. (Does not update 
+        self.offset) 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s2">assert </span><span class="s1">self.formula[self.offset] </span><span class="s2">in </span><span class="s1">(</span><span class="s3">')'</span><span class="s1">, </span><span class="s3">'}'</span><span class="s1">)</span>
+        <span class="s1">token = self.token_stack.pop().get_closer()</span>
+        <span class="s2">if </span><span class="s1">token.value != self.formula[self.offset]:</span>
+            <span class="s2">raise </span><span class="s1">TokenizerError(</span>
+                <span class="s3">&quot;Mismatched ( and { pair in '%s'&quot; </span><span class="s1">% self.formula)</span>
+        <span class="s1">self.items.append(token)</span>
+        <span class="s2">return </span><span class="s5">1</span>
+
+    <span class="s2">def </span><span class="s1">_parse_separator(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Consumes a ; or , character. 
+ 
+        Returns the number of characters consumed. (Does not update 
+        self.offset) 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">curr_char = self.formula[self.offset]</span>
+        <span class="s2">assert </span><span class="s1">curr_char </span><span class="s2">in </span><span class="s1">(</span><span class="s3">';'</span><span class="s1">, </span><span class="s3">','</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">curr_char == </span><span class="s3">';'</span><span class="s1">:</span>
+            <span class="s1">token = Token.make_separator(</span><span class="s3">&quot;;&quot;</span><span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">top_type = self.token_stack[-</span><span class="s5">1</span><span class="s1">].type</span>
+            <span class="s2">except </span><span class="s1">IndexError:</span>
+                <span class="s1">token = Token(</span><span class="s3">&quot;,&quot;</span><span class="s1">, Token.OP_IN)  </span><span class="s0"># Range Union operator</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">if </span><span class="s1">top_type == Token.PAREN:</span>
+                    <span class="s1">token = Token(</span><span class="s3">&quot;,&quot;</span><span class="s1">, Token.OP_IN)  </span><span class="s0"># Range Union operator</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">token = Token.make_separator(</span><span class="s3">&quot;,&quot;</span><span class="s1">)</span>
+        <span class="s1">self.items.append(token)</span>
+        <span class="s2">return </span><span class="s5">1</span>
+
+    <span class="s2">def </span><span class="s1">check_scientific_notation(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Consumes a + or - character if part of a number in sci. notation. 
+ 
+        Returns True if the character was consumed and self.offset was 
+        updated, False otherwise. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">curr_char = self.formula[self.offset]</span>
+        <span class="s2">if </span><span class="s1">(curr_char </span><span class="s2">in </span><span class="s3">'+-'</span>
+                <span class="s2">and </span><span class="s1">len(self.token) &gt;= </span><span class="s5">1</span>
+                <span class="s2">and </span><span class="s1">self.SN_RE.match(</span><span class="s3">&quot;&quot;</span><span class="s1">.join(self.token))):</span>
+            <span class="s1">self.token.append(curr_char)</span>
+            <span class="s1">self.offset += </span><span class="s5">1</span>
+            <span class="s2">return True</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">assert_empty_token(self, can_follow=()):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Ensure that there's no token currently being parsed. 
+ 
+        Or if there is a token being parsed, it must end with a character in 
+        can_follow. 
+ 
+        If there are unconsumed token contents, it means we hit an unexpected 
+        token transition. In this case, we raise a TokenizerError 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.token </span><span class="s2">and </span><span class="s1">self.token[-</span><span class="s5">1</span><span class="s1">] </span><span class="s2">not in </span><span class="s1">can_follow:</span>
+            <span class="s2">raise </span><span class="s1">TokenizerError(</span>
+                <span class="s3">&quot;Unexpected character at position %d in '%s'&quot; </span><span class="s1">%</span>
+                <span class="s1">(self.offset, self.formula))</span>
+
+    <span class="s2">def </span><span class="s1">save_token(self):</span>
+        <span class="s0">&quot;&quot;&quot;If there's a token being parsed, add it to the item list.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.token:</span>
+            <span class="s1">self.items.append(Token.make_operand(</span><span class="s3">&quot;&quot;</span><span class="s1">.join(self.token)))</span>
+            <span class="s2">del </span><span class="s1">self.token[:]</span>
+
+    <span class="s2">def </span><span class="s1">render(self):</span>
+        <span class="s0">&quot;&quot;&quot;Convert the parsed tokens back to a string.&quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">self.items:</span>
+            <span class="s2">return </span><span class="s3">&quot;&quot;</span>
+        <span class="s2">elif </span><span class="s1">self.items[</span><span class="s5">0</span><span class="s1">].type == Token.LITERAL:</span>
+            <span class="s2">return </span><span class="s1">self.items[</span><span class="s5">0</span><span class="s1">].value</span>
+        <span class="s2">return </span><span class="s3">&quot;=&quot; </span><span class="s1">+ </span><span class="s3">&quot;&quot;</span><span class="s1">.join(token.value </span><span class="s2">for </span><span class="s1">token </span><span class="s2">in </span><span class="s1">self.items)</span>
+
+
+<span class="s2">class </span><span class="s1">Token(object):</span>
+
+    <span class="s0">&quot;&quot;&quot; 
+    A token in an Excel formula. 
+ 
+    Tokens have three attributes: 
+ 
+    * `value`: The string value parsed that led to this token 
+    * `type`: A string identifying the type of token 
+    * `subtype`: A string identifying subtype of the token (optional, and 
+                 defaults to &quot;&quot;) 
+ 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__slots__ = [</span><span class="s3">'value'</span><span class="s1">, </span><span class="s3">'type'</span><span class="s1">, </span><span class="s3">'subtype'</span><span class="s1">]</span>
+
+    <span class="s1">LITERAL = </span><span class="s3">&quot;LITERAL&quot;</span>
+    <span class="s1">OPERAND = </span><span class="s3">&quot;OPERAND&quot;</span>
+    <span class="s1">FUNC = </span><span class="s3">&quot;FUNC&quot;</span>
+    <span class="s1">ARRAY = </span><span class="s3">&quot;ARRAY&quot;</span>
+    <span class="s1">PAREN = </span><span class="s3">&quot;PAREN&quot;</span>
+    <span class="s1">SEP = </span><span class="s3">&quot;SEP&quot;</span>
+    <span class="s1">OP_PRE = </span><span class="s3">&quot;OPERATOR-PREFIX&quot;</span>
+    <span class="s1">OP_IN = </span><span class="s3">&quot;OPERATOR-INFIX&quot;</span>
+    <span class="s1">OP_POST = </span><span class="s3">&quot;OPERATOR-POSTFIX&quot;</span>
+    <span class="s1">WSPACE = </span><span class="s3">&quot;WHITE-SPACE&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, value, type_, subtype=</span><span class="s3">&quot;&quot;</span><span class="s1">):</span>
+        <span class="s1">self.value = value</span>
+        <span class="s1">self.type = type_</span>
+        <span class="s1">self.subtype = subtype</span>
+
+    <span class="s0"># Literal operands:</span>
+    <span class="s0">#</span>
+    <span class="s0"># Literal operands are always of type 'OPERAND' and can be of subtype</span>
+    <span class="s0"># 'TEXT' (for text strings), 'NUMBER' (for all numeric types), 'LOGICAL'</span>
+    <span class="s0"># (for TRUE and FALSE), 'ERROR' (for literal error values), or 'RANGE'</span>
+    <span class="s0"># (for all range references).</span>
+
+    <span class="s1">TEXT = </span><span class="s3">'TEXT'</span>
+    <span class="s1">NUMBER = </span><span class="s3">'NUMBER'</span>
+    <span class="s1">LOGICAL = </span><span class="s3">'LOGICAL'</span>
+    <span class="s1">ERROR = </span><span class="s3">'ERROR'</span>
+    <span class="s1">RANGE = </span><span class="s3">'RANGE'</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">u&quot;{0} {1} {2}:&quot;</span><span class="s1">.format(self.type, self.subtype, self.value)</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s2">def </span><span class="s1">make_operand(cls, value):</span>
+        <span class="s0">&quot;&quot;&quot;Create an operand token.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">value.startswith(</span><span class="s3">'&quot;'</span><span class="s1">):</span>
+            <span class="s1">subtype = cls.TEXT</span>
+        <span class="s2">elif </span><span class="s1">value.startswith(</span><span class="s3">'#'</span><span class="s1">):</span>
+            <span class="s1">subtype = cls.ERROR</span>
+        <span class="s2">elif </span><span class="s1">value </span><span class="s2">in </span><span class="s1">(</span><span class="s3">'TRUE'</span><span class="s1">, </span><span class="s3">'FALSE'</span><span class="s1">):</span>
+            <span class="s1">subtype = cls.LOGICAL</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">float(value)</span>
+                <span class="s1">subtype = cls.NUMBER</span>
+            <span class="s2">except </span><span class="s1">ValueError:</span>
+                <span class="s1">subtype = cls.RANGE</span>
+        <span class="s2">return </span><span class="s1">cls(value, cls.OPERAND, subtype)</span>
+
+
+    <span class="s0"># Subexpresssions</span>
+    <span class="s0">#</span>
+    <span class="s0"># There are 3 types of `Subexpressions`: functions, array literals, and</span>
+    <span class="s0"># parentheticals. Subexpressions have 'OPEN' and 'CLOSE' tokens. 'OPEN'</span>
+    <span class="s0"># is used when parsing the initial expression token (i.e., '(' or '{')</span>
+    <span class="s0"># and 'CLOSE' is used when parsing the closing expression token ('}' or</span>
+    <span class="s0"># ')').</span>
+
+    <span class="s1">OPEN = </span><span class="s3">&quot;OPEN&quot;</span>
+    <span class="s1">CLOSE = </span><span class="s3">&quot;CLOSE&quot;</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s2">def </span><span class="s1">make_subexp(cls, value, func=</span><span class="s2">False</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Create a subexpression token. 
+ 
+        `value`: The value of the token 
+        `func`: If True, force the token to be of type FUNC 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s2">assert </span><span class="s1">value[-</span><span class="s5">1</span><span class="s1">] </span><span class="s2">in </span><span class="s1">(</span><span class="s3">'{'</span><span class="s1">, </span><span class="s3">'}'</span><span class="s1">, </span><span class="s3">'('</span><span class="s1">, </span><span class="s3">')'</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">func:</span>
+            <span class="s2">assert </span><span class="s1">re.match(</span><span class="s3">'.+</span><span class="s4">\\</span><span class="s3">(|</span><span class="s4">\\</span><span class="s3">)'</span><span class="s1">, value)</span>
+            <span class="s1">type_ = Token.FUNC</span>
+        <span class="s2">elif </span><span class="s1">value </span><span class="s2">in </span><span class="s3">'{}'</span><span class="s1">:</span>
+            <span class="s1">type_ = Token.ARRAY</span>
+        <span class="s2">elif </span><span class="s1">value </span><span class="s2">in </span><span class="s3">'()'</span><span class="s1">:</span>
+            <span class="s1">type_ = Token.PAREN</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">type_ = Token.FUNC</span>
+        <span class="s1">subtype = cls.CLOSE </span><span class="s2">if </span><span class="s1">value </span><span class="s2">in </span><span class="s3">')}' </span><span class="s2">else </span><span class="s1">cls.OPEN</span>
+        <span class="s2">return </span><span class="s1">cls(value, type_, subtype)</span>
+
+    <span class="s2">def </span><span class="s1">get_closer(self):</span>
+        <span class="s0">&quot;&quot;&quot;Return a closing token that matches this token's type.&quot;&quot;&quot;</span>
+        <span class="s2">assert </span><span class="s1">self.type </span><span class="s2">in </span><span class="s1">(self.FUNC, self.ARRAY, self.PAREN)</span>
+        <span class="s2">assert </span><span class="s1">self.subtype == self.OPEN</span>
+        <span class="s1">value = </span><span class="s3">&quot;}&quot; </span><span class="s2">if </span><span class="s1">self.type == self.ARRAY </span><span class="s2">else </span><span class="s3">&quot;)&quot;</span>
+        <span class="s2">return </span><span class="s1">self.make_subexp(value, func=self.type == self.FUNC)</span>
+
+    <span class="s0"># Separator tokens</span>
+    <span class="s0">#</span>
+    <span class="s0"># Argument separators always have type 'SEP' and can have one of two</span>
+    <span class="s0"># subtypes: 'ARG', 'ROW'. 'ARG' is used for the ',' token, when used to</span>
+    <span class="s0"># delimit either function arguments or array elements. 'ROW' is used for</span>
+    <span class="s0"># the ';' token, which is always used to delimit rows in an array</span>
+    <span class="s0"># literal.</span>
+
+    <span class="s1">ARG = </span><span class="s3">&quot;ARG&quot;</span>
+    <span class="s1">ROW = </span><span class="s3">&quot;ROW&quot;</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s2">def </span><span class="s1">make_separator(cls, value):</span>
+        <span class="s0">&quot;&quot;&quot;Create a separator token&quot;&quot;&quot;</span>
+        <span class="s2">assert </span><span class="s1">value </span><span class="s2">in </span><span class="s1">(</span><span class="s3">','</span><span class="s1">, </span><span class="s3">';'</span><span class="s1">)</span>
+        <span class="s1">subtype = cls.ARG </span><span class="s2">if </span><span class="s1">value == </span><span class="s3">',' </span><span class="s2">else </span><span class="s1">cls.ROW</span>
+        <span class="s2">return </span><span class="s1">cls(value, cls.SEP, subtype)</span>
+</pre>
+</body>
+</html>

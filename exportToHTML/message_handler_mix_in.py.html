@@ -1,0 +1,400 @@
+<html>
+<head>
+<title>message_handler_mix_in.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+message_handler_mix_in.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">List, Tuple</span>
+
+<span class="s2">from </span><span class="s1">pylint.constants </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">_SCOPE_EXEMPT,</span>
+    <span class="s1">MAIN_CHECKER_NAME,</span>
+    <span class="s1">MSG_STATE_CONFIDENCE,</span>
+    <span class="s1">MSG_STATE_SCOPE_CONFIG,</span>
+    <span class="s1">MSG_STATE_SCOPE_MODULE,</span>
+    <span class="s1">MSG_TYPES,</span>
+    <span class="s1">MSG_TYPES_LONG,</span>
+    <span class="s1">MSG_TYPES_STATUS,</span>
+    <span class="s1">WarningScope,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">pylint.exceptions </span><span class="s2">import </span><span class="s1">InvalidMessageError, UnknownMessageError</span>
+<span class="s2">from </span><span class="s1">pylint.interfaces </span><span class="s2">import </span><span class="s1">UNDEFINED</span>
+<span class="s2">from </span><span class="s1">pylint.message.message </span><span class="s2">import </span><span class="s1">Message</span>
+<span class="s2">from </span><span class="s1">pylint.utils </span><span class="s2">import </span><span class="s1">get_module_and_frameid, get_rst_section, get_rst_title</span>
+
+
+<span class="s2">class </span><span class="s1">MessagesHandlerMixIn:</span>
+    <span class="s0">&quot;&quot;&quot;A mix-in class containing all the messages related methods for the main lint class.&quot;&quot;&quot;</span>
+
+    <span class="s1">__by_id_managed_msgs: List[Tuple[str, str, str, int, bool]] = []</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self):</span>
+        <span class="s1">self._msgs_state = {}</span>
+        <span class="s1">self.msg_status = </span><span class="s3">0</span>
+
+    <span class="s2">def </span><span class="s1">_checker_messages(self, checker):</span>
+        <span class="s2">for </span><span class="s1">known_checker </span><span class="s2">in </span><span class="s1">self._checkers[checker.lower()]:</span>
+            <span class="s2">yield from </span><span class="s1">known_checker.msgs</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s2">def </span><span class="s1">clear_by_id_managed_msgs(cls):</span>
+        <span class="s1">cls.__by_id_managed_msgs.clear()</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s2">def </span><span class="s1">get_by_id_managed_msgs(cls):</span>
+        <span class="s2">return </span><span class="s1">cls.__by_id_managed_msgs</span>
+
+    <span class="s2">def </span><span class="s1">_register_by_id_managed_msg(self, msgid_or_symbol: str, line, is_disabled=</span><span class="s2">True</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;If the msgid is a numeric one, then register it to inform the user 
+        it could furnish instead a symbolic msgid.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">msgid_or_symbol[</span><span class="s3">1</span><span class="s1">:].isdigit():</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">symbol = self.msgs_store.message_id_store.get_symbol(msgid=msgid_or_symbol)  </span><span class="s0"># type: ignore</span>
+            <span class="s2">except </span><span class="s1">UnknownMessageError:</span>
+                <span class="s2">return</span>
+            <span class="s1">managed = (self.current_name, msgid_or_symbol, symbol, line, is_disabled)  </span><span class="s0"># type: ignore</span>
+            <span class="s1">MessagesHandlerMixIn.__by_id_managed_msgs.append(managed)</span>
+
+    <span class="s2">def </span><span class="s1">disable(self, msgid, scope=</span><span class="s4">&quot;package&quot;</span><span class="s1">, line=</span><span class="s2">None</span><span class="s1">, ignore_unknown=</span><span class="s2">False</span><span class="s1">):</span>
+        <span class="s1">self._set_msg_status(</span>
+            <span class="s1">msgid, enable=</span><span class="s2">False</span><span class="s1">, scope=scope, line=line, ignore_unknown=ignore_unknown</span>
+        <span class="s1">)</span>
+        <span class="s1">self._register_by_id_managed_msg(msgid, line)</span>
+
+    <span class="s2">def </span><span class="s1">enable(self, msgid, scope=</span><span class="s4">&quot;package&quot;</span><span class="s1">, line=</span><span class="s2">None</span><span class="s1">, ignore_unknown=</span><span class="s2">False</span><span class="s1">):</span>
+        <span class="s1">self._set_msg_status(</span>
+            <span class="s1">msgid, enable=</span><span class="s2">True</span><span class="s1">, scope=scope, line=line, ignore_unknown=ignore_unknown</span>
+        <span class="s1">)</span>
+        <span class="s1">self._register_by_id_managed_msg(msgid, line, is_disabled=</span><span class="s2">False</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_set_msg_status(</span>
+        <span class="s1">self, msgid, enable, scope=</span><span class="s4">&quot;package&quot;</span><span class="s1">, line=</span><span class="s2">None</span><span class="s1">, ignore_unknown=</span><span class="s2">False</span>
+    <span class="s1">):</span>
+        <span class="s2">assert </span><span class="s1">scope </span><span class="s2">in </span><span class="s1">(</span><span class="s4">&quot;package&quot;</span><span class="s1">, </span><span class="s4">&quot;module&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">msgid == </span><span class="s4">&quot;all&quot;</span><span class="s1">:</span>
+            <span class="s2">for </span><span class="s1">_msgid </span><span class="s2">in </span><span class="s1">MSG_TYPES:</span>
+                <span class="s1">self._set_msg_status(_msgid, enable, scope, line, ignore_unknown)</span>
+            <span class="s2">if </span><span class="s1">enable </span><span class="s2">and not </span><span class="s1">self._python3_porting_mode:</span>
+                <span class="s0"># Don't activate the python 3 porting checker if it wasn't activated explicitly.</span>
+                <span class="s1">self.disable(</span><span class="s4">&quot;python3&quot;</span><span class="s1">)</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># msgid is a category?</span>
+        <span class="s1">category_id = msgid.upper()</span>
+        <span class="s2">if </span><span class="s1">category_id </span><span class="s2">not in </span><span class="s1">MSG_TYPES:</span>
+            <span class="s1">category_id = MSG_TYPES_LONG.get(category_id)</span>
+        <span class="s2">if </span><span class="s1">category_id </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s2">for </span><span class="s1">_msgid </span><span class="s2">in </span><span class="s1">self.msgs_store._msgs_by_category.get(category_id):</span>
+                <span class="s1">self._set_msg_status(_msgid, enable, scope, line)</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># msgid is a checker name?</span>
+        <span class="s2">if </span><span class="s1">msgid.lower() </span><span class="s2">in </span><span class="s1">self._checkers:</span>
+            <span class="s2">for </span><span class="s1">checker </span><span class="s2">in </span><span class="s1">self._checkers[msgid.lower()]:</span>
+                <span class="s2">for </span><span class="s1">_msgid </span><span class="s2">in </span><span class="s1">checker.msgs:</span>
+                    <span class="s1">self._set_msg_status(_msgid, enable, scope, line)</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># msgid is report id?</span>
+        <span class="s2">if </span><span class="s1">msgid.lower().startswith(</span><span class="s4">&quot;rp&quot;</span><span class="s1">):</span>
+            <span class="s2">if </span><span class="s1">enable:</span>
+                <span class="s1">self.enable_report(msgid)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">self.disable_report(msgid)</span>
+            <span class="s2">return</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s0"># msgid is a symbolic or numeric msgid.</span>
+            <span class="s1">message_definitions = self.msgs_store.get_message_definitions(msgid)</span>
+        <span class="s2">except </span><span class="s1">UnknownMessageError:</span>
+            <span class="s2">if </span><span class="s1">ignore_unknown:</span>
+                <span class="s2">return</span>
+            <span class="s2">raise</span>
+        <span class="s2">for </span><span class="s1">message_definition </span><span class="s2">in </span><span class="s1">message_definitions:</span>
+            <span class="s1">self._set_one_msg_status(scope, message_definition, line, enable)</span>
+
+    <span class="s2">def </span><span class="s1">_set_one_msg_status(self, scope, msg, line, enable):</span>
+        <span class="s2">if </span><span class="s1">scope == </span><span class="s4">&quot;module&quot;</span><span class="s1">:</span>
+            <span class="s1">self.file_state.set_msg_status(msg, line, enable)</span>
+            <span class="s2">if not </span><span class="s1">enable </span><span class="s2">and </span><span class="s1">msg.symbol != </span><span class="s4">&quot;locally-disabled&quot;</span><span class="s1">:</span>
+                <span class="s1">self.add_message(</span>
+                    <span class="s4">&quot;locally-disabled&quot;</span><span class="s1">, line=line, args=(msg.symbol, msg.msgid)</span>
+                <span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">msgs = self._msgs_state</span>
+            <span class="s1">msgs[msg.msgid] = enable</span>
+            <span class="s0"># sync configuration object</span>
+            <span class="s1">self.config.enable = [</span>
+                <span class="s1">self._message_symbol(mid) </span><span class="s2">for </span><span class="s1">mid, val </span><span class="s2">in </span><span class="s1">sorted(msgs.items()) </span><span class="s2">if </span><span class="s1">val</span>
+            <span class="s1">]</span>
+            <span class="s1">self.config.disable = [</span>
+                <span class="s1">self._message_symbol(mid)</span>
+                <span class="s2">for </span><span class="s1">mid, val </span><span class="s2">in </span><span class="s1">sorted(msgs.items())</span>
+                <span class="s2">if not </span><span class="s1">val</span>
+            <span class="s1">]</span>
+
+    <span class="s2">def </span><span class="s1">_message_symbol(self, msgid):</span>
+        <span class="s0">&quot;&quot;&quot;Get the message symbol of the given message id 
+ 
+        Return the original message id if the message does not 
+        exist. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">[md.symbol </span><span class="s2">for </span><span class="s1">md </span><span class="s2">in </span><span class="s1">self.msgs_store.get_message_definitions(msgid)]</span>
+        <span class="s2">except </span><span class="s1">UnknownMessageError:</span>
+            <span class="s2">return </span><span class="s1">msgid</span>
+
+    <span class="s2">def </span><span class="s1">get_message_state_scope(self, msgid, line=</span><span class="s2">None</span><span class="s1">, confidence=UNDEFINED):</span>
+        <span class="s0">&quot;&quot;&quot;Returns the scope at which a message was enabled/disabled.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.config.confidence </span><span class="s2">and </span><span class="s1">confidence.name </span><span class="s2">not in </span><span class="s1">self.config.confidence:</span>
+            <span class="s2">return </span><span class="s1">MSG_STATE_CONFIDENCE</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">line </span><span class="s2">in </span><span class="s1">self.file_state._module_msgs_state[msgid]:</span>
+                <span class="s2">return </span><span class="s1">MSG_STATE_SCOPE_MODULE</span>
+        <span class="s2">except </span><span class="s1">(KeyError, TypeError):</span>
+            <span class="s2">return </span><span class="s1">MSG_STATE_SCOPE_CONFIG</span>
+        <span class="s2">return None</span>
+
+    <span class="s2">def </span><span class="s1">is_message_enabled(self, msg_descr, line=</span><span class="s2">None</span><span class="s1">, confidence=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;return true if the message associated to the given message id is 
+        enabled 
+ 
+        msgid may be either a numeric or symbolic message id. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.config.confidence </span><span class="s2">and </span><span class="s1">confidence:</span>
+            <span class="s2">if </span><span class="s1">confidence.name </span><span class="s2">not in </span><span class="s1">self.config.confidence:</span>
+                <span class="s2">return False</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">message_definitions = self.msgs_store.get_message_definitions(msg_descr)</span>
+            <span class="s1">msgids = [md.msgid </span><span class="s2">for </span><span class="s1">md </span><span class="s2">in </span><span class="s1">message_definitions]</span>
+        <span class="s2">except </span><span class="s1">UnknownMessageError:</span>
+            <span class="s0"># The linter checks for messages that are not registered</span>
+            <span class="s0"># due to version mismatch, just treat them as message IDs</span>
+            <span class="s0"># for now.</span>
+            <span class="s1">msgids = [msg_descr]</span>
+        <span class="s2">for </span><span class="s1">msgid </span><span class="s2">in </span><span class="s1">msgids:</span>
+            <span class="s2">if </span><span class="s1">self.is_one_message_enabled(msgid, line):</span>
+                <span class="s2">return True</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">is_one_message_enabled(self, msgid, line):</span>
+        <span class="s2">if </span><span class="s1">line </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">self._msgs_state.get(msgid, </span><span class="s2">True</span><span class="s1">)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">self.file_state._module_msgs_state[msgid][line]</span>
+        <span class="s2">except </span><span class="s1">KeyError:</span>
+            <span class="s0"># Check if the message's line is after the maximum line existing in ast tree.</span>
+            <span class="s0"># This line won't appear in the ast tree and won't be referred in</span>
+            <span class="s0"># self.file_state._module_msgs_state</span>
+            <span class="s0"># This happens for example with a commented line at the end of a module.</span>
+            <span class="s1">max_line_number = self.file_state.get_effective_max_line_number()</span>
+            <span class="s2">if </span><span class="s1">max_line_number </span><span class="s2">and </span><span class="s1">line &gt; max_line_number:</span>
+                <span class="s1">fallback = </span><span class="s2">True</span>
+                <span class="s1">lines = self.file_state._raw_module_msgs_state.get(msgid, {})</span>
+
+                <span class="s0"># Doesn't consider scopes, as a disable can be in a different scope</span>
+                <span class="s0"># than that of the current line.</span>
+                <span class="s1">closest_lines = reversed(</span>
+                    <span class="s1">[</span>
+                        <span class="s1">(message_line, enable)</span>
+                        <span class="s2">for </span><span class="s1">message_line, enable </span><span class="s2">in </span><span class="s1">lines.items()</span>
+                        <span class="s2">if </span><span class="s1">message_line &lt;= line</span>
+                    <span class="s1">]</span>
+                <span class="s1">)</span>
+                <span class="s1">last_line, is_enabled = next(closest_lines, (</span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">))</span>
+                <span class="s2">if </span><span class="s1">last_line </span><span class="s2">is not None</span><span class="s1">:</span>
+                    <span class="s1">fallback = is_enabled</span>
+
+                <span class="s2">return </span><span class="s1">self._msgs_state.get(msgid, fallback)</span>
+            <span class="s2">return </span><span class="s1">self._msgs_state.get(msgid, </span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">add_message(</span>
+        <span class="s1">self, msgid, line=</span><span class="s2">None</span><span class="s1">, node=</span><span class="s2">None</span><span class="s1">, args=</span><span class="s2">None</span><span class="s1">, confidence=</span><span class="s2">None</span><span class="s1">, col_offset=</span><span class="s2">None</span>
+    <span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Adds a message given by ID or name. 
+ 
+        If provided, the message string is expanded using args. 
+ 
+        AST checkers must provide the node argument (but may optionally 
+        provide line if the line number is different), raw and token checkers 
+        must provide the line argument. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">confidence </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">confidence = UNDEFINED</span>
+        <span class="s1">message_definitions = self.msgs_store.get_message_definitions(msgid)</span>
+        <span class="s2">for </span><span class="s1">message_definition </span><span class="s2">in </span><span class="s1">message_definitions:</span>
+            <span class="s1">self.add_one_message(</span>
+                <span class="s1">message_definition, line, node, args, confidence, col_offset</span>
+            <span class="s1">)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">check_message_definition(message_definition, line, node):</span>
+        <span class="s2">if </span><span class="s1">message_definition.msgid[</span><span class="s3">0</span><span class="s1">] </span><span class="s2">not in </span><span class="s1">_SCOPE_EXEMPT:</span>
+            <span class="s0"># Fatal messages and reports are special, the node/scope distinction</span>
+            <span class="s0"># does not apply to them.</span>
+            <span class="s2">if </span><span class="s1">message_definition.scope == WarningScope.LINE:</span>
+                <span class="s2">if </span><span class="s1">line </span><span class="s2">is None</span><span class="s1">:</span>
+                    <span class="s2">raise </span><span class="s1">InvalidMessageError(</span>
+                        <span class="s4">&quot;Message %s must provide line, got None&quot;</span>
+                        <span class="s1">% message_definition.msgid</span>
+                    <span class="s1">)</span>
+                <span class="s2">if </span><span class="s1">node </span><span class="s2">is not None</span><span class="s1">:</span>
+                    <span class="s2">raise </span><span class="s1">InvalidMessageError(</span>
+                        <span class="s4">&quot;Message %s must only provide line, &quot;</span>
+                        <span class="s4">&quot;got line=%s, node=%s&quot; </span><span class="s1">% (message_definition.msgid, line, node)</span>
+                    <span class="s1">)</span>
+            <span class="s2">elif </span><span class="s1">message_definition.scope == WarningScope.NODE:</span>
+                <span class="s0"># Node-based warnings may provide an override line.</span>
+                <span class="s2">if </span><span class="s1">node </span><span class="s2">is None</span><span class="s1">:</span>
+                    <span class="s2">raise </span><span class="s1">InvalidMessageError(</span>
+                        <span class="s4">&quot;Message %s must provide Node, got None&quot;</span>
+                        <span class="s1">% message_definition.msgid</span>
+                    <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">add_one_message(</span>
+        <span class="s1">self, message_definition, line, node, args, confidence, col_offset</span>
+    <span class="s1">):</span>
+        <span class="s1">self.check_message_definition(message_definition, line, node)</span>
+        <span class="s2">if </span><span class="s1">line </span><span class="s2">is None and </span><span class="s1">node </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">line = node.fromlineno</span>
+        <span class="s2">if </span><span class="s1">col_offset </span><span class="s2">is None and </span><span class="s1">hasattr(node, </span><span class="s4">&quot;col_offset&quot;</span><span class="s1">):</span>
+            <span class="s1">col_offset = node.col_offset</span>
+
+        <span class="s0"># should this message be displayed</span>
+        <span class="s2">if not </span><span class="s1">self.is_message_enabled(message_definition.msgid, line, confidence):</span>
+            <span class="s1">self.file_state.handle_ignored_message(</span>
+                <span class="s1">self.get_message_state_scope(</span>
+                    <span class="s1">message_definition.msgid, line, confidence</span>
+                <span class="s1">),</span>
+                <span class="s1">message_definition.msgid,</span>
+                <span class="s1">line,</span>
+                <span class="s1">node,</span>
+                <span class="s1">args,</span>
+                <span class="s1">confidence,</span>
+            <span class="s1">)</span>
+            <span class="s2">return</span>
+        <span class="s0"># update stats</span>
+        <span class="s1">msg_cat = MSG_TYPES[message_definition.msgid[</span><span class="s3">0</span><span class="s1">]]</span>
+        <span class="s1">self.msg_status |= MSG_TYPES_STATUS[message_definition.msgid[</span><span class="s3">0</span><span class="s1">]]</span>
+        <span class="s1">self.stats[msg_cat] += </span><span class="s3">1</span>
+        <span class="s1">self.stats[</span><span class="s4">&quot;by_module&quot;</span><span class="s1">][self.current_name][msg_cat] += </span><span class="s3">1</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">self.stats[</span><span class="s4">&quot;by_msg&quot;</span><span class="s1">][message_definition.symbol] += </span><span class="s3">1</span>
+        <span class="s2">except </span><span class="s1">KeyError:</span>
+            <span class="s1">self.stats[</span><span class="s4">&quot;by_msg&quot;</span><span class="s1">][message_definition.symbol] = </span><span class="s3">1</span>
+        <span class="s0"># expand message ?</span>
+        <span class="s1">msg = message_definition.msg</span>
+        <span class="s2">if </span><span class="s1">args:</span>
+            <span class="s1">msg %= args</span>
+        <span class="s0"># get module and object</span>
+        <span class="s2">if </span><span class="s1">node </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">module, obj = self.current_name, </span><span class="s4">&quot;&quot;</span>
+            <span class="s1">abspath = self.current_file</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">module, obj = get_module_and_frameid(node)</span>
+            <span class="s1">abspath = node.root().file</span>
+        <span class="s1">path = abspath.replace(self.reporter.path_strip_prefix, </span><span class="s4">&quot;&quot;</span><span class="s1">, </span><span class="s3">1</span><span class="s1">)</span>
+        <span class="s0"># add the message</span>
+        <span class="s1">self.reporter.handle_message(</span>
+            <span class="s1">Message(</span>
+                <span class="s1">message_definition.msgid,</span>
+                <span class="s1">message_definition.symbol,</span>
+                <span class="s1">(abspath, path, module, obj, line </span><span class="s2">or </span><span class="s3">1</span><span class="s1">, col_offset </span><span class="s2">or </span><span class="s3">0</span><span class="s1">),</span>
+                <span class="s1">msg,</span>
+                <span class="s1">confidence,</span>
+            <span class="s1">)</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_get_checkers_infos(self):</span>
+        <span class="s1">by_checker = {}</span>
+        <span class="s2">for </span><span class="s1">checker </span><span class="s2">in </span><span class="s1">self.get_checkers():</span>
+            <span class="s1">name = checker.name</span>
+            <span class="s2">if </span><span class="s1">name != </span><span class="s4">&quot;master&quot;</span><span class="s1">:</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">by_checker[name][</span><span class="s4">&quot;checker&quot;</span><span class="s1">] = checker</span>
+                    <span class="s1">by_checker[name][</span><span class="s4">&quot;options&quot;</span><span class="s1">] += checker.options_and_values()</span>
+                    <span class="s1">by_checker[name][</span><span class="s4">&quot;msgs&quot;</span><span class="s1">].update(checker.msgs)</span>
+                    <span class="s1">by_checker[name][</span><span class="s4">&quot;reports&quot;</span><span class="s1">] += checker.reports</span>
+                <span class="s2">except </span><span class="s1">KeyError:</span>
+                    <span class="s1">by_checker[name] = {</span>
+                        <span class="s4">&quot;checker&quot;</span><span class="s1">: checker,</span>
+                        <span class="s4">&quot;options&quot;</span><span class="s1">: list(checker.options_and_values()),</span>
+                        <span class="s4">&quot;msgs&quot;</span><span class="s1">: dict(checker.msgs),</span>
+                        <span class="s4">&quot;reports&quot;</span><span class="s1">: list(checker.reports),</span>
+                    <span class="s1">}</span>
+        <span class="s2">return </span><span class="s1">by_checker</span>
+
+    <span class="s2">def </span><span class="s1">get_checkers_documentation(self):</span>
+        <span class="s1">result = get_rst_title(</span><span class="s4">&quot;Pylint global options and switches&quot;</span><span class="s1">, </span><span class="s4">&quot;-&quot;</span><span class="s1">)</span>
+        <span class="s1">result += </span><span class="s4">&quot;&quot;&quot; 
+Pylint provides global options and switches. 
+ 
+&quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">checker </span><span class="s2">in </span><span class="s1">self.get_checkers():</span>
+            <span class="s1">name = checker.name</span>
+            <span class="s2">if </span><span class="s1">name == MAIN_CHECKER_NAME:</span>
+                <span class="s2">if </span><span class="s1">checker.options:</span>
+                    <span class="s2">for </span><span class="s1">section, options </span><span class="s2">in </span><span class="s1">checker.options_by_section():</span>
+                        <span class="s2">if </span><span class="s1">section </span><span class="s2">is None</span><span class="s1">:</span>
+                            <span class="s1">title = </span><span class="s4">&quot;General options&quot;</span>
+                        <span class="s2">else</span><span class="s1">:</span>
+                            <span class="s1">title = </span><span class="s4">&quot;%s options&quot; </span><span class="s1">% section.capitalize()</span>
+                        <span class="s1">result += get_rst_title(title, </span><span class="s4">&quot;~&quot;</span><span class="s1">)</span>
+                        <span class="s1">result += </span><span class="s4">&quot;%s</span><span class="s5">\n</span><span class="s4">&quot; </span><span class="s1">% get_rst_section(</span><span class="s2">None</span><span class="s1">, options)</span>
+        <span class="s1">result += get_rst_title(</span><span class="s4">&quot;Pylint checkers' options and switches&quot;</span><span class="s1">, </span><span class="s4">&quot;-&quot;</span><span class="s1">)</span>
+        <span class="s1">result += </span><span class="s4">&quot;&quot;&quot;</span><span class="s5">\ 
+</span>
+<span class="s4">Pylint checkers can provide three set of features: 
+ 
+* options that control their execution, 
+* messages that they can raise, 
+* reports that they can generate. 
+ 
+Below is a list of all checkers and their features. 
+ 
+&quot;&quot;&quot;</span>
+        <span class="s1">by_checker = self._get_checkers_infos()</span>
+        <span class="s2">for </span><span class="s1">checker </span><span class="s2">in </span><span class="s1">sorted(by_checker):</span>
+            <span class="s1">information = by_checker[checker]</span>
+            <span class="s1">checker = information[</span><span class="s4">&quot;checker&quot;</span><span class="s1">]</span>
+            <span class="s2">del </span><span class="s1">information[</span><span class="s4">&quot;checker&quot;</span><span class="s1">]</span>
+            <span class="s1">result += checker.get_full_documentation(**information)</span>
+        <span class="s2">return </span><span class="s1">result</span>
+
+    <span class="s2">def </span><span class="s1">print_full_documentation(self, stream=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;output a full documentation in ReST format&quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">stream:</span>
+            <span class="s1">stream = sys.stdout</span>
+        <span class="s1">print(self.get_checkers_documentation()[:-</span><span class="s3">1</span><span class="s1">], file=stream)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_print_checker_doc(information, stream=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Helper method for print_full_documentation. 
+ 
+        Also used by doc/exts/pylint_extensions.py. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">stream:</span>
+            <span class="s1">stream = sys.stdout</span>
+        <span class="s1">checker = information[</span><span class="s4">&quot;checker&quot;</span><span class="s1">]</span>
+        <span class="s2">del </span><span class="s1">information[</span><span class="s4">&quot;checker&quot;</span><span class="s1">]</span>
+        <span class="s1">print(checker.get_full_documentation(**information)[:-</span><span class="s3">1</span><span class="s1">], file=stream)</span>
+</pre>
+</body>
+</html>

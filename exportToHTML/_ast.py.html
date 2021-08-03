@@ -1,0 +1,152 @@
+<html>
+<head>
+<title>_ast.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #d19a66;}
+.s3 { color: #5c6370;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+_ast.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">ast</span>
+<span class="s0">import </span><span class="s1">sys</span>
+<span class="s0">from </span><span class="s1">collections </span><span class="s0">import </span><span class="s1">namedtuple</span>
+<span class="s0">from </span><span class="s1">functools </span><span class="s0">import </span><span class="s1">partial</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Optional</span>
+
+<span class="s0">import </span><span class="s1">astroid</span>
+
+<span class="s1">_ast_py3 = </span><span class="s0">None</span>
+<span class="s0">try</span><span class="s1">:</span>
+    <span class="s0">import </span><span class="s1">typed_ast.ast3 </span><span class="s0">as </span><span class="s1">_ast_py3</span>
+<span class="s0">except </span><span class="s1">ImportError:</span>
+    <span class="s0">pass</span>
+
+
+<span class="s1">PY38 = sys.version_info[:</span><span class="s2">2</span><span class="s1">] &gt;= (</span><span class="s2">3</span><span class="s1">, </span><span class="s2">8</span><span class="s1">)</span>
+<span class="s0">if </span><span class="s1">PY38:</span>
+    <span class="s3"># On Python 3.8, typed_ast was merged back into `ast`</span>
+    <span class="s1">_ast_py3 = ast</span>
+
+
+<span class="s1">FunctionType = namedtuple(</span><span class="s4">&quot;FunctionType&quot;</span><span class="s1">, [</span><span class="s4">&quot;argtypes&quot;</span><span class="s1">, </span><span class="s4">&quot;returns&quot;</span><span class="s1">])</span>
+
+
+<span class="s0">class </span><span class="s1">ParserModule(</span>
+    <span class="s1">namedtuple(</span>
+        <span class="s4">&quot;ParserModule&quot;</span><span class="s1">,</span>
+        <span class="s1">[</span>
+            <span class="s4">&quot;module&quot;</span><span class="s1">,</span>
+            <span class="s4">&quot;unary_op_classes&quot;</span><span class="s1">,</span>
+            <span class="s4">&quot;cmp_op_classes&quot;</span><span class="s1">,</span>
+            <span class="s4">&quot;bool_op_classes&quot;</span><span class="s1">,</span>
+            <span class="s4">&quot;bin_op_classes&quot;</span><span class="s1">,</span>
+            <span class="s4">&quot;context_classes&quot;</span><span class="s1">,</span>
+        <span class="s1">],</span>
+    <span class="s1">)</span>
+<span class="s1">):</span>
+    <span class="s0">def </span><span class="s1">parse(self, string: str, type_comments=</span><span class="s0">True</span><span class="s1">):</span>
+        <span class="s0">if </span><span class="s1">self.module </span><span class="s0">is </span><span class="s1">_ast_py3:</span>
+            <span class="s0">if </span><span class="s1">PY38:</span>
+                <span class="s1">parse_func = partial(self.module.parse, type_comments=type_comments)</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">parse_func = partial(</span>
+                    <span class="s1">self.module.parse, feature_version=sys.version_info.minor</span>
+                <span class="s1">)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">parse_func = self.module.parse</span>
+        <span class="s0">return </span><span class="s1">parse_func(string)</span>
+
+
+<span class="s0">def </span><span class="s1">parse_function_type_comment(type_comment: str) -&gt; Optional[FunctionType]:</span>
+    <span class="s3">&quot;&quot;&quot;Given a correct type comment, obtain a FunctionType object&quot;&quot;&quot;</span>
+    <span class="s0">if </span><span class="s1">_ast_py3 </span><span class="s0">is None</span><span class="s1">:</span>
+        <span class="s0">return None</span>
+
+    <span class="s1">func_type = _ast_py3.parse(type_comment, </span><span class="s4">&quot;&lt;type_comment&gt;&quot;</span><span class="s1">, </span><span class="s4">&quot;func_type&quot;</span><span class="s1">)</span>
+    <span class="s0">return </span><span class="s1">FunctionType(argtypes=func_type.argtypes, returns=func_type.returns)</span>
+
+
+<span class="s0">def </span><span class="s1">get_parser_module(type_comments=</span><span class="s0">True</span><span class="s1">) -&gt; ParserModule:</span>
+    <span class="s0">if not </span><span class="s1">type_comments:</span>
+        <span class="s1">parser_module = ast</span>
+    <span class="s0">else</span><span class="s1">:</span>
+        <span class="s1">parser_module = _ast_py3</span>
+    <span class="s1">parser_module = parser_module </span><span class="s0">or </span><span class="s1">ast</span>
+
+    <span class="s1">unary_op_classes = _unary_operators_from_module(parser_module)</span>
+    <span class="s1">cmp_op_classes = _compare_operators_from_module(parser_module)</span>
+    <span class="s1">bool_op_classes = _bool_operators_from_module(parser_module)</span>
+    <span class="s1">bin_op_classes = _binary_operators_from_module(parser_module)</span>
+    <span class="s1">context_classes = _contexts_from_module(parser_module)</span>
+
+    <span class="s0">return </span><span class="s1">ParserModule(</span>
+        <span class="s1">parser_module,</span>
+        <span class="s1">unary_op_classes,</span>
+        <span class="s1">cmp_op_classes,</span>
+        <span class="s1">bool_op_classes,</span>
+        <span class="s1">bin_op_classes,</span>
+        <span class="s1">context_classes,</span>
+    <span class="s1">)</span>
+
+
+<span class="s0">def </span><span class="s1">_unary_operators_from_module(module):</span>
+    <span class="s0">return </span><span class="s1">{module.UAdd: </span><span class="s4">&quot;+&quot;</span><span class="s1">, module.USub: </span><span class="s4">&quot;-&quot;</span><span class="s1">, module.Not: </span><span class="s4">&quot;not&quot;</span><span class="s1">, module.Invert: </span><span class="s4">&quot;~&quot;</span><span class="s1">}</span>
+
+
+<span class="s0">def </span><span class="s1">_binary_operators_from_module(module):</span>
+    <span class="s1">binary_operators = {</span>
+        <span class="s1">module.Add: </span><span class="s4">&quot;+&quot;</span><span class="s1">,</span>
+        <span class="s1">module.BitAnd: </span><span class="s4">&quot;&amp;&quot;</span><span class="s1">,</span>
+        <span class="s1">module.BitOr: </span><span class="s4">&quot;|&quot;</span><span class="s1">,</span>
+        <span class="s1">module.BitXor: </span><span class="s4">&quot;^&quot;</span><span class="s1">,</span>
+        <span class="s1">module.Div: </span><span class="s4">&quot;/&quot;</span><span class="s1">,</span>
+        <span class="s1">module.FloorDiv: </span><span class="s4">&quot;//&quot;</span><span class="s1">,</span>
+        <span class="s1">module.MatMult: </span><span class="s4">&quot;@&quot;</span><span class="s1">,</span>
+        <span class="s1">module.Mod: </span><span class="s4">&quot;%&quot;</span><span class="s1">,</span>
+        <span class="s1">module.Mult: </span><span class="s4">&quot;*&quot;</span><span class="s1">,</span>
+        <span class="s1">module.Pow: </span><span class="s4">&quot;**&quot;</span><span class="s1">,</span>
+        <span class="s1">module.Sub: </span><span class="s4">&quot;-&quot;</span><span class="s1">,</span>
+        <span class="s1">module.LShift: </span><span class="s4">&quot;&lt;&lt;&quot;</span><span class="s1">,</span>
+        <span class="s1">module.RShift: </span><span class="s4">&quot;&gt;&gt;&quot;</span><span class="s1">,</span>
+    <span class="s1">}</span>
+    <span class="s0">return </span><span class="s1">binary_operators</span>
+
+
+<span class="s0">def </span><span class="s1">_bool_operators_from_module(module):</span>
+    <span class="s0">return </span><span class="s1">{module.And: </span><span class="s4">&quot;and&quot;</span><span class="s1">, module.Or: </span><span class="s4">&quot;or&quot;</span><span class="s1">}</span>
+
+
+<span class="s0">def </span><span class="s1">_compare_operators_from_module(module):</span>
+    <span class="s0">return </span><span class="s1">{</span>
+        <span class="s1">module.Eq: </span><span class="s4">&quot;==&quot;</span><span class="s1">,</span>
+        <span class="s1">module.Gt: </span><span class="s4">&quot;&gt;&quot;</span><span class="s1">,</span>
+        <span class="s1">module.GtE: </span><span class="s4">&quot;&gt;=&quot;</span><span class="s1">,</span>
+        <span class="s1">module.In: </span><span class="s4">&quot;in&quot;</span><span class="s1">,</span>
+        <span class="s1">module.Is: </span><span class="s4">&quot;is&quot;</span><span class="s1">,</span>
+        <span class="s1">module.IsNot: </span><span class="s4">&quot;is not&quot;</span><span class="s1">,</span>
+        <span class="s1">module.Lt: </span><span class="s4">&quot;&lt;&quot;</span><span class="s1">,</span>
+        <span class="s1">module.LtE: </span><span class="s4">&quot;&lt;=&quot;</span><span class="s1">,</span>
+        <span class="s1">module.NotEq: </span><span class="s4">&quot;!=&quot;</span><span class="s1">,</span>
+        <span class="s1">module.NotIn: </span><span class="s4">&quot;not in&quot;</span><span class="s1">,</span>
+    <span class="s1">}</span>
+
+
+<span class="s0">def </span><span class="s1">_contexts_from_module(module):</span>
+    <span class="s0">return </span><span class="s1">{</span>
+        <span class="s1">module.Load: astroid.Load,</span>
+        <span class="s1">module.Store: astroid.Store,</span>
+        <span class="s1">module.Del: astroid.Del,</span>
+        <span class="s1">module.Param: astroid.Store,</span>
+    <span class="s1">}</span>
+</pre>
+</body>
+</html>

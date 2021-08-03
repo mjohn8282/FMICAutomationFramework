@@ -1,0 +1,58 @@
+<html>
+<head>
+<title>readProperties.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+.s3 { color: #5c6370;}
+.s4 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+readProperties.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">configparser</span>
+<span class="s0">import </span><span class="s1">pytest</span>
+
+
+<span class="s0">class </span><span class="s1">Readconfi:</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, intialiseconfigfile):</span>
+        <span class="s1">self.config = intialiseconfigfile</span>
+
+    <span class="s0">def </span><span class="s1">getbaseurl(self):</span>
+        <span class="s1">url = self.config.get(</span><span class="s2">'login'</span><span class="s1">, </span><span class="s2">'baseurl'</span><span class="s1">)</span>
+        <span class="s0">return </span><span class="s1">url</span>
+
+    <span class="s0">def </span><span class="s1">getfirefoxdriverlocation(self):</span>
+        <span class="s1">location = self.config.get(</span><span class="s2">'driverlocation'</span><span class="s1">, </span><span class="s2">'firefox'</span><span class="s1">)</span>
+        <span class="s0">return </span><span class="s1">location</span>
+
+    <span class="s0">def </span><span class="s1">getedgedriverlocation(self):</span>
+        <span class="s1">location = self.config.get(</span><span class="s2">'driverlocation'</span><span class="s1">, </span><span class="s2">'edge'</span><span class="s1">)</span>
+        <span class="s0">return </span><span class="s1">location</span>
+
+    <span class="s0">def </span><span class="s1">gettestfilelocation(self):</span>
+        <span class="s1">location = self.config.get(</span><span class="s2">'Testdata'</span><span class="s1">, </span><span class="s2">'testdatafilelocation'</span><span class="s1">)</span>
+        <span class="s0">return </span><span class="s1">location</span>
+
+    <span class="s0">def </span><span class="s1">getchromedriverlocation(self):</span>
+        <span class="s3"># location = self.confi.get(&quot;driverlocation&quot;, &quot;chrome&quot;)</span>
+        <span class="s3"># return location</span>
+        <span class="s0">return </span><span class="s2">&quot;D:</span><span class="s4">\\</span><span class="s2">John</span><span class="s4">\\</span><span class="s2">PythonProject</span><span class="s4">\\</span><span class="s2">POM</span><span class="s4">\\</span><span class="s2">Drivers</span><span class="s4">\\</span><span class="s2">chromedriver.exe&quot;</span>
+
+    <span class="s0">def </span><span class="s1">getpassword(self):</span>
+        <span class="s1">password = self.config.get(</span><span class="s2">'login'</span><span class="s1">, </span><span class="s2">'password'</span><span class="s1">)</span>
+        <span class="s0">return </span><span class="s1">password</span>
+
+    <span class="s0">def </span><span class="s1">getuseremail(self):</span>
+        <span class="s1">useremail = self.config.get(</span><span class="s2">'login'</span><span class="s1">, </span><span class="s2">'useremail'</span><span class="s1">)</span>
+        <span class="s0">return </span><span class="s1">useremail</span>
+</pre>
+</body>
+</html>

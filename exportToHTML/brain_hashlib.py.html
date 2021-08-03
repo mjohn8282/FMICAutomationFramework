@@ -1,0 +1,87 @@
+<html>
+<head>
+<title>brain_hashlib.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_hashlib.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2016, 2018, 2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 David Poirier &lt;david-poirier-csn@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 wgehalo &lt;wgehalo@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Ioana Tagirta &lt;ioana.tagirta@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020-2021 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 David Gilman &lt;davidgilman1@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+
+<span class="s1">PY36 = sys.version_info &gt;= (</span><span class="s3">3</span><span class="s1">, </span><span class="s3">6</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_hashlib_transform():</span>
+    <span class="s1">signature = </span><span class="s4">&quot;value=''&quot;</span>
+    <span class="s1">template = </span><span class="s4">&quot;&quot;&quot; 
+    class %(name)s(object): 
+      def __init__(self, %(signature)s): pass 
+      def digest(self): 
+        return %(digest)s 
+      def copy(self): 
+        return self 
+      def update(self, value): pass 
+      def hexdigest(self): 
+        return '' 
+      @property 
+      def name(self): 
+        return %(name)r 
+      @property 
+      def block_size(self): 
+        return 1 
+      @property 
+      def digest_size(self): 
+        return 1 
+    &quot;&quot;&quot;</span>
+    <span class="s1">algorithms_with_signature = dict.fromkeys(</span>
+        <span class="s1">[</span><span class="s4">&quot;md5&quot;</span><span class="s1">, </span><span class="s4">&quot;sha1&quot;</span><span class="s1">, </span><span class="s4">&quot;sha224&quot;</span><span class="s1">, </span><span class="s4">&quot;sha256&quot;</span><span class="s1">, </span><span class="s4">&quot;sha384&quot;</span><span class="s1">, </span><span class="s4">&quot;sha512&quot;</span><span class="s1">], signature</span>
+    <span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">PY36:</span>
+        <span class="s1">blake2b_signature = </span><span class="s4">&quot;data=b'', *, digest_size=64, key=b'', salt=b'', </span><span class="s5">\ 
+                </span><span class="s4">person=b'', fanout=1, depth=1, leaf_size=0, node_offset=0, </span><span class="s5">\ 
+                </span><span class="s4">node_depth=0, inner_size=0, last_node=False&quot;</span>
+        <span class="s1">blake2s_signature = </span><span class="s4">&quot;data=b'', *, digest_size=32, key=b'', salt=b'', </span><span class="s5">\ 
+                </span><span class="s4">person=b'', fanout=1, depth=1, leaf_size=0, node_offset=0, </span><span class="s5">\ 
+                </span><span class="s4">node_depth=0, inner_size=0, last_node=False&quot;</span>
+        <span class="s1">new_algorithms = dict.fromkeys(</span>
+            <span class="s1">[</span><span class="s4">&quot;sha3_224&quot;</span><span class="s1">, </span><span class="s4">&quot;sha3_256&quot;</span><span class="s1">, </span><span class="s4">&quot;sha3_384&quot;</span><span class="s1">, </span><span class="s4">&quot;sha3_512&quot;</span><span class="s1">, </span><span class="s4">&quot;shake_128&quot;</span><span class="s1">, </span><span class="s4">&quot;shake_256&quot;</span><span class="s1">],</span>
+            <span class="s1">signature,</span>
+        <span class="s1">)</span>
+        <span class="s1">algorithms_with_signature.update(new_algorithms)</span>
+        <span class="s1">algorithms_with_signature.update(</span>
+            <span class="s1">{</span><span class="s4">&quot;blake2b&quot;</span><span class="s1">: blake2b_signature, </span><span class="s4">&quot;blake2s&quot;</span><span class="s1">: blake2s_signature}</span>
+        <span class="s1">)</span>
+    <span class="s1">classes = </span><span class="s4">&quot;&quot;</span><span class="s1">.join(</span>
+        <span class="s1">template % {</span><span class="s4">&quot;name&quot;</span><span class="s1">: hashfunc, </span><span class="s4">&quot;digest&quot;</span><span class="s1">: </span><span class="s4">'b&quot;&quot;'</span><span class="s1">, </span><span class="s4">&quot;signature&quot;</span><span class="s1">: signature}</span>
+        <span class="s2">for </span><span class="s1">hashfunc, signature </span><span class="s2">in </span><span class="s1">algorithms_with_signature.items()</span>
+    <span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">astroid.parse(classes)</span>
+
+
+<span class="s1">astroid.register_module_extender(astroid.MANAGER, </span><span class="s4">&quot;hashlib&quot;</span><span class="s1">, _hashlib_transform)</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,560 @@
+<html>
+<head>
+<title>bases.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+bases.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2009-2011, 2013-2014 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2012 FELD Boris &lt;lothiraldan@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Google, Inc.</span>
+<span class="s0"># Copyright (c) 2014 Eevee (Alex Munroe) &lt;amunroe@yelp.com&gt;</span>
+<span class="s0"># Copyright (c) 2015-2016 Ceridwen &lt;ceridwenv@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015 Florian Bruhin &lt;me@the-compiler.org&gt;</span>
+<span class="s0"># Copyright (c) 2016-2017 Derek Gustafson &lt;degustaf@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Calen Pennington &lt;calen.pennington@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018-2019 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Ville Skyttä &lt;ville.skytta@iki.fi&gt;</span>
+<span class="s0"># Copyright (c) 2018 Bryce Guinta &lt;bryce.paul.guinta@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Nick Drozd &lt;nicholasdrozd@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Daniel Colascione &lt;dancol@dancol.org&gt;</span>
+<span class="s0"># Copyright (c) 2019 Hugo van Kemenade &lt;hugovk@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;This module contains base classes and functions for the nodes and some 
+inference utils. 
+&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">builtins</span>
+<span class="s2">import </span><span class="s1">collections</span>
+
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">context </span><span class="s2">as </span><span class="s1">contextmod</span>
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">exceptions, util</span>
+
+<span class="s1">objectmodel = util.lazy_import(</span><span class="s3">&quot;interpreter.objectmodel&quot;</span><span class="s1">)</span>
+<span class="s1">helpers = util.lazy_import(</span><span class="s3">&quot;helpers&quot;</span><span class="s1">)</span>
+<span class="s1">BUILTINS = builtins.__name__</span>
+<span class="s1">manager = util.lazy_import(</span><span class="s3">&quot;manager&quot;</span><span class="s1">)</span>
+<span class="s1">MANAGER = manager.AstroidManager()</span>
+
+<span class="s0"># TODO: check if needs special treatment</span>
+<span class="s1">BUILTINS = </span><span class="s3">&quot;builtins&quot;</span>
+<span class="s1">BOOL_SPECIAL_METHOD = </span><span class="s3">&quot;__bool__&quot;</span>
+
+<span class="s1">PROPERTIES = {BUILTINS + </span><span class="s3">&quot;.property&quot;</span><span class="s1">, </span><span class="s3">&quot;abc.abstractproperty&quot;</span><span class="s1">}</span>
+<span class="s0"># List of possible property names. We use this list in order</span>
+<span class="s0"># to see if a method is a property or not. This should be</span>
+<span class="s0"># pretty reliable and fast, the alternative being to check each</span>
+<span class="s0"># decorator to see if its a real property-like descriptor, which</span>
+<span class="s0"># can be too complicated.</span>
+<span class="s0"># Also, these aren't qualified, because each project can</span>
+<span class="s0"># define them, we shouldn't expect to know every possible</span>
+<span class="s0"># property-like decorator!</span>
+<span class="s1">POSSIBLE_PROPERTIES = {</span>
+    <span class="s3">&quot;cached_property&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;cachedproperty&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;lazyproperty&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;lazy_property&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;reify&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;lazyattribute&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;lazy_attribute&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;LazyProperty&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;lazy&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;cache_readonly&quot;</span><span class="s1">,</span>
+<span class="s1">}</span>
+
+
+<span class="s2">def </span><span class="s1">_is_property(meth, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s1">decoratornames = meth.decoratornames(context=context)</span>
+    <span class="s2">if </span><span class="s1">PROPERTIES.intersection(decoratornames):</span>
+        <span class="s2">return True</span>
+    <span class="s1">stripped = {</span>
+        <span class="s1">name.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">)[-</span><span class="s4">1</span><span class="s1">] </span><span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">decoratornames </span><span class="s2">if </span><span class="s1">name </span><span class="s2">is not </span><span class="s1">util.Uninferable</span>
+    <span class="s1">}</span>
+    <span class="s2">if </span><span class="s1">any(name </span><span class="s2">in </span><span class="s1">stripped </span><span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">POSSIBLE_PROPERTIES):</span>
+        <span class="s2">return True</span>
+
+    <span class="s0"># Lookup for subclasses of *property*</span>
+    <span class="s2">if not </span><span class="s1">meth.decorators:</span>
+        <span class="s2">return False</span>
+    <span class="s2">for </span><span class="s1">decorator </span><span class="s2">in </span><span class="s1">meth.decorators.nodes </span><span class="s2">or </span><span class="s1">():</span>
+        <span class="s1">inferred = helpers.safe_infer(decorator, context=context)</span>
+        <span class="s2">if </span><span class="s1">inferred </span><span class="s2">is None or </span><span class="s1">inferred </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+            <span class="s2">continue</span>
+        <span class="s2">if </span><span class="s1">inferred.__class__.__name__ == </span><span class="s3">&quot;ClassDef&quot;</span><span class="s1">:</span>
+            <span class="s2">for </span><span class="s1">base_class </span><span class="s2">in </span><span class="s1">inferred.bases:</span>
+                <span class="s2">if </span><span class="s1">base_class.__class__.__name__ != </span><span class="s3">&quot;Name&quot;</span><span class="s1">:</span>
+                    <span class="s2">continue</span>
+                <span class="s1">module, _ = base_class.lookup(base_class.name)</span>
+                <span class="s2">if </span><span class="s1">module.name == BUILTINS </span><span class="s2">and </span><span class="s1">base_class.name == </span><span class="s3">&quot;property&quot;</span><span class="s1">:</span>
+                    <span class="s2">return True</span>
+
+    <span class="s2">return False</span>
+
+
+<span class="s2">class </span><span class="s1">Proxy:</span>
+    <span class="s0">&quot;&quot;&quot;a simple proxy object 
+ 
+    Note: 
+ 
+    Subclasses of this object will need a custom __getattr__ 
+    if new instance attributes are created. See the Const class 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">_proxied = </span><span class="s2">None  </span><span class="s0"># proxied object may be set by class or by instance</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, proxied=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s2">if </span><span class="s1">proxied </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">self._proxied = proxied</span>
+
+    <span class="s2">def </span><span class="s1">__getattr__(self, name):</span>
+        <span class="s2">if </span><span class="s1">name == </span><span class="s3">&quot;_proxied&quot;</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">getattr(self.__class__, </span><span class="s3">&quot;_proxied&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">name </span><span class="s2">in </span><span class="s1">self.__dict__:</span>
+            <span class="s2">return </span><span class="s1">self.__dict__[name]</span>
+        <span class="s2">return </span><span class="s1">getattr(self._proxied, name)</span>
+
+    <span class="s2">def </span><span class="s1">infer(self, context=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s2">yield </span><span class="s1">self</span>
+
+
+<span class="s2">def </span><span class="s1">_infer_stmts(stmts, context, frame=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Return an iterator on statements inferred by each statement in *stmts*.&quot;&quot;&quot;</span>
+    <span class="s1">inferred = </span><span class="s2">False</span>
+    <span class="s2">if </span><span class="s1">context </span><span class="s2">is not None</span><span class="s1">:</span>
+        <span class="s1">name = context.lookupname</span>
+        <span class="s1">context = context.clone()</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">name = </span><span class="s2">None</span>
+        <span class="s1">context = contextmod.InferenceContext()</span>
+
+    <span class="s2">for </span><span class="s1">stmt </span><span class="s2">in </span><span class="s1">stmts:</span>
+        <span class="s2">if </span><span class="s1">stmt </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+            <span class="s2">yield </span><span class="s1">stmt</span>
+            <span class="s1">inferred = </span><span class="s2">True</span>
+            <span class="s2">continue</span>
+        <span class="s1">context.lookupname = stmt._infer_name(frame, name)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">for </span><span class="s1">inferred </span><span class="s2">in </span><span class="s1">stmt.infer(context=context):</span>
+                <span class="s2">yield </span><span class="s1">inferred</span>
+                <span class="s1">inferred = </span><span class="s2">True</span>
+        <span class="s2">except </span><span class="s1">exceptions.NameInferenceError:</span>
+            <span class="s2">continue</span>
+        <span class="s2">except </span><span class="s1">exceptions.InferenceError:</span>
+            <span class="s2">yield </span><span class="s1">util.Uninferable</span>
+            <span class="s1">inferred = </span><span class="s2">True</span>
+    <span class="s2">if not </span><span class="s1">inferred:</span>
+        <span class="s2">raise </span><span class="s1">exceptions.InferenceError(</span>
+            <span class="s3">&quot;Inference failed for all members of {stmts!r}.&quot;</span><span class="s1">,</span>
+            <span class="s1">stmts=stmts,</span>
+            <span class="s1">frame=frame,</span>
+            <span class="s1">context=context,</span>
+        <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_infer_method_result_truth(instance, method_name, context):</span>
+    <span class="s0"># Get the method from the instance and try to infer</span>
+    <span class="s0"># its return's truth value.</span>
+    <span class="s1">meth = next(instance.igetattr(method_name, context=context), </span><span class="s2">None</span><span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">meth </span><span class="s2">and </span><span class="s1">hasattr(meth, </span><span class="s3">&quot;infer_call_result&quot;</span><span class="s1">):</span>
+        <span class="s2">if not </span><span class="s1">meth.callable():</span>
+            <span class="s2">return </span><span class="s1">util.Uninferable</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">for </span><span class="s1">value </span><span class="s2">in </span><span class="s1">meth.infer_call_result(instance, context=context):</span>
+                <span class="s2">if </span><span class="s1">value </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+                    <span class="s2">return </span><span class="s1">value</span>
+
+                <span class="s1">inferred = next(value.infer(context=context))</span>
+                <span class="s2">return </span><span class="s1">inferred.bool_value()</span>
+        <span class="s2">except </span><span class="s1">exceptions.InferenceError:</span>
+            <span class="s2">pass</span>
+    <span class="s2">return </span><span class="s1">util.Uninferable</span>
+
+
+<span class="s2">class </span><span class="s1">BaseInstance(Proxy):</span>
+    <span class="s0">&quot;&quot;&quot;An instance base class, which provides lookup methods for potential instances.&quot;&quot;&quot;</span>
+
+    <span class="s1">special_attributes = </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">display_type(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;Instance of&quot;</span>
+
+    <span class="s2">def </span><span class="s1">getattr(self, name, context=</span><span class="s2">None</span><span class="s1">, lookupclass=</span><span class="s2">True</span><span class="s1">):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">values = self._proxied.instance_attr(name, context)</span>
+        <span class="s2">except </span><span class="s1">exceptions.AttributeInferenceError </span><span class="s2">as </span><span class="s1">exc:</span>
+            <span class="s2">if </span><span class="s1">self.special_attributes </span><span class="s2">and </span><span class="s1">name </span><span class="s2">in </span><span class="s1">self.special_attributes:</span>
+                <span class="s2">return </span><span class="s1">[self.special_attributes.lookup(name)]</span>
+
+            <span class="s2">if </span><span class="s1">lookupclass:</span>
+                <span class="s0"># Class attributes not available through the instance</span>
+                <span class="s0"># unless they are explicitly defined.</span>
+                <span class="s2">return </span><span class="s1">self._proxied.getattr(name, context, class_context=</span><span class="s2">False</span><span class="s1">)</span>
+
+            <span class="s2">raise </span><span class="s1">exceptions.AttributeInferenceError(</span>
+                <span class="s1">target=self, attribute=name, context=context</span>
+            <span class="s1">) </span><span class="s2">from </span><span class="s1">exc</span>
+        <span class="s0"># since we've no context information, return matching class members as</span>
+        <span class="s0"># well</span>
+        <span class="s2">if </span><span class="s1">lookupclass:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s2">return </span><span class="s1">values + self._proxied.getattr(</span>
+                    <span class="s1">name, context, class_context=</span><span class="s2">False</span>
+                <span class="s1">)</span>
+            <span class="s2">except </span><span class="s1">exceptions.AttributeInferenceError:</span>
+                <span class="s2">pass</span>
+        <span class="s2">return </span><span class="s1">values</span>
+
+    <span class="s2">def </span><span class="s1">igetattr(self, name, context=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;inferred getattr&quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">context:</span>
+            <span class="s1">context = contextmod.InferenceContext()</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s0"># avoid recursively inferring the same attr on the same class</span>
+            <span class="s2">if </span><span class="s1">context.push((self._proxied, name)):</span>
+                <span class="s2">raise </span><span class="s1">exceptions.InferenceError(</span>
+                    <span class="s1">message=</span><span class="s3">&quot;Cannot infer the same attribute again&quot;</span><span class="s1">,</span>
+                    <span class="s1">node=self,</span>
+                    <span class="s1">context=context,</span>
+                <span class="s1">)</span>
+
+            <span class="s0"># XXX frame should be self._proxied, or not ?</span>
+            <span class="s1">get_attr = self.getattr(name, context, lookupclass=</span><span class="s2">False</span><span class="s1">)</span>
+            <span class="s2">yield from </span><span class="s1">_infer_stmts(</span>
+                <span class="s1">self._wrap_attr(get_attr, context), context, frame=self</span>
+            <span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">exceptions.AttributeInferenceError </span><span class="s2">as </span><span class="s1">error:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s0"># fallback to class.igetattr since it has some logic to handle</span>
+                <span class="s0"># descriptors</span>
+                <span class="s0"># But only if the _proxied is the Class.</span>
+                <span class="s2">if </span><span class="s1">self._proxied.__class__.__name__ != </span><span class="s3">&quot;ClassDef&quot;</span><span class="s1">:</span>
+                    <span class="s2">raise</span>
+                <span class="s1">attrs = self._proxied.igetattr(name, context, class_context=</span><span class="s2">False</span><span class="s1">)</span>
+                <span class="s2">yield from </span><span class="s1">self._wrap_attr(attrs, context)</span>
+            <span class="s2">except </span><span class="s1">exceptions.AttributeInferenceError </span><span class="s2">as </span><span class="s1">error:</span>
+                <span class="s2">raise </span><span class="s1">exceptions.InferenceError(**vars(error)) </span><span class="s2">from </span><span class="s1">error</span>
+
+    <span class="s2">def </span><span class="s1">_wrap_attr(self, attrs, context=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;wrap bound methods of attrs in a InstanceMethod proxies&quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">attr </span><span class="s2">in </span><span class="s1">attrs:</span>
+            <span class="s2">if </span><span class="s1">isinstance(attr, UnboundMethod):</span>
+                <span class="s2">if </span><span class="s1">_is_property(attr):</span>
+                    <span class="s2">yield from </span><span class="s1">attr.infer_call_result(self, context)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s2">yield </span><span class="s1">BoundMethod(attr, self)</span>
+            <span class="s2">elif </span><span class="s1">hasattr(attr, </span><span class="s3">&quot;name&quot;</span><span class="s1">) </span><span class="s2">and </span><span class="s1">attr.name == </span><span class="s3">&quot;&lt;lambda&gt;&quot;</span><span class="s1">:</span>
+                <span class="s2">if </span><span class="s1">attr.args.arguments </span><span class="s2">and </span><span class="s1">attr.args.arguments[</span><span class="s4">0</span><span class="s1">].name == </span><span class="s3">&quot;self&quot;</span><span class="s1">:</span>
+                    <span class="s2">yield </span><span class="s1">BoundMethod(attr, self)</span>
+                    <span class="s2">continue</span>
+                <span class="s2">yield </span><span class="s1">attr</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">yield </span><span class="s1">attr</span>
+
+    <span class="s2">def </span><span class="s1">infer_call_result(self, caller, context=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;infer what a class instance is returning when called&quot;&quot;&quot;</span>
+        <span class="s1">context = contextmod.bind_context_to_node(context, self)</span>
+        <span class="s1">inferred = </span><span class="s2">False</span>
+        <span class="s2">for </span><span class="s1">node </span><span class="s2">in </span><span class="s1">self._proxied.igetattr(</span><span class="s3">&quot;__call__&quot;</span><span class="s1">, context):</span>
+            <span class="s2">if </span><span class="s1">node </span><span class="s2">is </span><span class="s1">util.Uninferable </span><span class="s2">or not </span><span class="s1">node.callable():</span>
+                <span class="s2">continue</span>
+            <span class="s2">for </span><span class="s1">res </span><span class="s2">in </span><span class="s1">node.infer_call_result(caller, context):</span>
+                <span class="s1">inferred = </span><span class="s2">True</span>
+                <span class="s2">yield </span><span class="s1">res</span>
+        <span class="s2">if not </span><span class="s1">inferred:</span>
+            <span class="s2">raise </span><span class="s1">exceptions.InferenceError(node=self, caller=caller, context=context)</span>
+
+
+<span class="s2">class </span><span class="s1">Instance(BaseInstance):</span>
+    <span class="s0">&quot;&quot;&quot;A special node representing a class instance.&quot;&quot;&quot;</span>
+
+    <span class="s0"># pylint: disable=unnecessary-lambda</span>
+    <span class="s1">special_attributes = util.lazy_descriptor(</span><span class="s2">lambda</span><span class="s1">: objectmodel.InstanceModel())</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;&lt;Instance of {}.{} at 0x{}&gt;&quot;</span><span class="s1">.format(</span>
+            <span class="s1">self._proxied.root().name, self._proxied.name, id(self)</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__str__(self):</span>
+        <span class="s2">return </span><span class="s3">f&quot;Instance of </span><span class="s5">{</span><span class="s1">self._proxied.root().name</span><span class="s5">}</span><span class="s3">.</span><span class="s5">{</span><span class="s1">self._proxied.name</span><span class="s5">}</span><span class="s3">&quot;</span>
+
+    <span class="s2">def </span><span class="s1">callable(self):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">self._proxied.getattr(</span><span class="s3">&quot;__call__&quot;</span><span class="s1">, class_context=</span><span class="s2">False</span><span class="s1">)</span>
+            <span class="s2">return True</span>
+        <span class="s2">except </span><span class="s1">exceptions.AttributeInferenceError:</span>
+            <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">pytype(self):</span>
+        <span class="s2">return </span><span class="s1">self._proxied.qname()</span>
+
+    <span class="s2">def </span><span class="s1">display_type(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;Instance of&quot;</span>
+
+    <span class="s2">def </span><span class="s1">bool_value(self, context=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Infer the truth value for an Instance 
+ 
+        The truth value of an instance is determined by these conditions: 
+ 
+           * if it implements __bool__ on Python 3 or __nonzero__ 
+             on Python 2, then its bool value will be determined by 
+             calling this special method and checking its result. 
+           * when this method is not defined, __len__() is called, if it 
+             is defined, and the object is considered true if its result is 
+             nonzero. If a class defines neither __len__() nor __bool__(), 
+             all its instances are considered true. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">context = context </span><span class="s2">or </span><span class="s1">contextmod.InferenceContext()</span>
+        <span class="s1">context.callcontext = contextmod.CallContext(args=[])</span>
+        <span class="s1">context.boundnode = self</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">result = _infer_method_result_truth(self, BOOL_SPECIAL_METHOD, context)</span>
+        <span class="s2">except </span><span class="s1">(exceptions.InferenceError, exceptions.AttributeInferenceError):</span>
+            <span class="s0"># Fallback to __len__.</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">result = _infer_method_result_truth(self, </span><span class="s3">&quot;__len__&quot;</span><span class="s1">, context)</span>
+            <span class="s2">except </span><span class="s1">(exceptions.AttributeInferenceError, exceptions.InferenceError):</span>
+                <span class="s2">return True</span>
+        <span class="s2">return </span><span class="s1">result</span>
+
+    <span class="s0"># This is set in inference.py.</span>
+    <span class="s2">def </span><span class="s1">getitem(self, index, context=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s2">pass</span>
+
+
+<span class="s2">class </span><span class="s1">UnboundMethod(Proxy):</span>
+    <span class="s0">&quot;&quot;&quot;a special node representing a method not bound to an instance&quot;&quot;&quot;</span>
+
+    <span class="s0"># pylint: disable=unnecessary-lambda</span>
+    <span class="s1">special_attributes = util.lazy_descriptor(</span><span class="s2">lambda</span><span class="s1">: objectmodel.UnboundMethodModel())</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s1">frame = self._proxied.parent.frame()</span>
+        <span class="s2">return </span><span class="s3">&quot;&lt;{} {} of {} at 0x{}&quot;</span><span class="s1">.format(</span>
+            <span class="s1">self.__class__.__name__, self._proxied.name, frame.qname(), id(self)</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">implicit_parameters(self):</span>
+        <span class="s2">return </span><span class="s4">0</span>
+
+    <span class="s2">def </span><span class="s1">is_bound(self):</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">getattr(self, name, context=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s2">if </span><span class="s1">name </span><span class="s2">in </span><span class="s1">self.special_attributes:</span>
+            <span class="s2">return </span><span class="s1">[self.special_attributes.lookup(name)]</span>
+        <span class="s2">return </span><span class="s1">self._proxied.getattr(name, context)</span>
+
+    <span class="s2">def </span><span class="s1">igetattr(self, name, context=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s2">if </span><span class="s1">name </span><span class="s2">in </span><span class="s1">self.special_attributes:</span>
+            <span class="s2">return </span><span class="s1">iter((self.special_attributes.lookup(name),))</span>
+        <span class="s2">return </span><span class="s1">self._proxied.igetattr(name, context)</span>
+
+    <span class="s2">def </span><span class="s1">infer_call_result(self, caller, context):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        The boundnode of the regular context with a function called 
+        on ``object.__new__`` will be of type ``object``, 
+        which is incorrect for the argument in general. 
+        If no context is given the ``object.__new__`` call argument will 
+        correctly inferred except when inside a call that requires 
+        the additional context (such as a classmethod) of the boundnode 
+        to determine which class the method was called from 
+        &quot;&quot;&quot;</span>
+
+        <span class="s0"># If we're unbound method __new__ of builtin object, the result is an</span>
+        <span class="s0"># instance of the class given as first argument.</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">self._proxied.name == </span><span class="s3">&quot;__new__&quot;</span>
+            <span class="s2">and </span><span class="s1">self._proxied.parent.frame().qname() == </span><span class="s3">&quot;%s.object&quot; </span><span class="s1">% BUILTINS</span>
+        <span class="s1">):</span>
+            <span class="s2">if </span><span class="s1">caller.args:</span>
+                <span class="s1">node_context = context.extra_context.get(caller.args[</span><span class="s4">0</span><span class="s1">])</span>
+                <span class="s1">infer = caller.args[</span><span class="s4">0</span><span class="s1">].infer(context=node_context)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">infer = []</span>
+            <span class="s2">return </span><span class="s1">(Instance(x) </span><span class="s2">if </span><span class="s1">x </span><span class="s2">is not </span><span class="s1">util.Uninferable </span><span class="s2">else </span><span class="s1">x </span><span class="s2">for </span><span class="s1">x </span><span class="s2">in </span><span class="s1">infer)</span>
+        <span class="s2">return </span><span class="s1">self._proxied.infer_call_result(caller, context)</span>
+
+    <span class="s2">def </span><span class="s1">bool_value(self, context=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s2">return True</span>
+
+
+<span class="s2">class </span><span class="s1">BoundMethod(UnboundMethod):</span>
+    <span class="s0">&quot;&quot;&quot;a special node representing a method bound to an instance&quot;&quot;&quot;</span>
+
+    <span class="s0"># pylint: disable=unnecessary-lambda</span>
+    <span class="s1">special_attributes = util.lazy_descriptor(</span><span class="s2">lambda</span><span class="s1">: objectmodel.BoundMethodModel())</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, proxy, bound):</span>
+        <span class="s1">UnboundMethod.__init__(self, proxy)</span>
+        <span class="s1">self.bound = bound</span>
+
+    <span class="s2">def </span><span class="s1">implicit_parameters(self):</span>
+        <span class="s2">if </span><span class="s1">self.name == </span><span class="s3">&quot;__new__&quot;</span><span class="s1">:</span>
+            <span class="s0"># __new__ acts as a classmethod but the class argument is not implicit.</span>
+            <span class="s2">return </span><span class="s4">0</span>
+        <span class="s2">return </span><span class="s4">1</span>
+
+    <span class="s2">def </span><span class="s1">is_bound(self):</span>
+        <span class="s2">return True</span>
+
+    <span class="s2">def </span><span class="s1">_infer_type_new_call(self, caller, context):</span>
+        <span class="s0">&quot;&quot;&quot;Try to infer what type.__new__(mcs, name, bases, attrs) returns. 
+ 
+        In order for such call to be valid, the metaclass needs to be 
+        a subtype of ``type``, the name needs to be a string, the bases 
+        needs to be a tuple of classes 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># pylint: disable=import-outside-toplevel; circular import</span>
+        <span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">node_classes</span>
+
+        <span class="s0"># Verify the metaclass</span>
+        <span class="s1">mcs = next(caller.args[</span><span class="s4">0</span><span class="s1">].infer(context=context))</span>
+        <span class="s2">if </span><span class="s1">mcs.__class__.__name__ != </span><span class="s3">&quot;ClassDef&quot;</span><span class="s1">:</span>
+            <span class="s0"># Not a valid first argument.</span>
+            <span class="s2">return None</span>
+        <span class="s2">if not </span><span class="s1">mcs.is_subtype_of(</span><span class="s3">&quot;%s.type&quot; </span><span class="s1">% BUILTINS):</span>
+            <span class="s0"># Not a valid metaclass.</span>
+            <span class="s2">return None</span>
+
+        <span class="s0"># Verify the name</span>
+        <span class="s1">name = next(caller.args[</span><span class="s4">1</span><span class="s1">].infer(context=context))</span>
+        <span class="s2">if </span><span class="s1">name.__class__.__name__ != </span><span class="s3">&quot;Const&quot;</span><span class="s1">:</span>
+            <span class="s0"># Not a valid name, needs to be a const.</span>
+            <span class="s2">return None</span>
+        <span class="s2">if not </span><span class="s1">isinstance(name.value, str):</span>
+            <span class="s0"># Needs to be a string.</span>
+            <span class="s2">return None</span>
+
+        <span class="s0"># Verify the bases</span>
+        <span class="s1">bases = next(caller.args[</span><span class="s4">2</span><span class="s1">].infer(context=context))</span>
+        <span class="s2">if </span><span class="s1">bases.__class__.__name__ != </span><span class="s3">&quot;Tuple&quot;</span><span class="s1">:</span>
+            <span class="s0"># Needs to be a tuple.</span>
+            <span class="s2">return None</span>
+        <span class="s1">inferred_bases = [next(elt.infer(context=context)) </span><span class="s2">for </span><span class="s1">elt </span><span class="s2">in </span><span class="s1">bases.elts]</span>
+        <span class="s2">if </span><span class="s1">any(base.__class__.__name__ != </span><span class="s3">&quot;ClassDef&quot; </span><span class="s2">for </span><span class="s1">base </span><span class="s2">in </span><span class="s1">inferred_bases):</span>
+            <span class="s0"># All the bases needs to be Classes</span>
+            <span class="s2">return None</span>
+
+        <span class="s0"># Verify the attributes.</span>
+        <span class="s1">attrs = next(caller.args[</span><span class="s4">3</span><span class="s1">].infer(context=context))</span>
+        <span class="s2">if </span><span class="s1">attrs.__class__.__name__ != </span><span class="s3">&quot;Dict&quot;</span><span class="s1">:</span>
+            <span class="s0"># Needs to be a dictionary.</span>
+            <span class="s2">return None</span>
+        <span class="s1">cls_locals = collections.defaultdict(list)</span>
+        <span class="s2">for </span><span class="s1">key, value </span><span class="s2">in </span><span class="s1">attrs.items:</span>
+            <span class="s1">key = next(key.infer(context=context))</span>
+            <span class="s1">value = next(value.infer(context=context))</span>
+            <span class="s0"># Ignore non string keys</span>
+            <span class="s2">if </span><span class="s1">key.__class__.__name__ == </span><span class="s3">&quot;Const&quot; </span><span class="s2">and </span><span class="s1">isinstance(key.value, str):</span>
+                <span class="s1">cls_locals[key.value].append(value)</span>
+
+        <span class="s0"># Build the class from now.</span>
+        <span class="s1">cls = mcs.__class__(</span>
+            <span class="s1">name=name.value,</span>
+            <span class="s1">lineno=caller.lineno,</span>
+            <span class="s1">col_offset=caller.col_offset,</span>
+            <span class="s1">parent=caller,</span>
+        <span class="s1">)</span>
+        <span class="s1">empty = node_classes.Pass()</span>
+        <span class="s1">cls.postinit(</span>
+            <span class="s1">bases=bases.elts,</span>
+            <span class="s1">body=[empty],</span>
+            <span class="s1">decorators=[],</span>
+            <span class="s1">newstyle=</span><span class="s2">True</span><span class="s1">,</span>
+            <span class="s1">metaclass=mcs,</span>
+            <span class="s1">keywords=[],</span>
+        <span class="s1">)</span>
+        <span class="s1">cls.locals = cls_locals</span>
+        <span class="s2">return </span><span class="s1">cls</span>
+
+    <span class="s2">def </span><span class="s1">infer_call_result(self, caller, context=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">context = contextmod.bind_context_to_node(context, self.bound)</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">self.bound.__class__.__name__ == </span><span class="s3">&quot;ClassDef&quot;</span>
+            <span class="s2">and </span><span class="s1">self.bound.name == </span><span class="s3">&quot;type&quot;</span>
+            <span class="s2">and </span><span class="s1">self.name == </span><span class="s3">&quot;__new__&quot;</span>
+            <span class="s2">and </span><span class="s1">len(caller.args) == </span><span class="s4">4</span>
+        <span class="s1">):</span>
+            <span class="s0"># Check if we have a ``type.__new__(mcs, name, bases, attrs)`` call.</span>
+            <span class="s1">new_cls = self._infer_type_new_call(caller, context)</span>
+            <span class="s2">if </span><span class="s1">new_cls:</span>
+                <span class="s2">return </span><span class="s1">iter((new_cls,))</span>
+
+        <span class="s2">return </span><span class="s1">super().infer_call_result(caller, context)</span>
+
+    <span class="s2">def </span><span class="s1">bool_value(self, context=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s2">return True</span>
+
+
+<span class="s2">class </span><span class="s1">Generator(BaseInstance):</span>
+    <span class="s0">&quot;&quot;&quot;a special node representing a generator. 
+ 
+    Proxied class is set once for all in raw_building. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0"># pylint: disable=unnecessary-lambda</span>
+    <span class="s1">special_attributes = util.lazy_descriptor(</span><span class="s2">lambda</span><span class="s1">: objectmodel.GeneratorModel())</span>
+
+    <span class="s0"># pylint: disable=super-init-not-called</span>
+    <span class="s2">def </span><span class="s1">__init__(self, parent=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">self.parent = parent</span>
+
+    <span class="s2">def </span><span class="s1">callable(self):</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">pytype(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;%s.generator&quot; </span><span class="s1">% BUILTINS</span>
+
+    <span class="s2">def </span><span class="s1">display_type(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;Generator&quot;</span>
+
+    <span class="s2">def </span><span class="s1">bool_value(self, context=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s2">return True</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;&lt;Generator({}) l.{} at 0x{}&gt;&quot;</span><span class="s1">.format(</span>
+            <span class="s1">self._proxied.name, self.lineno, id(self)</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__str__(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;Generator(%s)&quot; </span><span class="s1">% (self._proxied.name)</span>
+
+
+<span class="s2">class </span><span class="s1">AsyncGenerator(Generator):</span>
+    <span class="s0">&quot;&quot;&quot;Special node representing an async generator&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">pytype(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;%s.async_generator&quot; </span><span class="s1">% BUILTINS</span>
+
+    <span class="s2">def </span><span class="s1">display_type(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;AsyncGenerator&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;&lt;AsyncGenerator({}) l.{} at 0x{}&gt;&quot;</span><span class="s1">.format(</span>
+            <span class="s1">self._proxied.name, self.lineno, id(self)</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__str__(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;AsyncGenerator(%s)&quot; </span><span class="s1">% (self._proxied.name)</span>
+</pre>
+</body>
+</html>

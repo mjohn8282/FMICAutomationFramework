@@ -1,0 +1,185 @@
+<html>
+<head>
+<title>numbits.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+numbits.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot; 
+Functions to manipulate packed binary representations of number sets. 
+ 
+To save space, coverage stores sets of line numbers in SQLite using a packed 
+binary representation called a numbits.  A numbits is a set of positive 
+integers. 
+ 
+A numbits is stored as a blob in the database.  The exact meaning of the bytes 
+in the blobs should be considered an implementation detail that might change in 
+the future.  Use these functions to work with those binary blobs of data. 
+ 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">json</span>
+
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">env</span>
+<span class="s2">from </span><span class="s1">coverage.backward </span><span class="s2">import </span><span class="s1">byte_to_int, bytes_to_ints, binary_bytes, zip_longest</span>
+<span class="s2">from </span><span class="s1">coverage.misc </span><span class="s2">import </span><span class="s1">contract, new_contract</span>
+
+<span class="s2">if </span><span class="s1">env.PY3:</span>
+    <span class="s2">def </span><span class="s1">_to_blob(b):</span>
+        <span class="s0">&quot;&quot;&quot;Convert a bytestring into a type SQLite will accept for a blob.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">b</span>
+
+    <span class="s1">new_contract(</span><span class="s3">'blob'</span><span class="s1">, </span><span class="s2">lambda </span><span class="s1">v: isinstance(v, bytes))</span>
+<span class="s2">else</span><span class="s1">:</span>
+    <span class="s2">def </span><span class="s1">_to_blob(b):</span>
+        <span class="s0">&quot;&quot;&quot;Convert a bytestring into a type SQLite will accept for a blob.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">buffer(b)                                    </span><span class="s0"># pylint: disable=undefined-variable</span>
+
+    <span class="s1">new_contract(</span><span class="s3">'blob'</span><span class="s1">, </span><span class="s2">lambda </span><span class="s1">v: isinstance(v, buffer))   </span><span class="s0"># pylint: disable=undefined-variable</span>
+
+
+<span class="s1">@contract(nums=</span><span class="s3">'Iterable'</span><span class="s1">, returns=</span><span class="s3">'blob'</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">nums_to_numbits(nums):</span>
+    <span class="s0">&quot;&quot;&quot;Convert `nums` into a numbits. 
+ 
+    Arguments: 
+        nums: a reusable iterable of integers, the line numbers to store. 
+ 
+    Returns: 
+        A binary blob. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">nbytes = max(nums) // </span><span class="s4">8 </span><span class="s1">+ </span><span class="s4">1</span>
+    <span class="s2">except </span><span class="s1">ValueError:</span>
+        <span class="s0"># nums was empty.</span>
+        <span class="s2">return </span><span class="s1">_to_blob(</span><span class="s3">b''</span><span class="s1">)</span>
+    <span class="s1">b = bytearray(nbytes)</span>
+    <span class="s2">for </span><span class="s1">num </span><span class="s2">in </span><span class="s1">nums:</span>
+        <span class="s1">b[num//</span><span class="s4">8</span><span class="s1">] |= </span><span class="s4">1 </span><span class="s1">&lt;&lt; num % </span><span class="s4">8</span>
+    <span class="s2">return </span><span class="s1">_to_blob(bytes(b))</span>
+
+
+<span class="s1">@contract(numbits=</span><span class="s3">'blob'</span><span class="s1">, returns=</span><span class="s3">'list[int]'</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">numbits_to_nums(numbits):</span>
+    <span class="s0">&quot;&quot;&quot;Convert a numbits into a list of numbers. 
+ 
+    Arguments: 
+        numbits: a binary blob, the packed number set. 
+ 
+    Returns: 
+        A list of ints. 
+ 
+    When registered as a SQLite function by :func:`register_sqlite_functions`, 
+    this returns a string, a JSON-encoded list of ints. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">nums = []</span>
+    <span class="s2">for </span><span class="s1">byte_i, byte </span><span class="s2">in </span><span class="s1">enumerate(bytes_to_ints(numbits)):</span>
+        <span class="s2">for </span><span class="s1">bit_i </span><span class="s2">in </span><span class="s1">range(</span><span class="s4">8</span><span class="s1">):</span>
+            <span class="s2">if </span><span class="s1">(byte &amp; (</span><span class="s4">1 </span><span class="s1">&lt;&lt; bit_i)):</span>
+                <span class="s1">nums.append(byte_i * </span><span class="s4">8 </span><span class="s1">+ bit_i)</span>
+    <span class="s2">return </span><span class="s1">nums</span>
+
+
+<span class="s1">@contract(numbits1=</span><span class="s3">'blob'</span><span class="s1">, numbits2=</span><span class="s3">'blob'</span><span class="s1">, returns=</span><span class="s3">'blob'</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">numbits_union(numbits1, numbits2):</span>
+    <span class="s0">&quot;&quot;&quot;Compute the union of two numbits. 
+ 
+    Returns: 
+        A new numbits, the union of `numbits1` and `numbits2`. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">byte_pairs = zip_longest(bytes_to_ints(numbits1), bytes_to_ints(numbits2), fillvalue=</span><span class="s4">0</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">_to_blob(binary_bytes(b1 | b2 </span><span class="s2">for </span><span class="s1">b1, b2 </span><span class="s2">in </span><span class="s1">byte_pairs))</span>
+
+
+<span class="s1">@contract(numbits1=</span><span class="s3">'blob'</span><span class="s1">, numbits2=</span><span class="s3">'blob'</span><span class="s1">, returns=</span><span class="s3">'blob'</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">numbits_intersection(numbits1, numbits2):</span>
+    <span class="s0">&quot;&quot;&quot;Compute the intersection of two numbits. 
+ 
+    Returns: 
+        A new numbits, the intersection `numbits1` and `numbits2`. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">byte_pairs = zip_longest(bytes_to_ints(numbits1), bytes_to_ints(numbits2), fillvalue=</span><span class="s4">0</span><span class="s1">)</span>
+    <span class="s1">intersection_bytes = binary_bytes(b1 &amp; b2 </span><span class="s2">for </span><span class="s1">b1, b2 </span><span class="s2">in </span><span class="s1">byte_pairs)</span>
+    <span class="s2">return </span><span class="s1">_to_blob(intersection_bytes.rstrip(</span><span class="s3">b'</span><span class="s5">\0</span><span class="s3">'</span><span class="s1">))</span>
+
+
+<span class="s1">@contract(numbits1=</span><span class="s3">'blob'</span><span class="s1">, numbits2=</span><span class="s3">'blob'</span><span class="s1">, returns=</span><span class="s3">'bool'</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">numbits_any_intersection(numbits1, numbits2):</span>
+    <span class="s0">&quot;&quot;&quot;Is there any number that appears in both numbits? 
+ 
+    Determine whether two number sets have a non-empty intersection. This is 
+    faster than computing the intersection. 
+ 
+    Returns: 
+        A bool, True if there is any number in both `numbits1` and `numbits2`. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">byte_pairs = zip_longest(bytes_to_ints(numbits1), bytes_to_ints(numbits2), fillvalue=</span><span class="s4">0</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">any(b1 &amp; b2 </span><span class="s2">for </span><span class="s1">b1, b2 </span><span class="s2">in </span><span class="s1">byte_pairs)</span>
+
+
+<span class="s1">@contract(num=</span><span class="s3">'int'</span><span class="s1">, numbits=</span><span class="s3">'blob'</span><span class="s1">, returns=</span><span class="s3">'bool'</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">num_in_numbits(num, numbits):</span>
+    <span class="s0">&quot;&quot;&quot;Does the integer `num` appear in `numbits`? 
+ 
+    Returns: 
+        A bool, True if `num` is a member of `numbits`. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">nbyte, nbit = divmod(num, </span><span class="s4">8</span><span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">nbyte &gt;= len(numbits):</span>
+        <span class="s2">return False</span>
+    <span class="s2">return </span><span class="s1">bool(byte_to_int(numbits[nbyte]) &amp; (</span><span class="s4">1 </span><span class="s1">&lt;&lt; nbit))</span>
+
+
+<span class="s2">def </span><span class="s1">register_sqlite_functions(connection):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Define numbits functions in a SQLite connection. 
+ 
+    This defines these functions for use in SQLite statements: 
+ 
+    * :func:`numbits_union` 
+    * :func:`numbits_intersection` 
+    * :func:`numbits_any_intersection` 
+    * :func:`num_in_numbits` 
+    * :func:`numbits_to_nums` 
+ 
+    `connection` is a :class:`sqlite3.Connection &lt;python:sqlite3.Connection&gt;` 
+    object.  After creating the connection, pass it to this function to 
+    register the numbits functions.  Then you can use numbits functions in your 
+    queries:: 
+ 
+        import sqlite3 
+        from coverage.numbits import register_sqlite_functions 
+ 
+        conn = sqlite3.connect('example.db') 
+        register_sqlite_functions(conn) 
+        c = conn.cursor() 
+        # Kind of a nonsense query: find all the files and contexts that 
+        # executed line 47 in any file: 
+        c.execute( 
+            &quot;select file_id, context_id from line_bits where num_in_numbits(?, numbits)&quot;, 
+            (47,) 
+        ) 
+    &quot;&quot;&quot;</span>
+    <span class="s1">connection.create_function(</span><span class="s3">&quot;numbits_union&quot;</span><span class="s1">, </span><span class="s4">2</span><span class="s1">, numbits_union)</span>
+    <span class="s1">connection.create_function(</span><span class="s3">&quot;numbits_intersection&quot;</span><span class="s1">, </span><span class="s4">2</span><span class="s1">, numbits_intersection)</span>
+    <span class="s1">connection.create_function(</span><span class="s3">&quot;numbits_any_intersection&quot;</span><span class="s1">, </span><span class="s4">2</span><span class="s1">, numbits_any_intersection)</span>
+    <span class="s1">connection.create_function(</span><span class="s3">&quot;num_in_numbits&quot;</span><span class="s1">, </span><span class="s4">2</span><span class="s1">, num_in_numbits)</span>
+    <span class="s1">connection.create_function(</span><span class="s3">&quot;numbits_to_nums&quot;</span><span class="s1">, </span><span class="s4">1</span><span class="s1">, </span><span class="s2">lambda </span><span class="s1">b: json.dumps(numbits_to_nums(b)))</span>
+</pre>
+</body>
+</html>

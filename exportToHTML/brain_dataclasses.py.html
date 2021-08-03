@@ -1,0 +1,81 @@
+<html>
+<head>
+<title>brain_dataclasses.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_dataclasses.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+<span class="s0">&quot;&quot;&quot; 
+Astroid hook for the dataclasses library 
+&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">MANAGER</span>
+
+<span class="s1">DATACLASSES_DECORATORS = frozenset((</span><span class="s3">&quot;dataclasses.dataclass&quot;</span><span class="s1">, </span><span class="s3">&quot;dataclass&quot;</span><span class="s1">))</span>
+
+
+<span class="s2">def </span><span class="s1">is_decorated_with_dataclass(node, decorator_names=DATACLASSES_DECORATORS):</span>
+    <span class="s0">&quot;&quot;&quot;Return True if a decorated node has a `dataclass` decorator applied.&quot;&quot;&quot;</span>
+    <span class="s2">if not </span><span class="s1">node.decorators:</span>
+        <span class="s2">return False</span>
+    <span class="s2">for </span><span class="s1">decorator_attribute </span><span class="s2">in </span><span class="s1">node.decorators.nodes:</span>
+        <span class="s2">if </span><span class="s1">isinstance(decorator_attribute, astroid.Call):  </span><span class="s0"># decorator with arguments</span>
+            <span class="s1">decorator_attribute = decorator_attribute.func</span>
+        <span class="s2">if </span><span class="s1">decorator_attribute.as_string() </span><span class="s2">in </span><span class="s1">decorator_names:</span>
+            <span class="s2">return True</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">dataclass_transform(node):</span>
+    <span class="s0">&quot;&quot;&quot;Rewrite a dataclass to be easily understood by pylint&quot;&quot;&quot;</span>
+
+    <span class="s2">for </span><span class="s1">assign_node </span><span class="s2">in </span><span class="s1">node.body:</span>
+        <span class="s2">if not </span><span class="s1">isinstance(assign_node, (astroid.AnnAssign, astroid.Assign)):</span>
+            <span class="s2">continue</span>
+
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">isinstance(assign_node, astroid.AnnAssign)</span>
+            <span class="s2">and </span><span class="s1">isinstance(assign_node.annotation, astroid.Subscript)</span>
+            <span class="s2">and </span><span class="s1">(</span>
+                <span class="s1">isinstance(assign_node.annotation.value, astroid.Name)</span>
+                <span class="s2">and </span><span class="s1">assign_node.annotation.value.name == </span><span class="s3">&quot;ClassVar&quot;</span>
+                <span class="s2">or </span><span class="s1">isinstance(assign_node.annotation.value, astroid.Attribute)</span>
+                <span class="s2">and </span><span class="s1">assign_node.annotation.value.attrname == </span><span class="s3">&quot;ClassVar&quot;</span>
+            <span class="s1">)</span>
+        <span class="s1">):</span>
+            <span class="s2">continue</span>
+
+        <span class="s1">targets = (</span>
+            <span class="s1">assign_node.targets</span>
+            <span class="s2">if </span><span class="s1">hasattr(assign_node, </span><span class="s3">&quot;targets&quot;</span><span class="s1">)</span>
+            <span class="s2">else </span><span class="s1">[assign_node.target]</span>
+        <span class="s1">)</span>
+        <span class="s2">for </span><span class="s1">target </span><span class="s2">in </span><span class="s1">targets:</span>
+            <span class="s1">rhs_node = astroid.Unknown(</span>
+                <span class="s1">lineno=assign_node.lineno,</span>
+                <span class="s1">col_offset=assign_node.col_offset,</span>
+                <span class="s1">parent=assign_node,</span>
+            <span class="s1">)</span>
+            <span class="s1">node.instance_attrs[target.name] = [rhs_node]</span>
+            <span class="s1">node.locals[target.name] = [rhs_node]</span>
+
+
+<span class="s1">MANAGER.register_transform(</span>
+    <span class="s1">astroid.ClassDef, dataclass_transform, is_decorated_with_dataclass</span>
+<span class="s1">)</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<html>
+<head>
+<title>function.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+function.py</font>
+</center></td></tr></table>
+<pre><span class="s0">#movies = [&quot;The Holy Grailliam&quot;,&quot;1975&quot;,&quot;Terry Jones &amp; Terry Gilliam&quot;,&quot;91&quot;,</span>
+<span class="s0">#           [&quot;Graham Chapman&quot;,[&quot;Michael Palin&quot;,&quot;John Cleese&quot;,&quot;Terry Gilliam&quot;,&quot;Eric Idle&quot;,&quot;Terry Jones&quot;]]]</span>
+
+<span class="s0">#print(movies)</span>
+
+<span class="s0">&quot;&quot;&quot;this is comment!! &quot;&quot;&quot;</span>
+
+<span class="s2">def </span><span class="s1">print_loop(loop_list,indent=</span><span class="s2">False</span><span class="s1">,level=</span><span class="s3">0</span><span class="s1">):</span>
+	<span class="s2">for </span><span class="s1">loopitem </span><span class="s2">in </span><span class="s1">loop_list:</span>
+		<span class="s2">if </span><span class="s1">isinstance(loopitem,list):</span>
+			<span class="s1">print_loop(loopitem,indent,level+</span><span class="s3">1</span><span class="s1">)</span>
+		<span class="s2">else </span><span class="s1">:</span>
+			<span class="s2">if </span><span class="s1">indent:</span>
+				<span class="s2">for </span><span class="s1">tab_stop </span><span class="s2">in </span><span class="s1">range(level):</span>
+					<span class="s1">print(</span><span class="s4">&quot;</span><span class="s5">\t</span><span class="s4">&quot;</span><span class="s1">,end=</span><span class="s4">''</span><span class="s1">)</span>
+			<span class="s1">print(loopitem)	</span>
+
+<span class="s0">#print_loop(movies)</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,218 @@
+<html>
+<head>
+<title>series.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+series.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">unicode</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">Alias,</span>
+    <span class="s1">Sequence,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">ExtensionList</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">NestedInteger,</span>
+    <span class="s1">NestedBool,</span>
+    <span class="s1">NestedNoneSet,</span>
+    <span class="s1">NestedText,</span>
+<span class="s1">)</span>
+
+<span class="s0">from </span><span class="s1">.shapes </span><span class="s0">import </span><span class="s1">GraphicalProperties</span>
+<span class="s0">from </span><span class="s1">.data_source </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">AxDataSource,</span>
+    <span class="s1">NumDataSource,</span>
+    <span class="s1">NumRef,</span>
+    <span class="s1">StrRef,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">.error_bar </span><span class="s0">import </span><span class="s1">ErrorBars</span>
+<span class="s0">from </span><span class="s1">.label </span><span class="s0">import </span><span class="s1">DataLabelList</span>
+<span class="s0">from </span><span class="s1">.marker </span><span class="s0">import </span><span class="s1">DataPoint, PictureOptions, Marker</span>
+<span class="s0">from </span><span class="s1">.trendline </span><span class="s0">import </span><span class="s1">Trendline</span>
+
+<span class="s1">attribute_mapping = {</span>
+    <span class="s3">'area'</span><span class="s1">: (</span><span class="s3">'idx'</span><span class="s1">, </span><span class="s3">'order'</span><span class="s1">, </span><span class="s3">'tx'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">, </span><span class="s3">'pictureOptions'</span><span class="s1">, </span><span class="s3">'dPt'</span><span class="s1">, </span><span class="s3">'dLbls'</span><span class="s1">, </span><span class="s3">'errBars'</span><span class="s1">,</span>
+             <span class="s3">'trendline'</span><span class="s1">, </span><span class="s3">'cat'</span><span class="s1">, </span><span class="s3">'val'</span><span class="s1">,),</span>
+    <span class="s3">'bar'</span><span class="s1">:(</span><span class="s3">'idx'</span><span class="s1">, </span><span class="s3">'order'</span><span class="s1">,</span><span class="s3">'tx'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">, </span><span class="s3">'invertIfNegative'</span><span class="s1">, </span><span class="s3">'pictureOptions'</span><span class="s1">, </span><span class="s3">'dPt'</span><span class="s1">,</span>
+           <span class="s3">'dLbls'</span><span class="s1">, </span><span class="s3">'trendline'</span><span class="s1">, </span><span class="s3">'errBars'</span><span class="s1">, </span><span class="s3">'cat'</span><span class="s1">, </span><span class="s3">'val'</span><span class="s1">, </span><span class="s3">'shape'</span><span class="s1">),</span>
+    <span class="s3">'bubble'</span><span class="s1">:(</span><span class="s3">'idx'</span><span class="s1">,</span><span class="s3">'order'</span><span class="s1">, </span><span class="s3">'tx'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">, </span><span class="s3">'invertIfNegative'</span><span class="s1">, </span><span class="s3">'dPt'</span><span class="s1">, </span><span class="s3">'dLbls'</span><span class="s1">,</span>
+              <span class="s3">'trendline'</span><span class="s1">, </span><span class="s3">'errBars'</span><span class="s1">, </span><span class="s3">'xVal'</span><span class="s1">, </span><span class="s3">'yVal'</span><span class="s1">, </span><span class="s3">'bubbleSize'</span><span class="s1">, </span><span class="s3">'bubble3D'</span><span class="s1">),</span>
+    <span class="s3">'line'</span><span class="s1">:(</span><span class="s3">'idx'</span><span class="s1">, </span><span class="s3">'order'</span><span class="s1">, </span><span class="s3">'tx'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">, </span><span class="s3">'marker'</span><span class="s1">, </span><span class="s3">'dPt'</span><span class="s1">, </span><span class="s3">'dLbls'</span><span class="s1">, </span><span class="s3">'trendline'</span><span class="s1">,</span>
+            <span class="s3">'errBars'</span><span class="s1">, </span><span class="s3">'cat'</span><span class="s1">, </span><span class="s3">'val'</span><span class="s1">, </span><span class="s3">'smooth'</span><span class="s1">),</span>
+    <span class="s3">'pie'</span><span class="s1">:(</span><span class="s3">'idx'</span><span class="s1">, </span><span class="s3">'order'</span><span class="s1">, </span><span class="s3">'tx'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">, </span><span class="s3">'explosion'</span><span class="s1">, </span><span class="s3">'dPt'</span><span class="s1">, </span><span class="s3">'dLbls'</span><span class="s1">, </span><span class="s3">'cat'</span><span class="s1">, </span><span class="s3">'val'</span><span class="s1">),</span>
+    <span class="s3">'radar'</span><span class="s1">:(</span><span class="s3">'idx'</span><span class="s1">, </span><span class="s3">'order'</span><span class="s1">, </span><span class="s3">'tx'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">, </span><span class="s3">'marker'</span><span class="s1">, </span><span class="s3">'dPt'</span><span class="s1">, </span><span class="s3">'dLbls'</span><span class="s1">, </span><span class="s3">'cat'</span><span class="s1">, </span><span class="s3">'val'</span><span class="s1">),</span>
+    <span class="s3">'scatter'</span><span class="s1">:(</span><span class="s3">'idx'</span><span class="s1">, </span><span class="s3">'order'</span><span class="s1">, </span><span class="s3">'tx'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">, </span><span class="s3">'marker'</span><span class="s1">, </span><span class="s3">'dPt'</span><span class="s1">, </span><span class="s3">'dLbls'</span><span class="s1">, </span><span class="s3">'trendline'</span><span class="s1">,</span>
+               <span class="s3">'errBars'</span><span class="s1">, </span><span class="s3">'xVal'</span><span class="s1">, </span><span class="s3">'yVal'</span><span class="s1">, </span><span class="s3">'smooth'</span><span class="s1">),</span>
+    <span class="s3">'surface'</span><span class="s1">:(</span><span class="s3">'idx'</span><span class="s1">, </span><span class="s3">'order'</span><span class="s1">, </span><span class="s3">'tx'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">, </span><span class="s3">'cat'</span><span class="s1">, </span><span class="s3">'val'</span><span class="s1">),</span>
+                     <span class="s1">}</span>
+
+
+<span class="s0">class </span><span class="s1">SeriesLabel(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;tx&quot;</span>
+
+    <span class="s1">strRef = Typed(expected_type=StrRef, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">v = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">value = Alias(</span><span class="s3">'v'</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'strRef'</span><span class="s1">, </span><span class="s3">'v'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">strRef=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">v=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">self.strRef = strRef</span>
+        <span class="s1">self.v = v</span>
+
+
+<span class="s0">class </span><span class="s1">Series(Serialisable):</span>
+
+    <span class="s2">&quot;&quot;&quot; 
+    Generic series object. Should not be instantiated directly. 
+    User the chart.Series factory instead. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;ser&quot;</span>
+
+    <span class="s1">idx = NestedInteger()</span>
+    <span class="s1">order = NestedInteger()</span>
+    <span class="s1">tx = Typed(expected_type=SeriesLabel, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">title = Alias(</span><span class="s3">'tx'</span><span class="s1">)</span>
+    <span class="s1">spPr = Typed(expected_type=GraphicalProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">graphicalProperties = Alias(</span><span class="s3">'spPr'</span><span class="s1">)</span>
+
+    <span class="s2"># area chart</span>
+    <span class="s1">pictureOptions = Typed(expected_type=PictureOptions, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">dPt = Sequence(expected_type=DataPoint, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">data_points = Alias(</span><span class="s3">&quot;dPt&quot;</span><span class="s1">)</span>
+    <span class="s1">dLbls = Typed(expected_type=DataLabelList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">labels = Alias(</span><span class="s3">&quot;dLbls&quot;</span><span class="s1">)</span>
+    <span class="s1">trendline = Typed(expected_type=Trendline, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">errBars = Typed(expected_type=ErrorBars, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">cat = Typed(expected_type=AxDataSource, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">identifiers = Alias(</span><span class="s3">&quot;cat&quot;</span><span class="s1">)</span>
+    <span class="s1">val = Typed(expected_type=NumDataSource, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s2">#bar chart</span>
+    <span class="s1">invertIfNegative = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">shape = NestedNoneSet(values=([</span><span class="s3">'cone'</span><span class="s1">, </span><span class="s3">'coneToMax'</span><span class="s1">, </span><span class="s3">'box'</span><span class="s1">, </span><span class="s3">'cylinder'</span><span class="s1">, </span><span class="s3">'pyramid'</span><span class="s1">, </span><span class="s3">'pyramidToMax'</span><span class="s1">]))</span>
+
+    <span class="s2">#bubble chart</span>
+    <span class="s1">xVal = Typed(expected_type=AxDataSource, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">yVal = Typed(expected_type=NumDataSource, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">bubbleSize = Typed(expected_type=NumDataSource, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">zVal = Alias(</span><span class="s3">&quot;bubbleSize&quot;</span><span class="s1">)</span>
+    <span class="s1">bubble3D = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s2">#line chart</span>
+    <span class="s1">marker = Typed(expected_type=Marker, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">smooth = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s2">#pie chart</span>
+    <span class="s1">explosion = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = ()</span>
+
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">idx=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">order=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">tx=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pictureOptions=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dPt=(),</span>
+                 <span class="s1">dLbls=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">trendline=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">errBars=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">cat=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">val=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">invertIfNegative=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">shape=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">xVal=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">yVal=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">bubbleSize=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">bubble3D=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">marker=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">smooth=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">explosion=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.idx = idx</span>
+        <span class="s1">self.order = order</span>
+        <span class="s1">self.tx = tx</span>
+        <span class="s0">if </span><span class="s1">spPr </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">spPr = GraphicalProperties()</span>
+        <span class="s1">self.spPr = spPr</span>
+        <span class="s1">self.pictureOptions = pictureOptions</span>
+        <span class="s1">self.dPt = dPt</span>
+        <span class="s1">self.dLbls = dLbls</span>
+        <span class="s1">self.trendline = trendline</span>
+        <span class="s1">self.errBars = errBars</span>
+        <span class="s1">self.cat = cat</span>
+        <span class="s1">self.val = val</span>
+        <span class="s1">self.invertIfNegative = invertIfNegative</span>
+        <span class="s1">self.shape = shape</span>
+        <span class="s1">self.xVal = xVal</span>
+        <span class="s1">self.yVal = yVal</span>
+        <span class="s1">self.bubbleSize = bubbleSize</span>
+        <span class="s1">self.bubble3D = bubble3D</span>
+        <span class="s0">if </span><span class="s1">marker </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">marker = Marker()</span>
+        <span class="s1">self.marker = marker</span>
+        <span class="s1">self.smooth = smooth</span>
+        <span class="s1">self.explosion = explosion</span>
+
+    <span class="s0">def </span><span class="s1">to_tree(self, tagname=</span><span class="s0">None</span><span class="s1">, idx=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s0">if </span><span class="s1">idx </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s0">if </span><span class="s1">self.order == self.idx:</span>
+                <span class="s1">self.order = idx</span>
+            <span class="s1">self.idx = idx</span>
+        <span class="s0">return </span><span class="s1">super(Series, self).to_tree(tagname)</span>
+
+
+<span class="s0">class </span><span class="s1">XYSeries(Series):</span>
+
+    <span class="s2">&quot;&quot;&quot;Dedicated series for charts that have x and y series&quot;&quot;&quot;</span>
+
+    <span class="s1">idx = Series.idx</span>
+    <span class="s1">order = Series.order</span>
+    <span class="s1">tx = Series.tx</span>
+    <span class="s1">spPr = Series.spPr</span>
+
+    <span class="s1">dPt = Series.dPt</span>
+    <span class="s1">dLbls = Series.dLbls</span>
+    <span class="s1">trendline = Series.trendline</span>
+    <span class="s1">errBars = Series.errBars</span>
+    <span class="s1">xVal = Series.xVal</span>
+    <span class="s1">yVal = Series.yVal</span>
+
+    <span class="s1">invertIfNegative = Series.invertIfNegative</span>
+
+    <span class="s1">bubbleSize = Series.bubbleSize</span>
+    <span class="s1">bubble3D = Series.bubble3D</span>
+
+    <span class="s1">marker = Series.marker</span>
+    <span class="s1">smooth = Series.smooth</span>
+</pre>
+</body>
+</html>

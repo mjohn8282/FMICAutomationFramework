@@ -1,0 +1,338 @@
+<html>
+<head>
+<title>multi.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+multi.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># -*- coding: utf-8 -*-</span>
+<span class="s0">&quot;&quot;&quot; 
+Managing Gateway Groups and interactions with multiple channels. 
+ 
+(c) 2008-2014, Holger Krekel and others 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">atexit</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">from </span><span class="s1">functools </span><span class="s2">import </span><span class="s1">partial</span>
+<span class="s2">from </span><span class="s1">threading </span><span class="s2">import </span><span class="s1">Lock</span>
+
+<span class="s2">from </span><span class="s1">execnet </span><span class="s2">import </span><span class="s1">gateway_bootstrap</span>
+<span class="s2">from </span><span class="s1">execnet </span><span class="s2">import </span><span class="s1">gateway_io</span>
+<span class="s2">from </span><span class="s1">execnet </span><span class="s2">import </span><span class="s1">XSpec</span>
+<span class="s2">from </span><span class="s1">execnet.gateway_base </span><span class="s2">import </span><span class="s1">get_execmodel</span>
+<span class="s2">from </span><span class="s1">execnet.gateway_base </span><span class="s2">import </span><span class="s1">reraise</span>
+<span class="s2">from </span><span class="s1">execnet.gateway_base </span><span class="s2">import </span><span class="s1">trace</span>
+
+<span class="s1">NO_ENDMARKER_WANTED = object()</span>
+
+
+<span class="s2">class </span><span class="s1">Group(object):</span>
+    <span class="s0">&quot;&quot;&quot;Gateway Groups.&quot;&quot;&quot;</span>
+
+    <span class="s1">defaultspec = </span><span class="s3">&quot;popen&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, xspecs=(), execmodel=</span><span class="s3">&quot;thread&quot;</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;initialize group and make gateways as specified. 
+        execmodel can be 'thread' or 'eventlet'. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self._gateways = []</span>
+        <span class="s1">self._autoidcounter = </span><span class="s4">0</span>
+        <span class="s1">self._autoidlock = Lock()</span>
+        <span class="s1">self._gateways_to_join = []</span>
+        <span class="s0"># we use the same execmodel for all of the Gateway objects</span>
+        <span class="s0"># we spawn on our side.  Probably we should not allow different</span>
+        <span class="s0"># execmodels between different groups but not clear.</span>
+        <span class="s0"># Note that &quot;other side&quot; execmodels may differ and is typically</span>
+        <span class="s0"># specified by the spec passed to makegateway.</span>
+        <span class="s1">self.set_execmodel(execmodel)</span>
+        <span class="s2">for </span><span class="s1">xspec </span><span class="s2">in </span><span class="s1">xspecs:</span>
+            <span class="s1">self.makegateway(xspec)</span>
+        <span class="s1">atexit.register(self._cleanup_atexit)</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">execmodel(self):</span>
+        <span class="s2">return </span><span class="s1">self._execmodel</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">remote_execmodel(self):</span>
+        <span class="s2">return </span><span class="s1">self._remote_execmodel</span>
+
+    <span class="s2">def </span><span class="s1">set_execmodel(self, execmodel, remote_execmodel=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Set the execution model for local and remote site. 
+ 
+        execmodel can be one of &quot;thread&quot; or &quot;eventlet&quot; (XXX gevent). 
+        It determines the execution model for any newly created gateway. 
+        If remote_execmodel is not specified it takes on the value 
+        of execmodel. 
+ 
+        NOTE: Execution models can only be set before any gateway is created. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self._gateways:</span>
+            <span class="s2">raise </span><span class="s1">ValueError(</span>
+                <span class="s3">&quot;can not set execution models if &quot; &quot;gateways have been created already&quot;</span>
+            <span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">remote_execmodel </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">remote_execmodel = execmodel</span>
+        <span class="s1">self._execmodel = get_execmodel(execmodel)</span>
+        <span class="s1">self._remote_execmodel = get_execmodel(remote_execmodel)</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s1">idgateways = [gw.id </span><span class="s2">for </span><span class="s1">gw </span><span class="s2">in </span><span class="s1">self]</span>
+        <span class="s2">return </span><span class="s3">&quot;&lt;Group %r&gt;&quot; </span><span class="s1">% idgateways</span>
+
+    <span class="s2">def </span><span class="s1">__getitem__(self, key):</span>
+        <span class="s2">if </span><span class="s1">isinstance(key, int):</span>
+            <span class="s2">return </span><span class="s1">self._gateways[key]</span>
+        <span class="s2">for </span><span class="s1">gw </span><span class="s2">in </span><span class="s1">self._gateways:</span>
+            <span class="s2">if </span><span class="s1">gw == key </span><span class="s2">or </span><span class="s1">gw.id == key:</span>
+                <span class="s2">return </span><span class="s1">gw</span>
+        <span class="s2">raise </span><span class="s1">KeyError(key)</span>
+
+    <span class="s2">def </span><span class="s1">__contains__(self, key):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">self[key]</span>
+            <span class="s2">return True</span>
+        <span class="s2">except </span><span class="s1">KeyError:</span>
+            <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">__len__(self):</span>
+        <span class="s2">return </span><span class="s1">len(self._gateways)</span>
+
+    <span class="s2">def </span><span class="s1">__iter__(self):</span>
+        <span class="s2">return </span><span class="s1">iter(list(self._gateways))</span>
+
+    <span class="s2">def </span><span class="s1">makegateway(self, spec=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;create and configure a gateway to a Python interpreter. 
+        The ``spec`` string encodes the target gateway type 
+        and configuration information. The general format is:: 
+ 
+            key1=value1//key2=value2//... 
+ 
+        If you leave out the ``=value`` part a True value is assumed. 
+        Valid types: ``popen``, ``ssh=hostname``, ``socket=host:port``. 
+        Valid configuration:: 
+ 
+            id=&lt;string&gt;     specifies the gateway id 
+            python=&lt;path&gt;   specifies which python interpreter to execute 
+            execmodel=model 'thread', 'eventlet', 'gevent' model for execution 
+            chdir=&lt;path&gt;    specifies to which directory to change 
+            nice=&lt;path&gt;     specifies process priority of new process 
+            env:NAME=value  specifies a remote environment variable setting. 
+ 
+        If no spec is given, self.defaultspec is used. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">spec:</span>
+            <span class="s1">spec = self.defaultspec</span>
+        <span class="s2">if not </span><span class="s1">isinstance(spec, XSpec):</span>
+            <span class="s1">spec = XSpec(spec)</span>
+        <span class="s1">self.allocate_id(spec)</span>
+        <span class="s2">if </span><span class="s1">spec.execmodel </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">spec.execmodel = self.remote_execmodel.backend</span>
+        <span class="s2">if </span><span class="s1">spec.via:</span>
+            <span class="s2">assert not </span><span class="s1">spec.socket</span>
+            <span class="s1">master = self[spec.via]</span>
+            <span class="s1">proxy_channel = master.remote_exec(gateway_io)</span>
+            <span class="s1">proxy_channel.send(vars(spec))</span>
+            <span class="s1">proxy_io_master = gateway_io.ProxyIO(proxy_channel, self.execmodel)</span>
+            <span class="s1">gw = gateway_bootstrap.bootstrap(proxy_io_master, spec)</span>
+        <span class="s2">elif </span><span class="s1">spec.popen </span><span class="s2">or </span><span class="s1">spec.ssh </span><span class="s2">or </span><span class="s1">spec.vagrant_ssh:</span>
+            <span class="s1">io = gateway_io.create_io(spec, execmodel=self.execmodel)</span>
+            <span class="s1">gw = gateway_bootstrap.bootstrap(io, spec)</span>
+        <span class="s2">elif </span><span class="s1">spec.socket:</span>
+            <span class="s2">from </span><span class="s1">execnet </span><span class="s2">import </span><span class="s1">gateway_socket</span>
+
+            <span class="s1">io = gateway_socket.create_io(spec, self, execmodel=self.execmodel)</span>
+            <span class="s1">gw = gateway_bootstrap.bootstrap(io, spec)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;no gateway type found for {!r}&quot;</span><span class="s1">.format(spec._spec))</span>
+        <span class="s1">gw.spec = spec</span>
+        <span class="s1">self._register(gw)</span>
+        <span class="s2">if </span><span class="s1">spec.chdir </span><span class="s2">or </span><span class="s1">spec.nice </span><span class="s2">or </span><span class="s1">spec.env:</span>
+            <span class="s1">channel = gw.remote_exec(</span>
+                <span class="s3">&quot;&quot;&quot; 
+                import os 
+                path, nice, env = channel.receive() 
+                if path: 
+                    if not os.path.exists(path): 
+                        os.mkdir(path) 
+                    os.chdir(path) 
+                if nice and hasattr(os, 'nice'): 
+                    os.nice(nice) 
+                if env: 
+                    for name, value in env.items(): 
+                        os.environ[name] = value 
+            &quot;&quot;&quot;</span>
+            <span class="s1">)</span>
+            <span class="s1">nice = spec.nice </span><span class="s2">and </span><span class="s1">int(spec.nice) </span><span class="s2">or </span><span class="s4">0</span>
+            <span class="s1">channel.send((spec.chdir, nice, spec.env))</span>
+            <span class="s1">channel.waitclose()</span>
+        <span class="s2">return </span><span class="s1">gw</span>
+
+    <span class="s2">def </span><span class="s1">allocate_id(self, spec):</span>
+        <span class="s0">&quot;&quot;&quot;(re-entrant) allocate id for the given xspec object.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">spec.id </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">with </span><span class="s1">self._autoidlock:</span>
+                <span class="s1">id = </span><span class="s3">&quot;gw&quot; </span><span class="s1">+ str(self._autoidcounter)</span>
+                <span class="s1">self._autoidcounter += </span><span class="s4">1</span>
+                <span class="s2">if </span><span class="s1">id </span><span class="s2">in </span><span class="s1">self:</span>
+                    <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;already have gateway with id {!r}&quot;</span><span class="s1">.format(id))</span>
+                <span class="s1">spec.id = id</span>
+
+    <span class="s2">def </span><span class="s1">_register(self, gateway):</span>
+        <span class="s2">assert not </span><span class="s1">hasattr(gateway, </span><span class="s3">&quot;_group&quot;</span><span class="s1">)</span>
+        <span class="s2">assert </span><span class="s1">gateway.id</span>
+        <span class="s2">assert </span><span class="s1">id </span><span class="s2">not in </span><span class="s1">self</span>
+        <span class="s1">self._gateways.append(gateway)</span>
+        <span class="s1">gateway._group = self</span>
+
+    <span class="s2">def </span><span class="s1">_unregister(self, gateway):</span>
+        <span class="s1">self._gateways.remove(gateway)</span>
+        <span class="s1">self._gateways_to_join.append(gateway)</span>
+
+    <span class="s2">def </span><span class="s1">_cleanup_atexit(self):</span>
+        <span class="s1">trace(</span><span class="s3">&quot;=== atexit cleanup {!r} ===&quot;</span><span class="s1">.format(self))</span>
+        <span class="s1">self.terminate(timeout=</span><span class="s4">1.0</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">terminate(self, timeout=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;trigger exit of member gateways and wait for termination 
+        of member gateways and associated subprocesses.  After waiting 
+        timeout seconds try to to kill local sub processes of popen- 
+        and ssh-gateways.  Timeout defaults to None meaning 
+        open-ended waiting and no kill attempts. 
+        &quot;&quot;&quot;</span>
+
+        <span class="s2">while </span><span class="s1">self:</span>
+            <span class="s1">vias = {}</span>
+            <span class="s2">for </span><span class="s1">gw </span><span class="s2">in </span><span class="s1">self:</span>
+                <span class="s2">if </span><span class="s1">gw.spec.via:</span>
+                    <span class="s1">vias[gw.spec.via] = </span><span class="s2">True</span>
+            <span class="s2">for </span><span class="s1">gw </span><span class="s2">in </span><span class="s1">self:</span>
+                <span class="s2">if </span><span class="s1">gw.id </span><span class="s2">not in </span><span class="s1">vias:</span>
+                    <span class="s1">gw.exit()</span>
+
+            <span class="s2">def </span><span class="s1">join_wait(gw):</span>
+                <span class="s1">gw.join()</span>
+                <span class="s1">gw._io.wait()</span>
+
+            <span class="s2">def </span><span class="s1">kill(gw):</span>
+                <span class="s1">trace(</span><span class="s3">&quot;Gateways did not come down after timeout: %r&quot; </span><span class="s1">% gw)</span>
+                <span class="s1">gw._io.kill()</span>
+
+            <span class="s1">safe_terminate(</span>
+                <span class="s1">self.execmodel,</span>
+                <span class="s1">timeout,</span>
+                <span class="s1">[</span>
+                    <span class="s1">(partial(join_wait, gw), partial(kill, gw))</span>
+                    <span class="s2">for </span><span class="s1">gw </span><span class="s2">in </span><span class="s1">self._gateways_to_join</span>
+                <span class="s1">],</span>
+            <span class="s1">)</span>
+            <span class="s1">self._gateways_to_join[:] = []</span>
+
+    <span class="s2">def </span><span class="s1">remote_exec(self, source, **kwargs):</span>
+        <span class="s0">&quot;&quot;&quot;remote_exec source on all member gateways and return 
+        MultiChannel connecting to all sub processes. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">channels = []</span>
+        <span class="s2">for </span><span class="s1">gw </span><span class="s2">in </span><span class="s1">self:</span>
+            <span class="s1">channels.append(gw.remote_exec(source, **kwargs))</span>
+        <span class="s2">return </span><span class="s1">MultiChannel(channels)</span>
+
+
+<span class="s2">class </span><span class="s1">MultiChannel:</span>
+    <span class="s2">def </span><span class="s1">__init__(self, channels):</span>
+        <span class="s1">self._channels = channels</span>
+
+    <span class="s2">def </span><span class="s1">__len__(self):</span>
+        <span class="s2">return </span><span class="s1">len(self._channels)</span>
+
+    <span class="s2">def </span><span class="s1">__iter__(self):</span>
+        <span class="s2">return </span><span class="s1">iter(self._channels)</span>
+
+    <span class="s2">def </span><span class="s1">__getitem__(self, key):</span>
+        <span class="s2">return </span><span class="s1">self._channels[key]</span>
+
+    <span class="s2">def </span><span class="s1">__contains__(self, chan):</span>
+        <span class="s2">return </span><span class="s1">chan </span><span class="s2">in </span><span class="s1">self._channels</span>
+
+    <span class="s2">def </span><span class="s1">send_each(self, item):</span>
+        <span class="s2">for </span><span class="s1">ch </span><span class="s2">in </span><span class="s1">self._channels:</span>
+            <span class="s1">ch.send(item)</span>
+
+    <span class="s2">def </span><span class="s1">receive_each(self, withchannel=</span><span class="s2">False</span><span class="s1">):</span>
+        <span class="s2">assert not </span><span class="s1">hasattr(self, </span><span class="s3">&quot;_queue&quot;</span><span class="s1">)</span>
+        <span class="s1">l = []</span>
+        <span class="s2">for </span><span class="s1">ch </span><span class="s2">in </span><span class="s1">self._channels:</span>
+            <span class="s1">obj = ch.receive()</span>
+            <span class="s2">if </span><span class="s1">withchannel:</span>
+                <span class="s1">l.append((ch, obj))</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">l.append(obj)</span>
+        <span class="s2">return </span><span class="s1">l</span>
+
+    <span class="s2">def </span><span class="s1">make_receive_queue(self, endmarker=NO_ENDMARKER_WANTED):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">self._queue</span>
+        <span class="s2">except </span><span class="s1">AttributeError:</span>
+            <span class="s1">self._queue = </span><span class="s2">None</span>
+            <span class="s2">for </span><span class="s1">ch </span><span class="s2">in </span><span class="s1">self._channels:</span>
+                <span class="s2">if </span><span class="s1">self._queue </span><span class="s2">is None</span><span class="s1">:</span>
+                    <span class="s1">self._queue = ch.gateway.execmodel.queue.Queue()</span>
+
+                <span class="s2">def </span><span class="s1">putreceived(obj, channel=ch):</span>
+                    <span class="s1">self._queue.put((channel, obj))</span>
+
+                <span class="s2">if </span><span class="s1">endmarker </span><span class="s2">is </span><span class="s1">NO_ENDMARKER_WANTED:</span>
+                    <span class="s1">ch.setcallback(putreceived)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">ch.setcallback(putreceived, endmarker=endmarker)</span>
+            <span class="s2">return </span><span class="s1">self._queue</span>
+
+    <span class="s2">def </span><span class="s1">waitclose(self):</span>
+        <span class="s1">first = </span><span class="s2">None</span>
+        <span class="s2">for </span><span class="s1">ch </span><span class="s2">in </span><span class="s1">self._channels:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">ch.waitclose()</span>
+            <span class="s2">except </span><span class="s1">ch.RemoteError:</span>
+                <span class="s2">if </span><span class="s1">first </span><span class="s2">is None</span><span class="s1">:</span>
+                    <span class="s1">first = sys.exc_info()</span>
+        <span class="s2">if </span><span class="s1">first:</span>
+            <span class="s1">reraise(*first)</span>
+
+
+<span class="s2">def </span><span class="s1">safe_terminate(execmodel, timeout, list_of_paired_functions):</span>
+    <span class="s1">workerpool = execmodel.WorkerPool()</span>
+
+    <span class="s2">def </span><span class="s1">termkill(termfunc, killfunc):</span>
+        <span class="s1">termreply = workerpool.spawn(termfunc)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">termreply.get(timeout=timeout)</span>
+        <span class="s2">except </span><span class="s1">IOError:</span>
+            <span class="s1">killfunc()</span>
+
+    <span class="s1">replylist = []</span>
+    <span class="s2">for </span><span class="s1">termfunc, killfunc </span><span class="s2">in </span><span class="s1">list_of_paired_functions:</span>
+        <span class="s1">reply = workerpool.spawn(termkill, termfunc, killfunc)</span>
+        <span class="s1">replylist.append(reply)</span>
+    <span class="s2">for </span><span class="s1">reply </span><span class="s2">in </span><span class="s1">replylist:</span>
+        <span class="s1">reply.get()</span>
+    <span class="s1">workerpool.waitall(timeout=timeout)</span>
+
+
+<span class="s1">default_group = Group()</span>
+<span class="s1">makegateway = default_group.makegateway</span>
+<span class="s1">set_execmodel = default_group.set_execmodel</span>
+</pre>
+</body>
+</html>

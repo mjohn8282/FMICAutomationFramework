@@ -1,0 +1,207 @@
+<html>
+<head>
+<title>base_checker.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+base_checker.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2006-2014 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2013-2014 Google, Inc.</span>
+<span class="s0"># Copyright (c) 2013 buck@yelp.com &lt;buck@yelp.com&gt;</span>
+<span class="s0"># Copyright (c) 2014-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Brett Cannon &lt;brett@python.org&gt;</span>
+<span class="s0"># Copyright (c) 2014 Arun Persaud &lt;arun@nubati.net&gt;</span>
+<span class="s0"># Copyright (c) 2015 Ionel Cristian Maries &lt;contact@ionelmc.ro&gt;</span>
+<span class="s0"># Copyright (c) 2016 Moises Lopez &lt;moylop260@vauxoo.com&gt;</span>
+<span class="s0"># Copyright (c) 2017-2018 Bryce Guinta &lt;bryce.paul.guinta@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018-2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 ssolanki &lt;sushobhitsolanki@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Bruno P. Kinoshita &lt;kinow@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+<span class="s2">import </span><span class="s1">functools</span>
+<span class="s2">from </span><span class="s1">inspect </span><span class="s2">import </span><span class="s1">cleandoc</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Any</span>
+
+<span class="s2">from </span><span class="s1">pylint.config </span><span class="s2">import </span><span class="s1">OptionsProviderMixIn</span>
+<span class="s2">from </span><span class="s1">pylint.constants </span><span class="s2">import </span><span class="s1">_MSG_ORDER, WarningScope</span>
+<span class="s2">from </span><span class="s1">pylint.exceptions </span><span class="s2">import </span><span class="s1">InvalidMessageError</span>
+<span class="s2">from </span><span class="s1">pylint.interfaces </span><span class="s2">import </span><span class="s1">UNDEFINED, IRawChecker, ITokenChecker, implements</span>
+<span class="s2">from </span><span class="s1">pylint.message.message_definition </span><span class="s2">import </span><span class="s1">MessageDefinition</span>
+<span class="s2">from </span><span class="s1">pylint.utils </span><span class="s2">import </span><span class="s1">get_rst_section, get_rst_title</span>
+
+
+<span class="s1">@functools.total_ordering</span>
+<span class="s2">class </span><span class="s1">BaseChecker(OptionsProviderMixIn):</span>
+
+    <span class="s0"># checker name (you may reuse an existing one)</span>
+    <span class="s1">name: str = </span><span class="s3">&quot;&quot;</span>
+    <span class="s0"># options level (0 will be displaying in --help, 1 in --long-help)</span>
+    <span class="s1">level = </span><span class="s4">1</span>
+    <span class="s0"># ordered list of options to control the checker behaviour</span>
+    <span class="s1">options: Any = ()</span>
+    <span class="s0"># messages issued by this checker</span>
+    <span class="s1">msgs: Any = {}</span>
+    <span class="s0"># reports issued by this checker</span>
+    <span class="s1">reports: Any = ()</span>
+    <span class="s0"># mark this checker as enabled or not.</span>
+    <span class="s1">enabled: bool = </span><span class="s2">True</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, linter=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;checker instances should have the linter as argument 
+ 
+        :param ILinter linter: is an object implementing ILinter.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.name </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">self.name = self.name.lower()</span>
+        <span class="s1">OptionsProviderMixIn.__init__(self)</span>
+        <span class="s1">self.linter = linter</span>
+
+    <span class="s2">def </span><span class="s1">__gt__(self, other):</span>
+        <span class="s0">&quot;&quot;&quot;Permit to sort a list of Checker by name.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">self.name</span><span class="s5">}{</span><span class="s1">self.msgs</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">.__gt__(</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">other.name</span><span class="s5">}{</span><span class="s1">other.msgs</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s1">status = </span><span class="s3">&quot;Checker&quot; </span><span class="s2">if </span><span class="s1">self.enabled </span><span class="s2">else </span><span class="s3">&quot;Disabled checker&quot;</span>
+        <span class="s1">msgs = </span><span class="s3">&quot;', '&quot;</span><span class="s1">.join(self.msgs.keys())</span>
+        <span class="s2">return </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">status</span><span class="s5">} </span><span class="s3">'</span><span class="s5">{</span><span class="s1">self.name</span><span class="s5">}</span><span class="s3">' (responsible for '</span><span class="s5">{</span><span class="s1">msgs</span><span class="s5">}</span><span class="s3">')&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__str__(self):</span>
+        <span class="s0">&quot;&quot;&quot;This might be incomplete because multiple class inheriting BaseChecker 
+        can have the same name. Cf MessageHandlerMixIn.get_full_documentation()&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.get_full_documentation(</span>
+            <span class="s1">msgs=self.msgs, options=self.options_and_values(), reports=self.reports</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">get_full_documentation(self, msgs, options, reports, doc=</span><span class="s2">None</span><span class="s1">, module=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">result = </span><span class="s3">&quot;&quot;</span>
+        <span class="s1">checker_title = </span><span class="s3">&quot;%s checker&quot; </span><span class="s1">% (self.name.replace(</span><span class="s3">&quot;_&quot;</span><span class="s1">, </span><span class="s3">&quot; &quot;</span><span class="s1">).title())</span>
+        <span class="s2">if </span><span class="s1">module:</span>
+            <span class="s0"># Provide anchor to link against</span>
+            <span class="s1">result += </span><span class="s3">&quot;.. _%s:</span><span class="s5">\n\n</span><span class="s3">&quot; </span><span class="s1">% module</span>
+        <span class="s1">result += </span><span class="s3">&quot;%s</span><span class="s5">\n</span><span class="s3">&quot; </span><span class="s1">% get_rst_title(checker_title, </span><span class="s3">&quot;~&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">module:</span>
+            <span class="s1">result += </span><span class="s3">&quot;This checker is provided by ``%s``.</span><span class="s5">\n</span><span class="s3">&quot; </span><span class="s1">% module</span>
+        <span class="s1">result += </span><span class="s3">&quot;Verbatim name of the checker is ``%s``.</span><span class="s5">\n\n</span><span class="s3">&quot; </span><span class="s1">% self.name</span>
+        <span class="s2">if </span><span class="s1">doc:</span>
+            <span class="s0"># Provide anchor to link against</span>
+            <span class="s1">result += get_rst_title(</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">checker_title</span><span class="s5">} </span><span class="s3">Documentation&quot;</span><span class="s1">, </span><span class="s3">&quot;^&quot;</span><span class="s1">)</span>
+            <span class="s1">result += </span><span class="s3">&quot;%s</span><span class="s5">\n\n</span><span class="s3">&quot; </span><span class="s1">% cleandoc(doc)</span>
+        <span class="s0"># options might be an empty generator and not be False when casted to boolean</span>
+        <span class="s1">options = list(options)</span>
+        <span class="s2">if </span><span class="s1">options:</span>
+            <span class="s1">result += get_rst_title(</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">checker_title</span><span class="s5">} </span><span class="s3">Options&quot;</span><span class="s1">, </span><span class="s3">&quot;^&quot;</span><span class="s1">)</span>
+            <span class="s1">result += </span><span class="s3">&quot;%s</span><span class="s5">\n</span><span class="s3">&quot; </span><span class="s1">% get_rst_section(</span><span class="s2">None</span><span class="s1">, options)</span>
+        <span class="s2">if </span><span class="s1">msgs:</span>
+            <span class="s1">result += get_rst_title(</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">checker_title</span><span class="s5">} </span><span class="s3">Messages&quot;</span><span class="s1">, </span><span class="s3">&quot;^&quot;</span><span class="s1">)</span>
+            <span class="s2">for </span><span class="s1">msgid, msg </span><span class="s2">in </span><span class="s1">sorted(</span>
+                <span class="s1">msgs.items(), key=</span><span class="s2">lambda </span><span class="s1">kv: (_MSG_ORDER.index(kv[</span><span class="s4">0</span><span class="s1">][</span><span class="s4">0</span><span class="s1">]), kv[</span><span class="s4">1</span><span class="s1">])</span>
+            <span class="s1">):</span>
+                <span class="s1">msg = self.create_message_definition_from_tuple(msgid, msg)</span>
+                <span class="s1">result += </span><span class="s3">&quot;%s</span><span class="s5">\n</span><span class="s3">&quot; </span><span class="s1">% msg.format_help(checkerref=</span><span class="s2">False</span><span class="s1">)</span>
+            <span class="s1">result += </span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">&quot;</span>
+        <span class="s2">if </span><span class="s1">reports:</span>
+            <span class="s1">result += get_rst_title(</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">checker_title</span><span class="s5">} </span><span class="s3">Reports&quot;</span><span class="s1">, </span><span class="s3">&quot;^&quot;</span><span class="s1">)</span>
+            <span class="s2">for </span><span class="s1">report </span><span class="s2">in </span><span class="s1">reports:</span>
+                <span class="s1">result += </span><span class="s3">&quot;:%s: %s</span><span class="s5">\n</span><span class="s3">&quot; </span><span class="s1">% report[:</span><span class="s4">2</span><span class="s1">]</span>
+            <span class="s1">result += </span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">&quot;</span>
+        <span class="s1">result += </span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">&quot;</span>
+        <span class="s2">return </span><span class="s1">result</span>
+
+    <span class="s2">def </span><span class="s1">add_message(</span>
+        <span class="s1">self, msgid, line=</span><span class="s2">None</span><span class="s1">, node=</span><span class="s2">None</span><span class="s1">, args=</span><span class="s2">None</span><span class="s1">, confidence=</span><span class="s2">None</span><span class="s1">, col_offset=</span><span class="s2">None</span>
+    <span class="s1">):</span>
+        <span class="s2">if not </span><span class="s1">confidence:</span>
+            <span class="s1">confidence = UNDEFINED</span>
+        <span class="s1">self.linter.add_message(msgid, line, node, args, confidence, col_offset)</span>
+
+    <span class="s2">def </span><span class="s1">check_consistency(self):</span>
+        <span class="s0">&quot;&quot;&quot;Check the consistency of msgid. 
+ 
+        msg ids for a checker should be a string of len 4, where the two first 
+        characters are the checker id and the two last the msg id in this 
+        checker. 
+ 
+        :raises InvalidMessageError: If the checker id in the messages are not 
+        always the same.&quot;&quot;&quot;</span>
+        <span class="s1">checker_id = </span><span class="s2">None</span>
+        <span class="s1">existing_ids = []</span>
+        <span class="s2">for </span><span class="s1">message </span><span class="s2">in </span><span class="s1">self.messages:</span>
+            <span class="s2">if </span><span class="s1">checker_id </span><span class="s2">is not None and </span><span class="s1">checker_id != message.msgid[</span><span class="s4">1</span><span class="s1">:</span><span class="s4">3</span><span class="s1">]:</span>
+                <span class="s1">error_msg = </span><span class="s3">&quot;Inconsistent checker part in message id &quot;</span>
+                <span class="s1">error_msg += </span><span class="s3">f&quot;'</span><span class="s5">{</span><span class="s1">message.msgid</span><span class="s5">}</span><span class="s3">' (expected 'x</span><span class="s5">{</span><span class="s1">checker_id</span><span class="s5">}</span><span class="s3">xx' &quot;</span>
+                <span class="s1">error_msg += </span><span class="s3">f&quot;because we already had </span><span class="s5">{</span><span class="s1">existing_ids</span><span class="s5">}</span><span class="s3">).&quot;</span>
+                <span class="s2">raise </span><span class="s1">InvalidMessageError(error_msg)</span>
+            <span class="s1">checker_id = message.msgid[</span><span class="s4">1</span><span class="s1">:</span><span class="s4">3</span><span class="s1">]</span>
+            <span class="s1">existing_ids.append(message.msgid)</span>
+
+    <span class="s2">def </span><span class="s1">create_message_definition_from_tuple(self, msgid, msg_tuple):</span>
+        <span class="s2">if </span><span class="s1">implements(self, (IRawChecker, ITokenChecker)):</span>
+            <span class="s1">default_scope = WarningScope.LINE</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">default_scope = WarningScope.NODE</span>
+        <span class="s1">options = {}</span>
+        <span class="s2">if </span><span class="s1">len(msg_tuple) &gt; </span><span class="s4">3</span><span class="s1">:</span>
+            <span class="s1">(msg, symbol, descr, options) = msg_tuple</span>
+        <span class="s2">elif </span><span class="s1">len(msg_tuple) &gt; </span><span class="s4">2</span><span class="s1">:</span>
+            <span class="s1">(msg, symbol, descr) = msg_tuple</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">error_msg = </span><span class="s3">&quot;&quot;&quot;Messages should have a msgid and a symbol. Something like this : 
+ 
+&quot;W1234&quot;: ( 
+    &quot;message&quot;, 
+    &quot;message-symbol&quot;, 
+    &quot;Message description with detail.&quot;, 
+    ... 
+), 
+&quot;&quot;&quot;</span>
+            <span class="s2">raise </span><span class="s1">InvalidMessageError(error_msg)</span>
+        <span class="s1">options.setdefault(</span><span class="s3">&quot;scope&quot;</span><span class="s1">, default_scope)</span>
+        <span class="s2">return </span><span class="s1">MessageDefinition(self, msgid, msg, descr, symbol, **options)</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">messages(self) -&gt; list:</span>
+        <span class="s2">return </span><span class="s1">[</span>
+            <span class="s1">self.create_message_definition_from_tuple(msgid, msg_tuple)</span>
+            <span class="s2">for </span><span class="s1">msgid, msg_tuple </span><span class="s2">in </span><span class="s1">sorted(self.msgs.items())</span>
+        <span class="s1">]</span>
+
+    <span class="s0"># dummy methods implementing the IChecker interface</span>
+
+    <span class="s2">def </span><span class="s1">get_message_definition(self, msgid):</span>
+        <span class="s2">for </span><span class="s1">message_definition </span><span class="s2">in </span><span class="s1">self.messages:</span>
+            <span class="s2">if </span><span class="s1">message_definition.msgid == msgid:</span>
+                <span class="s2">return </span><span class="s1">message_definition</span>
+        <span class="s1">error_msg = </span><span class="s3">f&quot;MessageDefinition for '</span><span class="s5">{</span><span class="s1">msgid</span><span class="s5">}</span><span class="s3">' does not exists. &quot;</span>
+        <span class="s1">error_msg += </span><span class="s3">f&quot;Choose from </span><span class="s5">{</span><span class="s1">[m.msgid </span><span class="s2">for </span><span class="s1">m </span><span class="s2">in </span><span class="s1">self.messages]</span><span class="s5">}</span><span class="s3">.&quot;</span>
+        <span class="s2">raise </span><span class="s1">InvalidMessageError(error_msg)</span>
+
+    <span class="s2">def </span><span class="s1">open(self):</span>
+        <span class="s0">&quot;&quot;&quot;called before visiting project (i.e set of modules)&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">close(self):</span>
+        <span class="s0">&quot;&quot;&quot;called after visiting project (i.e set of modules)&quot;&quot;&quot;</span>
+
+
+<span class="s2">class </span><span class="s1">BaseTokenChecker(BaseChecker):</span>
+    <span class="s0">&quot;&quot;&quot;Base class for checkers that want to have access to the token stream.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">process_tokens(self, tokens):</span>
+        <span class="s0">&quot;&quot;&quot;Should be overridden by subclasses.&quot;&quot;&quot;</span>
+        <span class="s2">raise </span><span class="s1">NotImplementedError()</span>
+</pre>
+</body>
+</html>

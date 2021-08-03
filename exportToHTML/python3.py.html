@@ -1,0 +1,1456 @@
+<html>
+<head>
+<title>python3.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+python3.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2014-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014-2015 Brett Cannon &lt;brett@python.org&gt;</span>
+<span class="s0"># Copyright (c) 2015 Simu Toni &lt;simutoni@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015 Pavel Roskin &lt;proski@gnu.org&gt;</span>
+<span class="s0"># Copyright (c) 2015 Ionel Cristian Maries &lt;contact@ionelmc.ro&gt;</span>
+<span class="s0"># Copyright (c) 2015 Cosmin Poieana &lt;cmin@ropython.org&gt;</span>
+<span class="s0"># Copyright (c) 2015 Viorel Stirbu &lt;viorels@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016, 2018 Jakub Wilk &lt;jwilk@jwilk.net&gt;</span>
+<span class="s0"># Copyright (c) 2016-2017 Roy Williams &lt;roy.williams.iii@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Roy Williams &lt;rwilliams@lyft.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Łukasz Rogalski &lt;rogalski.91@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Erik &lt;erik.eriksson@yahoo.com&gt;</span>
+<span class="s0"># Copyright (c) 2017, 2020 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017-2018 Ville Skyttä &lt;ville.skytta@iki.fi&gt;</span>
+<span class="s0"># Copyright (c) 2017 Daniel Miller &lt;millerdev@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 ahirnish &lt;ahirnish@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018-2020 Anthony Sottile &lt;asottile@umich.edu&gt;</span>
+<span class="s0"># Copyright (c) 2018 sbagan &lt;pnlbagan@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Lucas Cimon &lt;lucas.cimon@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Aivar Annamaa &lt;aivarannamaa@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 ssolanki &lt;sushobhitsolanki@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Sushobhit &lt;31987769+sushobhit27@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Ashley Whetter &lt;ashley@awhetter.co.uk&gt;</span>
+<span class="s0"># Copyright (c) 2018 gaurikholkar &lt;f2013002@goa.bits-pilani.ac.in&gt;</span>
+<span class="s0"># Copyright (c) 2019-2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Nick Drozd &lt;nicholasdrozd@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Hugues Bruant &lt;hugues.bruant@affirm.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Gabriel R Sezefredo &lt;gabriel@sezefredo.com.br&gt;</span>
+<span class="s0"># Copyright (c) 2019 Hugo van Kemenade &lt;hugovk@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 bluesheeptoken &lt;louis.fruleux1@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Peter Kolbus &lt;peter.kolbus@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 谭九鼎 &lt;109224573@qq.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Federico Bond &lt;federicobond@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Athos Ribeiro &lt;athoscr@fedoraproject.org&gt;</span>
+<span class="s0"># Copyright (c) 2021 Marc Mueller &lt;30130371+cdce8p@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Tiago Honorato &lt;tiagohonorato1@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 tiagohonorato &lt;61059243+tiagohonorato@users.noreply.github.com&gt;</span>
+<span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;Check Python 2 code for Python 2/3 source-compatible issues.&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">itertools</span>
+<span class="s2">import </span><span class="s1">re</span>
+<span class="s2">import </span><span class="s1">tokenize</span>
+<span class="s2">from </span><span class="s1">collections </span><span class="s2">import </span><span class="s1">namedtuple</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+
+<span class="s2">from </span><span class="s1">pylint </span><span class="s2">import </span><span class="s1">checkers, interfaces</span>
+<span class="s2">from </span><span class="s1">pylint.checkers </span><span class="s2">import </span><span class="s1">utils</span>
+<span class="s2">from </span><span class="s1">pylint.checkers.utils </span><span class="s2">import </span><span class="s1">find_try_except_wrapper_node, node_ignores_exception</span>
+<span class="s2">from </span><span class="s1">pylint.constants </span><span class="s2">import </span><span class="s1">WarningScope</span>
+<span class="s2">from </span><span class="s1">pylint.interfaces </span><span class="s2">import </span><span class="s1">INFERENCE, INFERENCE_FAILURE</span>
+
+<span class="s1">_ZERO = re.compile(</span><span class="s3">&quot;^0+$&quot;</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_is_old_octal(literal):</span>
+    <span class="s2">if </span><span class="s1">_ZERO.match(literal):</span>
+        <span class="s2">return False</span>
+    <span class="s2">if </span><span class="s1">re.match(</span><span class="s3">r&quot;0\d+&quot;</span><span class="s1">, literal):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">int(literal, </span><span class="s4">8</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">ValueError:</span>
+            <span class="s2">return False</span>
+        <span class="s2">return True</span>
+    <span class="s2">return None</span>
+
+
+<span class="s2">def </span><span class="s1">_inferred_value_is_dict(value):</span>
+    <span class="s2">if </span><span class="s1">isinstance(value, astroid.Dict):</span>
+        <span class="s2">return True</span>
+    <span class="s2">return </span><span class="s1">isinstance(value, astroid.Instance) </span><span class="s2">and </span><span class="s3">&quot;dict&quot; </span><span class="s2">in </span><span class="s1">value.basenames</span>
+
+
+<span class="s2">def </span><span class="s1">_infer_if_relevant_attr(node, relevant_attrs):</span>
+    <span class="s2">return </span><span class="s1">node.expr.infer() </span><span class="s2">if </span><span class="s1">node.attrname </span><span class="s2">in </span><span class="s1">relevant_attrs </span><span class="s2">else </span><span class="s1">[]</span>
+
+
+<span class="s2">def </span><span class="s1">_is_builtin(node):</span>
+    <span class="s2">return </span><span class="s1">getattr(node, </span><span class="s3">&quot;name&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">) </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;__builtin__&quot;</span><span class="s1">, </span><span class="s3">&quot;builtins&quot;</span><span class="s1">)</span>
+
+
+<span class="s1">_ACCEPTS_ITERATOR = {</span>
+    <span class="s3">&quot;iter&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;list&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;tuple&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;sorted&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;set&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;sum&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;any&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;all&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;enumerate&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;dict&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;filter&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;reversed&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;max&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;min&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;frozenset&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;OrderedDict&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;zip&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;map&quot;</span><span class="s1">,</span>
+<span class="s1">}</span>
+<span class="s1">ATTRIBUTES_ACCEPTS_ITERATOR = {</span><span class="s3">&quot;join&quot;</span><span class="s1">, </span><span class="s3">&quot;from_iterable&quot;</span><span class="s1">}</span>
+<span class="s1">_BUILTIN_METHOD_ACCEPTS_ITERATOR = {</span>
+    <span class="s3">&quot;builtins.list.extend&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;builtins.dict.update&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;builtins.set.update&quot;</span><span class="s1">,</span>
+<span class="s1">}</span>
+<span class="s1">DICT_METHODS = {</span><span class="s3">&quot;items&quot;</span><span class="s1">, </span><span class="s3">&quot;keys&quot;</span><span class="s1">, </span><span class="s3">&quot;values&quot;</span><span class="s1">}</span>
+
+
+<span class="s2">def </span><span class="s1">_in_iterating_context(node):</span>
+    <span class="s0">&quot;&quot;&quot;Check if the node is being used as an iterator. 
+ 
+    Definition is taken from lib2to3.fixer_util.in_special_context(). 
+    &quot;&quot;&quot;</span>
+    <span class="s1">parent = node.parent</span>
+    <span class="s0"># Since a call can't be the loop variant we only need to know if the node's</span>
+    <span class="s0"># parent is a 'for' loop to know it's being used as the iterator for the</span>
+    <span class="s0"># loop.</span>
+    <span class="s2">if </span><span class="s1">isinstance(parent, astroid.For):</span>
+        <span class="s2">return True</span>
+    <span class="s0"># Need to make sure the use of the node is in the iterator part of the</span>
+    <span class="s0"># comprehension.</span>
+    <span class="s2">if </span><span class="s1">isinstance(parent, astroid.Comprehension):</span>
+        <span class="s2">if </span><span class="s1">parent.iter == node:</span>
+            <span class="s2">return True</span>
+    <span class="s0"># Various built-ins can take in an iterable or list and lead to the same</span>
+    <span class="s0"># value.</span>
+    <span class="s2">elif </span><span class="s1">isinstance(parent, astroid.Call):</span>
+        <span class="s2">if </span><span class="s1">isinstance(parent.func, astroid.Name):</span>
+            <span class="s2">if </span><span class="s1">parent.func.name </span><span class="s2">in </span><span class="s1">_ACCEPTS_ITERATOR:</span>
+                <span class="s2">return True</span>
+        <span class="s2">elif </span><span class="s1">isinstance(parent.func, astroid.Attribute):</span>
+            <span class="s2">if </span><span class="s1">parent.func.attrname </span><span class="s2">in </span><span class="s1">ATTRIBUTES_ACCEPTS_ITERATOR:</span>
+                <span class="s2">return True</span>
+
+        <span class="s1">inferred = utils.safe_infer(parent.func)</span>
+        <span class="s2">if </span><span class="s1">inferred:</span>
+            <span class="s2">if </span><span class="s1">inferred.qname() </span><span class="s2">in </span><span class="s1">_BUILTIN_METHOD_ACCEPTS_ITERATOR:</span>
+                <span class="s2">return True</span>
+            <span class="s1">root = inferred.root()</span>
+            <span class="s2">if </span><span class="s1">root </span><span class="s2">and </span><span class="s1">root.name == </span><span class="s3">&quot;itertools&quot;</span><span class="s1">:</span>
+                <span class="s2">return True</span>
+    <span class="s0"># If the call is in an unpacking, there's no need to warn,</span>
+    <span class="s0"># since it can be considered iterating.</span>
+    <span class="s2">elif </span><span class="s1">isinstance(parent, astroid.Assign) </span><span class="s2">and </span><span class="s1">isinstance(</span>
+        <span class="s1">parent.targets[</span><span class="s4">0</span><span class="s1">], (astroid.List, astroid.Tuple)</span>
+    <span class="s1">):</span>
+        <span class="s2">if </span><span class="s1">len(parent.targets[</span><span class="s4">0</span><span class="s1">].elts) &gt; </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s2">return True</span>
+    <span class="s0"># If the call is in a containment check, we consider that to</span>
+    <span class="s0"># be an iterating context</span>
+    <span class="s2">elif </span><span class="s1">(</span>
+        <span class="s1">isinstance(parent, astroid.Compare)</span>
+        <span class="s2">and </span><span class="s1">len(parent.ops) == </span><span class="s4">1</span>
+        <span class="s2">and </span><span class="s1">parent.ops[</span><span class="s4">0</span><span class="s1">][</span><span class="s4">0</span><span class="s1">] </span><span class="s2">in </span><span class="s1">[</span><span class="s3">&quot;in&quot;</span><span class="s1">, </span><span class="s3">&quot;not in&quot;</span><span class="s1">]</span>
+    <span class="s1">):</span>
+        <span class="s2">return True</span>
+    <span class="s0"># Also if it's an `yield from`, that's fair</span>
+    <span class="s2">elif </span><span class="s1">isinstance(parent, astroid.YieldFrom):</span>
+        <span class="s2">return True</span>
+    <span class="s2">if </span><span class="s1">isinstance(parent, astroid.Starred):</span>
+        <span class="s2">return True</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">_is_conditional_import(node):</span>
+    <span class="s0">&quot;&quot;&quot;Checks if an import node is in the context of a conditional.&quot;&quot;&quot;</span>
+    <span class="s1">parent = node.parent</span>
+    <span class="s2">return </span><span class="s1">isinstance(</span>
+        <span class="s1">parent, (astroid.TryExcept, astroid.ExceptHandler, astroid.If, astroid.IfExp)</span>
+    <span class="s1">)</span>
+
+
+<span class="s1">Branch = namedtuple(</span><span class="s3">&quot;Branch&quot;</span><span class="s1">, [</span><span class="s3">&quot;node&quot;</span><span class="s1">, </span><span class="s3">&quot;is_py2_only&quot;</span><span class="s1">])</span>
+
+
+<span class="s2">class </span><span class="s1">Python3Checker(checkers.BaseChecker):</span>
+
+    <span class="s1">__implements__ = interfaces.IAstroidChecker</span>
+    <span class="s1">enabled = </span><span class="s2">False</span>
+    <span class="s1">name = </span><span class="s3">&quot;python3&quot;</span>
+
+    <span class="s1">msgs = {</span>
+        <span class="s0"># Errors for what will syntactically break in Python 3, warnings for</span>
+        <span class="s0"># everything else.</span>
+        <span class="s3">&quot;E1601&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;print statement used&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;print-statement&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a print statement is used &quot;</span>
+            <span class="s3">&quot;(`print` is a function in Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;E1602&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Parameter unpacking specified&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;parameter-unpacking&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when parameter unpacking is specified for a function&quot;</span>
+            <span class="s3">&quot;(Python 3 doesn't allow it)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;E1603&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Implicit unpacking of exceptions is not supported in Python 3&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;unpacking-in-except&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Python3 will not allow implicit unpacking of &quot;</span>
+            <span class="s3">&quot;exceptions in except clauses. &quot;</span>
+            <span class="s3">&quot;See https://www.python.org/dev/peps/pep-3110/&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span><span class="s3">&quot;old_names&quot;</span><span class="s1">: [(</span><span class="s3">&quot;W0712&quot;</span><span class="s1">, </span><span class="s3">&quot;old-unpacking-in-except&quot;</span><span class="s1">)]},</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;E1604&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Use raise ErrorClass(args) instead of raise ErrorClass, args.&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;old-raise-syntax&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the alternate raise syntax &quot;</span>
+            <span class="s3">&quot;'raise foo, bar' is used &quot;</span>
+            <span class="s3">&quot;instead of 'raise foo(bar)'.&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span><span class="s3">&quot;old_names&quot;</span><span class="s1">: [(</span><span class="s3">&quot;W0121&quot;</span><span class="s1">, </span><span class="s3">&quot;old-old-raise-syntax&quot;</span><span class="s1">)]},</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;E1605&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Use of the `` operator&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;backtick&quot;</span><span class="s1">,</span>
+            <span class="s3">'Used when the deprecated &quot;``&quot; (backtick) operator is used '</span>
+            <span class="s3">&quot;instead  of the str() function.&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span><span class="s3">&quot;scope&quot;</span><span class="s1">: WarningScope.NODE, </span><span class="s3">&quot;old_names&quot;</span><span class="s1">: [(</span><span class="s3">&quot;W0333&quot;</span><span class="s1">, </span><span class="s3">&quot;old-backtick&quot;</span><span class="s1">)]},</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;E1609&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Import * only allowed at module level&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;import-star-module-level&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the import star syntax is used somewhere &quot;</span>
+            <span class="s3">&quot;else than the module level.&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span><span class="s3">&quot;maxversion&quot;</span><span class="s1">: (</span><span class="s4">3</span><span class="s1">, </span><span class="s4">0</span><span class="s1">)},</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1601&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;apply built-in referenced&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;apply-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the apply built-in function is referenced &quot;</span>
+            <span class="s3">&quot;(missing from Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1602&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;basestring built-in referenced&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;basestring-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the basestring built-in function is referenced &quot;</span>
+            <span class="s3">&quot;(missing from Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1603&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;buffer built-in referenced&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;buffer-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the buffer built-in function is referenced &quot;</span>
+            <span class="s3">&quot;(missing from Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1604&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;cmp built-in referenced&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;cmp-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the cmp built-in function is referenced &quot;</span>
+            <span class="s3">&quot;(missing from Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1605&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;coerce built-in referenced&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;coerce-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the coerce built-in function is referenced &quot;</span>
+            <span class="s3">&quot;(missing from Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1606&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;execfile built-in referenced&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;execfile-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the execfile built-in function is referenced &quot;</span>
+            <span class="s3">&quot;(missing from Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1607&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;file built-in referenced&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;file-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the file built-in function is referenced &quot;</span>
+            <span class="s3">&quot;(missing from Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1608&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;long built-in referenced&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;long-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the long built-in function is referenced &quot;</span>
+            <span class="s3">&quot;(missing from Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1609&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;raw_input built-in referenced&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;raw_input-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the raw_input built-in function is referenced &quot;</span>
+            <span class="s3">&quot;(missing from Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1610&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;reduce built-in referenced&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;reduce-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the reduce built-in function is referenced &quot;</span>
+            <span class="s3">&quot;(missing from Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1611&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;StandardError built-in referenced&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;standarderror-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the StandardError built-in function is referenced &quot;</span>
+            <span class="s3">&quot;(missing from Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1612&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;unicode built-in referenced&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;unicode-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the unicode built-in function is referenced &quot;</span>
+            <span class="s3">&quot;(missing from Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1613&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;xrange built-in referenced&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;xrange-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the xrange built-in function is referenced &quot;</span>
+            <span class="s3">&quot;(missing from Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1614&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;__coerce__ method defined&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;coerce-method&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a __coerce__ method is defined &quot;</span>
+            <span class="s3">&quot;(method is not used by Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1615&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;__delslice__ method defined&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;delslice-method&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a __delslice__ method is defined &quot;</span>
+            <span class="s3">&quot;(method is not used by Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1616&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;__getslice__ method defined&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;getslice-method&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a __getslice__ method is defined &quot;</span>
+            <span class="s3">&quot;(method is not used by Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1617&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;__setslice__ method defined&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;setslice-method&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a __setslice__ method is defined &quot;</span>
+            <span class="s3">&quot;(method is not used by Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1618&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;import missing `from __future__ import absolute_import`&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;no-absolute-import&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when an import is not accompanied by &quot;</span>
+            <span class="s3">&quot;``from __future__ import absolute_import`` &quot;</span>
+            <span class="s3">&quot;(default behaviour in Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1619&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;division w/o __future__ statement&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;old-division&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used for non-floor division w/o a float literal or &quot;</span>
+            <span class="s3">&quot;``from __future__ import division`` &quot;</span>
+            <span class="s3">&quot;(Python 3 returns a float for int division unconditionally)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1620&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Calling a dict.iter*() method&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;dict-iter-method&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used for calls to dict.iterkeys(), itervalues() or iteritems() &quot;</span>
+            <span class="s3">&quot;(Python 3 lacks these methods)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1621&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Calling a dict.view*() method&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;dict-view-method&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used for calls to dict.viewkeys(), viewvalues() or viewitems() &quot;</span>
+            <span class="s3">&quot;(Python 3 lacks these methods)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1622&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Called a next() method on an object&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;next-method-called&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when an object's next() method is called &quot;</span>
+            <span class="s3">&quot;(Python 3 uses the next() built-in function)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1623&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Assigning to a class's __metaclass__ attribute&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;metaclass-assignment&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a metaclass is specified by assigning to __metaclass__ &quot;</span>
+            <span class="s3">&quot;(Python 3 specifies the metaclass as a class statement argument)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1624&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Indexing exceptions will not work on Python 3&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;indexing-exception&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Indexing exceptions will not work on Python 3. Use &quot;</span>
+            <span class="s3">&quot;`exception.args[index]` instead.&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span><span class="s3">&quot;old_names&quot;</span><span class="s1">: [(</span><span class="s3">&quot;W0713&quot;</span><span class="s1">, </span><span class="s3">&quot;old-indexing-exception&quot;</span><span class="s1">)]},</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1625&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Raising a string exception&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;raising-string&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a string exception is raised. This will not &quot;</span>
+            <span class="s3">&quot;work on Python 3.&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span><span class="s3">&quot;old_names&quot;</span><span class="s1">: [(</span><span class="s3">&quot;W0701&quot;</span><span class="s1">, </span><span class="s3">&quot;old-raising-string&quot;</span><span class="s1">)]},</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1626&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;reload built-in referenced&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;reload-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the reload built-in function is referenced &quot;</span>
+            <span class="s3">&quot;(missing from Python 3). You can use instead imp.reload &quot;</span>
+            <span class="s3">&quot;or importlib.reload.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1627&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;__oct__ method defined&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;oct-method&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when an __oct__ method is defined &quot;</span>
+            <span class="s3">&quot;(method is not used by Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1628&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;__hex__ method defined&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;hex-method&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a __hex__ method is defined (method is not used by Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1629&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;__nonzero__ method defined&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;nonzero-method&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a __nonzero__ method is defined &quot;</span>
+            <span class="s3">&quot;(method is not used by Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1630&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;__cmp__ method defined&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;cmp-method&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a __cmp__ method is defined (method is not used by Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s0"># 'W1631': replaced by W1636</span>
+        <span class="s3">&quot;W1632&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;input built-in referenced&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;input-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the input built-in is referenced &quot;</span>
+            <span class="s3">&quot;(backwards-incompatible semantics in Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1633&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;round built-in referenced&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;round-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the round built-in is referenced &quot;</span>
+            <span class="s3">&quot;(backwards-incompatible semantics in Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1634&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;intern built-in referenced&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;intern-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the intern built-in is referenced &quot;</span>
+            <span class="s3">&quot;(Moved to sys.intern in Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1635&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;unichr built-in referenced&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;unichr-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the unichr built-in is referenced (Use chr in Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1636&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;map built-in referenced when not iterating&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;map-builtin-not-iterating&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the map built-in is referenced in a non-iterating &quot;</span>
+            <span class="s3">&quot;context (returns an iterator in Python 3)&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span><span class="s3">&quot;old_names&quot;</span><span class="s1">: [(</span><span class="s3">&quot;W1631&quot;</span><span class="s1">, </span><span class="s3">&quot;implicit-map-evaluation&quot;</span><span class="s1">)]},</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1637&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;zip built-in referenced when not iterating&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;zip-builtin-not-iterating&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the zip built-in is referenced in a non-iterating &quot;</span>
+            <span class="s3">&quot;context (returns an iterator in Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1638&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;range built-in referenced when not iterating&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;range-builtin-not-iterating&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the range built-in is referenced in a non-iterating &quot;</span>
+            <span class="s3">&quot;context (returns a range in Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1639&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;filter built-in referenced when not iterating&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;filter-builtin-not-iterating&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the filter built-in is referenced in a non-iterating &quot;</span>
+            <span class="s3">&quot;context (returns an iterator in Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1640&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Using the cmp argument for list.sort / sorted&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;using-cmp-argument&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Using the cmp argument for list.sort or the sorted &quot;</span>
+            <span class="s3">&quot;builtin should be avoided, since it was removed in &quot;</span>
+            <span class="s3">&quot;Python 3. Using either `key` or `functools.cmp_to_key` &quot;</span>
+            <span class="s3">&quot;should be preferred.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1641&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Implementing __eq__ without also implementing __hash__&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;eq-without-hash&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a class implements __eq__ but not __hash__.  In Python 2, objects &quot;</span>
+            <span class="s3">&quot;get object.__hash__ as the default implementation, in Python 3 objects get &quot;</span>
+            <span class="s3">&quot;None as their default __hash__ implementation if they also implement __eq__.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1642&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;__div__ method defined&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;div-method&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a __div__ method is defined.  Using `__truediv__` and setting&quot;</span>
+            <span class="s3">&quot;__div__ = __truediv__ should be preferred.&quot;</span>
+            <span class="s3">&quot;(method is not used by Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1643&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;__idiv__ method defined&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;idiv-method&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when an __idiv__ method is defined.  Using `__itruediv__` and setting&quot;</span>
+            <span class="s3">&quot;__idiv__ = __itruediv__ should be preferred.&quot;</span>
+            <span class="s3">&quot;(method is not used by Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1644&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;__rdiv__ method defined&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;rdiv-method&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a __rdiv__ method is defined.  Using `__rtruediv__` and setting&quot;</span>
+            <span class="s3">&quot;__rdiv__ = __rtruediv__ should be preferred.&quot;</span>
+            <span class="s3">&quot;(method is not used by Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1645&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Exception.message removed in Python 3&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;exception-message-attribute&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when the message attribute is accessed on an Exception.  Use &quot;</span>
+            <span class="s3">&quot;str(exception) instead.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1646&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;non-text encoding used in str.decode&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;invalid-str-codec&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when using str.encode or str.decode with a non-text encoding.  Use &quot;</span>
+            <span class="s3">&quot;codecs module to handle arbitrary codecs.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1647&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;sys.maxint removed in Python 3&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;sys-max-int&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when accessing sys.maxint.  Use sys.maxsize instead.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1648&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Module moved in Python 3&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;bad-python3-import&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when importing a module that no longer exists in Python 3.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1649&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Accessing a deprecated function on the string module&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;deprecated-string-function&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when accessing a string function that has been deprecated in Python 3.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1650&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Using str.translate with deprecated deletechars parameters&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;deprecated-str-translate-call&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when using the deprecated deletechars parameters from str.translate.  Use &quot;</span>
+            <span class="s3">&quot;re.sub to remove the desired characters &quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1651&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Accessing a deprecated function on the itertools module&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;deprecated-itertools-function&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when accessing a function on itertools that has been removed in Python 3.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1652&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Accessing a deprecated fields on the types module&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;deprecated-types-field&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when accessing a field on types that has been removed in Python 3.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1653&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;next method defined&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;next-method-defined&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a next method is defined that would be an iterator in Python 2 but &quot;</span>
+            <span class="s3">&quot;is treated as a normal function in Python 3.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1654&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;dict.items referenced when not iterating&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;dict-items-not-iterating&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when dict.items is referenced in a non-iterating &quot;</span>
+            <span class="s3">&quot;context (returns an iterator in Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1655&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;dict.keys referenced when not iterating&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;dict-keys-not-iterating&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when dict.keys is referenced in a non-iterating &quot;</span>
+            <span class="s3">&quot;context (returns an iterator in Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1656&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;dict.values referenced when not iterating&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;dict-values-not-iterating&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when dict.values is referenced in a non-iterating &quot;</span>
+            <span class="s3">&quot;context (returns an iterator in Python 3)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1657&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Accessing a removed attribute on the operator module&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;deprecated-operator-function&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when accessing a field on operator module that has been &quot;</span>
+            <span class="s3">&quot;removed in Python 3.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1658&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Accessing a removed attribute on the urllib module&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;deprecated-urllib-function&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when accessing a field on urllib module that has been &quot;</span>
+            <span class="s3">&quot;removed or moved in Python 3.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1659&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Accessing a removed xreadlines attribute&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;xreadlines-attribute&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when accessing the xreadlines() function on a file stream, &quot;</span>
+            <span class="s3">&quot;removed in Python 3.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1660&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Accessing a removed attribute on the sys module&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;deprecated-sys-function&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when accessing a field on sys module that has been &quot;</span>
+            <span class="s3">&quot;removed in Python 3.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1661&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Using an exception object that was bound by an except handler&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;exception-escape&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Emitted when using an exception, that was bound in an except &quot;</span>
+            <span class="s3">&quot;handler, outside of the except handler. On Python 3 these &quot;</span>
+            <span class="s3">&quot;exceptions will be deleted once they get out &quot;</span>
+            <span class="s3">&quot;of the except handler.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W1662&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Using a variable that was bound inside a comprehension&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;comprehension-escape&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Emitted when using a variable, that was bound in a comprehension &quot;</span>
+            <span class="s3">&quot;handler, outside of the comprehension itself. On Python 3 these &quot;</span>
+            <span class="s3">&quot;variables will be deleted outside of the &quot;</span>
+            <span class="s3">&quot;comprehension.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+    <span class="s1">}</span>
+
+    <span class="s1">_bad_builtins = frozenset(</span>
+        <span class="s1">[</span>
+            <span class="s3">&quot;apply&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;basestring&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;buffer&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;cmp&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;coerce&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;execfile&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;file&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;input&quot;</span><span class="s1">,  </span><span class="s0"># Not missing, but incompatible semantics</span>
+            <span class="s3">&quot;intern&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;long&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;raw_input&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;reduce&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;round&quot;</span><span class="s1">,  </span><span class="s0"># Not missing, but incompatible semantics</span>
+            <span class="s3">&quot;StandardError&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;unichr&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;unicode&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;xrange&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;reload&quot;</span><span class="s1">,</span>
+        <span class="s1">]</span>
+    <span class="s1">)</span>
+
+    <span class="s1">_unused_magic_methods = frozenset(</span>
+        <span class="s1">[</span>
+            <span class="s3">&quot;__coerce__&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;__delslice__&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;__getslice__&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;__setslice__&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;__oct__&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;__hex__&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;__nonzero__&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;__cmp__&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;__div__&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;__idiv__&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;__rdiv__&quot;</span><span class="s1">,</span>
+        <span class="s1">]</span>
+    <span class="s1">)</span>
+
+    <span class="s1">_invalid_encodings = frozenset(</span>
+        <span class="s1">[</span>
+            <span class="s3">&quot;base64_codec&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;base64&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;base_64&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;bz2_codec&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;bz2&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;hex_codec&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;hex&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;quopri_codec&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;quopri&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;quotedprintable&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;quoted_printable&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;uu_codec&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;uu&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;zlib_codec&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;zlib&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;zip&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;rot13&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;rot_13&quot;</span><span class="s1">,</span>
+        <span class="s1">]</span>
+    <span class="s1">)</span>
+
+    <span class="s1">_bad_python3_module_map = {</span>
+        <span class="s3">&quot;sys-max-int&quot;</span><span class="s1">: {</span><span class="s3">&quot;sys&quot;</span><span class="s1">: frozenset([</span><span class="s3">&quot;maxint&quot;</span><span class="s1">])},</span>
+        <span class="s3">&quot;deprecated-itertools-function&quot;</span><span class="s1">: {</span>
+            <span class="s3">&quot;itertools&quot;</span><span class="s1">: frozenset(</span>
+                <span class="s1">[</span><span class="s3">&quot;izip&quot;</span><span class="s1">, </span><span class="s3">&quot;ifilter&quot;</span><span class="s1">, </span><span class="s3">&quot;imap&quot;</span><span class="s1">, </span><span class="s3">&quot;izip_longest&quot;</span><span class="s1">, </span><span class="s3">&quot;ifilterfalse&quot;</span><span class="s1">]</span>
+            <span class="s1">)</span>
+        <span class="s1">},</span>
+        <span class="s3">&quot;deprecated-types-field&quot;</span><span class="s1">: {</span>
+            <span class="s3">&quot;types&quot;</span><span class="s1">: frozenset(</span>
+                <span class="s1">[</span>
+                    <span class="s3">&quot;EllipsisType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;XRangeType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;ComplexType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;StringType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;TypeType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;LongType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;UnicodeType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;ClassType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;BufferType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;StringTypes&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;NotImplementedType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;NoneType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;InstanceType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;FloatType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;SliceType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;UnboundMethodType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;ObjectType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;IntType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;TupleType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;ListType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;DictType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;FileType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;DictionaryType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;BooleanType&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;DictProxyType&quot;</span><span class="s1">,</span>
+                <span class="s1">]</span>
+            <span class="s1">)</span>
+        <span class="s1">},</span>
+        <span class="s3">&quot;bad-python3-import&quot;</span><span class="s1">: frozenset(</span>
+            <span class="s1">[</span>
+                <span class="s3">&quot;anydbm&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;BaseHTTPServer&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;__builtin__&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;CGIHTTPServer&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;ConfigParser&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;copy_reg&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;cPickle&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;cStringIO&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;Cookie&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;cookielib&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;dbhash&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;dumbdbm&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;dumbdb&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;Dialog&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;DocXMLRPCServer&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;FileDialog&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;FixTk&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;gdbm&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;htmlentitydefs&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;HTMLParser&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;httplib&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;markupbase&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;Queue&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;repr&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;robotparser&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;ScrolledText&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;SimpleDialog&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;SimpleHTTPServer&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;SimpleXMLRPCServer&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;StringIO&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;dummy_thread&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;SocketServer&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;test.test_support&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;Tkinter&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;Tix&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;Tkconstants&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;tkColorChooser&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;tkCommonDialog&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;Tkdnd&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;tkFileDialog&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;tkFont&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;tkMessageBox&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;tkSimpleDialog&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;UserList&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;UserString&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;whichdb&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;_winreg&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;xmlrpclib&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;audiodev&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;Bastion&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;bsddb185&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;bsddb3&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;Canvas&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;cfmfile&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;cl&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;commands&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;compiler&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;dircache&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;dl&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;exception&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;fpformat&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;htmllib&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;ihooks&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;imageop&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;imputil&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;linuxaudiodev&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;md5&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;mhlib&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;mimetools&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;MimeWriter&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;mimify&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;multifile&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;mutex&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;new&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;popen2&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;posixfile&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;pure&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;rexec&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;rfc822&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;sets&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;sha&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;sgmllib&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;sre&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;stringold&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;sunaudio&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;sv&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;test.testall&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;thread&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;timing&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;toaiff&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;user&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;urllib2&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;urlparse&quot;</span><span class="s1">,</span>
+            <span class="s1">]</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;deprecated-string-function&quot;</span><span class="s1">: {</span>
+            <span class="s3">&quot;string&quot;</span><span class="s1">: frozenset(</span>
+                <span class="s1">[</span>
+                    <span class="s3">&quot;maketrans&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;atof&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;atoi&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;atol&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;capitalize&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;expandtabs&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;find&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;rfind&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;index&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;rindex&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;count&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;lower&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;letters&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;split&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;rsplit&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;splitfields&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;join&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;joinfields&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;lstrip&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;rstrip&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;strip&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;swapcase&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;translate&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;upper&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;ljust&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;rjust&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;center&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;zfill&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;replace&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;lowercase&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;letters&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;uppercase&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;atol_error&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;atof_error&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;atoi_error&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;index_error&quot;</span><span class="s1">,</span>
+                <span class="s1">]</span>
+            <span class="s1">)</span>
+        <span class="s1">},</span>
+        <span class="s3">&quot;deprecated-operator-function&quot;</span><span class="s1">: {</span><span class="s3">&quot;operator&quot;</span><span class="s1">: frozenset({</span><span class="s3">&quot;div&quot;</span><span class="s1">})},</span>
+        <span class="s3">&quot;deprecated-urllib-function&quot;</span><span class="s1">: {</span>
+            <span class="s3">&quot;urllib&quot;</span><span class="s1">: frozenset(</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;addbase&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;addclosehook&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;addinfo&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;addinfourl&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;always_safe&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;basejoin&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;ftpcache&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;ftperrors&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;ftpwrapper&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;getproxies&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;getproxies_environment&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;getproxies_macosx_sysconf&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;main&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;noheaders&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;pathname2url&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;proxy_bypass&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;proxy_bypass_environment&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;proxy_bypass_macosx_sysconf&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;quote&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;quote_plus&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;reporthook&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;splitattr&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;splithost&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;splitnport&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;splitpasswd&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;splitport&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;splitquery&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;splittag&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;splittype&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;splituser&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;splitvalue&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;unquote&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;unquote_plus&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;unwrap&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;url2pathname&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;urlcleanup&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;urlencode&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;urlopen&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;urlretrieve&quot;</span><span class="s1">,</span>
+                <span class="s1">}</span>
+            <span class="s1">)</span>
+        <span class="s1">},</span>
+        <span class="s3">&quot;deprecated-sys-function&quot;</span><span class="s1">: {</span><span class="s3">&quot;sys&quot;</span><span class="s1">: frozenset({</span><span class="s3">&quot;exc_clear&quot;</span><span class="s1">})},</span>
+    <span class="s1">}</span>
+
+    <span class="s1">_deprecated_attrs = frozenset(</span>
+        <span class="s1">itertools.chain.from_iterable(</span>
+            <span class="s1">attr</span>
+            <span class="s2">for </span><span class="s1">module_map </span><span class="s2">in </span><span class="s1">_bad_python3_module_map.values()</span>
+            <span class="s2">if </span><span class="s1">isinstance(module_map, dict)</span>
+            <span class="s2">for </span><span class="s1">attr </span><span class="s2">in </span><span class="s1">module_map.values()</span>
+        <span class="s1">)</span>
+    <span class="s1">)</span>
+
+    <span class="s1">_relevant_call_attrs = (</span>
+        <span class="s1">DICT_METHODS | _deprecated_attrs | {</span><span class="s3">&quot;encode&quot;</span><span class="s1">, </span><span class="s3">&quot;decode&quot;</span><span class="s1">, </span><span class="s3">&quot;translate&quot;</span><span class="s1">}</span>
+    <span class="s1">)</span>
+
+    <span class="s1">_python_2_tests = frozenset(</span>
+        <span class="s1">[</span>
+            <span class="s1">astroid.extract_node(x).repr_tree()</span>
+            <span class="s2">for </span><span class="s1">x </span><span class="s2">in </span><span class="s1">[</span>
+                <span class="s3">&quot;sys.version_info[0] == 2&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;sys.version_info[0] &lt; 3&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;sys.version_info == (2, 7)&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;sys.version_info &lt;= (2, 7)&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;sys.version_info &lt; (3, 0)&quot;</span><span class="s1">,</span>
+            <span class="s1">]</span>
+        <span class="s1">]</span>
+    <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, *args, **kwargs):</span>
+        <span class="s1">self._future_division = </span><span class="s2">False</span>
+        <span class="s1">self._future_absolute_import = </span><span class="s2">False</span>
+        <span class="s1">self._modules_warned_about = set()</span>
+        <span class="s1">self._branch_stack = []</span>
+        <span class="s1">super().__init__(*args, **kwargs)</span>
+
+    <span class="s0"># pylint: disable=keyword-arg-before-vararg, arguments-differ</span>
+    <span class="s2">def </span><span class="s1">add_message(self, msg_id, always_warn=</span><span class="s2">False</span><span class="s1">, *args, **kwargs):</span>
+        <span class="s2">if </span><span class="s1">always_warn </span><span class="s2">or not </span><span class="s1">(</span>
+            <span class="s1">self._branch_stack </span><span class="s2">and </span><span class="s1">self._branch_stack[-</span><span class="s4">1</span><span class="s1">].is_py2_only</span>
+        <span class="s1">):</span>
+            <span class="s1">super().add_message(msg_id, *args, **kwargs)</span>
+
+    <span class="s2">def </span><span class="s1">_is_py2_test(self, node):</span>
+        <span class="s2">if </span><span class="s1">isinstance(node.test, astroid.Attribute) </span><span class="s2">and </span><span class="s1">isinstance(</span>
+            <span class="s1">node.test.expr, astroid.Name</span>
+        <span class="s1">):</span>
+            <span class="s2">if </span><span class="s1">node.test.expr.name == </span><span class="s3">&quot;six&quot; </span><span class="s2">and </span><span class="s1">node.test.attrname == </span><span class="s3">&quot;PY2&quot;</span><span class="s1">:</span>
+                <span class="s2">return True</span>
+        <span class="s2">elif </span><span class="s1">(</span>
+            <span class="s1">isinstance(node.test, astroid.Compare)</span>
+            <span class="s2">and </span><span class="s1">node.test.repr_tree() </span><span class="s2">in </span><span class="s1">self._python_2_tests</span>
+        <span class="s1">):</span>
+            <span class="s2">return True</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">visit_if(self, node):</span>
+        <span class="s1">self._branch_stack.append(Branch(node, self._is_py2_test(node)))</span>
+
+    <span class="s2">def </span><span class="s1">leave_if(self, node):</span>
+        <span class="s1">new_node = self._branch_stack.pop().node</span>
+        <span class="s2">assert </span><span class="s1">new_node == node</span>
+
+    <span class="s2">def </span><span class="s1">visit_ifexp(self, node):</span>
+        <span class="s1">self._branch_stack.append(Branch(node, self._is_py2_test(node)))</span>
+
+    <span class="s2">def </span><span class="s1">leave_ifexp(self, node):</span>
+        <span class="s1">new_node = self._branch_stack.pop()</span>
+        <span class="s2">assert </span><span class="s1">new_node.node == node</span>
+
+    <span class="s2">def </span><span class="s1">visit_module(self, node):  </span><span class="s0"># pylint: disable=unused-argument</span>
+        <span class="s0">&quot;&quot;&quot;Clear checker state after previous module.&quot;&quot;&quot;</span>
+        <span class="s1">self._future_division = </span><span class="s2">False</span>
+        <span class="s1">self._future_absolute_import = </span><span class="s2">False</span>
+
+    <span class="s2">def </span><span class="s1">visit_functiondef(self, node):</span>
+        <span class="s2">if </span><span class="s1">node.is_method():</span>
+            <span class="s2">if </span><span class="s1">node.name </span><span class="s2">in </span><span class="s1">self._unused_magic_methods:</span>
+                <span class="s1">method_name = node.name</span>
+                <span class="s2">if </span><span class="s1">node.name.startswith(</span><span class="s3">&quot;__&quot;</span><span class="s1">):</span>
+                    <span class="s1">method_name = node.name[</span><span class="s4">2</span><span class="s1">:-</span><span class="s4">2</span><span class="s1">]</span>
+                <span class="s1">self.add_message(method_name + </span><span class="s3">&quot;-method&quot;</span><span class="s1">, node=node)</span>
+            <span class="s2">elif </span><span class="s1">node.name == </span><span class="s3">&quot;next&quot;</span><span class="s1">:</span>
+                <span class="s0"># If there is a method named `next` declared, if it is invokable</span>
+                <span class="s0"># with zero arguments then it implements the Iterator protocol.</span>
+                <span class="s0"># This means if the method is an instance method or a</span>
+                <span class="s0"># classmethod 1 argument should cause a failure, if it is a</span>
+                <span class="s0"># staticmethod 0 arguments should cause a failure.</span>
+                <span class="s1">failing_arg_count = </span><span class="s4">1</span>
+                <span class="s2">if </span><span class="s1">utils.decorated_with(</span>
+                    <span class="s1">node, [astroid.bases.BUILTINS + </span><span class="s3">&quot;.staticmethod&quot;</span><span class="s1">]</span>
+                <span class="s1">):</span>
+                    <span class="s1">failing_arg_count = </span><span class="s4">0</span>
+                <span class="s2">if </span><span class="s1">len(node.args.args) == failing_arg_count:</span>
+                    <span class="s1">self.add_message(</span><span class="s3">&quot;next-method-defined&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s1">@utils.check_messages(</span><span class="s3">&quot;parameter-unpacking&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_arguments(self, node):</span>
+        <span class="s2">for </span><span class="s1">arg </span><span class="s2">in </span><span class="s1">node.args:</span>
+            <span class="s2">if </span><span class="s1">isinstance(arg, astroid.Tuple):</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;parameter-unpacking&quot;</span><span class="s1">, node=arg)</span>
+
+    <span class="s1">@utils.check_messages(</span><span class="s3">&quot;comprehension-escape&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_listcomp(self, node):</span>
+        <span class="s1">names = {</span>
+            <span class="s1">generator.target.name</span>
+            <span class="s2">for </span><span class="s1">generator </span><span class="s2">in </span><span class="s1">node.generators</span>
+            <span class="s2">if </span><span class="s1">isinstance(generator.target, astroid.AssignName)</span>
+        <span class="s1">}</span>
+        <span class="s1">scope = node.parent.scope()</span>
+        <span class="s1">scope_names = scope.nodes_of_class(astroid.Name, skip_klass=astroid.FunctionDef)</span>
+        <span class="s1">has_redefined_assign_name = any(</span>
+            <span class="s1">assign_name</span>
+            <span class="s2">for </span><span class="s1">assign_name </span><span class="s2">in </span><span class="s1">scope.nodes_of_class(</span>
+                <span class="s1">astroid.AssignName, skip_klass=astroid.FunctionDef</span>
+            <span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">assign_name.name </span><span class="s2">in </span><span class="s1">names </span><span class="s2">and </span><span class="s1">assign_name.lineno &gt; node.lineno</span>
+        <span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">has_redefined_assign_name:</span>
+            <span class="s2">return</span>
+
+        <span class="s1">emitted_for_names = set()</span>
+        <span class="s1">scope_names = list(scope_names)</span>
+        <span class="s2">for </span><span class="s1">scope_name </span><span class="s2">in </span><span class="s1">scope_names:</span>
+            <span class="s2">if </span><span class="s1">(</span>
+                <span class="s1">scope_name.name </span><span class="s2">not in </span><span class="s1">names</span>
+                <span class="s2">or </span><span class="s1">scope_name.lineno &lt;= node.lineno</span>
+                <span class="s2">or </span><span class="s1">scope_name.name </span><span class="s2">in </span><span class="s1">emitted_for_names</span>
+                <span class="s2">or </span><span class="s1">scope_name.scope() == node</span>
+            <span class="s1">):</span>
+                <span class="s2">continue</span>
+
+            <span class="s1">emitted_for_names.add(scope_name.name)</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;comprehension-escape&quot;</span><span class="s1">, node=scope_name)</span>
+
+    <span class="s2">def </span><span class="s1">visit_name(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Detect when a &quot;bad&quot; built-in is referenced.&quot;&quot;&quot;</span>
+        <span class="s1">found_node, _ = node.lookup(node.name)</span>
+        <span class="s2">if not </span><span class="s1">_is_builtin(found_node):</span>
+            <span class="s2">return</span>
+        <span class="s2">if </span><span class="s1">node.name </span><span class="s2">not in </span><span class="s1">self._bad_builtins:</span>
+            <span class="s2">return</span>
+        <span class="s2">if </span><span class="s1">node_ignores_exception(node) </span><span class="s2">or </span><span class="s1">isinstance(</span>
+            <span class="s1">find_try_except_wrapper_node(node), astroid.ExceptHandler</span>
+        <span class="s1">):</span>
+            <span class="s2">return</span>
+
+        <span class="s1">message = node.name.lower() + </span><span class="s3">&quot;-builtin&quot;</span>
+        <span class="s1">self.add_message(message, node=node)</span>
+
+    <span class="s1">@utils.check_messages(</span><span class="s3">&quot;print-statement&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_print(self, node):</span>
+        <span class="s1">self.add_message(</span><span class="s3">&quot;print-statement&quot;</span><span class="s1">, node=node, always_warn=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_warn_if_deprecated(self, node, module, attributes, report_on_modules=</span><span class="s2">True</span><span class="s1">):</span>
+        <span class="s2">for </span><span class="s1">message, module_map </span><span class="s2">in </span><span class="s1">self._bad_python3_module_map.items():</span>
+            <span class="s2">if </span><span class="s1">module </span><span class="s2">in </span><span class="s1">module_map </span><span class="s2">and </span><span class="s1">module </span><span class="s2">not in </span><span class="s1">self._modules_warned_about:</span>
+                <span class="s2">if </span><span class="s1">isinstance(module_map, frozenset):</span>
+                    <span class="s2">if </span><span class="s1">report_on_modules:</span>
+                        <span class="s1">self._modules_warned_about.add(module)</span>
+                        <span class="s1">self.add_message(message, node=node)</span>
+                <span class="s2">elif </span><span class="s1">attributes </span><span class="s2">and </span><span class="s1">module_map[module].intersection(attributes):</span>
+                    <span class="s1">self.add_message(message, node=node)</span>
+
+    <span class="s2">def </span><span class="s1">visit_importfrom(self, node):</span>
+        <span class="s2">if </span><span class="s1">node.modname == </span><span class="s3">&quot;__future__&quot;</span><span class="s1">:</span>
+            <span class="s2">for </span><span class="s1">name, _ </span><span class="s2">in </span><span class="s1">node.names:</span>
+                <span class="s2">if </span><span class="s1">name == </span><span class="s3">&quot;division&quot;</span><span class="s1">:</span>
+                    <span class="s1">self._future_division = </span><span class="s2">True</span>
+                <span class="s2">elif </span><span class="s1">name == </span><span class="s3">&quot;absolute_import&quot;</span><span class="s1">:</span>
+                    <span class="s1">self._future_absolute_import = </span><span class="s2">True</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">if not </span><span class="s1">self._future_absolute_import:</span>
+                <span class="s2">if </span><span class="s1">self.linter.is_message_enabled(</span><span class="s3">&quot;no-absolute-import&quot;</span><span class="s1">):</span>
+                    <span class="s1">self.add_message(</span><span class="s3">&quot;no-absolute-import&quot;</span><span class="s1">, node=node)</span>
+                    <span class="s1">self._future_absolute_import = </span><span class="s2">True</span>
+            <span class="s2">if not </span><span class="s1">_is_conditional_import(node) </span><span class="s2">and not </span><span class="s1">node.level:</span>
+                <span class="s1">self._warn_if_deprecated(node, node.modname, {x[</span><span class="s4">0</span><span class="s1">] </span><span class="s2">for </span><span class="s1">x </span><span class="s2">in </span><span class="s1">node.names})</span>
+
+        <span class="s2">if </span><span class="s1">node.names[</span><span class="s4">0</span><span class="s1">][</span><span class="s4">0</span><span class="s1">] == </span><span class="s3">&quot;*&quot;</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">self.linter.is_message_enabled(</span><span class="s3">&quot;import-star-module-level&quot;</span><span class="s1">):</span>
+                <span class="s2">if not </span><span class="s1">isinstance(node.scope(), astroid.Module):</span>
+                    <span class="s1">self.add_message(</span><span class="s3">&quot;import-star-module-level&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s2">def </span><span class="s1">visit_import(self, node):</span>
+        <span class="s2">if not </span><span class="s1">self._future_absolute_import:</span>
+            <span class="s2">if </span><span class="s1">self.linter.is_message_enabled(</span><span class="s3">&quot;no-absolute-import&quot;</span><span class="s1">):</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;no-absolute-import&quot;</span><span class="s1">, node=node)</span>
+                <span class="s1">self._future_absolute_import = </span><span class="s2">True</span>
+        <span class="s2">if not </span><span class="s1">_is_conditional_import(node):</span>
+            <span class="s2">for </span><span class="s1">name, _ </span><span class="s2">in </span><span class="s1">node.names:</span>
+                <span class="s1">self._warn_if_deprecated(node, name, </span><span class="s2">None</span><span class="s1">)</span>
+
+    <span class="s1">@utils.check_messages(</span><span class="s3">&quot;metaclass-assignment&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_classdef(self, node):</span>
+        <span class="s2">if </span><span class="s3">&quot;__metaclass__&quot; </span><span class="s2">in </span><span class="s1">node.locals:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;metaclass-assignment&quot;</span><span class="s1">, node=node)</span>
+        <span class="s1">locals_and_methods = set(node.locals).union(x.name </span><span class="s2">for </span><span class="s1">x </span><span class="s2">in </span><span class="s1">node.mymethods())</span>
+        <span class="s2">if </span><span class="s3">&quot;__eq__&quot; </span><span class="s2">in </span><span class="s1">locals_and_methods </span><span class="s2">and </span><span class="s3">&quot;__hash__&quot; </span><span class="s2">not in </span><span class="s1">locals_and_methods:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;eq-without-hash&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s1">@utils.check_messages(</span><span class="s3">&quot;old-division&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_binop(self, node):</span>
+        <span class="s2">if not </span><span class="s1">self._future_division </span><span class="s2">and </span><span class="s1">node.op == </span><span class="s3">&quot;/&quot;</span><span class="s1">:</span>
+            <span class="s2">for </span><span class="s1">arg </span><span class="s2">in </span><span class="s1">(node.left, node.right):</span>
+                <span class="s1">inferred = utils.safe_infer(arg)</span>
+                <span class="s0"># If we can infer the object and that object is not an int, bail out.</span>
+                <span class="s2">if </span><span class="s1">inferred </span><span class="s2">and not </span><span class="s1">(</span>
+                    <span class="s1">(</span>
+                        <span class="s1">isinstance(inferred, astroid.Const)</span>
+                        <span class="s2">and </span><span class="s1">isinstance(inferred.value, int)</span>
+                    <span class="s1">)</span>
+                    <span class="s2">or </span><span class="s1">(</span>
+                        <span class="s1">isinstance(inferred, astroid.Instance)</span>
+                        <span class="s2">and </span><span class="s1">inferred.name == </span><span class="s3">&quot;int&quot;</span>
+                    <span class="s1">)</span>
+                <span class="s1">):</span>
+                    <span class="s2">break</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;old-division&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_cmp_argument(self, node):</span>
+        <span class="s0"># Check that the `cmp` argument is used</span>
+        <span class="s1">kwargs = []</span>
+        <span class="s2">if </span><span class="s1">isinstance(node.func, astroid.Attribute) </span><span class="s2">and </span><span class="s1">node.func.attrname == </span><span class="s3">&quot;sort&quot;</span><span class="s1">:</span>
+            <span class="s1">inferred = utils.safe_infer(node.func.expr)</span>
+            <span class="s2">if not </span><span class="s1">inferred:</span>
+                <span class="s2">return</span>
+
+            <span class="s1">builtins_list = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">astroid.bases.BUILTINS</span><span class="s5">}</span><span class="s3">.list&quot;</span>
+            <span class="s2">if </span><span class="s1">isinstance(inferred, astroid.List) </span><span class="s2">or </span><span class="s1">inferred.qname() == builtins_list:</span>
+                <span class="s1">kwargs = node.keywords</span>
+
+        <span class="s2">elif </span><span class="s1">isinstance(node.func, astroid.Name) </span><span class="s2">and </span><span class="s1">node.func.name == </span><span class="s3">&quot;sorted&quot;</span><span class="s1">:</span>
+            <span class="s1">inferred = utils.safe_infer(node.func)</span>
+            <span class="s2">if not </span><span class="s1">inferred:</span>
+                <span class="s2">return</span>
+
+            <span class="s1">builtins_sorted = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">astroid.bases.BUILTINS</span><span class="s5">}</span><span class="s3">.sorted&quot;</span>
+            <span class="s2">if </span><span class="s1">inferred.qname() == builtins_sorted:</span>
+                <span class="s1">kwargs = node.keywords</span>
+
+        <span class="s2">for </span><span class="s1">kwarg </span><span class="s2">in </span><span class="s1">kwargs </span><span class="s2">or </span><span class="s1">[]:</span>
+            <span class="s2">if </span><span class="s1">kwarg.arg == </span><span class="s3">&quot;cmp&quot;</span><span class="s1">:</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;using-cmp-argument&quot;</span><span class="s1">, node=node)</span>
+                <span class="s2">return</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_is_constant_string_or_name(node):</span>
+        <span class="s2">if </span><span class="s1">isinstance(node, astroid.Const):</span>
+            <span class="s2">return </span><span class="s1">isinstance(node.value, str)</span>
+        <span class="s2">return </span><span class="s1">isinstance(node, astroid.Name)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_is_none(node):</span>
+        <span class="s2">return </span><span class="s1">isinstance(node, astroid.Const) </span><span class="s2">and </span><span class="s1">node.value </span><span class="s2">is None</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_has_only_n_positional_args(node, number_of_args):</span>
+        <span class="s2">return </span><span class="s1">len(node.args) == number_of_args </span><span class="s2">and </span><span class="s1">all(node.args) </span><span class="s2">and not </span><span class="s1">node.keywords</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_could_be_string(inferred_types):</span>
+        <span class="s1">confidence = INFERENCE </span><span class="s2">if </span><span class="s1">inferred_types </span><span class="s2">else </span><span class="s1">INFERENCE_FAILURE</span>
+        <span class="s2">for </span><span class="s1">inferred_type </span><span class="s2">in </span><span class="s1">inferred_types:</span>
+            <span class="s2">if </span><span class="s1">inferred_type </span><span class="s2">is </span><span class="s1">astroid.Uninferable:</span>
+                <span class="s1">confidence = INFERENCE_FAILURE</span>
+            <span class="s2">elif not </span><span class="s1">(</span>
+                <span class="s1">isinstance(inferred_type, astroid.Const)</span>
+                <span class="s2">and </span><span class="s1">isinstance(inferred_type.value, str)</span>
+            <span class="s1">):</span>
+                <span class="s2">return None</span>
+        <span class="s2">return </span><span class="s1">confidence</span>
+
+    <span class="s2">def </span><span class="s1">visit_call(self, node):</span>
+        <span class="s1">self._check_cmp_argument(node)</span>
+
+        <span class="s2">if </span><span class="s1">isinstance(node.func, astroid.Attribute):</span>
+            <span class="s1">inferred_types = set()</span>
+
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s2">for </span><span class="s1">inferred_receiver </span><span class="s2">in </span><span class="s1">_infer_if_relevant_attr(</span>
+                    <span class="s1">node.func, self._relevant_call_attrs</span>
+                <span class="s1">):</span>
+                    <span class="s2">if </span><span class="s1">inferred_receiver </span><span class="s2">is </span><span class="s1">astroid.Uninferable:</span>
+                        <span class="s2">continue</span>
+                    <span class="s1">inferred_types.add(inferred_receiver)</span>
+                    <span class="s2">if </span><span class="s1">isinstance(inferred_receiver, astroid.Module):</span>
+                        <span class="s1">self._warn_if_deprecated(</span>
+                            <span class="s1">node,</span>
+                            <span class="s1">inferred_receiver.name,</span>
+                            <span class="s1">{node.func.attrname},</span>
+                            <span class="s1">report_on_modules=</span><span class="s2">False</span><span class="s1">,</span>
+                        <span class="s1">)</span>
+                    <span class="s2">if </span><span class="s1">(</span>
+                        <span class="s1">_inferred_value_is_dict(inferred_receiver)</span>
+                        <span class="s2">and </span><span class="s1">node.func.attrname </span><span class="s2">in </span><span class="s1">DICT_METHODS</span>
+                    <span class="s1">):</span>
+                        <span class="s2">if not </span><span class="s1">_in_iterating_context(node):</span>
+                            <span class="s1">checker = </span><span class="s3">f&quot;dict-</span><span class="s5">{</span><span class="s1">node.func.attrname</span><span class="s5">}</span><span class="s3">-not-iterating&quot;</span>
+                            <span class="s1">self.add_message(checker, node=node)</span>
+            <span class="s2">except </span><span class="s1">astroid.InferenceError:</span>
+                <span class="s2">pass</span>
+            <span class="s2">if </span><span class="s1">node.args:</span>
+                <span class="s1">is_str_confidence = self._could_be_string(inferred_types)</span>
+                <span class="s2">if </span><span class="s1">is_str_confidence:</span>
+                    <span class="s2">if </span><span class="s1">(</span>
+                        <span class="s1">node.func.attrname </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;encode&quot;</span><span class="s1">, </span><span class="s3">&quot;decode&quot;</span><span class="s1">)</span>
+                        <span class="s2">and </span><span class="s1">len(node.args) &gt;= </span><span class="s4">1</span>
+                        <span class="s2">and </span><span class="s1">node.args[</span><span class="s4">0</span><span class="s1">]</span>
+                    <span class="s1">):</span>
+                        <span class="s1">first_arg = node.args[</span><span class="s4">0</span><span class="s1">]</span>
+                        <span class="s1">self._validate_encoding(first_arg, node)</span>
+                    <span class="s2">if </span><span class="s1">(</span>
+                        <span class="s1">node.func.attrname == </span><span class="s3">&quot;translate&quot;</span>
+                        <span class="s2">and </span><span class="s1">self._has_only_n_positional_args(node, </span><span class="s4">2</span><span class="s1">)</span>
+                        <span class="s2">and </span><span class="s1">self._is_none(node.args[</span><span class="s4">0</span><span class="s1">])</span>
+                        <span class="s2">and </span><span class="s1">self._is_constant_string_or_name(node.args[</span><span class="s4">1</span><span class="s1">])</span>
+                    <span class="s1">):</span>
+                        <span class="s0"># The above statement looking for calls of the form:</span>
+                        <span class="s0">#</span>
+                        <span class="s0"># foo.translate(None, 'abc123')</span>
+                        <span class="s0">#</span>
+                        <span class="s0"># or</span>
+                        <span class="s0">#</span>
+                        <span class="s0"># foo.translate(None, some_variable)</span>
+                        <span class="s0">#</span>
+                        <span class="s0"># This check is somewhat broad and _may_ have some false positives, but</span>
+                        <span class="s0"># after checking several large codebases it did not have any false</span>
+                        <span class="s0"># positives while finding several real issues.  This call pattern seems</span>
+                        <span class="s0"># rare enough that the trade off is worth it.</span>
+                        <span class="s1">self.add_message(</span>
+                            <span class="s3">&quot;deprecated-str-translate-call&quot;</span><span class="s1">,</span>
+                            <span class="s1">node=node,</span>
+                            <span class="s1">confidence=is_str_confidence,</span>
+                        <span class="s1">)</span>
+                <span class="s2">return</span>
+            <span class="s2">if </span><span class="s1">node.keywords:</span>
+                <span class="s2">return</span>
+            <span class="s2">if </span><span class="s1">node.func.attrname == </span><span class="s3">&quot;next&quot;</span><span class="s1">:</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;next-method-called&quot;</span><span class="s1">, node=node)</span>
+            <span class="s2">elif </span><span class="s1">node.func.attrname </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;iterkeys&quot;</span><span class="s1">, </span><span class="s3">&quot;itervalues&quot;</span><span class="s1">, </span><span class="s3">&quot;iteritems&quot;</span><span class="s1">):</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;dict-iter-method&quot;</span><span class="s1">, node=node)</span>
+            <span class="s2">elif </span><span class="s1">node.func.attrname </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;viewkeys&quot;</span><span class="s1">, </span><span class="s3">&quot;viewvalues&quot;</span><span class="s1">, </span><span class="s3">&quot;viewitems&quot;</span><span class="s1">):</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;dict-view-method&quot;</span><span class="s1">, node=node)</span>
+        <span class="s2">elif </span><span class="s1">isinstance(node.func, astroid.Name):</span>
+            <span class="s1">found_node = node.func.lookup(node.func.name)[</span><span class="s4">0</span><span class="s1">]</span>
+            <span class="s2">if </span><span class="s1">_is_builtin(found_node):</span>
+                <span class="s2">if </span><span class="s1">node.func.name </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;filter&quot;</span><span class="s1">, </span><span class="s3">&quot;map&quot;</span><span class="s1">, </span><span class="s3">&quot;range&quot;</span><span class="s1">, </span><span class="s3">&quot;zip&quot;</span><span class="s1">):</span>
+                    <span class="s2">if not </span><span class="s1">_in_iterating_context(node):</span>
+                        <span class="s1">checker = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">node.func.name</span><span class="s5">}</span><span class="s3">-builtin-not-iterating&quot;</span>
+                        <span class="s1">self.add_message(checker, node=node)</span>
+                <span class="s2">elif </span><span class="s1">node.func.name == </span><span class="s3">&quot;open&quot; </span><span class="s2">and </span><span class="s1">node.keywords:</span>
+                    <span class="s1">kwargs = node.keywords</span>
+                    <span class="s2">for </span><span class="s1">kwarg </span><span class="s2">in </span><span class="s1">kwargs </span><span class="s2">or </span><span class="s1">[]:</span>
+                        <span class="s2">if </span><span class="s1">kwarg.arg == </span><span class="s3">&quot;encoding&quot;</span><span class="s1">:</span>
+                            <span class="s1">self._validate_encoding(kwarg.value, node)</span>
+                            <span class="s2">break</span>
+
+    <span class="s2">def </span><span class="s1">_validate_encoding(self, encoding, node):</span>
+        <span class="s2">if </span><span class="s1">isinstance(encoding, astroid.Const):</span>
+            <span class="s1">value = encoding.value</span>
+            <span class="s2">if </span><span class="s1">value </span><span class="s2">in </span><span class="s1">self._invalid_encodings:</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;invalid-str-codec&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s1">@utils.check_messages(</span><span class="s3">&quot;indexing-exception&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_subscript(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Look for indexing exceptions.&quot;&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">for </span><span class="s1">inferred </span><span class="s2">in </span><span class="s1">node.value.infer():</span>
+                <span class="s2">if not </span><span class="s1">isinstance(inferred, astroid.Instance):</span>
+                    <span class="s2">continue</span>
+                <span class="s2">if </span><span class="s1">utils.inherit_from_std_ex(inferred):</span>
+                    <span class="s1">self.add_message(</span><span class="s3">&quot;indexing-exception&quot;</span><span class="s1">, node=node)</span>
+        <span class="s2">except </span><span class="s1">astroid.InferenceError:</span>
+            <span class="s2">return</span>
+
+    <span class="s2">def </span><span class="s1">visit_assignattr(self, node):</span>
+        <span class="s2">if </span><span class="s1">isinstance(node.assign_type(), astroid.AugAssign):</span>
+            <span class="s1">self.visit_attribute(node)</span>
+
+    <span class="s2">def </span><span class="s1">visit_delattr(self, node):</span>
+        <span class="s1">self.visit_attribute(node)</span>
+
+    <span class="s1">@utils.check_messages(</span><span class="s3">&quot;exception-message-attribute&quot;</span><span class="s1">, </span><span class="s3">&quot;xreadlines-attribute&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_attribute(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Look for removed attributes&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">node.attrname == </span><span class="s3">&quot;xreadlines&quot;</span><span class="s1">:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;xreadlines-attribute&quot;</span><span class="s1">, node=node)</span>
+            <span class="s2">return</span>
+
+        <span class="s1">exception_message = </span><span class="s3">&quot;message&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">for </span><span class="s1">inferred </span><span class="s2">in </span><span class="s1">_infer_if_relevant_attr(</span>
+                <span class="s1">node, self._deprecated_attrs | {exception_message}</span>
+            <span class="s1">):</span>
+                <span class="s2">if </span><span class="s1">isinstance(inferred, astroid.Instance) </span><span class="s2">and </span><span class="s1">utils.inherit_from_std_ex(</span>
+                    <span class="s1">inferred</span>
+                <span class="s1">):</span>
+                    <span class="s2">if </span><span class="s1">node.attrname == exception_message:</span>
+
+                        <span class="s0"># Exceptions with .message clearly defined are an exception</span>
+                        <span class="s2">if </span><span class="s1">exception_message </span><span class="s2">in </span><span class="s1">inferred.instance_attrs:</span>
+                            <span class="s2">continue</span>
+                        <span class="s1">self.add_message(</span><span class="s3">&quot;exception-message-attribute&quot;</span><span class="s1">, node=node)</span>
+                <span class="s2">if </span><span class="s1">isinstance(inferred, astroid.Module):</span>
+                    <span class="s1">self._warn_if_deprecated(</span>
+                        <span class="s1">node, inferred.name, {node.attrname}, report_on_modules=</span><span class="s2">False</span>
+                    <span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">astroid.InferenceError:</span>
+            <span class="s2">return</span>
+
+    <span class="s1">@utils.check_messages(</span><span class="s3">&quot;unpacking-in-except&quot;</span><span class="s1">, </span><span class="s3">&quot;comprehension-escape&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_excepthandler(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Visit an except handler block and check for exception unpacking.&quot;&quot;&quot;</span>
+
+        <span class="s2">def </span><span class="s1">_is_used_in_except_block(node, block):</span>
+            <span class="s1">current = node</span>
+            <span class="s2">while </span><span class="s1">current </span><span class="s2">and </span><span class="s1">current </span><span class="s2">is not </span><span class="s1">block:</span>
+                <span class="s1">current = current.parent</span>
+            <span class="s2">return </span><span class="s1">current </span><span class="s2">is not None</span>
+
+        <span class="s2">if </span><span class="s1">isinstance(node.name, (astroid.Tuple, astroid.List)):</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;unpacking-in-except&quot;</span><span class="s1">, node=node)</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if not </span><span class="s1">node.name:</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># Find any names</span>
+        <span class="s1">scope = node.parent.scope()</span>
+        <span class="s1">scope_names = scope.nodes_of_class(astroid.Name, skip_klass=astroid.FunctionDef)</span>
+        <span class="s1">scope_names = list(scope_names)</span>
+        <span class="s1">potential_leaked_names = [</span>
+            <span class="s1">scope_name</span>
+            <span class="s2">for </span><span class="s1">scope_name </span><span class="s2">in </span><span class="s1">scope_names</span>
+            <span class="s2">if </span><span class="s1">scope_name.name == node.name.name</span>
+            <span class="s2">and </span><span class="s1">scope_name.lineno &gt; node.lineno</span>
+            <span class="s2">and not </span><span class="s1">_is_used_in_except_block(scope_name, node)</span>
+        <span class="s1">]</span>
+        <span class="s1">reassignments_for_same_name = {</span>
+            <span class="s1">assign_name.lineno</span>
+            <span class="s2">for </span><span class="s1">assign_name </span><span class="s2">in </span><span class="s1">scope.nodes_of_class(</span>
+                <span class="s1">astroid.AssignName, skip_klass=astroid.FunctionDef</span>
+            <span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">assign_name.name == node.name.name</span>
+        <span class="s1">}</span>
+        <span class="s2">for </span><span class="s1">leaked_name </span><span class="s2">in </span><span class="s1">potential_leaked_names:</span>
+            <span class="s2">if </span><span class="s1">any(</span>
+                <span class="s1">node.lineno &lt; elem &lt; leaked_name.lineno</span>
+                <span class="s2">for </span><span class="s1">elem </span><span class="s2">in </span><span class="s1">reassignments_for_same_name</span>
+            <span class="s1">):</span>
+                <span class="s2">continue</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;exception-escape&quot;</span><span class="s1">, node=leaked_name)</span>
+
+    <span class="s1">@utils.check_messages(</span><span class="s3">&quot;backtick&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_repr(self, node):</span>
+        <span class="s1">self.add_message(</span><span class="s3">&quot;backtick&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s1">@utils.check_messages(</span><span class="s3">&quot;raising-string&quot;</span><span class="s1">, </span><span class="s3">&quot;old-raise-syntax&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_raise(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Visit a raise statement and check for raising 
+        strings or old-raise-syntax. 
+        &quot;&quot;&quot;</span>
+
+        <span class="s0"># Ignore empty raise.</span>
+        <span class="s2">if </span><span class="s1">node.exc </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">return</span>
+        <span class="s1">expr = node.exc</span>
+        <span class="s2">if </span><span class="s1">self._check_raise_value(node, expr):</span>
+            <span class="s2">return</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">value = next(astroid.unpack_infer(expr))</span>
+        <span class="s2">except </span><span class="s1">astroid.InferenceError:</span>
+            <span class="s2">return</span>
+        <span class="s1">self._check_raise_value(node, value)</span>
+
+    <span class="s2">def </span><span class="s1">_check_raise_value(self, node, expr):</span>
+        <span class="s2">if </span><span class="s1">isinstance(expr, astroid.Const):</span>
+            <span class="s1">value = expr.value</span>
+            <span class="s2">if </span><span class="s1">isinstance(value, str):</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;raising-string&quot;</span><span class="s1">, node=node)</span>
+                <span class="s2">return True</span>
+        <span class="s2">return None</span>
+
+
+<span class="s2">class </span><span class="s1">Python3TokenChecker(checkers.BaseTokenChecker):</span>
+    <span class="s1">__implements__ = interfaces.ITokenChecker</span>
+    <span class="s1">name = </span><span class="s3">&quot;python3&quot;</span>
+    <span class="s1">enabled = </span><span class="s2">False</span>
+
+    <span class="s1">msgs = {</span>
+        <span class="s3">&quot;E1606&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Use of long suffix&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;long-suffix&quot;</span><span class="s1">,</span>
+            <span class="s3">'Used when &quot;l&quot; or &quot;L&quot; is used to mark a long integer. '</span>
+            <span class="s3">&quot;This will not work in Python 3, since `int` and `long` &quot;</span>
+            <span class="s3">&quot;types have merged.&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span><span class="s3">&quot;maxversion&quot;</span><span class="s1">: (</span><span class="s4">3</span><span class="s1">, </span><span class="s4">0</span><span class="s1">)},</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;E1607&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Use of the &lt;&gt; operator&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;old-ne-operator&quot;</span><span class="s1">,</span>
+            <span class="s3">'Used when the deprecated &quot;&lt;&gt;&quot; operator is used instead '</span>
+            <span class="s3">'of &quot;!=&quot;. This is removed in Python 3.'</span><span class="s1">,</span>
+            <span class="s1">{</span><span class="s3">&quot;maxversion&quot;</span><span class="s1">: (</span><span class="s4">3</span><span class="s1">, </span><span class="s4">0</span><span class="s1">), </span><span class="s3">&quot;old_names&quot;</span><span class="s1">: [(</span><span class="s3">&quot;W0331&quot;</span><span class="s1">, </span><span class="s3">&quot;old-old-ne-operator&quot;</span><span class="s1">)]},</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;E1608&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Use of old octal literal&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;old-octal-literal&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when encountering the old octal syntax, &quot;</span>
+            <span class="s3">&quot;removed in Python 3. To use the new syntax, &quot;</span>
+            <span class="s3">&quot;prepend 0o on the number.&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span><span class="s3">&quot;maxversion&quot;</span><span class="s1">: (</span><span class="s4">3</span><span class="s1">, </span><span class="s4">0</span><span class="s1">)},</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;E1610&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Non-ascii bytes literals not supported in 3.x&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;non-ascii-bytes-literal&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when non-ascii bytes literals are found in a program. &quot;</span>
+            <span class="s3">&quot;They are no longer supported in Python 3.&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span><span class="s3">&quot;maxversion&quot;</span><span class="s1">: (</span><span class="s4">3</span><span class="s1">, </span><span class="s4">0</span><span class="s1">)},</span>
+        <span class="s1">),</span>
+    <span class="s1">}</span>
+
+    <span class="s2">def </span><span class="s1">process_tokens(self, tokens):</span>
+        <span class="s2">for </span><span class="s1">idx, (tok_type, token, start, _, _) </span><span class="s2">in </span><span class="s1">enumerate(tokens):</span>
+            <span class="s2">if </span><span class="s1">tok_type == tokenize.NUMBER:</span>
+                <span class="s2">if </span><span class="s1">token.lower().endswith(</span><span class="s3">&quot;l&quot;</span><span class="s1">):</span>
+                    <span class="s0"># This has a different semantic than lowercase-l-suffix.</span>
+                    <span class="s1">self.add_message(</span><span class="s3">&quot;long-suffix&quot;</span><span class="s1">, line=start[</span><span class="s4">0</span><span class="s1">])</span>
+                <span class="s2">elif </span><span class="s1">_is_old_octal(token):</span>
+                    <span class="s1">self.add_message(</span><span class="s3">&quot;old-octal-literal&quot;</span><span class="s1">, line=start[</span><span class="s4">0</span><span class="s1">])</span>
+            <span class="s2">if </span><span class="s1">tokens[idx][</span><span class="s4">1</span><span class="s1">] == </span><span class="s3">&quot;&lt;&gt;&quot;</span><span class="s1">:</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;old-ne-operator&quot;</span><span class="s1">, line=tokens[idx][</span><span class="s4">2</span><span class="s1">][</span><span class="s4">0</span><span class="s1">])</span>
+            <span class="s2">if </span><span class="s1">tok_type == tokenize.STRING </span><span class="s2">and </span><span class="s1">token.startswith(</span><span class="s3">&quot;b&quot;</span><span class="s1">):</span>
+                <span class="s2">if </span><span class="s1">any(elem </span><span class="s2">for </span><span class="s1">elem </span><span class="s2">in </span><span class="s1">token </span><span class="s2">if </span><span class="s1">ord(elem) &gt; </span><span class="s4">127</span><span class="s1">):</span>
+                    <span class="s1">self.add_message(</span><span class="s3">&quot;non-ascii-bytes-literal&quot;</span><span class="s1">, line=start[</span><span class="s4">0</span><span class="s1">])</span>
+
+
+<span class="s2">def </span><span class="s1">register(linter):</span>
+    <span class="s1">linter.register_checker(Python3Checker(linter))</span>
+    <span class="s1">linter.register_checker(Python3TokenChecker(linter))</span>
+</pre>
+</body>
+</html>

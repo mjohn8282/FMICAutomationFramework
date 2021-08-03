@@ -1,0 +1,94 @@
+<html>
+<head>
+<title>bad_builtin.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+bad_builtin.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2016, 2018, 2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019, 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Hugo van Kemenade &lt;hugovk@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Peter Kolbus &lt;peter.kolbus@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;Checker for deprecated builtins.&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">astroid</span>
+
+<span class="s2">from </span><span class="s1">pylint.checkers </span><span class="s2">import </span><span class="s1">BaseChecker</span>
+<span class="s2">from </span><span class="s1">pylint.checkers.utils </span><span class="s2">import </span><span class="s1">check_messages</span>
+<span class="s2">from </span><span class="s1">pylint.interfaces </span><span class="s2">import </span><span class="s1">IAstroidChecker</span>
+
+<span class="s1">BAD_FUNCTIONS = [</span><span class="s3">&quot;map&quot;</span><span class="s1">, </span><span class="s3">&quot;filter&quot;</span><span class="s1">]</span>
+<span class="s0"># Some hints regarding the use of bad builtins.</span>
+<span class="s1">BUILTIN_HINTS = {</span><span class="s3">&quot;map&quot;</span><span class="s1">: </span><span class="s3">&quot;Using a list comprehension can be clearer.&quot;</span><span class="s1">}</span>
+<span class="s1">BUILTIN_HINTS[</span><span class="s3">&quot;filter&quot;</span><span class="s1">] = BUILTIN_HINTS[</span><span class="s3">&quot;map&quot;</span><span class="s1">]</span>
+
+
+<span class="s2">class </span><span class="s1">BadBuiltinChecker(BaseChecker):</span>
+
+    <span class="s1">__implements__ = (IAstroidChecker,)</span>
+    <span class="s1">name = </span><span class="s3">&quot;deprecated_builtins&quot;</span>
+    <span class="s1">msgs = {</span>
+        <span class="s3">&quot;W0141&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Used builtin function %s&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;bad-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a disallowed builtin function is used (see the &quot;</span>
+            <span class="s3">&quot;bad-function option). Usual disallowed functions are the ones &quot;</span>
+            <span class="s3">&quot;like map, or filter , where Python offers now some cleaner &quot;</span>
+            <span class="s3">&quot;alternative like list comprehension.&quot;</span><span class="s1">,</span>
+        <span class="s1">)</span>
+    <span class="s1">}</span>
+
+    <span class="s1">options = (</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;bad-functions&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: BAD_FUNCTIONS,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;csv&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;builtin function names&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;List of builtins function names that should not be &quot;</span>
+                <span class="s3">&quot;used, separated by a comma&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;bad-builtin&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_call(self, node):</span>
+        <span class="s2">if </span><span class="s1">isinstance(node.func, astroid.Name):</span>
+            <span class="s1">name = node.func.name</span>
+            <span class="s0"># ignore the name if it's not a builtin (i.e. not defined in the</span>
+            <span class="s0"># locals nor globals scope)</span>
+            <span class="s2">if not </span><span class="s1">(name </span><span class="s2">in </span><span class="s1">node.frame() </span><span class="s2">or </span><span class="s1">name </span><span class="s2">in </span><span class="s1">node.root()):</span>
+                <span class="s2">if </span><span class="s1">name </span><span class="s2">in </span><span class="s1">self.config.bad_functions:</span>
+                    <span class="s1">hint = BUILTIN_HINTS.get(name)</span>
+                    <span class="s2">if </span><span class="s1">hint:</span>
+                        <span class="s1">args = </span><span class="s3">f&quot;</span><span class="s4">{</span><span class="s1">name</span><span class="s4">!r}</span><span class="s3">. </span><span class="s4">{</span><span class="s1">hint</span><span class="s4">}</span><span class="s3">&quot;</span>
+                    <span class="s2">else</span><span class="s1">:</span>
+                        <span class="s1">args = repr(name)</span>
+                    <span class="s1">self.add_message(</span><span class="s3">&quot;bad-builtin&quot;</span><span class="s1">, node=node, args=args)</span>
+
+
+<span class="s2">def </span><span class="s1">register(linter):</span>
+    <span class="s0">&quot;&quot;&quot;Required method to auto register this checker. 
+ 
+    :param linter: Main interface object for Pylint plugins 
+    :type linter: Pylint object 
+    &quot;&quot;&quot;</span>
+    <span class="s1">linter.register_checker(BadBuiltinChecker(linter))</span>
+</pre>
+</body>
+</html>

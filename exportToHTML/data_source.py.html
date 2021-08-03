@@ -1,0 +1,268 @@
+<html>
+<head>
+<title>data_source.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+data_source.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+Collection of utility primitives for charts. 
+&quot;&quot;&quot;</span>
+
+<span class="s2">from </span><span class="s1">openpyexcel.compat </span><span class="s2">import </span><span class="s1">unicode</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s2">import </span><span class="s1">Serialisable</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Alias,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Sequence,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s2">import </span><span class="s1">ExtensionList</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">NestedString,</span>
+    <span class="s1">NestedText,</span>
+    <span class="s1">NestedInteger,</span>
+<span class="s1">)</span>
+
+
+<span class="s2">class </span><span class="s1">NumFmt(Serialisable):</span>
+
+    <span class="s1">formatCode = String()</span>
+    <span class="s1">sourceLinked = Bool()</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">formatCode=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">sourceLinked=</span><span class="s2">False</span>
+                <span class="s1">):</span>
+        <span class="s1">self.formatCode = formatCode</span>
+        <span class="s1">self.sourceLinked = sourceLinked</span>
+
+
+<span class="s2">class </span><span class="s1">NumberValueDescriptor(NestedText):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Data should be numerical but isn't always :-/ 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">allow_none = </span><span class="s2">True</span>
+
+    <span class="s2">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s2">if </span><span class="s1">value == </span><span class="s3">&quot;#N/A&quot;</span><span class="s1">:</span>
+            <span class="s1">self.expected_type = unicode</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.expected_type = float</span>
+        <span class="s1">super(NumberValueDescriptor, self).__set__(instance, value)</span>
+
+
+<span class="s2">class </span><span class="s1">NumVal(Serialisable):</span>
+
+    <span class="s1">idx = Integer()</span>
+    <span class="s1">formatCode = NestedText(allow_none=</span><span class="s2">True</span><span class="s1">, expected_type=unicode)</span>
+    <span class="s1">v = NumberValueDescriptor()</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">idx=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">formatCode=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">v=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.idx = idx</span>
+        <span class="s1">self.formatCode = formatCode</span>
+        <span class="s1">self.v = v</span>
+
+
+<span class="s2">class </span><span class="s1">NumData(Serialisable):</span>
+
+    <span class="s1">formatCode = NestedText(expected_type=unicode, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">ptCount = NestedInteger(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">pt = Sequence(expected_type=NumVal)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'formatCode'</span><span class="s1">, </span><span class="s3">'ptCount'</span><span class="s1">, </span><span class="s3">'pt'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">formatCode=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">ptCount=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">pt=(),</span>
+                 <span class="s1">extLst=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.formatCode = formatCode</span>
+        <span class="s1">self.ptCount = ptCount</span>
+        <span class="s1">self.pt = pt</span>
+
+
+<span class="s2">class </span><span class="s1">NumRef(Serialisable):</span>
+
+    <span class="s1">f = NestedText(expected_type=unicode)</span>
+    <span class="s1">ref = Alias(</span><span class="s3">'f'</span><span class="s1">)</span>
+    <span class="s1">numCache = Typed(expected_type=NumData, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'f'</span><span class="s1">, </span><span class="s3">'numCache'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">f=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">numCache=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.f = f</span>
+        <span class="s1">self.numCache = numCache</span>
+
+
+<span class="s2">class </span><span class="s1">StrVal(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;strVal&quot;</span>
+
+    <span class="s1">idx = Integer()</span>
+    <span class="s1">v = NestedText(expected_type=unicode)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">idx=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">v=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.idx = idx</span>
+        <span class="s1">self.v = v</span>
+
+
+<span class="s2">class </span><span class="s1">StrData(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;strData&quot;</span>
+
+    <span class="s1">ptCount = NestedInteger(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">pt = Sequence(expected_type=StrVal)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'ptCount'</span><span class="s1">, </span><span class="s3">'pt'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">ptCount=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">pt=(),</span>
+                 <span class="s1">extLst=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.ptCount = ptCount</span>
+        <span class="s1">self.pt = pt</span>
+
+
+<span class="s2">class </span><span class="s1">StrRef(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;strRef&quot;</span>
+
+    <span class="s1">f = NestedText(expected_type=unicode, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">strCache = Typed(expected_type=StrData, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'f'</span><span class="s1">, </span><span class="s3">'strCache'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">f=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">strCache=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.f = f</span>
+        <span class="s1">self.strCache = strCache</span>
+
+
+<span class="s2">class </span><span class="s1">NumDataSource(Serialisable):</span>
+
+    <span class="s1">numRef = Typed(expected_type=NumRef, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">numLit = Typed(expected_type=NumData, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">numRef=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">numLit=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.numRef = numRef</span>
+        <span class="s1">self.numLit = numLit</span>
+
+
+<span class="s2">class </span><span class="s1">Level(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;lvl&quot;</span>
+
+    <span class="s1">pt = Sequence(expected_type=StrVal)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'pt'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">pt=(),</span>
+                <span class="s1">):</span>
+        <span class="s1">self.pt = pt</span>
+
+
+<span class="s2">class </span><span class="s1">MultiLevelStrData(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;multiLvlStrData&quot;</span>
+
+    <span class="s1">ptCount = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">lvl = Sequence(expected_type=Level)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'ptCount'</span><span class="s1">, </span><span class="s3">'lvl'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">ptCount=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">lvl=(),</span>
+                 <span class="s1">extLst=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.ptCount = ptCount</span>
+        <span class="s1">self.lvl = lvl</span>
+
+
+<span class="s2">class </span><span class="s1">MultiLevelStrRef(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;multiLvlStrRef&quot;</span>
+
+    <span class="s1">f = NestedText(expected_type=unicode)</span>
+    <span class="s1">multiLvlStrCache = Typed(expected_type=MultiLevelStrData, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'multiLvlStrCache'</span><span class="s1">, </span><span class="s3">'f'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">f=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">multiLvlStrCache=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.f = f</span>
+        <span class="s1">self.multiLvlStrCache = multiLvlStrCache</span>
+
+
+<span class="s2">class </span><span class="s1">AxDataSource(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;cat&quot;</span>
+
+    <span class="s1">numRef = Typed(expected_type=NumRef, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">numLit = Typed(expected_type=NumData, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">strRef = Typed(expected_type=StrRef, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">strLit = Typed(expected_type=StrData, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">multiLvlStrRef = Typed(expected_type=MultiLevelStrRef, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">numRef=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">numLit=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">strRef=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">strLit=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">multiLvlStrRef=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s2">if not </span><span class="s1">any([numLit, numRef, strRef, strLit, multiLvlStrRef]):</span>
+            <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">&quot;A data source must be provided&quot;</span><span class="s1">)</span>
+        <span class="s1">self.numRef = numRef</span>
+        <span class="s1">self.numLit = numLit</span>
+        <span class="s1">self.strRef = strRef</span>
+        <span class="s1">self.strLit = strLit</span>
+        <span class="s1">self.multiLvlStrRef = multiLvlStrRef</span>
+</pre>
+</body>
+</html>

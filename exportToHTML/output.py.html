@@ -1,0 +1,655 @@
+<html>
+<head>
+<title>output.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+.s3 { color: #5c6370;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+output.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">copy</span>
+<span class="s0">import </span><span class="s1">itertools</span>
+<span class="s0">from </span><span class="s1">functools </span><span class="s0">import </span><span class="s1">partial</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Iterable, List, Set, Tuple</span>
+
+<span class="s0">from </span><span class="s1">isort.format </span><span class="s0">import </span><span class="s1">format_simplified</span>
+
+<span class="s0">from </span><span class="s1">. </span><span class="s0">import </span><span class="s1">parse, sorting, wrap</span>
+<span class="s0">from </span><span class="s1">.comments </span><span class="s0">import </span><span class="s1">add_to_line </span><span class="s0">as </span><span class="s1">with_comments</span>
+<span class="s0">from </span><span class="s1">.identify </span><span class="s0">import </span><span class="s1">STATEMENT_DECLARATIONS</span>
+<span class="s0">from </span><span class="s1">.settings </span><span class="s0">import </span><span class="s1">DEFAULT_CONFIG, Config</span>
+
+
+<span class="s0">def </span><span class="s1">sorted_imports(</span>
+    <span class="s1">parsed: parse.ParsedContent,</span>
+    <span class="s1">config: Config = DEFAULT_CONFIG,</span>
+    <span class="s1">extension: str = </span><span class="s2">&quot;py&quot;</span><span class="s1">,</span>
+    <span class="s1">import_type: str = </span><span class="s2">&quot;import&quot;</span><span class="s1">,</span>
+<span class="s1">) -&gt; str:</span>
+    <span class="s3">&quot;&quot;&quot;Adds the imports back to the file. 
+ 
+    (at the index of the first import) sorted alphabetically and split between groups 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s0">if </span><span class="s1">parsed.import_index == -</span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s0">return </span><span class="s1">_output_as_string(parsed.lines_without_imports, parsed.line_separator)</span>
+
+    <span class="s1">formatted_output: List[str] = parsed.lines_without_imports.copy()</span>
+    <span class="s1">remove_imports = [format_simplified(removal) </span><span class="s0">for </span><span class="s1">removal </span><span class="s0">in </span><span class="s1">config.remove_imports]</span>
+
+    <span class="s1">sections: Iterable[str] = itertools.chain(parsed.sections, config.forced_separate)</span>
+
+    <span class="s0">if </span><span class="s1">config.no_sections:</span>
+        <span class="s1">parsed.imports[</span><span class="s2">&quot;no_sections&quot;</span><span class="s1">] = {</span><span class="s2">&quot;straight&quot;</span><span class="s1">: {}, </span><span class="s2">&quot;from&quot;</span><span class="s1">: {}}</span>
+        <span class="s1">base_sections: Tuple[str, ...] = ()</span>
+        <span class="s0">for </span><span class="s1">section </span><span class="s0">in </span><span class="s1">sections:</span>
+            <span class="s0">if </span><span class="s1">section == </span><span class="s2">&quot;FUTURE&quot;</span><span class="s1">:</span>
+                <span class="s1">base_sections = (</span><span class="s2">&quot;FUTURE&quot;</span><span class="s1">,)</span>
+                <span class="s0">continue</span>
+            <span class="s1">parsed.imports[</span><span class="s2">&quot;no_sections&quot;</span><span class="s1">][</span><span class="s2">&quot;straight&quot;</span><span class="s1">].update(</span>
+                <span class="s1">parsed.imports[section].get(</span><span class="s2">&quot;straight&quot;</span><span class="s1">, {})</span>
+            <span class="s1">)</span>
+            <span class="s1">parsed.imports[</span><span class="s2">&quot;no_sections&quot;</span><span class="s1">][</span><span class="s2">&quot;from&quot;</span><span class="s1">].update(parsed.imports[section].get(</span><span class="s2">&quot;from&quot;</span><span class="s1">, {}))</span>
+        <span class="s1">sections = base_sections + (</span><span class="s2">&quot;no_sections&quot;</span><span class="s1">,)</span>
+
+    <span class="s1">output: List[str] = []</span>
+    <span class="s1">seen_headings: Set[str] = set()</span>
+    <span class="s1">pending_lines_before = </span><span class="s0">False</span>
+    <span class="s0">for </span><span class="s1">section </span><span class="s0">in </span><span class="s1">sections:</span>
+        <span class="s1">straight_modules = parsed.imports[section][</span><span class="s2">&quot;straight&quot;</span><span class="s1">]</span>
+        <span class="s0">if not </span><span class="s1">config.only_sections:</span>
+            <span class="s1">straight_modules = sorting.naturally(</span>
+                <span class="s1">straight_modules,</span>
+                <span class="s1">key=</span><span class="s0">lambda </span><span class="s1">key: sorting.module_key(</span>
+                    <span class="s1">key, config, section_name=section, straight_import=</span><span class="s0">True</span>
+                <span class="s1">),</span>
+                <span class="s1">reverse=config.reverse_sort,</span>
+            <span class="s1">)</span>
+
+        <span class="s1">from_modules = parsed.imports[section][</span><span class="s2">&quot;from&quot;</span><span class="s1">]</span>
+        <span class="s0">if not </span><span class="s1">config.only_sections:</span>
+            <span class="s1">from_modules = sorting.naturally(</span>
+                <span class="s1">from_modules,</span>
+                <span class="s1">key=</span><span class="s0">lambda </span><span class="s1">key: sorting.module_key(key, config, section_name=section),</span>
+                <span class="s1">reverse=config.reverse_sort,</span>
+            <span class="s1">)</span>
+
+            <span class="s0">if </span><span class="s1">config.star_first:</span>
+                <span class="s1">star_modules = []</span>
+                <span class="s1">other_modules = []</span>
+                <span class="s0">for </span><span class="s1">module </span><span class="s0">in </span><span class="s1">from_modules:</span>
+                    <span class="s0">if </span><span class="s2">&quot;*&quot; </span><span class="s0">in </span><span class="s1">parsed.imports[section][</span><span class="s2">&quot;from&quot;</span><span class="s1">][module]:</span>
+                        <span class="s1">star_modules.append(module)</span>
+                    <span class="s0">else</span><span class="s1">:</span>
+                        <span class="s1">other_modules.append(module)</span>
+                <span class="s1">from_modules = star_modules + other_modules</span>
+
+        <span class="s1">straight_imports = _with_straight_imports(</span>
+            <span class="s1">parsed, config, straight_modules, section, remove_imports, import_type</span>
+        <span class="s1">)</span>
+        <span class="s1">from_imports = _with_from_imports(</span>
+            <span class="s1">parsed, config, from_modules, section, remove_imports, import_type</span>
+        <span class="s1">)</span>
+
+        <span class="s1">lines_between = [</span><span class="s2">&quot;&quot;</span><span class="s1">] * (</span>
+            <span class="s1">config.lines_between_types </span><span class="s0">if </span><span class="s1">from_modules </span><span class="s0">and </span><span class="s1">straight_modules </span><span class="s0">else </span><span class="s4">0</span>
+        <span class="s1">)</span>
+        <span class="s0">if </span><span class="s1">config.from_first:</span>
+            <span class="s1">section_output = from_imports + lines_between + straight_imports</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">section_output = straight_imports + lines_between + from_imports</span>
+
+        <span class="s0">if </span><span class="s1">config.force_sort_within_sections:</span>
+            <span class="s3"># collapse comments</span>
+            <span class="s1">comments_above = []</span>
+            <span class="s1">new_section_output: List[str] = []</span>
+            <span class="s0">for </span><span class="s1">line </span><span class="s0">in </span><span class="s1">section_output:</span>
+                <span class="s0">if not </span><span class="s1">line:</span>
+                    <span class="s0">continue</span>
+                <span class="s0">if </span><span class="s1">line.startswith(</span><span class="s2">&quot;#&quot;</span><span class="s1">):</span>
+                    <span class="s1">comments_above.append(line)</span>
+                <span class="s0">elif </span><span class="s1">comments_above:</span>
+                    <span class="s1">new_section_output.append(_LineWithComments(line, comments_above))</span>
+                    <span class="s1">comments_above = []</span>
+                <span class="s0">else</span><span class="s1">:</span>
+                    <span class="s1">new_section_output.append(line)</span>
+            <span class="s3"># only_sections options is not imposed if force_sort_within_sections is True</span>
+            <span class="s1">new_section_output = sorting.naturally(</span>
+                <span class="s1">new_section_output,</span>
+                <span class="s1">key=partial(sorting.section_key, config=config),</span>
+            <span class="s1">)</span>
+
+            <span class="s3"># uncollapse comments</span>
+            <span class="s1">section_output = []</span>
+            <span class="s0">for </span><span class="s1">line </span><span class="s0">in </span><span class="s1">new_section_output:</span>
+                <span class="s1">comments = getattr(line, </span><span class="s2">&quot;comments&quot;</span><span class="s1">, ())</span>
+                <span class="s0">if </span><span class="s1">comments:</span>
+                    <span class="s1">section_output.extend(comments)</span>
+                <span class="s1">section_output.append(str(line))</span>
+
+        <span class="s1">section_name = section</span>
+        <span class="s1">no_lines_before = section_name </span><span class="s0">in </span><span class="s1">config.no_lines_before</span>
+
+        <span class="s0">if </span><span class="s1">section_output:</span>
+            <span class="s0">if </span><span class="s1">section_name </span><span class="s0">in </span><span class="s1">parsed.place_imports:</span>
+                <span class="s1">parsed.place_imports[section_name] = section_output</span>
+                <span class="s0">continue</span>
+
+            <span class="s1">section_title = config.import_headings.get(section_name.lower(), </span><span class="s2">&quot;&quot;</span><span class="s1">)</span>
+            <span class="s0">if </span><span class="s1">section_title </span><span class="s0">and </span><span class="s1">section_title </span><span class="s0">not in </span><span class="s1">seen_headings:</span>
+                <span class="s0">if </span><span class="s1">config.dedup_headings:</span>
+                    <span class="s1">seen_headings.add(section_title)</span>
+                <span class="s1">section_comment = </span><span class="s2">f&quot;# </span><span class="s5">{</span><span class="s1">section_title</span><span class="s5">}</span><span class="s2">&quot;</span>
+                <span class="s0">if </span><span class="s1">section_comment </span><span class="s0">not in </span><span class="s1">parsed.lines_without_imports[</span><span class="s4">0</span><span class="s1">:</span><span class="s4">1</span><span class="s1">]:</span>
+                    <span class="s1">section_output.insert(</span><span class="s4">0</span><span class="s1">, section_comment)</span>
+
+            <span class="s0">if </span><span class="s1">pending_lines_before </span><span class="s0">or not </span><span class="s1">no_lines_before:</span>
+                <span class="s1">output += [</span><span class="s2">&quot;&quot;</span><span class="s1">] * config.lines_between_sections</span>
+
+            <span class="s1">output += section_output</span>
+
+            <span class="s1">pending_lines_before = </span><span class="s0">False</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">pending_lines_before = pending_lines_before </span><span class="s0">or not </span><span class="s1">no_lines_before</span>
+
+    <span class="s0">if </span><span class="s1">config.ensure_newline_before_comments:</span>
+        <span class="s1">output = _ensure_newline_before_comment(output)</span>
+
+    <span class="s0">while </span><span class="s1">output </span><span class="s0">and </span><span class="s1">output[-</span><span class="s4">1</span><span class="s1">].strip() == </span><span class="s2">&quot;&quot;</span><span class="s1">:</span>
+        <span class="s1">output.pop()  </span><span class="s3"># pragma: no cover</span>
+    <span class="s0">while </span><span class="s1">output </span><span class="s0">and </span><span class="s1">output[</span><span class="s4">0</span><span class="s1">].strip() == </span><span class="s2">&quot;&quot;</span><span class="s1">:</span>
+        <span class="s1">output.pop(</span><span class="s4">0</span><span class="s1">)</span>
+
+    <span class="s0">if </span><span class="s1">config.formatting_function:</span>
+        <span class="s1">output = config.formatting_function(</span>
+            <span class="s1">parsed.line_separator.join(output), extension, config</span>
+        <span class="s1">).splitlines()</span>
+
+    <span class="s1">output_at = </span><span class="s4">0</span>
+    <span class="s0">if </span><span class="s1">parsed.import_index &lt; parsed.original_line_count:</span>
+        <span class="s1">output_at = parsed.import_index</span>
+    <span class="s1">formatted_output[output_at:</span><span class="s4">0</span><span class="s1">] = output</span>
+
+    <span class="s0">if </span><span class="s1">output:</span>
+        <span class="s1">imports_tail = output_at + len(output)</span>
+        <span class="s0">while </span><span class="s1">[</span>
+            <span class="s1">character.strip() </span><span class="s0">for </span><span class="s1">character </span><span class="s0">in </span><span class="s1">formatted_output[imports_tail : imports_tail + </span><span class="s4">1</span><span class="s1">]</span>
+        <span class="s1">] == [</span><span class="s2">&quot;&quot;</span><span class="s1">]:</span>
+            <span class="s1">formatted_output.pop(imports_tail)</span>
+
+        <span class="s0">if </span><span class="s1">len(formatted_output) &gt; imports_tail:</span>
+            <span class="s1">next_construct = </span><span class="s2">&quot;&quot;</span>
+            <span class="s1">tail = formatted_output[imports_tail:]</span>
+
+            <span class="s0">for </span><span class="s1">index, line </span><span class="s0">in </span><span class="s1">enumerate(tail):</span>
+                <span class="s1">should_skip, in_quote, *_ = parse.skip_line(</span>
+                    <span class="s1">line,</span>
+                    <span class="s1">in_quote=</span><span class="s2">&quot;&quot;</span><span class="s1">,</span>
+                    <span class="s1">index=len(formatted_output),</span>
+                    <span class="s1">section_comments=config.section_comments,</span>
+                    <span class="s1">needs_import=</span><span class="s0">False</span><span class="s1">,</span>
+                <span class="s1">)</span>
+                <span class="s0">if not </span><span class="s1">should_skip </span><span class="s0">and </span><span class="s1">line.strip():</span>
+                    <span class="s0">if </span><span class="s1">(</span>
+                        <span class="s1">line.strip().startswith(</span><span class="s2">&quot;#&quot;</span><span class="s1">)</span>
+                        <span class="s0">and </span><span class="s1">len(tail) &gt; (index + </span><span class="s4">1</span><span class="s1">)</span>
+                        <span class="s0">and </span><span class="s1">tail[index + </span><span class="s4">1</span><span class="s1">].strip()</span>
+                    <span class="s1">):</span>
+                        <span class="s0">continue</span>
+                    <span class="s1">next_construct = line</span>
+                    <span class="s0">break</span>
+                <span class="s0">if </span><span class="s1">in_quote:</span>
+                    <span class="s1">next_construct = line</span>
+                    <span class="s0">break</span>
+
+            <span class="s0">if </span><span class="s1">config.lines_after_imports != -</span><span class="s4">1</span><span class="s1">:</span>
+                <span class="s1">formatted_output[imports_tail:</span><span class="s4">0</span><span class="s1">] = [</span>
+                    <span class="s2">&quot;&quot; </span><span class="s0">for </span><span class="s1">line </span><span class="s0">in </span><span class="s1">range(config.lines_after_imports)</span>
+                <span class="s1">]</span>
+            <span class="s0">elif </span><span class="s1">extension != </span><span class="s2">&quot;pyi&quot; </span><span class="s0">and </span><span class="s1">next_construct.startswith(STATEMENT_DECLARATIONS):</span>
+                <span class="s1">formatted_output[imports_tail:</span><span class="s4">0</span><span class="s1">] = [</span><span class="s2">&quot;&quot;</span><span class="s1">, </span><span class="s2">&quot;&quot;</span><span class="s1">]</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">formatted_output[imports_tail:</span><span class="s4">0</span><span class="s1">] = [</span><span class="s2">&quot;&quot;</span><span class="s1">]</span>
+
+    <span class="s0">if </span><span class="s1">parsed.place_imports:</span>
+        <span class="s1">new_out_lines = []</span>
+        <span class="s0">for </span><span class="s1">index, line </span><span class="s0">in </span><span class="s1">enumerate(formatted_output):</span>
+            <span class="s1">new_out_lines.append(line)</span>
+            <span class="s0">if </span><span class="s1">line </span><span class="s0">in </span><span class="s1">parsed.import_placements:</span>
+                <span class="s1">new_out_lines.extend(parsed.place_imports[parsed.import_placements[line]])</span>
+                <span class="s0">if </span><span class="s1">(</span>
+                    <span class="s1">len(formatted_output) &lt;= (index + </span><span class="s4">1</span><span class="s1">)</span>
+                    <span class="s0">or </span><span class="s1">formatted_output[index + </span><span class="s4">1</span><span class="s1">].strip() != </span><span class="s2">&quot;&quot;</span>
+                <span class="s1">):</span>
+                    <span class="s1">new_out_lines.append(</span><span class="s2">&quot;&quot;</span><span class="s1">)</span>
+        <span class="s1">formatted_output = new_out_lines</span>
+
+    <span class="s0">return </span><span class="s1">_output_as_string(formatted_output, parsed.line_separator)</span>
+
+
+<span class="s0">def </span><span class="s1">_with_from_imports(</span>
+    <span class="s1">parsed: parse.ParsedContent,</span>
+    <span class="s1">config: Config,</span>
+    <span class="s1">from_modules: Iterable[str],</span>
+    <span class="s1">section: str,</span>
+    <span class="s1">remove_imports: List[str],</span>
+    <span class="s1">import_type: str,</span>
+<span class="s1">) -&gt; List[str]:</span>
+    <span class="s1">output: List[str] = []</span>
+    <span class="s0">for </span><span class="s1">module </span><span class="s0">in </span><span class="s1">from_modules:</span>
+        <span class="s0">if </span><span class="s1">module </span><span class="s0">in </span><span class="s1">remove_imports:</span>
+            <span class="s0">continue</span>
+
+        <span class="s1">import_start = </span><span class="s2">f&quot;from </span><span class="s5">{</span><span class="s1">module</span><span class="s5">} {</span><span class="s1">import_type</span><span class="s5">} </span><span class="s2">&quot;</span>
+        <span class="s1">from_imports = list(parsed.imports[section][</span><span class="s2">&quot;from&quot;</span><span class="s1">][module])</span>
+        <span class="s0">if </span><span class="s1">(</span>
+            <span class="s0">not </span><span class="s1">config.no_inline_sort</span>
+            <span class="s0">or </span><span class="s1">(config.force_single_line </span><span class="s0">and </span><span class="s1">module </span><span class="s0">not in </span><span class="s1">config.single_line_exclusions)</span>
+        <span class="s1">) </span><span class="s0">and not </span><span class="s1">config.only_sections:</span>
+            <span class="s1">from_imports = sorting.naturally(</span>
+                <span class="s1">from_imports,</span>
+                <span class="s1">key=</span><span class="s0">lambda </span><span class="s1">key: sorting.module_key(</span>
+                    <span class="s1">key,</span>
+                    <span class="s1">config,</span>
+                    <span class="s0">True</span><span class="s1">,</span>
+                    <span class="s1">config.force_alphabetical_sort_within_sections,</span>
+                    <span class="s1">section_name=section,</span>
+                <span class="s1">),</span>
+                <span class="s1">reverse=config.reverse_sort,</span>
+            <span class="s1">)</span>
+        <span class="s0">if </span><span class="s1">remove_imports:</span>
+            <span class="s1">from_imports = [</span>
+                <span class="s1">line </span><span class="s0">for </span><span class="s1">line </span><span class="s0">in </span><span class="s1">from_imports </span><span class="s0">if </span><span class="s2">f&quot;</span><span class="s5">{</span><span class="s1">module</span><span class="s5">}</span><span class="s2">.</span><span class="s5">{</span><span class="s1">line</span><span class="s5">}</span><span class="s2">&quot; </span><span class="s0">not in </span><span class="s1">remove_imports</span>
+            <span class="s1">]</span>
+
+        <span class="s1">sub_modules = [</span><span class="s2">f&quot;</span><span class="s5">{</span><span class="s1">module</span><span class="s5">}</span><span class="s2">.</span><span class="s5">{</span><span class="s1">from_import</span><span class="s5">}</span><span class="s2">&quot; </span><span class="s0">for </span><span class="s1">from_import </span><span class="s0">in </span><span class="s1">from_imports]</span>
+        <span class="s1">as_imports = {</span>
+            <span class="s1">from_import: [</span>
+                <span class="s2">f&quot;</span><span class="s5">{</span><span class="s1">from_import</span><span class="s5">} </span><span class="s2">as </span><span class="s5">{</span><span class="s1">as_module</span><span class="s5">}</span><span class="s2">&quot; </span><span class="s0">for </span><span class="s1">as_module </span><span class="s0">in </span><span class="s1">parsed.as_map[</span><span class="s2">&quot;from&quot;</span><span class="s1">][sub_module]</span>
+            <span class="s1">]</span>
+            <span class="s0">for </span><span class="s1">from_import, sub_module </span><span class="s0">in </span><span class="s1">zip(from_imports, sub_modules)</span>
+            <span class="s0">if </span><span class="s1">sub_module </span><span class="s0">in </span><span class="s1">parsed.as_map[</span><span class="s2">&quot;from&quot;</span><span class="s1">]</span>
+        <span class="s1">}</span>
+        <span class="s0">if </span><span class="s1">config.combine_as_imports </span><span class="s0">and not </span><span class="s1">(</span><span class="s2">&quot;*&quot; </span><span class="s0">in </span><span class="s1">from_imports </span><span class="s0">and </span><span class="s1">config.combine_star):</span>
+            <span class="s0">if not </span><span class="s1">config.no_inline_sort:</span>
+                <span class="s0">for </span><span class="s1">as_import </span><span class="s0">in </span><span class="s1">as_imports:</span>
+                    <span class="s0">if not </span><span class="s1">config.only_sections:</span>
+                        <span class="s1">as_imports[as_import] = sorting.naturally(as_imports[as_import])</span>
+            <span class="s0">for </span><span class="s1">from_import </span><span class="s0">in </span><span class="s1">copy.copy(from_imports):</span>
+                <span class="s0">if </span><span class="s1">from_import </span><span class="s0">in </span><span class="s1">as_imports:</span>
+                    <span class="s1">idx = from_imports.index(from_import)</span>
+                    <span class="s0">if </span><span class="s1">parsed.imports[section][</span><span class="s2">&quot;from&quot;</span><span class="s1">][module][from_import]:</span>
+                        <span class="s1">from_imports[(idx + </span><span class="s4">1</span><span class="s1">) : (idx + </span><span class="s4">1</span><span class="s1">)] = as_imports.pop(from_import)</span>
+                    <span class="s0">else</span><span class="s1">:</span>
+                        <span class="s1">from_imports[idx : (idx + </span><span class="s4">1</span><span class="s1">)] = as_imports.pop(from_import)</span>
+
+        <span class="s1">only_show_as_imports = </span><span class="s0">False</span>
+        <span class="s1">comments = parsed.categorized_comments[</span><span class="s2">&quot;from&quot;</span><span class="s1">].pop(module, ())</span>
+        <span class="s1">above_comments = parsed.categorized_comments[</span><span class="s2">&quot;above&quot;</span><span class="s1">][</span><span class="s2">&quot;from&quot;</span><span class="s1">].pop(module, </span><span class="s0">None</span><span class="s1">)</span>
+        <span class="s0">while </span><span class="s1">from_imports:</span>
+            <span class="s0">if </span><span class="s1">above_comments:</span>
+                <span class="s1">output.extend(above_comments)</span>
+                <span class="s1">above_comments = </span><span class="s0">None</span>
+
+            <span class="s0">if </span><span class="s2">&quot;*&quot; </span><span class="s0">in </span><span class="s1">from_imports </span><span class="s0">and </span><span class="s1">config.combine_star:</span>
+                <span class="s1">import_statement = wrap.line(</span>
+                    <span class="s1">with_comments(</span>
+                        <span class="s1">_with_star_comments(parsed, module, list(comments </span><span class="s0">or </span><span class="s1">())),</span>
+                        <span class="s2">f&quot;</span><span class="s5">{</span><span class="s1">import_start</span><span class="s5">}</span><span class="s2">*&quot;</span><span class="s1">,</span>
+                        <span class="s1">removed=config.ignore_comments,</span>
+                        <span class="s1">comment_prefix=config.comment_prefix,</span>
+                    <span class="s1">),</span>
+                    <span class="s1">parsed.line_separator,</span>
+                    <span class="s1">config,</span>
+                <span class="s1">)</span>
+                <span class="s1">from_imports = [</span>
+                    <span class="s1">from_import </span><span class="s0">for </span><span class="s1">from_import </span><span class="s0">in </span><span class="s1">from_imports </span><span class="s0">if </span><span class="s1">from_import </span><span class="s0">in </span><span class="s1">as_imports</span>
+                <span class="s1">]</span>
+                <span class="s1">only_show_as_imports = </span><span class="s0">True</span>
+            <span class="s0">elif </span><span class="s1">config.force_single_line </span><span class="s0">and </span><span class="s1">module </span><span class="s0">not in </span><span class="s1">config.single_line_exclusions:</span>
+                <span class="s1">import_statement = </span><span class="s2">&quot;&quot;</span>
+                <span class="s0">while </span><span class="s1">from_imports:</span>
+                    <span class="s1">from_import = from_imports.pop(</span><span class="s4">0</span><span class="s1">)</span>
+                    <span class="s1">single_import_line = with_comments(</span>
+                        <span class="s1">comments,</span>
+                        <span class="s1">import_start + from_import,</span>
+                        <span class="s1">removed=config.ignore_comments,</span>
+                        <span class="s1">comment_prefix=config.comment_prefix,</span>
+                    <span class="s1">)</span>
+                    <span class="s1">comment = (</span>
+                        <span class="s1">parsed.categorized_comments[</span><span class="s2">&quot;nested&quot;</span><span class="s1">].get(module, {}).pop(from_import, </span><span class="s0">None</span><span class="s1">)</span>
+                    <span class="s1">)</span>
+                    <span class="s0">if </span><span class="s1">comment:</span>
+                        <span class="s1">single_import_line += (</span>
+                            <span class="s2">f&quot;</span><span class="s5">{</span><span class="s1">comments </span><span class="s0">and </span><span class="s2">';' </span><span class="s0">or </span><span class="s1">config.comment_prefix</span><span class="s5">} </span><span class="s2">&quot; f&quot;</span><span class="s5">{</span><span class="s1">comment</span><span class="s5">}</span><span class="s2">&quot;</span>
+                        <span class="s1">)</span>
+                    <span class="s0">if </span><span class="s1">from_import </span><span class="s0">in </span><span class="s1">as_imports:</span>
+                        <span class="s0">if </span><span class="s1">(</span>
+                            <span class="s1">parsed.imports[section][</span><span class="s2">&quot;from&quot;</span><span class="s1">][module][from_import]</span>
+                            <span class="s0">and not </span><span class="s1">only_show_as_imports</span>
+                        <span class="s1">):</span>
+                            <span class="s1">output.append(</span>
+                                <span class="s1">wrap.line(single_import_line, parsed.line_separator, config)</span>
+                            <span class="s1">)</span>
+                        <span class="s1">from_comments = parsed.categorized_comments[</span><span class="s2">&quot;straight&quot;</span><span class="s1">].get(</span>
+                            <span class="s2">f&quot;</span><span class="s5">{</span><span class="s1">module</span><span class="s5">}</span><span class="s2">.</span><span class="s5">{</span><span class="s1">from_import</span><span class="s5">}</span><span class="s2">&quot;</span>
+                        <span class="s1">)</span>
+
+                        <span class="s0">if not </span><span class="s1">config.only_sections:</span>
+                            <span class="s1">output.extend(</span>
+                                <span class="s1">with_comments(</span>
+                                    <span class="s1">from_comments,</span>
+                                    <span class="s1">wrap.line(</span>
+                                        <span class="s1">import_start + as_import, parsed.line_separator, config</span>
+                                    <span class="s1">),</span>
+                                    <span class="s1">removed=config.ignore_comments,</span>
+                                    <span class="s1">comment_prefix=config.comment_prefix,</span>
+                                <span class="s1">)</span>
+                                <span class="s0">for </span><span class="s1">as_import </span><span class="s0">in </span><span class="s1">sorting.naturally(as_imports[from_import])</span>
+                            <span class="s1">)</span>
+
+                        <span class="s0">else</span><span class="s1">:</span>
+                            <span class="s1">output.extend(</span>
+                                <span class="s1">with_comments(</span>
+                                    <span class="s1">from_comments,</span>
+                                    <span class="s1">wrap.line(</span>
+                                        <span class="s1">import_start + as_import, parsed.line_separator, config</span>
+                                    <span class="s1">),</span>
+                                    <span class="s1">removed=config.ignore_comments,</span>
+                                    <span class="s1">comment_prefix=config.comment_prefix,</span>
+                                <span class="s1">)</span>
+                                <span class="s0">for </span><span class="s1">as_import </span><span class="s0">in </span><span class="s1">as_imports[from_import]</span>
+                            <span class="s1">)</span>
+                    <span class="s0">else</span><span class="s1">:</span>
+                        <span class="s1">output.append(wrap.line(single_import_line, parsed.line_separator, config))</span>
+                    <span class="s1">comments = </span><span class="s0">None</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s0">while </span><span class="s1">from_imports </span><span class="s0">and </span><span class="s1">from_imports[</span><span class="s4">0</span><span class="s1">] </span><span class="s0">in </span><span class="s1">as_imports:</span>
+                    <span class="s1">from_import = from_imports.pop(</span><span class="s4">0</span><span class="s1">)</span>
+
+                    <span class="s0">if not </span><span class="s1">config.only_sections:</span>
+                        <span class="s1">as_imports[from_import] = sorting.naturally(as_imports[from_import])</span>
+                    <span class="s1">from_comments = (</span>
+                        <span class="s1">parsed.categorized_comments[</span><span class="s2">&quot;straight&quot;</span><span class="s1">].get(</span><span class="s2">f&quot;</span><span class="s5">{</span><span class="s1">module</span><span class="s5">}</span><span class="s2">.</span><span class="s5">{</span><span class="s1">from_import</span><span class="s5">}</span><span class="s2">&quot;</span><span class="s1">) </span><span class="s0">or </span><span class="s1">[]</span>
+                    <span class="s1">)</span>
+                    <span class="s0">if </span><span class="s1">(</span>
+                        <span class="s1">parsed.imports[section][</span><span class="s2">&quot;from&quot;</span><span class="s1">][module][from_import]</span>
+                        <span class="s0">and not </span><span class="s1">only_show_as_imports</span>
+                    <span class="s1">):</span>
+                        <span class="s1">specific_comment = (</span>
+                            <span class="s1">parsed.categorized_comments[</span><span class="s2">&quot;nested&quot;</span><span class="s1">]</span>
+                            <span class="s1">.get(module, {})</span>
+                            <span class="s1">.pop(from_import, </span><span class="s0">None</span><span class="s1">)</span>
+                        <span class="s1">)</span>
+                        <span class="s0">if </span><span class="s1">specific_comment:</span>
+                            <span class="s1">from_comments.append(specific_comment)</span>
+                        <span class="s1">output.append(</span>
+                            <span class="s1">wrap.line(</span>
+                                <span class="s1">with_comments(</span>
+                                    <span class="s1">from_comments,</span>
+                                    <span class="s1">import_start + from_import,</span>
+                                    <span class="s1">removed=config.ignore_comments,</span>
+                                    <span class="s1">comment_prefix=config.comment_prefix,</span>
+                                <span class="s1">),</span>
+                                <span class="s1">parsed.line_separator,</span>
+                                <span class="s1">config,</span>
+                            <span class="s1">)</span>
+                        <span class="s1">)</span>
+                        <span class="s1">from_comments = []</span>
+
+                    <span class="s0">for </span><span class="s1">as_import </span><span class="s0">in </span><span class="s1">as_imports[from_import]:</span>
+                        <span class="s1">specific_comment = (</span>
+                            <span class="s1">parsed.categorized_comments[</span><span class="s2">&quot;nested&quot;</span><span class="s1">]</span>
+                            <span class="s1">.get(module, {})</span>
+                            <span class="s1">.pop(as_import, </span><span class="s0">None</span><span class="s1">)</span>
+                        <span class="s1">)</span>
+                        <span class="s0">if </span><span class="s1">specific_comment:</span>
+                            <span class="s1">from_comments.append(specific_comment)</span>
+
+                        <span class="s1">output.append(</span>
+                            <span class="s1">wrap.line(</span>
+                                <span class="s1">with_comments(</span>
+                                    <span class="s1">from_comments,</span>
+                                    <span class="s1">import_start + as_import,</span>
+                                    <span class="s1">removed=config.ignore_comments,</span>
+                                    <span class="s1">comment_prefix=config.comment_prefix,</span>
+                                <span class="s1">),</span>
+                                <span class="s1">parsed.line_separator,</span>
+                                <span class="s1">config,</span>
+                            <span class="s1">)</span>
+                        <span class="s1">)</span>
+
+                        <span class="s1">from_comments = []</span>
+
+                <span class="s0">if </span><span class="s2">&quot;*&quot; </span><span class="s0">in </span><span class="s1">from_imports:</span>
+                    <span class="s1">output.append(</span>
+                        <span class="s1">with_comments(</span>
+                            <span class="s1">_with_star_comments(parsed, module, list(comments </span><span class="s0">or </span><span class="s1">())),</span>
+                            <span class="s2">f&quot;</span><span class="s5">{</span><span class="s1">import_start</span><span class="s5">}</span><span class="s2">*&quot;</span><span class="s1">,</span>
+                            <span class="s1">removed=config.ignore_comments,</span>
+                            <span class="s1">comment_prefix=config.comment_prefix,</span>
+                        <span class="s1">)</span>
+                    <span class="s1">)</span>
+                    <span class="s1">from_imports.remove(</span><span class="s2">&quot;*&quot;</span><span class="s1">)</span>
+                    <span class="s1">comments = </span><span class="s0">None</span>
+
+                <span class="s0">for </span><span class="s1">from_import </span><span class="s0">in </span><span class="s1">copy.copy(from_imports):</span>
+                    <span class="s1">comment = (</span>
+                        <span class="s1">parsed.categorized_comments[</span><span class="s2">&quot;nested&quot;</span><span class="s1">].get(module, {}).pop(from_import, </span><span class="s0">None</span><span class="s1">)</span>
+                    <span class="s1">)</span>
+                    <span class="s0">if </span><span class="s1">comment:</span>
+                        <span class="s1">from_imports.remove(from_import)</span>
+                        <span class="s0">if </span><span class="s1">from_imports:</span>
+                            <span class="s1">use_comments = []</span>
+                        <span class="s0">else</span><span class="s1">:</span>
+                            <span class="s1">use_comments = comments</span>
+                            <span class="s1">comments = </span><span class="s0">None</span>
+                        <span class="s1">single_import_line = with_comments(</span>
+                            <span class="s1">use_comments,</span>
+                            <span class="s1">import_start + from_import,</span>
+                            <span class="s1">removed=config.ignore_comments,</span>
+                            <span class="s1">comment_prefix=config.comment_prefix,</span>
+                        <span class="s1">)</span>
+                        <span class="s1">single_import_line += (</span>
+                            <span class="s2">f&quot;</span><span class="s5">{</span><span class="s1">use_comments </span><span class="s0">and </span><span class="s2">';' </span><span class="s0">or </span><span class="s1">config.comment_prefix</span><span class="s5">} </span><span class="s2">&quot; f&quot;</span><span class="s5">{</span><span class="s1">comment</span><span class="s5">}</span><span class="s2">&quot;</span>
+                        <span class="s1">)</span>
+                        <span class="s1">output.append(wrap.line(single_import_line, parsed.line_separator, config))</span>
+
+                <span class="s1">from_import_section = []</span>
+                <span class="s0">while </span><span class="s1">from_imports </span><span class="s0">and </span><span class="s1">(</span>
+                    <span class="s1">from_imports[</span><span class="s4">0</span><span class="s1">] </span><span class="s0">not in </span><span class="s1">as_imports</span>
+                    <span class="s0">or </span><span class="s1">(</span>
+                        <span class="s1">config.combine_as_imports</span>
+                        <span class="s0">and </span><span class="s1">parsed.imports[section][</span><span class="s2">&quot;from&quot;</span><span class="s1">][module][from_import]</span>
+                    <span class="s1">)</span>
+                <span class="s1">):</span>
+                    <span class="s1">from_import_section.append(from_imports.pop(</span><span class="s4">0</span><span class="s1">))</span>
+                <span class="s0">if </span><span class="s1">config.combine_as_imports:</span>
+                    <span class="s1">comments = (comments </span><span class="s0">or </span><span class="s1">[]) + list(</span>
+                        <span class="s1">parsed.categorized_comments[</span><span class="s2">&quot;from&quot;</span><span class="s1">].pop(</span><span class="s2">f&quot;</span><span class="s5">{</span><span class="s1">module</span><span class="s5">}</span><span class="s2">.__combined_as__&quot;</span><span class="s1">, ())</span>
+                    <span class="s1">)</span>
+                <span class="s1">import_statement = with_comments(</span>
+                    <span class="s1">comments,</span>
+                    <span class="s1">import_start + (</span><span class="s2">&quot;, &quot;</span><span class="s1">).join(from_import_section),</span>
+                    <span class="s1">removed=config.ignore_comments,</span>
+                    <span class="s1">comment_prefix=config.comment_prefix,</span>
+                <span class="s1">)</span>
+                <span class="s0">if not </span><span class="s1">from_import_section:</span>
+                    <span class="s1">import_statement = </span><span class="s2">&quot;&quot;</span>
+
+                <span class="s1">do_multiline_reformat = </span><span class="s0">False</span>
+
+                <span class="s1">force_grid_wrap = config.force_grid_wrap</span>
+                <span class="s0">if </span><span class="s1">force_grid_wrap </span><span class="s0">and </span><span class="s1">len(from_import_section) &gt;= force_grid_wrap:</span>
+                    <span class="s1">do_multiline_reformat = </span><span class="s0">True</span>
+
+                <span class="s0">if </span><span class="s1">len(import_statement) &gt; config.line_length </span><span class="s0">and </span><span class="s1">len(from_import_section) &gt; </span><span class="s4">1</span><span class="s1">:</span>
+                    <span class="s1">do_multiline_reformat = </span><span class="s0">True</span>
+
+                <span class="s3"># If line too long AND have imports AND we are</span>
+                <span class="s3"># NOT using GRID or VERTICAL wrap modes</span>
+                <span class="s0">if </span><span class="s1">(</span>
+                    <span class="s1">len(import_statement) &gt; config.line_length</span>
+                    <span class="s0">and </span><span class="s1">len(from_import_section) &gt; </span><span class="s4">0</span>
+                    <span class="s0">and </span><span class="s1">config.multi_line_output</span>
+                    <span class="s0">not in </span><span class="s1">(wrap.Modes.GRID, wrap.Modes.VERTICAL)  </span><span class="s3"># type: ignore</span>
+                <span class="s1">):</span>
+                    <span class="s1">do_multiline_reformat = </span><span class="s0">True</span>
+
+                <span class="s0">if </span><span class="s1">do_multiline_reformat:</span>
+                    <span class="s1">import_statement = wrap.import_statement(</span>
+                        <span class="s1">import_start=import_start,</span>
+                        <span class="s1">from_imports=from_import_section,</span>
+                        <span class="s1">comments=comments,</span>
+                        <span class="s1">line_separator=parsed.line_separator,</span>
+                        <span class="s1">config=config,</span>
+                    <span class="s1">)</span>
+                    <span class="s0">if </span><span class="s1">config.multi_line_output == wrap.Modes.GRID:  </span><span class="s3"># type: ignore</span>
+                        <span class="s1">other_import_statement = wrap.import_statement(</span>
+                            <span class="s1">import_start=import_start,</span>
+                            <span class="s1">from_imports=from_import_section,</span>
+                            <span class="s1">comments=comments,</span>
+                            <span class="s1">line_separator=parsed.line_separator,</span>
+                            <span class="s1">config=config,</span>
+                            <span class="s1">multi_line_output=wrap.Modes.VERTICAL_GRID,  </span><span class="s3"># type: ignore</span>
+                        <span class="s1">)</span>
+                        <span class="s0">if </span><span class="s1">(</span>
+                            <span class="s1">max(</span>
+                                <span class="s1">len(import_line)</span>
+                                <span class="s0">for </span><span class="s1">import_line </span><span class="s0">in </span><span class="s1">import_statement.split(parsed.line_separator)</span>
+                            <span class="s1">)</span>
+                            <span class="s1">&gt; config.line_length</span>
+                        <span class="s1">):</span>
+                            <span class="s1">import_statement = other_import_statement</span>
+                <span class="s0">if not </span><span class="s1">do_multiline_reformat </span><span class="s0">and </span><span class="s1">len(import_statement) &gt; config.line_length:</span>
+                    <span class="s1">import_statement = wrap.line(import_statement, parsed.line_separator, config)</span>
+
+            <span class="s0">if </span><span class="s1">import_statement:</span>
+                <span class="s1">output.append(import_statement)</span>
+    <span class="s0">return </span><span class="s1">output</span>
+
+
+<span class="s0">def </span><span class="s1">_with_straight_imports(</span>
+    <span class="s1">parsed: parse.ParsedContent,</span>
+    <span class="s1">config: Config,</span>
+    <span class="s1">straight_modules: Iterable[str],</span>
+    <span class="s1">section: str,</span>
+    <span class="s1">remove_imports: List[str],</span>
+    <span class="s1">import_type: str,</span>
+<span class="s1">) -&gt; List[str]:</span>
+    <span class="s1">output: List[str] = []</span>
+
+    <span class="s1">as_imports = any((module </span><span class="s0">in </span><span class="s1">parsed.as_map[</span><span class="s2">&quot;straight&quot;</span><span class="s1">] </span><span class="s0">for </span><span class="s1">module </span><span class="s0">in </span><span class="s1">straight_modules))</span>
+
+    <span class="s3"># combine_straight_imports only works for bare imports, 'as' imports not included</span>
+    <span class="s0">if </span><span class="s1">config.combine_straight_imports </span><span class="s0">and not </span><span class="s1">as_imports:</span>
+        <span class="s0">if not </span><span class="s1">straight_modules:</span>
+            <span class="s0">return </span><span class="s1">[]</span>
+
+        <span class="s1">above_comments: List[str] = []</span>
+        <span class="s1">inline_comments: List[str] = []</span>
+
+        <span class="s0">for </span><span class="s1">module </span><span class="s0">in </span><span class="s1">straight_modules:</span>
+            <span class="s0">if </span><span class="s1">module </span><span class="s0">in </span><span class="s1">parsed.categorized_comments[</span><span class="s2">&quot;above&quot;</span><span class="s1">][</span><span class="s2">&quot;straight&quot;</span><span class="s1">]:</span>
+                <span class="s1">above_comments.extend(parsed.categorized_comments[</span><span class="s2">&quot;above&quot;</span><span class="s1">][</span><span class="s2">&quot;straight&quot;</span><span class="s1">].pop(module))</span>
+            <span class="s0">if </span><span class="s1">module </span><span class="s0">in </span><span class="s1">parsed.categorized_comments[</span><span class="s2">&quot;straight&quot;</span><span class="s1">]:</span>
+                <span class="s1">inline_comments.extend(parsed.categorized_comments[</span><span class="s2">&quot;straight&quot;</span><span class="s1">][module])</span>
+
+        <span class="s1">combined_straight_imports = </span><span class="s2">&quot;, &quot;</span><span class="s1">.join(straight_modules)</span>
+        <span class="s0">if </span><span class="s1">inline_comments:</span>
+            <span class="s1">combined_inline_comments = </span><span class="s2">&quot; &quot;</span><span class="s1">.join(inline_comments)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">combined_inline_comments = </span><span class="s2">&quot;&quot;</span>
+
+        <span class="s1">output.extend(above_comments)</span>
+
+        <span class="s0">if </span><span class="s1">combined_inline_comments:</span>
+            <span class="s1">output.append(</span>
+                <span class="s2">f&quot;</span><span class="s5">{</span><span class="s1">import_type</span><span class="s5">} {</span><span class="s1">combined_straight_imports</span><span class="s5">}  </span><span class="s2"># </span><span class="s5">{</span><span class="s1">combined_inline_comments</span><span class="s5">}</span><span class="s2">&quot;</span>
+            <span class="s1">)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">output.append(</span><span class="s2">f&quot;</span><span class="s5">{</span><span class="s1">import_type</span><span class="s5">} {</span><span class="s1">combined_straight_imports</span><span class="s5">}</span><span class="s2">&quot;</span><span class="s1">)</span>
+
+        <span class="s0">return </span><span class="s1">output</span>
+
+    <span class="s0">for </span><span class="s1">module </span><span class="s0">in </span><span class="s1">straight_modules:</span>
+        <span class="s0">if </span><span class="s1">module </span><span class="s0">in </span><span class="s1">remove_imports:</span>
+            <span class="s0">continue</span>
+
+        <span class="s1">import_definition = []</span>
+        <span class="s0">if </span><span class="s1">module </span><span class="s0">in </span><span class="s1">parsed.as_map[</span><span class="s2">&quot;straight&quot;</span><span class="s1">]:</span>
+            <span class="s0">if </span><span class="s1">parsed.imports[section][</span><span class="s2">&quot;straight&quot;</span><span class="s1">][module]:</span>
+                <span class="s1">import_definition.append((</span><span class="s2">f&quot;</span><span class="s5">{</span><span class="s1">import_type</span><span class="s5">} {</span><span class="s1">module</span><span class="s5">}</span><span class="s2">&quot;</span><span class="s1">, module))</span>
+            <span class="s1">import_definition.extend(</span>
+                <span class="s1">(</span><span class="s2">f&quot;</span><span class="s5">{</span><span class="s1">import_type</span><span class="s5">} {</span><span class="s1">module</span><span class="s5">} </span><span class="s2">as </span><span class="s5">{</span><span class="s1">as_import</span><span class="s5">}</span><span class="s2">&quot;</span><span class="s1">, </span><span class="s2">f&quot;</span><span class="s5">{</span><span class="s1">module</span><span class="s5">} </span><span class="s2">as </span><span class="s5">{</span><span class="s1">as_import</span><span class="s5">}</span><span class="s2">&quot;</span><span class="s1">)</span>
+                <span class="s0">for </span><span class="s1">as_import </span><span class="s0">in </span><span class="s1">parsed.as_map[</span><span class="s2">&quot;straight&quot;</span><span class="s1">][module]</span>
+            <span class="s1">)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">import_definition.append((</span><span class="s2">f&quot;</span><span class="s5">{</span><span class="s1">import_type</span><span class="s5">} {</span><span class="s1">module</span><span class="s5">}</span><span class="s2">&quot;</span><span class="s1">, module))</span>
+
+        <span class="s1">comments_above = parsed.categorized_comments[</span><span class="s2">&quot;above&quot;</span><span class="s1">][</span><span class="s2">&quot;straight&quot;</span><span class="s1">].pop(module, </span><span class="s0">None</span><span class="s1">)</span>
+        <span class="s0">if </span><span class="s1">comments_above:</span>
+            <span class="s1">output.extend(comments_above)</span>
+        <span class="s1">output.extend(</span>
+            <span class="s1">with_comments(</span>
+                <span class="s1">parsed.categorized_comments[</span><span class="s2">&quot;straight&quot;</span><span class="s1">].get(imodule),</span>
+                <span class="s1">idef,</span>
+                <span class="s1">removed=config.ignore_comments,</span>
+                <span class="s1">comment_prefix=config.comment_prefix,</span>
+            <span class="s1">)</span>
+            <span class="s0">for </span><span class="s1">idef, imodule </span><span class="s0">in </span><span class="s1">import_definition</span>
+        <span class="s1">)</span>
+
+    <span class="s0">return </span><span class="s1">output</span>
+
+
+<span class="s0">def </span><span class="s1">_output_as_string(lines: List[str], line_separator: str) -&gt; str:</span>
+    <span class="s0">return </span><span class="s1">line_separator.join(_normalize_empty_lines(lines))</span>
+
+
+<span class="s0">def </span><span class="s1">_normalize_empty_lines(lines: List[str]) -&gt; List[str]:</span>
+    <span class="s0">while </span><span class="s1">lines </span><span class="s0">and </span><span class="s1">lines[-</span><span class="s4">1</span><span class="s1">].strip() == </span><span class="s2">&quot;&quot;</span><span class="s1">:</span>
+        <span class="s1">lines.pop(-</span><span class="s4">1</span><span class="s1">)</span>
+
+    <span class="s1">lines.append(</span><span class="s2">&quot;&quot;</span><span class="s1">)</span>
+    <span class="s0">return </span><span class="s1">lines</span>
+
+
+<span class="s0">class </span><span class="s1">_LineWithComments(str):</span>
+    <span class="s0">def </span><span class="s1">__new__(cls, value, comments):</span>
+        <span class="s1">instance = super().__new__(cls, value)  </span><span class="s3"># type: ignore</span>
+        <span class="s1">instance.comments = comments</span>
+        <span class="s0">return </span><span class="s1">instance</span>
+
+
+<span class="s0">def </span><span class="s1">_ensure_newline_before_comment(output):</span>
+    <span class="s1">new_output: List[str] = []</span>
+
+    <span class="s0">def </span><span class="s1">is_comment(line):</span>
+        <span class="s0">return </span><span class="s1">line </span><span class="s0">and </span><span class="s1">line.startswith(</span><span class="s2">&quot;#&quot;</span><span class="s1">)</span>
+
+    <span class="s0">for </span><span class="s1">line, prev_line </span><span class="s0">in </span><span class="s1">zip(output, [</span><span class="s0">None</span><span class="s1">] + output):</span>
+        <span class="s0">if </span><span class="s1">is_comment(line) </span><span class="s0">and </span><span class="s1">prev_line != </span><span class="s2">&quot;&quot; </span><span class="s0">and not </span><span class="s1">is_comment(prev_line):</span>
+            <span class="s1">new_output.append(</span><span class="s2">&quot;&quot;</span><span class="s1">)</span>
+        <span class="s1">new_output.append(line)</span>
+    <span class="s0">return </span><span class="s1">new_output</span>
+
+
+<span class="s0">def </span><span class="s1">_with_star_comments(parsed: parse.ParsedContent, module: str, comments: List[str]) -&gt; List[str]:</span>
+    <span class="s1">star_comment = parsed.categorized_comments[</span><span class="s2">&quot;nested&quot;</span><span class="s1">].get(module, {}).pop(</span><span class="s2">&quot;*&quot;</span><span class="s1">, </span><span class="s0">None</span><span class="s1">)</span>
+    <span class="s0">if </span><span class="s1">star_comment:</span>
+        <span class="s0">return </span><span class="s1">comments + [star_comment]</span>
+    <span class="s0">return </span><span class="s1">comments</span>
+</pre>
+</body>
+</html>

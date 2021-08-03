@@ -1,0 +1,45 @@
+<html>
+<head>
+<title>Loginpage.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+.s3 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+Loginpage.py</font>
+</center></td></tr></table>
+<pre><span class="s0">class </span><span class="s1">Login:</span>
+    <span class="s1">textbox_username_id = </span><span class="s2">&quot;ctl00_ContentPlaceHolderBody_txtUserID&quot;</span>
+    <span class="s1">textbox_password_id = </span><span class="s2">&quot;ctl00_ContentPlaceHolderBody_txtPassword&quot;</span>
+    <span class="s1">button_login_id = </span><span class="s2">&quot;ctl00_ContentPlaceHolderBody_cmdLogin&quot;</span>
+    <span class="s1">icon_settings_id = </span><span class="s2">&quot;triggerSettings&quot;</span>
+    <span class="s1">link_logout_xpath = </span><span class="s2">&quot;//div[@id='divSettingMenu']/div[2]/a[3]&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, driver):</span>
+        <span class="s1">self.driver = driver</span>
+
+    <span class="s0">def </span><span class="s1">setUsername(self, username):</span>
+        <span class="s1">self.driver.find_element_by_id(self.textbox_username_id).clear()</span>
+        <span class="s1">self.driver.find_element_by_id(self.textbox_username_id).send_keys(username)</span>
+
+    <span class="s0">def </span><span class="s1">setPassword(self, password):</span>
+        <span class="s1">self.driver.find_element_by_id(self.textbox_password_id).clear()</span>
+        <span class="s1">self.driver.find_element_by_id(self.textbox_password_id).send_keys(password)</span>
+
+    <span class="s0">def </span><span class="s1">clickLoginbtn(self):</span>
+        <span class="s1">self.driver.find_element_by_id(self.button_login_id).click()</span>
+        <span class="s1">self.driver.implicitly_wait(</span><span class="s3">50</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">clicklogout(self):</span>
+        <span class="s1">self.driver.find_element_by_id(self.icon_settings_id).click()</span>
+        <span class="s1">self.driver.find_element_by_xpath(self.link_logout_xpath).click()</span>
+</pre>
+</body>
+</html>

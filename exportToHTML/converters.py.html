@@ -1,0 +1,105 @@
+<html>
+<head>
+<title>converters.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+converters.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+Commonly useful converters. 
+&quot;&quot;&quot;</span>
+
+<span class="s2">from </span><span class="s1">__future__ </span><span class="s2">import </span><span class="s1">absolute_import, division, print_function</span>
+
+<span class="s2">from </span><span class="s1">._make </span><span class="s2">import </span><span class="s1">NOTHING, Factory, pipe</span>
+
+
+<span class="s1">__all__ = [</span>
+    <span class="s3">&quot;pipe&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;optional&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;default_if_none&quot;</span><span class="s1">,</span>
+<span class="s1">]</span>
+
+
+<span class="s2">def </span><span class="s1">optional(converter):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    A converter that allows an attribute to be optional. An optional attribute 
+    is one which can be set to ``None``. 
+ 
+    :param callable converter: the converter that is used for non-``None`` 
+        values. 
+ 
+    .. versionadded:: 17.1.0 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">optional_converter(val):</span>
+        <span class="s2">if </span><span class="s1">val </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">return None</span>
+        <span class="s2">return </span><span class="s1">converter(val)</span>
+
+    <span class="s2">return </span><span class="s1">optional_converter</span>
+
+
+<span class="s2">def </span><span class="s1">default_if_none(default=NOTHING, factory=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    A converter that allows to replace ``None`` values by *default* or the 
+    result of *factory*. 
+ 
+    :param default: Value to be used if ``None`` is passed. Passing an instance 
+       of `attr.Factory` is supported, however the ``takes_self`` option 
+       is *not*. 
+    :param callable factory: A callable that takes not parameters whose result 
+       is used if ``None`` is passed. 
+ 
+    :raises TypeError: If **neither** *default* or *factory* is passed. 
+    :raises TypeError: If **both** *default* and *factory* are passed. 
+    :raises ValueError: If an instance of `attr.Factory` is passed with 
+       ``takes_self=True``. 
+ 
+    .. versionadded:: 18.2.0 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">default </span><span class="s2">is </span><span class="s1">NOTHING </span><span class="s2">and </span><span class="s1">factory </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">&quot;Must pass either `default` or `factory`.&quot;</span><span class="s1">)</span>
+
+    <span class="s2">if </span><span class="s1">default </span><span class="s2">is not </span><span class="s1">NOTHING </span><span class="s2">and </span><span class="s1">factory </span><span class="s2">is not None</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">TypeError(</span>
+            <span class="s3">&quot;Must pass either `default` or `factory` but not both.&quot;</span>
+        <span class="s1">)</span>
+
+    <span class="s2">if </span><span class="s1">factory </span><span class="s2">is not None</span><span class="s1">:</span>
+        <span class="s1">default = Factory(factory)</span>
+
+    <span class="s2">if </span><span class="s1">isinstance(default, Factory):</span>
+        <span class="s2">if </span><span class="s1">default.takes_self:</span>
+            <span class="s2">raise </span><span class="s1">ValueError(</span>
+                <span class="s3">&quot;`takes_self` is not supported by default_if_none.&quot;</span>
+            <span class="s1">)</span>
+
+        <span class="s2">def </span><span class="s1">default_if_none_converter(val):</span>
+            <span class="s2">if </span><span class="s1">val </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s2">return </span><span class="s1">val</span>
+
+            <span class="s2">return </span><span class="s1">default.factory()</span>
+
+    <span class="s2">else</span><span class="s1">:</span>
+
+        <span class="s2">def </span><span class="s1">default_if_none_converter(val):</span>
+            <span class="s2">if </span><span class="s1">val </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s2">return </span><span class="s1">val</span>
+
+            <span class="s2">return </span><span class="s1">default</span>
+
+    <span class="s2">return </span><span class="s1">default_if_none_converter</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,135 @@
+<html>
+<head>
+<title>excel.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+excel.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s3">&quot;&quot;&quot; 
+Excel specific descriptors 
+&quot;&quot;&quot;</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">REL_NS</span>
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">safe_string, unicode</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s0">import </span><span class="s1">Element</span>
+
+<span class="s0">from </span><span class="s1">. </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">MatchPattern,</span>
+    <span class="s1">MinMax,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Sequence,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.utils.cell </span><span class="s0">import </span><span class="s1">RANGE_EXPR</span>
+
+<span class="s0">class </span><span class="s1">HexBinary(MatchPattern):</span>
+
+    <span class="s1">pattern = </span><span class="s3">&quot;[0-9a-fA-F]+$&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">UniversalMeasure(MatchPattern):</span>
+
+    <span class="s1">pattern = </span><span class="s3">r&quot;[0-9]+(\.[0-9]+)?(mm|cm|in|pt|pc|pi)&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">TextPoint(MinMax):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Size in hundredths of points. 
+    In theory other units of measurement can be used but these are unbounded 
+    &quot;&quot;&quot;</span>
+    <span class="s1">expected_type = int</span>
+
+    <span class="s1">min = -</span><span class="s4">400000</span>
+    <span class="s1">max = </span><span class="s4">400000</span>
+
+
+<span class="s1">Coordinate = Integer</span>
+
+
+<span class="s0">class </span><span class="s1">Percentage(MinMax):</span>
+
+    <span class="s1">pattern = </span><span class="s3">r&quot;((100)|([0-9][0-9]?))(\.[0-9][0-9]?)?%&quot; </span><span class="s2"># strict</span>
+    <span class="s1">min = -</span><span class="s4">1000000</span>
+    <span class="s1">max = </span><span class="s4">1000000</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s0">if </span><span class="s1">isinstance(value, unicode) </span><span class="s0">and </span><span class="s3">&quot;%&quot; </span><span class="s0">in </span><span class="s1">value:</span>
+            <span class="s1">value = value.replace(</span><span class="s3">&quot;%&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+            <span class="s1">value = int(float(value) * </span><span class="s4">1000</span><span class="s1">)</span>
+        <span class="s1">super(Percentage, self).__set__(instance, value)</span>
+
+
+<span class="s0">class </span><span class="s1">Extension(Serialisable):</span>
+
+    <span class="s1">uri = String()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">uri=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.uri = uri</span>
+
+
+<span class="s0">class </span><span class="s1">ExtensionList(Serialisable):</span>
+
+    <span class="s1">ext = Sequence(expected_type=Extension)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">ext=(),</span>
+                <span class="s1">):</span>
+        <span class="s1">self.ext = ext</span>
+
+
+<span class="s0">class </span><span class="s1">Relation(String):</span>
+
+    <span class="s1">namespace = REL_NS</span>
+    <span class="s1">allow_none = </span><span class="s0">True</span>
+
+
+<span class="s0">class </span><span class="s1">Base64Binary(MatchPattern):</span>
+    <span class="s2"># http://www.w3.org/TR/xmlschema11-2/#nt-Base64Binary</span>
+    <span class="s1">pattern = </span><span class="s3">&quot;^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">Guid(MatchPattern):</span>
+    <span class="s2"># https://msdn.microsoft.com/en-us/library/dd946381(v=office.12).aspx</span>
+    <span class="s1">pattern = </span><span class="s3">r&quot;{[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}\}&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">CellRange(MatchPattern):</span>
+
+    <span class="s1">pattern = </span><span class="s3">r&quot;^[$]?([A-Za-z]{1,3})[$]?(\d+)(:[$]?([A-Za-z]{1,3})[$]?(\d+)?)?$|^[A-Za-z]{1,3}:[A-Za-z]{1,3}$&quot;</span>
+    <span class="s1">allow_none = </span><span class="s0">True</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+
+        <span class="s0">if </span><span class="s1">value </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">value = value.upper()</span>
+        <span class="s1">super(CellRange, self).__set__(instance, value)</span>
+
+
+<span class="s0">def </span><span class="s1">_explicit_none(tagname, value, namespace=</span><span class="s0">None</span><span class="s1">):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Override serialisation because explicit none required 
+    &quot;&quot;&quot;</span>
+    <span class="s0">if </span><span class="s1">namespace </span><span class="s0">is not None</span><span class="s1">:</span>
+        <span class="s1">tagname = </span><span class="s3">&quot;{%s}%s&quot; </span><span class="s1">% (namespace, tagname)</span>
+    <span class="s0">return </span><span class="s1">Element(tagname, val=safe_string(value))</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,1011 @@
+<html>
+<head>
+<title>imports.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+imports.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2006-2015 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2012-2014 Google, Inc.</span>
+<span class="s0"># Copyright (c) 2013 buck@yelp.com &lt;buck@yelp.com&gt;</span>
+<span class="s0"># Copyright (c) 2014-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Brett Cannon &lt;brett@python.org&gt;</span>
+<span class="s0"># Copyright (c) 2014 Arun Persaud &lt;arun@nubati.net&gt;</span>
+<span class="s0"># Copyright (c) 2015-2016 Moises Lopez &lt;moylop260@vauxoo.com&gt;</span>
+<span class="s0"># Copyright (c) 2015 Dmitry Pribysh &lt;dmand@yandex.ru&gt;</span>
+<span class="s0"># Copyright (c) 2015 Cezar &lt;celnazli@bitdefender.com&gt;</span>
+<span class="s0"># Copyright (c) 2015 Florian Bruhin &lt;me@the-compiler.org&gt;</span>
+<span class="s0"># Copyright (c) 2015 Noam Yorav-Raphael &lt;noamraph@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015 James Morgensen &lt;james.morgensen@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015 Ionel Cristian Maries &lt;contact@ionelmc.ro&gt;</span>
+<span class="s0"># Copyright (c) 2016 Jared Garst &lt;cultofjared@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Maik Röder &lt;maikroeder@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Glenn Matthews &lt;glenn@e-dad.net&gt;</span>
+<span class="s0"># Copyright (c) 2016 Ashley Whetter &lt;ashley@awhetter.co.uk&gt;</span>
+<span class="s0"># Copyright (c) 2017, 2020 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Michka Popoff &lt;michkapopoff@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Łukasz Rogalski &lt;rogalski.91@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Erik Wright &lt;erik.wright@shopify.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Lucas Cimon &lt;lucas.cimon@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Hornwitser &lt;github@hornwitser.no&gt;</span>
+<span class="s0"># Copyright (c) 2018 ssolanki &lt;sushobhitsolanki@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Natalie Serebryakova &lt;natalie.serebryakova@Natalies-MacBook-Pro.local&gt;</span>
+<span class="s0"># Copyright (c) 2018 Mike Frysinger &lt;vapier@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Sushobhit &lt;31987769+sushobhit27@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Marianna Polatoglou &lt;mpolatoglou@bloomberg.net&gt;</span>
+<span class="s0"># Copyright (c) 2019-2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Nick Drozd &lt;nicholasdrozd@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Hugo van Kemenade &lt;hugovk@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Nick Smith &lt;clickthisnick@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Paul Renvoisé &lt;renvoisepaul@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Peter Kolbus &lt;peter.kolbus@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Damien Baty &lt;damien.baty@polyconseil.fr&gt;</span>
+<span class="s0"># Copyright (c) 2020 Anthony Sottile &lt;asottile@umich.edu&gt;</span>
+<span class="s0"># Copyright (c) 2021 Marc Mueller &lt;30130371+cdce8p@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Andrew Howe &lt;howeaj@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Matus Valo &lt;matusvalo@users.noreply.github.com&gt;</span>
+
+<span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;imports checkers for Python code&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">collections</span>
+<span class="s2">import </span><span class="s1">copy</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">from </span><span class="s1">distutils </span><span class="s2">import </span><span class="s1">sysconfig</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Dict, List</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+
+<span class="s2">from </span><span class="s1">pylint.checkers </span><span class="s2">import </span><span class="s1">BaseChecker, DeprecatedMixin</span>
+<span class="s2">from </span><span class="s1">pylint.checkers.utils </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">check_messages,</span>
+    <span class="s1">is_from_fallback_block,</span>
+    <span class="s1">node_ignores_exception,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">pylint.exceptions </span><span class="s2">import </span><span class="s1">EmptyReportError</span>
+<span class="s2">from </span><span class="s1">pylint.graph </span><span class="s2">import </span><span class="s1">DotBackend, get_cycles</span>
+<span class="s2">from </span><span class="s1">pylint.interfaces </span><span class="s2">import </span><span class="s1">IAstroidChecker</span>
+<span class="s2">from </span><span class="s1">pylint.reporters.ureports.nodes </span><span class="s2">import </span><span class="s1">Paragraph, VerbatimText, VNode</span>
+<span class="s2">from </span><span class="s1">pylint.utils </span><span class="s2">import </span><span class="s1">IsortDriver, get_global_option</span>
+
+
+<span class="s2">def </span><span class="s1">_qualified_names(modname):</span>
+    <span class="s0">&quot;&quot;&quot;Split the names of the given module into subparts 
+ 
+    For example, 
+        _qualified_names('pylint.checkers.ImportsChecker') 
+    returns 
+        ['pylint', 'pylint.checkers', 'pylint.checkers.ImportsChecker'] 
+    &quot;&quot;&quot;</span>
+    <span class="s1">names = modname.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">[</span><span class="s3">&quot;.&quot;</span><span class="s1">.join(names[</span><span class="s4">0 </span><span class="s1">: i + </span><span class="s4">1</span><span class="s1">]) </span><span class="s2">for </span><span class="s1">i </span><span class="s2">in </span><span class="s1">range(len(names))]</span>
+
+
+<span class="s2">def </span><span class="s1">_get_import_name(importnode, modname):</span>
+    <span class="s0">&quot;&quot;&quot;Get a prepared module name from the given import node 
+ 
+    In the case of relative imports, this will return the 
+    absolute qualified module name, which might be useful 
+    for debugging. Otherwise, the initial module name 
+    is returned unchanged. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">isinstance(importnode, astroid.ImportFrom):</span>
+        <span class="s2">if </span><span class="s1">importnode.level:</span>
+            <span class="s1">root = importnode.root()</span>
+            <span class="s2">if </span><span class="s1">isinstance(root, astroid.Module):</span>
+                <span class="s1">modname = root.relative_to_absolute_name(</span>
+                    <span class="s1">modname, level=importnode.level</span>
+                <span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">modname</span>
+
+
+<span class="s2">def </span><span class="s1">_get_first_import(node, context, name, base, level, alias):</span>
+    <span class="s0">&quot;&quot;&quot;return the node where [base.]&lt;name&gt; is imported or None if not found&quot;&quot;&quot;</span>
+    <span class="s1">fullname = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">base</span><span class="s5">}</span><span class="s3">.</span><span class="s5">{</span><span class="s1">name</span><span class="s5">}</span><span class="s3">&quot; </span><span class="s2">if </span><span class="s1">base </span><span class="s2">else </span><span class="s1">name</span>
+
+    <span class="s1">first = </span><span class="s2">None</span>
+    <span class="s1">found = </span><span class="s2">False</span>
+    <span class="s2">for </span><span class="s1">first </span><span class="s2">in </span><span class="s1">context.body:</span>
+        <span class="s2">if </span><span class="s1">first </span><span class="s2">is </span><span class="s1">node:</span>
+            <span class="s2">continue</span>
+        <span class="s2">if </span><span class="s1">first.scope() </span><span class="s2">is </span><span class="s1">node.scope() </span><span class="s2">and </span><span class="s1">first.fromlineno &gt; node.fromlineno:</span>
+            <span class="s2">continue</span>
+        <span class="s2">if </span><span class="s1">isinstance(first, astroid.Import):</span>
+            <span class="s2">if </span><span class="s1">any(fullname == iname[</span><span class="s4">0</span><span class="s1">] </span><span class="s2">for </span><span class="s1">iname </span><span class="s2">in </span><span class="s1">first.names):</span>
+                <span class="s1">found = </span><span class="s2">True</span>
+                <span class="s2">break</span>
+        <span class="s2">elif </span><span class="s1">isinstance(first, astroid.ImportFrom):</span>
+            <span class="s2">if </span><span class="s1">level == first.level:</span>
+                <span class="s2">for </span><span class="s1">imported_name, imported_alias </span><span class="s2">in </span><span class="s1">first.names:</span>
+                    <span class="s2">if </span><span class="s1">fullname == </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">first.modname</span><span class="s5">}</span><span class="s3">.</span><span class="s5">{</span><span class="s1">imported_name</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">:</span>
+                        <span class="s1">found = </span><span class="s2">True</span>
+                        <span class="s2">break</span>
+                    <span class="s2">if </span><span class="s1">(</span>
+                        <span class="s1">name != </span><span class="s3">&quot;*&quot;</span>
+                        <span class="s2">and </span><span class="s1">name == imported_name</span>
+                        <span class="s2">and not </span><span class="s1">(alias </span><span class="s2">or </span><span class="s1">imported_alias)</span>
+                    <span class="s1">):</span>
+                        <span class="s1">found = </span><span class="s2">True</span>
+                        <span class="s2">break</span>
+                <span class="s2">if </span><span class="s1">found:</span>
+                    <span class="s2">break</span>
+    <span class="s2">if </span><span class="s1">found </span><span class="s2">and not </span><span class="s1">astroid.are_exclusive(first, node):</span>
+        <span class="s2">return </span><span class="s1">first</span>
+    <span class="s2">return None</span>
+
+
+<span class="s2">def </span><span class="s1">_ignore_import_failure(node, modname, ignored_modules):</span>
+    <span class="s2">for </span><span class="s1">submodule </span><span class="s2">in </span><span class="s1">_qualified_names(modname):</span>
+        <span class="s2">if </span><span class="s1">submodule </span><span class="s2">in </span><span class="s1">ignored_modules:</span>
+            <span class="s2">return True</span>
+
+    <span class="s2">return </span><span class="s1">node_ignores_exception(node, ImportError)</span>
+
+
+<span class="s0"># utilities to represents import dependencies as tree and dot graph ###########</span>
+
+
+<span class="s2">def </span><span class="s1">_make_tree_defs(mod_files_list):</span>
+    <span class="s0">&quot;&quot;&quot;get a list of 2-uple (module, list_of_files_which_import_this_module), 
+    it will return a dictionary to represent this as a tree 
+    &quot;&quot;&quot;</span>
+    <span class="s1">tree_defs = {}</span>
+    <span class="s2">for </span><span class="s1">mod, files </span><span class="s2">in </span><span class="s1">mod_files_list:</span>
+        <span class="s1">node = (tree_defs, ())</span>
+        <span class="s2">for </span><span class="s1">prefix </span><span class="s2">in </span><span class="s1">mod.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">):</span>
+            <span class="s1">node = node[</span><span class="s4">0</span><span class="s1">].setdefault(prefix, [{}, []])</span>
+        <span class="s1">node[</span><span class="s4">1</span><span class="s1">] += files</span>
+    <span class="s2">return </span><span class="s1">tree_defs</span>
+
+
+<span class="s2">def </span><span class="s1">_repr_tree_defs(data, indent_str=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;return a string which represents imports as a tree&quot;&quot;&quot;</span>
+    <span class="s1">lines = []</span>
+    <span class="s1">nodes = data.items()</span>
+    <span class="s2">for </span><span class="s1">i, (mod, (sub, files)) </span><span class="s2">in </span><span class="s1">enumerate(sorted(nodes, key=</span><span class="s2">lambda </span><span class="s1">x: x[</span><span class="s4">0</span><span class="s1">])):</span>
+        <span class="s2">if not </span><span class="s1">files:</span>
+            <span class="s1">files = </span><span class="s3">&quot;&quot;</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">files = </span><span class="s3">&quot;(%s)&quot; </span><span class="s1">% </span><span class="s3">&quot;,&quot;</span><span class="s1">.join(sorted(files))</span>
+        <span class="s2">if </span><span class="s1">indent_str </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">lines.append(</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">mod</span><span class="s5">} {</span><span class="s1">files</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">)</span>
+            <span class="s1">sub_indent_str = </span><span class="s3">&quot;  &quot;</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">lines.append(</span><span class="s3">fr&quot;</span><span class="s5">{</span><span class="s1">indent_str</span><span class="s5">}</span><span class="s3">\-</span><span class="s5">{</span><span class="s1">mod</span><span class="s5">} {</span><span class="s1">files</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">i == len(nodes) - </span><span class="s4">1</span><span class="s1">:</span>
+                <span class="s1">sub_indent_str = </span><span class="s3">&quot;%s  &quot; </span><span class="s1">% indent_str</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">sub_indent_str = </span><span class="s3">&quot;%s| &quot; </span><span class="s1">% indent_str</span>
+        <span class="s2">if </span><span class="s1">sub:</span>
+            <span class="s1">lines.append(_repr_tree_defs(sub, sub_indent_str))</span>
+    <span class="s2">return </span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">&quot;</span><span class="s1">.join(lines)</span>
+
+
+<span class="s2">def </span><span class="s1">_dependencies_graph(filename: str, dep_info: Dict[str, List[str]]) -&gt; str:</span>
+    <span class="s0">&quot;&quot;&quot;write dependencies as a dot (graphviz) file&quot;&quot;&quot;</span>
+    <span class="s1">done = {}</span>
+    <span class="s1">printer = DotBackend(os.path.splitext(os.path.basename(filename))[</span><span class="s4">0</span><span class="s1">], rankdir=</span><span class="s3">&quot;LR&quot;</span><span class="s1">)</span>
+    <span class="s1">printer.emit(</span><span class="s3">'URL=&quot;.&quot; node[shape=&quot;box&quot;]'</span><span class="s1">)</span>
+    <span class="s2">for </span><span class="s1">modname, dependencies </span><span class="s2">in </span><span class="s1">sorted(dep_info.items()):</span>
+        <span class="s1">done[modname] = </span><span class="s4">1</span>
+        <span class="s1">printer.emit_node(modname)</span>
+        <span class="s2">for </span><span class="s1">depmodname </span><span class="s2">in </span><span class="s1">dependencies:</span>
+            <span class="s2">if </span><span class="s1">depmodname </span><span class="s2">not in </span><span class="s1">done:</span>
+                <span class="s1">done[depmodname] = </span><span class="s4">1</span>
+                <span class="s1">printer.emit_node(depmodname)</span>
+    <span class="s2">for </span><span class="s1">depmodname, dependencies </span><span class="s2">in </span><span class="s1">sorted(dep_info.items()):</span>
+        <span class="s2">for </span><span class="s1">modname </span><span class="s2">in </span><span class="s1">dependencies:</span>
+            <span class="s1">printer.emit_edge(modname, depmodname)</span>
+    <span class="s2">return </span><span class="s1">printer.generate(filename)</span>
+
+
+<span class="s2">def </span><span class="s1">_make_graph(filename: str, dep_info: Dict[str, List[str]], sect: VNode, gtype: str):</span>
+    <span class="s0">&quot;&quot;&quot;generate a dependencies graph and add some information about it in the 
+    report's section 
+    &quot;&quot;&quot;</span>
+    <span class="s1">outputfile = _dependencies_graph(filename, dep_info)</span>
+    <span class="s1">sect.append(Paragraph(</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">gtype</span><span class="s5">}</span><span class="s3">imports graph has been written to </span><span class="s5">{</span><span class="s1">outputfile</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">))</span>
+
+
+<span class="s0"># the import checker itself ###################################################</span>
+
+<span class="s1">MSGS = {</span>
+    <span class="s3">&quot;E0401&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Unable to import %s&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;import-error&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when pylint has been unable to import a module.&quot;</span><span class="s1">,</span>
+        <span class="s1">{</span><span class="s3">&quot;old_names&quot;</span><span class="s1">: [(</span><span class="s3">&quot;F0401&quot;</span><span class="s1">, </span><span class="s3">&quot;old-import-error&quot;</span><span class="s1">)]},</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E0402&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Attempted relative import beyond top-level package&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;relative-beyond-top-level&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a relative import tries to access too many levels &quot;</span>
+        <span class="s3">&quot;in the current package.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;R0401&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Cyclic import (%s)&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;cyclic-import&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a cyclic import between two or more modules is detected.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;W0401&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Wildcard import %s&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;wildcard-import&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when `from module import *` is detected.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;W0402&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Uses of a deprecated module %r&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;deprecated-module&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used a module marked as deprecated is imported.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;W0404&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Reimport %r (imported line %s)&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;reimported&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a module is reimported multiple times.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;W0406&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Module import itself&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;import-self&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a module is importing itself.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;W0407&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Prefer importing %r instead of %r&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;preferred-module&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a module imported has a preferred replacement module.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;W0410&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;__future__ import is not the first non docstring statement&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;misplaced-future&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Python 2.5 and greater require __future__ import to be the &quot;</span>
+        <span class="s3">&quot;first non docstring statement in the module.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;C0410&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Multiple imports on one line (%s)&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;multiple-imports&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when import statement importing multiple modules is detected.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;C0411&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;%s should be placed before %s&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;wrong-import-order&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when PEP8 import order is not respected (standard imports &quot;</span>
+        <span class="s3">&quot;first, then third-party libraries, then local imports)&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;C0412&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Imports from package %s are not grouped&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;ungrouped-imports&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when imports are not grouped by packages&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;C0413&quot;</span><span class="s1">: (</span>
+        <span class="s3">'Import &quot;%s&quot; should be placed at the top of the module'</span><span class="s1">,</span>
+        <span class="s3">&quot;wrong-import-position&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when code and imports are mixed&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;C0414&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Import alias does not rename original package&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;useless-import-alias&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when an import alias is same as original package.&quot;</span>
+        <span class="s3">&quot;e.g using import numpy as numpy instead of import numpy as np&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;C0415&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Import outside toplevel (%s)&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;import-outside-toplevel&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when an import statement is used anywhere other than the module &quot;</span>
+        <span class="s3">&quot;toplevel. Move this import to the top of the file.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+<span class="s1">}</span>
+
+
+<span class="s1">DEFAULT_STANDARD_LIBRARY = ()</span>
+<span class="s1">DEFAULT_KNOWN_THIRD_PARTY = (</span><span class="s3">&quot;enchant&quot;</span><span class="s1">,)</span>
+<span class="s1">DEFAULT_PREFERRED_MODULES = ()</span>
+
+
+<span class="s2">class </span><span class="s1">ImportsChecker(DeprecatedMixin, BaseChecker):</span>
+    <span class="s0">&quot;&quot;&quot;checks for 
+    * external modules dependencies 
+    * relative / wildcard imports 
+    * cyclic imports 
+    * uses of deprecated modules 
+    * uses of modules instead of preferred modules 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__implements__ = IAstroidChecker</span>
+
+    <span class="s1">name = </span><span class="s3">&quot;imports&quot;</span>
+    <span class="s1">msgs = MSGS</span>
+    <span class="s1">priority = -</span><span class="s4">2</span>
+    <span class="s1">default_deprecated_modules = (</span><span class="s3">&quot;optparse&quot;</span><span class="s1">, </span><span class="s3">&quot;tkinter.tix&quot;</span><span class="s1">)</span>
+
+    <span class="s1">options = (</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;deprecated-modules&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: default_deprecated_modules,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;csv&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;modules&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Deprecated modules which should not be used,&quot;</span>
+                <span class="s3">&quot; separated by a comma.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;preferred-modules&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: DEFAULT_PREFERRED_MODULES,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;csv&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;module:preferred-module&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Couples of modules and preferred modules,&quot;</span>
+                <span class="s3">&quot; separated by a comma.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;import-graph&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;string&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;file.gv&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Output a graph (.gv or any supported image format) of&quot;</span>
+                <span class="s3">&quot; all (i.e. internal and external) dependencies to the given file&quot;</span>
+                <span class="s3">&quot; (report RP0402 must not be disabled).&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;ext-import-graph&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;string&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;file.gv&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Output a graph (.gv or any supported image format)&quot;</span>
+                <span class="s3">&quot; of external dependencies to the given file&quot;</span>
+                <span class="s3">&quot; (report RP0402 must not be disabled).&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;int-import-graph&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;string&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;file.gv&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Output a graph (.gv or any supported image format)&quot;</span>
+                <span class="s3">&quot; of internal dependencies to the given file&quot;</span>
+                <span class="s3">&quot; (report RP0402 must not be disabled).&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;known-standard-library&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: DEFAULT_STANDARD_LIBRARY,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;csv&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;modules&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Force import order to recognize a module as part of &quot;</span>
+                <span class="s3">&quot;the standard compatibility libraries.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;known-third-party&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: DEFAULT_KNOWN_THIRD_PARTY,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;csv&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;modules&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Force import order to recognize a module as part of &quot;</span>
+                <span class="s3">&quot;a third party library.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;allow-any-import-level&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: (),</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;csv&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;modules&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: (</span>
+                    <span class="s3">&quot;List of modules that can be imported at any level, not just &quot;</span>
+                    <span class="s3">&quot;the top level one.&quot;</span>
+                <span class="s1">),</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;analyse-fallback-blocks&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s2">False</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;yn&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;y_or_n&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Analyse import fallback blocks. This can be used to &quot;</span>
+                <span class="s3">&quot;support both Python 2 and 3 compatible code, which &quot;</span>
+                <span class="s3">&quot;means that the block might have code that exists &quot;</span>
+                <span class="s3">&quot;only in one or another interpreter, leading to false &quot;</span>
+                <span class="s3">&quot;positives when analysed.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;allow-wildcard-with-all&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s2">False</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;yn&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;y_or_n&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Allow wildcard imports from modules that define __all__.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, linter=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">BaseChecker.__init__(self, linter)</span>
+        <span class="s1">self.stats = </span><span class="s2">None</span>
+        <span class="s1">self.import_graph = </span><span class="s2">None</span>
+        <span class="s1">self._imports_stack = []</span>
+        <span class="s1">self._first_non_import_node = </span><span class="s2">None</span>
+        <span class="s1">self._module_pkg = {}  </span><span class="s0"># mapping of modules to the pkg they belong in</span>
+        <span class="s1">self._allow_any_import_level = set()</span>
+        <span class="s1">self.reports = (</span>
+            <span class="s1">(</span><span class="s3">&quot;RP0401&quot;</span><span class="s1">, </span><span class="s3">&quot;External dependencies&quot;</span><span class="s1">, self._report_external_dependencies),</span>
+            <span class="s1">(</span><span class="s3">&quot;RP0402&quot;</span><span class="s1">, </span><span class="s3">&quot;Modules dependencies graph&quot;</span><span class="s1">, self._report_dependencies_graph),</span>
+        <span class="s1">)</span>
+
+        <span class="s1">self._site_packages = self._compute_site_packages()</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_compute_site_packages():</span>
+        <span class="s2">def </span><span class="s1">_normalized_path(path):</span>
+            <span class="s2">return </span><span class="s1">os.path.normcase(os.path.abspath(path))</span>
+
+        <span class="s1">paths = set()</span>
+        <span class="s1">real_prefix = getattr(sys, </span><span class="s3">&quot;real_prefix&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s2">for </span><span class="s1">prefix </span><span class="s2">in </span><span class="s1">filter(</span><span class="s2">None</span><span class="s1">, (real_prefix, sys.prefix)):</span>
+            <span class="s1">path = sysconfig.get_python_lib(prefix=prefix)</span>
+            <span class="s1">path = _normalized_path(path)</span>
+            <span class="s1">paths.add(path)</span>
+
+        <span class="s0"># Handle Debian's derivatives /usr/local.</span>
+        <span class="s2">if </span><span class="s1">os.path.isfile(</span><span class="s3">&quot;/etc/debian_version&quot;</span><span class="s1">):</span>
+            <span class="s2">for </span><span class="s1">prefix </span><span class="s2">in </span><span class="s1">filter(</span><span class="s2">None</span><span class="s1">, (real_prefix, sys.prefix)):</span>
+                <span class="s1">libpython = os.path.join(</span>
+                    <span class="s1">prefix,</span>
+                    <span class="s3">&quot;local&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;lib&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;python&quot; </span><span class="s1">+ sysconfig.get_python_version(),</span>
+                    <span class="s3">&quot;dist-packages&quot;</span><span class="s1">,</span>
+                <span class="s1">)</span>
+                <span class="s1">paths.add(libpython)</span>
+        <span class="s2">return </span><span class="s1">paths</span>
+
+    <span class="s2">def </span><span class="s1">open(self):</span>
+        <span class="s0">&quot;&quot;&quot;called before visiting project (i.e set of modules)&quot;&quot;&quot;</span>
+        <span class="s1">self.linter.add_stats(dependencies={})</span>
+        <span class="s1">self.linter.add_stats(cycles=[])</span>
+        <span class="s1">self.stats = self.linter.stats</span>
+        <span class="s1">self.import_graph = collections.defaultdict(set)</span>
+        <span class="s1">self._module_pkg = {}  </span><span class="s0"># mapping of modules to the pkg they belong in</span>
+        <span class="s1">self._excluded_edges = collections.defaultdict(set)</span>
+        <span class="s1">self._ignored_modules = get_global_option(self, </span><span class="s3">&quot;ignored-modules&quot;</span><span class="s1">, default=[])</span>
+        <span class="s0"># Build a mapping {'module': 'preferred-module'}</span>
+        <span class="s1">self.preferred_modules = dict(</span>
+            <span class="s1">module.split(</span><span class="s3">&quot;:&quot;</span><span class="s1">)</span>
+            <span class="s2">for </span><span class="s1">module </span><span class="s2">in </span><span class="s1">self.config.preferred_modules</span>
+            <span class="s2">if </span><span class="s3">&quot;:&quot; </span><span class="s2">in </span><span class="s1">module</span>
+        <span class="s1">)</span>
+        <span class="s1">self._allow_any_import_level = set(self.config.allow_any_import_level)</span>
+
+    <span class="s2">def </span><span class="s1">_import_graph_without_ignored_edges(self):</span>
+        <span class="s1">filtered_graph = copy.deepcopy(self.import_graph)</span>
+        <span class="s2">for </span><span class="s1">node </span><span class="s2">in </span><span class="s1">filtered_graph:</span>
+            <span class="s1">filtered_graph[node].difference_update(self._excluded_edges[node])</span>
+        <span class="s2">return </span><span class="s1">filtered_graph</span>
+
+    <span class="s2">def </span><span class="s1">close(self):</span>
+        <span class="s0">&quot;&quot;&quot;called before visiting project (i.e set of modules)&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.linter.is_message_enabled(</span><span class="s3">&quot;cyclic-import&quot;</span><span class="s1">):</span>
+            <span class="s1">graph = self._import_graph_without_ignored_edges()</span>
+            <span class="s1">vertices = list(graph)</span>
+            <span class="s2">for </span><span class="s1">cycle </span><span class="s2">in </span><span class="s1">get_cycles(graph, vertices=vertices):</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;cyclic-import&quot;</span><span class="s1">, args=</span><span class="s3">&quot; -&gt; &quot;</span><span class="s1">.join(cycle))</span>
+
+    <span class="s2">def </span><span class="s1">deprecated_modules(self):</span>
+        <span class="s0">&quot;&quot;&quot;Callback returning the deprecated modules.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.config.deprecated_modules</span>
+
+    <span class="s1">@check_messages(*MSGS)</span>
+    <span class="s2">def </span><span class="s1">visit_import(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;triggered when an import statement is seen&quot;&quot;&quot;</span>
+        <span class="s1">self._check_reimport(node)</span>
+        <span class="s1">self._check_import_as_rename(node)</span>
+        <span class="s1">self._check_toplevel(node)</span>
+
+        <span class="s1">names = [name </span><span class="s2">for </span><span class="s1">name, _ </span><span class="s2">in </span><span class="s1">node.names]</span>
+        <span class="s2">if </span><span class="s1">len(names) &gt;= </span><span class="s4">2</span><span class="s1">:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;multiple-imports&quot;</span><span class="s1">, args=</span><span class="s3">&quot;, &quot;</span><span class="s1">.join(names), node=node)</span>
+
+        <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">names:</span>
+            <span class="s1">self.check_deprecated_module(node, name)</span>
+            <span class="s1">self._check_preferred_module(node, name)</span>
+            <span class="s1">imported_module = self._get_imported_module(node, name)</span>
+            <span class="s2">if </span><span class="s1">isinstance(node.parent, astroid.Module):</span>
+                <span class="s0"># Allow imports nested</span>
+                <span class="s1">self._check_position(node)</span>
+            <span class="s2">if </span><span class="s1">isinstance(node.scope(), astroid.Module):</span>
+                <span class="s1">self._record_import(node, imported_module)</span>
+
+            <span class="s2">if </span><span class="s1">imported_module </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s2">continue</span>
+
+            <span class="s1">self._add_imported_module(node, imported_module.name)</span>
+
+    <span class="s1">@check_messages(*MSGS)</span>
+    <span class="s2">def </span><span class="s1">visit_importfrom(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;triggered when a from statement is seen&quot;&quot;&quot;</span>
+        <span class="s1">basename = node.modname</span>
+        <span class="s1">imported_module = self._get_imported_module(node, basename)</span>
+
+        <span class="s1">self._check_import_as_rename(node)</span>
+        <span class="s1">self._check_misplaced_future(node)</span>
+        <span class="s1">self.check_deprecated_module(node, basename)</span>
+        <span class="s1">self._check_preferred_module(node, basename)</span>
+        <span class="s1">self._check_wildcard_imports(node, imported_module)</span>
+        <span class="s1">self._check_same_line_imports(node)</span>
+        <span class="s1">self._check_reimport(node, basename=basename, level=node.level)</span>
+        <span class="s1">self._check_toplevel(node)</span>
+
+        <span class="s2">if </span><span class="s1">isinstance(node.parent, astroid.Module):</span>
+            <span class="s0"># Allow imports nested</span>
+            <span class="s1">self._check_position(node)</span>
+        <span class="s2">if </span><span class="s1">isinstance(node.scope(), astroid.Module):</span>
+            <span class="s1">self._record_import(node, imported_module)</span>
+        <span class="s2">if </span><span class="s1">imported_module </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">return</span>
+        <span class="s2">for </span><span class="s1">name, _ </span><span class="s2">in </span><span class="s1">node.names:</span>
+            <span class="s2">if </span><span class="s1">name != </span><span class="s3">&quot;*&quot;</span><span class="s1">:</span>
+                <span class="s1">self._add_imported_module(node, </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">imported_module.name</span><span class="s5">}</span><span class="s3">.</span><span class="s5">{</span><span class="s1">name</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">self._add_imported_module(node, imported_module.name)</span>
+
+    <span class="s1">@check_messages(*MSGS)</span>
+    <span class="s2">def </span><span class="s1">leave_module(self, node):</span>
+        <span class="s0"># Check imports are grouped by category (standard, 3rd party, local)</span>
+        <span class="s1">std_imports, ext_imports, loc_imports = self._check_imports_order(node)</span>
+
+        <span class="s0"># Check that imports are grouped by package within a given category</span>
+        <span class="s1">met_import = set()  </span><span class="s0"># set for 'import x' style</span>
+        <span class="s1">met_from = set()  </span><span class="s0"># set for 'from x import y' style</span>
+        <span class="s1">current_package = </span><span class="s2">None</span>
+        <span class="s2">for </span><span class="s1">import_node, import_name </span><span class="s2">in </span><span class="s1">std_imports + ext_imports + loc_imports:</span>
+            <span class="s2">if not </span><span class="s1">self.linter.is_message_enabled(</span>
+                <span class="s3">&quot;ungrouped-imports&quot;</span><span class="s1">, import_node.fromlineno</span>
+            <span class="s1">):</span>
+                <span class="s2">continue</span>
+            <span class="s2">if </span><span class="s1">isinstance(import_node, astroid.node_classes.ImportFrom):</span>
+                <span class="s1">met = met_from</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">met = met_import</span>
+            <span class="s1">package, _, _ = import_name.partition(</span><span class="s3">&quot;.&quot;</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">current_package </span><span class="s2">and </span><span class="s1">current_package != package </span><span class="s2">and </span><span class="s1">package </span><span class="s2">in </span><span class="s1">met:</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;ungrouped-imports&quot;</span><span class="s1">, node=import_node, args=package)</span>
+            <span class="s1">current_package = package</span>
+            <span class="s1">met.add(package)</span>
+
+        <span class="s1">self._imports_stack = []</span>
+        <span class="s1">self._first_non_import_node = </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">compute_first_non_import_node(self, node):</span>
+        <span class="s2">if not </span><span class="s1">self.linter.is_message_enabled(</span><span class="s3">&quot;wrong-import-position&quot;</span><span class="s1">, node.fromlineno):</span>
+            <span class="s2">return</span>
+        <span class="s0"># if the node does not contain an import instruction, and if it is the</span>
+        <span class="s0"># first node of the module, keep a track of it (all the import positions</span>
+        <span class="s0"># of the module will be compared to the position of this first</span>
+        <span class="s0"># instruction)</span>
+        <span class="s2">if </span><span class="s1">self._first_non_import_node:</span>
+            <span class="s2">return</span>
+        <span class="s2">if not </span><span class="s1">isinstance(node.parent, astroid.Module):</span>
+            <span class="s2">return</span>
+        <span class="s1">nested_allowed = [astroid.TryExcept, astroid.TryFinally]</span>
+        <span class="s1">is_nested_allowed = [</span>
+            <span class="s1">allowed </span><span class="s2">for </span><span class="s1">allowed </span><span class="s2">in </span><span class="s1">nested_allowed </span><span class="s2">if </span><span class="s1">isinstance(node, allowed)</span>
+        <span class="s1">]</span>
+        <span class="s2">if </span><span class="s1">is_nested_allowed </span><span class="s2">and </span><span class="s1">any(</span>
+            <span class="s1">node.nodes_of_class((astroid.Import, astroid.ImportFrom))</span>
+        <span class="s1">):</span>
+            <span class="s2">return</span>
+        <span class="s2">if </span><span class="s1">isinstance(node, astroid.Assign):</span>
+            <span class="s0"># Add compatibility for module level dunder names</span>
+            <span class="s0"># https://www.python.org/dev/peps/pep-0008/#module-level-dunder-names</span>
+            <span class="s1">valid_targets = [</span>
+                <span class="s1">isinstance(target, astroid.AssignName)</span>
+                <span class="s2">and </span><span class="s1">target.name.startswith(</span><span class="s3">&quot;__&quot;</span><span class="s1">)</span>
+                <span class="s2">and </span><span class="s1">target.name.endswith(</span><span class="s3">&quot;__&quot;</span><span class="s1">)</span>
+                <span class="s2">for </span><span class="s1">target </span><span class="s2">in </span><span class="s1">node.targets</span>
+            <span class="s1">]</span>
+            <span class="s2">if </span><span class="s1">all(valid_targets):</span>
+                <span class="s2">return</span>
+        <span class="s1">self._first_non_import_node = node</span>
+
+    <span class="s1">visit_tryfinally = (</span>
+        <span class="s1">visit_tryexcept</span>
+    <span class="s1">) = (</span>
+        <span class="s1">visit_assignattr</span>
+    <span class="s1">) = (</span>
+        <span class="s1">visit_assign</span>
+    <span class="s1">) = (</span>
+        <span class="s1">visit_ifexp</span>
+    <span class="s1">) = visit_comprehension = visit_expr = visit_if = compute_first_non_import_node</span>
+
+    <span class="s2">def </span><span class="s1">visit_functiondef(self, node):</span>
+        <span class="s2">if not </span><span class="s1">self.linter.is_message_enabled(</span><span class="s3">&quot;wrong-import-position&quot;</span><span class="s1">, node.fromlineno):</span>
+            <span class="s2">return</span>
+        <span class="s0"># If it is the first non import instruction of the module, record it.</span>
+        <span class="s2">if </span><span class="s1">self._first_non_import_node:</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># Check if the node belongs to an `If` or a `Try` block. If they</span>
+        <span class="s0"># contain imports, skip recording this node.</span>
+        <span class="s2">if not </span><span class="s1">isinstance(node.parent.scope(), astroid.Module):</span>
+            <span class="s2">return</span>
+
+        <span class="s1">root = node</span>
+        <span class="s2">while not </span><span class="s1">isinstance(root.parent, astroid.Module):</span>
+            <span class="s1">root = root.parent</span>
+
+        <span class="s2">if </span><span class="s1">isinstance(root, (astroid.If, astroid.TryFinally, astroid.TryExcept)):</span>
+            <span class="s2">if </span><span class="s1">any(root.nodes_of_class((astroid.Import, astroid.ImportFrom))):</span>
+                <span class="s2">return</span>
+
+        <span class="s1">self._first_non_import_node = node</span>
+
+    <span class="s1">visit_classdef = visit_for = visit_while = visit_functiondef</span>
+
+    <span class="s2">def </span><span class="s1">_check_misplaced_future(self, node):</span>
+        <span class="s1">basename = node.modname</span>
+        <span class="s2">if </span><span class="s1">basename == </span><span class="s3">&quot;__future__&quot;</span><span class="s1">:</span>
+            <span class="s0"># check if this is the first non-docstring statement in the module</span>
+            <span class="s1">prev = node.previous_sibling()</span>
+            <span class="s2">if </span><span class="s1">prev:</span>
+                <span class="s0"># consecutive future statements are possible</span>
+                <span class="s2">if not </span><span class="s1">(</span>
+                    <span class="s1">isinstance(prev, astroid.ImportFrom)</span>
+                    <span class="s2">and </span><span class="s1">prev.modname == </span><span class="s3">&quot;__future__&quot;</span>
+                <span class="s1">):</span>
+                    <span class="s1">self.add_message(</span><span class="s3">&quot;misplaced-future&quot;</span><span class="s1">, node=node)</span>
+            <span class="s2">return</span>
+
+    <span class="s2">def </span><span class="s1">_check_same_line_imports(self, node):</span>
+        <span class="s0"># Detect duplicate imports on the same line.</span>
+        <span class="s1">names = (name </span><span class="s2">for </span><span class="s1">name, _ </span><span class="s2">in </span><span class="s1">node.names)</span>
+        <span class="s1">counter = collections.Counter(names)</span>
+        <span class="s2">for </span><span class="s1">name, count </span><span class="s2">in </span><span class="s1">counter.items():</span>
+            <span class="s2">if </span><span class="s1">count &gt; </span><span class="s4">1</span><span class="s1">:</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;reimported&quot;</span><span class="s1">, node=node, args=(name, node.fromlineno))</span>
+
+    <span class="s2">def </span><span class="s1">_check_position(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Check `node` import or importfrom node position is correct 
+ 
+        Send a message  if `node` comes before another instruction 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># if a first non-import instruction has already been encountered,</span>
+        <span class="s0"># it means the import comes after it and therefore is not well placed</span>
+        <span class="s2">if </span><span class="s1">self._first_non_import_node:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;wrong-import-position&quot;</span><span class="s1">, node=node, args=node.as_string())</span>
+
+    <span class="s2">def </span><span class="s1">_record_import(self, node, importedmodnode):</span>
+        <span class="s0">&quot;&quot;&quot;Record the package `node` imports from&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">isinstance(node, astroid.ImportFrom):</span>
+            <span class="s1">importedname = node.modname</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">importedname = importedmodnode.name </span><span class="s2">if </span><span class="s1">importedmodnode </span><span class="s2">else None</span>
+        <span class="s2">if not </span><span class="s1">importedname:</span>
+            <span class="s1">importedname = node.names[</span><span class="s4">0</span><span class="s1">][</span><span class="s4">0</span><span class="s1">].split(</span><span class="s3">&quot;.&quot;</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">]</span>
+
+        <span class="s2">if </span><span class="s1">isinstance(node, astroid.ImportFrom) </span><span class="s2">and </span><span class="s1">(node.level </span><span class="s2">or </span><span class="s4">0</span><span class="s1">) &gt;= </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s0"># We need the importedname with first point to detect local package</span>
+            <span class="s0"># Example of node:</span>
+            <span class="s0">#  'from .my_package1 import MyClass1'</span>
+            <span class="s0">#  the output should be '.my_package1' instead of 'my_package1'</span>
+            <span class="s0"># Example of node:</span>
+            <span class="s0">#  'from . import my_package2'</span>
+            <span class="s0">#  the output should be '.my_package2' instead of '{pyfile}'</span>
+            <span class="s1">importedname = </span><span class="s3">&quot;.&quot; </span><span class="s1">+ importedname</span>
+
+        <span class="s1">self._imports_stack.append((node, importedname))</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_is_fallback_import(node, imports):</span>
+        <span class="s1">imports = [import_node </span><span class="s2">for </span><span class="s1">(import_node, _) </span><span class="s2">in </span><span class="s1">imports]</span>
+        <span class="s2">return </span><span class="s1">any(astroid.are_exclusive(import_node, node) </span><span class="s2">for </span><span class="s1">import_node </span><span class="s2">in </span><span class="s1">imports)</span>
+
+    <span class="s2">def </span><span class="s1">_check_imports_order(self, _module_node):</span>
+        <span class="s0">&quot;&quot;&quot;Checks imports of module `node` are grouped by category 
+ 
+        Imports must follow this order: standard, 3rd party, local 
+        &quot;&quot;&quot;</span>
+        <span class="s1">std_imports = []</span>
+        <span class="s1">third_party_imports = []</span>
+        <span class="s1">first_party_imports = []</span>
+        <span class="s0"># need of a list that holds third or first party ordered import</span>
+        <span class="s1">external_imports = []</span>
+        <span class="s1">local_imports = []</span>
+        <span class="s1">third_party_not_ignored = []</span>
+        <span class="s1">first_party_not_ignored = []</span>
+        <span class="s1">local_not_ignored = []</span>
+        <span class="s1">isort_driver = IsortDriver(self.config)</span>
+        <span class="s2">for </span><span class="s1">node, modname </span><span class="s2">in </span><span class="s1">self._imports_stack:</span>
+            <span class="s2">if </span><span class="s1">modname.startswith(</span><span class="s3">&quot;.&quot;</span><span class="s1">):</span>
+                <span class="s1">package = </span><span class="s3">&quot;.&quot; </span><span class="s1">+ modname.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">)[</span><span class="s4">1</span><span class="s1">]</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">package = modname.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">]</span>
+            <span class="s1">nested = </span><span class="s2">not </span><span class="s1">isinstance(node.parent, astroid.Module)</span>
+            <span class="s1">ignore_for_import_order = </span><span class="s2">not </span><span class="s1">self.linter.is_message_enabled(</span>
+                <span class="s3">&quot;wrong-import-order&quot;</span><span class="s1">, node.fromlineno</span>
+            <span class="s1">)</span>
+            <span class="s1">import_category = isort_driver.place_module(package)</span>
+            <span class="s1">node_and_package_import = (node, package)</span>
+            <span class="s2">if </span><span class="s1">import_category </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;FUTURE&quot;</span><span class="s1">, </span><span class="s3">&quot;STDLIB&quot;</span><span class="s1">):</span>
+                <span class="s1">std_imports.append(node_and_package_import)</span>
+                <span class="s1">wrong_import = (</span>
+                    <span class="s1">third_party_not_ignored</span>
+                    <span class="s2">or </span><span class="s1">first_party_not_ignored</span>
+                    <span class="s2">or </span><span class="s1">local_not_ignored</span>
+                <span class="s1">)</span>
+                <span class="s2">if </span><span class="s1">self._is_fallback_import(node, wrong_import):</span>
+                    <span class="s2">continue</span>
+                <span class="s2">if </span><span class="s1">wrong_import </span><span class="s2">and not </span><span class="s1">nested:</span>
+                    <span class="s1">self.add_message(</span>
+                        <span class="s3">&quot;wrong-import-order&quot;</span><span class="s1">,</span>
+                        <span class="s1">node=node,</span>
+                        <span class="s1">args=(</span>
+                            <span class="s3">'standard import &quot;%s&quot;' </span><span class="s1">% node.as_string(),</span>
+                            <span class="s3">'&quot;%s&quot;' </span><span class="s1">% wrong_import[</span><span class="s4">0</span><span class="s1">][</span><span class="s4">0</span><span class="s1">].as_string(),</span>
+                        <span class="s1">),</span>
+                    <span class="s1">)</span>
+            <span class="s2">elif </span><span class="s1">import_category == </span><span class="s3">&quot;THIRDPARTY&quot;</span><span class="s1">:</span>
+                <span class="s1">third_party_imports.append(node_and_package_import)</span>
+                <span class="s1">external_imports.append(node_and_package_import)</span>
+                <span class="s2">if not </span><span class="s1">nested </span><span class="s2">and not </span><span class="s1">ignore_for_import_order:</span>
+                    <span class="s1">third_party_not_ignored.append(node_and_package_import)</span>
+                <span class="s1">wrong_import = first_party_not_ignored </span><span class="s2">or </span><span class="s1">local_not_ignored</span>
+                <span class="s2">if </span><span class="s1">wrong_import </span><span class="s2">and not </span><span class="s1">nested:</span>
+                    <span class="s1">self.add_message(</span>
+                        <span class="s3">&quot;wrong-import-order&quot;</span><span class="s1">,</span>
+                        <span class="s1">node=node,</span>
+                        <span class="s1">args=(</span>
+                            <span class="s3">'third party import &quot;%s&quot;' </span><span class="s1">% node.as_string(),</span>
+                            <span class="s3">'&quot;%s&quot;' </span><span class="s1">% wrong_import[</span><span class="s4">0</span><span class="s1">][</span><span class="s4">0</span><span class="s1">].as_string(),</span>
+                        <span class="s1">),</span>
+                    <span class="s1">)</span>
+            <span class="s2">elif </span><span class="s1">import_category == </span><span class="s3">&quot;FIRSTPARTY&quot;</span><span class="s1">:</span>
+                <span class="s1">first_party_imports.append(node_and_package_import)</span>
+                <span class="s1">external_imports.append(node_and_package_import)</span>
+                <span class="s2">if not </span><span class="s1">nested </span><span class="s2">and not </span><span class="s1">ignore_for_import_order:</span>
+                    <span class="s1">first_party_not_ignored.append(node_and_package_import)</span>
+                <span class="s1">wrong_import = local_not_ignored</span>
+                <span class="s2">if </span><span class="s1">wrong_import </span><span class="s2">and not </span><span class="s1">nested:</span>
+                    <span class="s1">self.add_message(</span>
+                        <span class="s3">&quot;wrong-import-order&quot;</span><span class="s1">,</span>
+                        <span class="s1">node=node,</span>
+                        <span class="s1">args=(</span>
+                            <span class="s3">'first party import &quot;%s&quot;' </span><span class="s1">% node.as_string(),</span>
+                            <span class="s3">'&quot;%s&quot;' </span><span class="s1">% wrong_import[</span><span class="s4">0</span><span class="s1">][</span><span class="s4">0</span><span class="s1">].as_string(),</span>
+                        <span class="s1">),</span>
+                    <span class="s1">)</span>
+            <span class="s2">elif </span><span class="s1">import_category == </span><span class="s3">&quot;LOCALFOLDER&quot;</span><span class="s1">:</span>
+                <span class="s1">local_imports.append((node, package))</span>
+                <span class="s2">if not </span><span class="s1">nested </span><span class="s2">and not </span><span class="s1">ignore_for_import_order:</span>
+                    <span class="s1">local_not_ignored.append((node, package))</span>
+        <span class="s2">return </span><span class="s1">std_imports, external_imports, local_imports</span>
+
+    <span class="s2">def </span><span class="s1">_get_imported_module(self, importnode, modname):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">importnode.do_import_module(modname)</span>
+        <span class="s2">except </span><span class="s1">astroid.TooManyLevelsError:</span>
+            <span class="s2">if </span><span class="s1">_ignore_import_failure(importnode, modname, self._ignored_modules):</span>
+                <span class="s2">return None</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;relative-beyond-top-level&quot;</span><span class="s1">, node=importnode)</span>
+        <span class="s2">except </span><span class="s1">astroid.AstroidSyntaxError </span><span class="s2">as </span><span class="s1">exc:</span>
+            <span class="s1">message = </span><span class="s3">&quot;Cannot import {!r} due to syntax error {!r}&quot;</span><span class="s1">.format(</span>
+                <span class="s1">modname, str(exc.error)  </span><span class="s0"># pylint: disable=no-member; false positive</span>
+            <span class="s1">)</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;syntax-error&quot;</span><span class="s1">, line=importnode.lineno, args=message)</span>
+
+        <span class="s2">except </span><span class="s1">astroid.AstroidBuildingException:</span>
+            <span class="s2">if not </span><span class="s1">self.linter.is_message_enabled(</span><span class="s3">&quot;import-error&quot;</span><span class="s1">):</span>
+                <span class="s2">return None</span>
+            <span class="s2">if </span><span class="s1">_ignore_import_failure(importnode, modname, self._ignored_modules):</span>
+                <span class="s2">return None</span>
+            <span class="s2">if not </span><span class="s1">self.config.analyse_fallback_blocks </span><span class="s2">and </span><span class="s1">is_from_fallback_block(</span>
+                <span class="s1">importnode</span>
+            <span class="s1">):</span>
+                <span class="s2">return None</span>
+
+            <span class="s1">dotted_modname = _get_import_name(importnode, modname)</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;import-error&quot;</span><span class="s1">, args=repr(dotted_modname), node=importnode)</span>
+        <span class="s2">return None</span>
+
+    <span class="s2">def </span><span class="s1">_add_imported_module(self, node, importedmodname):</span>
+        <span class="s0">&quot;&quot;&quot;notify an imported module, used to analyze dependencies&quot;&quot;&quot;</span>
+        <span class="s1">module_file = node.root().file</span>
+        <span class="s1">context_name = node.root().name</span>
+        <span class="s1">base = os.path.splitext(os.path.basename(module_file))[</span><span class="s4">0</span><span class="s1">]</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">importedmodname = astroid.modutils.get_module_part(</span>
+                <span class="s1">importedmodname, module_file</span>
+            <span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">ImportError:</span>
+            <span class="s2">pass</span>
+
+        <span class="s2">if </span><span class="s1">context_name == importedmodname:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;import-self&quot;</span><span class="s1">, node=node)</span>
+
+        <span class="s2">elif not </span><span class="s1">astroid.modutils.is_standard_module(importedmodname):</span>
+            <span class="s0"># if this is not a package __init__ module</span>
+            <span class="s2">if </span><span class="s1">base != </span><span class="s3">&quot;__init__&quot; </span><span class="s2">and </span><span class="s1">context_name </span><span class="s2">not in </span><span class="s1">self._module_pkg:</span>
+                <span class="s0"># record the module's parent, or the module itself if this is</span>
+                <span class="s0"># a top level module, as the package it belongs to</span>
+                <span class="s1">self._module_pkg[context_name] = context_name.rsplit(</span><span class="s3">&quot;.&quot;</span><span class="s1">, </span><span class="s4">1</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">]</span>
+
+            <span class="s0"># handle dependencies</span>
+            <span class="s1">importedmodnames = self.stats[</span><span class="s3">&quot;dependencies&quot;</span><span class="s1">].setdefault(</span>
+                <span class="s1">importedmodname, set()</span>
+            <span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">context_name </span><span class="s2">not in </span><span class="s1">importedmodnames:</span>
+                <span class="s1">importedmodnames.add(context_name)</span>
+
+            <span class="s0"># update import graph</span>
+            <span class="s1">self.import_graph[context_name].add(importedmodname)</span>
+            <span class="s2">if not </span><span class="s1">self.linter.is_message_enabled(</span><span class="s3">&quot;cyclic-import&quot;</span><span class="s1">, line=node.lineno):</span>
+                <span class="s1">self._excluded_edges[context_name].add(importedmodname)</span>
+
+    <span class="s2">def </span><span class="s1">_check_preferred_module(self, node, mod_path):</span>
+        <span class="s0">&quot;&quot;&quot;check if the module has a preferred replacement&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">mod_path </span><span class="s2">in </span><span class="s1">self.preferred_modules:</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;preferred-module&quot;</span><span class="s1">,</span>
+                <span class="s1">node=node,</span>
+                <span class="s1">args=(self.preferred_modules[mod_path], mod_path),</span>
+            <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_check_import_as_rename(self, node):</span>
+        <span class="s1">names = node.names</span>
+        <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">names:</span>
+            <span class="s2">if not </span><span class="s1">all(name):</span>
+                <span class="s2">return</span>
+
+            <span class="s1">real_name = name[</span><span class="s4">0</span><span class="s1">]</span>
+            <span class="s1">splitted_packages = real_name.rsplit(</span><span class="s3">&quot;.&quot;</span><span class="s1">)</span>
+            <span class="s1">real_name = splitted_packages[-</span><span class="s4">1</span><span class="s1">]</span>
+            <span class="s1">imported_name = name[</span><span class="s4">1</span><span class="s1">]</span>
+            <span class="s0"># consider only following cases</span>
+            <span class="s0"># import x as x</span>
+            <span class="s0"># and ignore following</span>
+            <span class="s0"># import x.y.z as z</span>
+            <span class="s2">if </span><span class="s1">real_name == imported_name </span><span class="s2">and </span><span class="s1">len(splitted_packages) == </span><span class="s4">1</span><span class="s1">:</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;useless-import-alias&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_reimport(self, node, basename=</span><span class="s2">None</span><span class="s1">, level=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;check if the import is necessary (i.e. not already done)&quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">self.linter.is_message_enabled(</span><span class="s3">&quot;reimported&quot;</span><span class="s1">):</span>
+            <span class="s2">return</span>
+
+        <span class="s1">frame = node.frame()</span>
+        <span class="s1">root = node.root()</span>
+        <span class="s1">contexts = [(frame, level)]</span>
+        <span class="s2">if </span><span class="s1">root </span><span class="s2">is not </span><span class="s1">frame:</span>
+            <span class="s1">contexts.append((root, </span><span class="s2">None</span><span class="s1">))</span>
+
+        <span class="s2">for </span><span class="s1">known_context, known_level </span><span class="s2">in </span><span class="s1">contexts:</span>
+            <span class="s2">for </span><span class="s1">name, alias </span><span class="s2">in </span><span class="s1">node.names:</span>
+                <span class="s1">first = _get_first_import(</span>
+                    <span class="s1">node, known_context, name, basename, known_level, alias</span>
+                <span class="s1">)</span>
+                <span class="s2">if </span><span class="s1">first </span><span class="s2">is not None</span><span class="s1">:</span>
+                    <span class="s1">self.add_message(</span>
+                        <span class="s3">&quot;reimported&quot;</span><span class="s1">, node=node, args=(name, first.fromlineno)</span>
+                    <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_report_external_dependencies(self, sect, _, _dummy):</span>
+        <span class="s0">&quot;&quot;&quot;return a verbatim layout for displaying dependencies&quot;&quot;&quot;</span>
+        <span class="s1">dep_info = _make_tree_defs(self._external_dependencies_info().items())</span>
+        <span class="s2">if not </span><span class="s1">dep_info:</span>
+            <span class="s2">raise </span><span class="s1">EmptyReportError()</span>
+        <span class="s1">tree_str = _repr_tree_defs(dep_info)</span>
+        <span class="s1">sect.append(VerbatimText(tree_str))</span>
+
+    <span class="s2">def </span><span class="s1">_report_dependencies_graph(self, sect, _, _dummy):</span>
+        <span class="s0">&quot;&quot;&quot;write dependencies as a dot (graphviz) file&quot;&quot;&quot;</span>
+        <span class="s1">dep_info = self.stats[</span><span class="s3">&quot;dependencies&quot;</span><span class="s1">]</span>
+        <span class="s2">if not </span><span class="s1">dep_info </span><span class="s2">or not </span><span class="s1">(</span>
+            <span class="s1">self.config.import_graph</span>
+            <span class="s2">or </span><span class="s1">self.config.ext_import_graph</span>
+            <span class="s2">or </span><span class="s1">self.config.int_import_graph</span>
+        <span class="s1">):</span>
+            <span class="s2">raise </span><span class="s1">EmptyReportError()</span>
+        <span class="s1">filename = self.config.import_graph</span>
+        <span class="s2">if </span><span class="s1">filename:</span>
+            <span class="s1">_make_graph(filename, dep_info, sect, </span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+        <span class="s1">filename = self.config.ext_import_graph</span>
+        <span class="s2">if </span><span class="s1">filename:</span>
+            <span class="s1">_make_graph(filename, self._external_dependencies_info(), sect, </span><span class="s3">&quot;external &quot;</span><span class="s1">)</span>
+        <span class="s1">filename = self.config.int_import_graph</span>
+        <span class="s2">if </span><span class="s1">filename:</span>
+            <span class="s1">_make_graph(filename, self._internal_dependencies_info(), sect, </span><span class="s3">&quot;internal &quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_filter_dependencies_graph(self, internal):</span>
+        <span class="s0">&quot;&quot;&quot;build the internal or the external dependency graph&quot;&quot;&quot;</span>
+        <span class="s1">graph = collections.defaultdict(set)</span>
+        <span class="s2">for </span><span class="s1">importee, importers </span><span class="s2">in </span><span class="s1">self.stats[</span><span class="s3">&quot;dependencies&quot;</span><span class="s1">].items():</span>
+            <span class="s2">for </span><span class="s1">importer </span><span class="s2">in </span><span class="s1">importers:</span>
+                <span class="s1">package = self._module_pkg.get(importer, importer)</span>
+                <span class="s1">is_inside = importee.startswith(package)</span>
+                <span class="s2">if </span><span class="s1">is_inside </span><span class="s2">and </span><span class="s1">internal </span><span class="s2">or not </span><span class="s1">is_inside </span><span class="s2">and not </span><span class="s1">internal:</span>
+                    <span class="s1">graph[importee].add(importer)</span>
+        <span class="s2">return </span><span class="s1">graph</span>
+
+    <span class="s1">@astroid.decorators.cached</span>
+    <span class="s2">def </span><span class="s1">_external_dependencies_info(self):</span>
+        <span class="s0">&quot;&quot;&quot;return cached external dependencies information or build and 
+        cache them 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._filter_dependencies_graph(internal=</span><span class="s2">False</span><span class="s1">)</span>
+
+    <span class="s1">@astroid.decorators.cached</span>
+    <span class="s2">def </span><span class="s1">_internal_dependencies_info(self):</span>
+        <span class="s0">&quot;&quot;&quot;return cached internal dependencies information or build and 
+        cache them 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._filter_dependencies_graph(internal=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_check_wildcard_imports(self, node, imported_module):</span>
+        <span class="s2">if </span><span class="s1">node.root().package:</span>
+            <span class="s0"># Skip the check if in __init__.py issue #2026</span>
+            <span class="s2">return</span>
+
+        <span class="s1">wildcard_import_is_allowed = self._wildcard_import_is_allowed(imported_module)</span>
+        <span class="s2">for </span><span class="s1">name, _ </span><span class="s2">in </span><span class="s1">node.names:</span>
+            <span class="s2">if </span><span class="s1">name == </span><span class="s3">&quot;*&quot; </span><span class="s2">and not </span><span class="s1">wildcard_import_is_allowed:</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;wildcard-import&quot;</span><span class="s1">, args=node.modname, node=node)</span>
+
+    <span class="s2">def </span><span class="s1">_wildcard_import_is_allowed(self, imported_module):</span>
+        <span class="s2">return </span><span class="s1">(</span>
+            <span class="s1">self.config.allow_wildcard_with_all</span>
+            <span class="s2">and </span><span class="s1">imported_module </span><span class="s2">is not None</span>
+            <span class="s2">and </span><span class="s3">&quot;__all__&quot; </span><span class="s2">in </span><span class="s1">imported_module.locals</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_check_toplevel(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Check whether the import is made outside the module toplevel.&quot;&quot;&quot;</span>
+        <span class="s0"># If the scope of the import is a module, then obviously it is</span>
+        <span class="s0"># not outside the module toplevel.</span>
+        <span class="s2">if </span><span class="s1">isinstance(node.scope(), astroid.Module):</span>
+            <span class="s2">return</span>
+
+        <span class="s1">module_names = [</span>
+            <span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">node.modname</span><span class="s5">}</span><span class="s3">.</span><span class="s5">{</span><span class="s1">name[</span><span class="s4">0</span><span class="s1">]</span><span class="s5">}</span><span class="s3">&quot;</span>
+            <span class="s2">if </span><span class="s1">isinstance(node, astroid.ImportFrom)</span>
+            <span class="s2">else </span><span class="s1">name[</span><span class="s4">0</span><span class="s1">]</span>
+            <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">node.names</span>
+        <span class="s1">]</span>
+
+        <span class="s0"># Get the full names of all the imports that are only allowed at the module level</span>
+        <span class="s1">scoped_imports = [</span>
+            <span class="s1">name </span><span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">module_names </span><span class="s2">if </span><span class="s1">name </span><span class="s2">not in </span><span class="s1">self._allow_any_import_level</span>
+        <span class="s1">]</span>
+
+        <span class="s2">if </span><span class="s1">scoped_imports:</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;import-outside-toplevel&quot;</span><span class="s1">, args=</span><span class="s3">&quot;, &quot;</span><span class="s1">.join(scoped_imports), node=node</span>
+            <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">register(linter):</span>
+    <span class="s0">&quot;&quot;&quot;required method to auto register this checker&quot;&quot;&quot;</span>
+    <span class="s1">linter.register_checker(ImportsChecker(linter))</span>
+</pre>
+</body>
+</html>

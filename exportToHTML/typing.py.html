@@ -1,0 +1,336 @@
+<html>
+<head>
+<title>typing.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+.s3 { color: #d19a66;}
+.s4 { color: #5c6370;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+typing.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">functools </span><span class="s0">import </span><span class="s1">lru_cache</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Dict, List, NamedTuple, Set, Union</span>
+
+<span class="s0">import </span><span class="s1">astroid</span>
+<span class="s0">import </span><span class="s1">astroid.bases</span>
+<span class="s0">import </span><span class="s1">astroid.node_classes</span>
+
+<span class="s0">from </span><span class="s1">pylint.checkers </span><span class="s0">import </span><span class="s1">BaseChecker</span>
+<span class="s0">from </span><span class="s1">pylint.checkers.utils </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">check_messages,</span>
+    <span class="s1">is_node_in_type_annotation_context,</span>
+    <span class="s1">safe_infer,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">pylint.interfaces </span><span class="s0">import </span><span class="s1">IAstroidChecker</span>
+<span class="s0">from </span><span class="s1">pylint.lint </span><span class="s0">import </span><span class="s1">PyLinter</span>
+
+
+<span class="s0">class </span><span class="s1">TypingAlias(NamedTuple):</span>
+    <span class="s1">name: str</span>
+    <span class="s1">name_collision: bool</span>
+
+
+<span class="s1">DEPRECATED_TYPING_ALIASES: Dict[str, TypingAlias] = {</span>
+    <span class="s2">&quot;typing.Tuple&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;tuple&quot;</span><span class="s1">, </span><span class="s0">False</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.List&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;list&quot;</span><span class="s1">, </span><span class="s0">False</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Dict&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;dict&quot;</span><span class="s1">, </span><span class="s0">False</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Set&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;set&quot;</span><span class="s1">, </span><span class="s0">False</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.FrozenSet&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;frozenset&quot;</span><span class="s1">, </span><span class="s0">False</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Type&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;type&quot;</span><span class="s1">, </span><span class="s0">False</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Deque&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.deque&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.DefaultDict&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.defaultdict&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.OrderedDict&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.OrderedDict&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Counter&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.Counter&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.ChainMap&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.ChainMap&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Awaitable&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.Awaitable&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Coroutine&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.Coroutine&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.AsyncIterable&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.AsyncIterable&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.AsyncIterator&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.AsyncIterator&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.AsyncGenerator&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.AsyncGenerator&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Iterable&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.Iterable&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Iterator&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.Iterator&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Generator&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.Generator&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Reversible&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.Reversible&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Container&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.Container&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Collection&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.Collection&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Callable&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.Callable&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.AbstractSet&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.Set&quot;</span><span class="s1">, </span><span class="s0">False</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.MutableSet&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.MutableSet&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Mapping&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.Mapping&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.MutableMapping&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.MutableMapping&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Sequence&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.Sequence&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.MutableSequence&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.MutableSequence&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.ByteString&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.ByteString&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.MappingView&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.MappingView&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.KeysView&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.KeysView&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.ItemsView&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.ItemsView&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.ValuesView&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.ValuesView&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.ContextManager&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;contextlib.AbstractContextManager&quot;</span><span class="s1">, </span><span class="s0">False</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.AsyncContextManager&quot;</span><span class="s1">: TypingAlias(</span>
+        <span class="s2">&quot;contextlib.AbstractAsyncContextManager&quot;</span><span class="s1">, </span><span class="s0">False</span>
+    <span class="s1">),</span>
+    <span class="s2">&quot;typing.Pattern&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;re.Pattern&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Match&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;re.Match&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Hashable&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.Hashable&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+    <span class="s2">&quot;typing.Sized&quot;</span><span class="s1">: TypingAlias(</span><span class="s2">&quot;collections.abc.Sized&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">),</span>
+<span class="s1">}</span>
+
+<span class="s1">ALIAS_NAMES = frozenset(key.split(</span><span class="s2">&quot;.&quot;</span><span class="s1">)[</span><span class="s3">1</span><span class="s1">] </span><span class="s0">for </span><span class="s1">key </span><span class="s0">in </span><span class="s1">DEPRECATED_TYPING_ALIASES)</span>
+<span class="s1">UNION_NAMES = (</span><span class="s2">&quot;Optional&quot;</span><span class="s1">, </span><span class="s2">&quot;Union&quot;</span><span class="s1">)</span>
+
+
+<span class="s0">class </span><span class="s1">DeprecatedTypingAliasMsg(NamedTuple):</span>
+    <span class="s1">node: Union[astroid.Name, astroid.Attribute]</span>
+    <span class="s1">qname: str</span>
+    <span class="s1">alias: str</span>
+    <span class="s1">parent_subscript: bool</span>
+
+
+<span class="s0">class </span><span class="s1">TypingChecker(BaseChecker):</span>
+    <span class="s4">&quot;&quot;&quot;Find issue specifically related to type annotations.&quot;&quot;&quot;</span>
+
+    <span class="s1">__implements__ = (IAstroidChecker,)</span>
+
+    <span class="s1">name = </span><span class="s2">&quot;typing&quot;</span>
+    <span class="s1">priority = -</span><span class="s3">1</span>
+    <span class="s1">msgs = {</span>
+        <span class="s2">&quot;W6001&quot;</span><span class="s1">: (</span>
+            <span class="s2">&quot;'%s' is deprecated, use '%s' instead&quot;</span><span class="s1">,</span>
+            <span class="s2">&quot;deprecated-typing-alias&quot;</span><span class="s1">,</span>
+            <span class="s2">&quot;Emitted when a deprecated typing alias is used.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s2">&quot;R6002&quot;</span><span class="s1">: (</span>
+            <span class="s2">&quot;'%s' will be deprecated with PY39, consider using '%s' instead%s&quot;</span><span class="s1">,</span>
+            <span class="s2">&quot;consider-using-alias&quot;</span><span class="s1">,</span>
+            <span class="s2">&quot;Only emitted if 'runtime-typing=no' and a deprecated &quot;</span>
+            <span class="s2">&quot;typing alias is used in a type annotation context in &quot;</span>
+            <span class="s2">&quot;Python 3.7 or 3.8.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s2">&quot;R6003&quot;</span><span class="s1">: (</span>
+            <span class="s2">&quot;Consider using alternative Union syntax instead of '%s'%s&quot;</span><span class="s1">,</span>
+            <span class="s2">&quot;consider-alternative-union-syntax&quot;</span><span class="s1">,</span>
+            <span class="s2">&quot;Emitted when 'typing.Union' or 'typing.Optional' is used &quot;</span>
+            <span class="s2">&quot;instead of the alternative Union syntax 'int | None'.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+    <span class="s1">}</span>
+    <span class="s1">options = (</span>
+        <span class="s1">(</span>
+            <span class="s2">&quot;py-version&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s2">&quot;default&quot;</span><span class="s1">: (</span><span class="s3">3</span><span class="s1">, </span><span class="s3">7</span><span class="s1">),</span>
+                <span class="s2">&quot;type&quot;</span><span class="s1">: </span><span class="s2">&quot;py_version&quot;</span><span class="s1">,</span>
+                <span class="s2">&quot;metavar&quot;</span><span class="s1">: </span><span class="s2">&quot;&lt;py_version&gt;&quot;</span><span class="s1">,</span>
+                <span class="s2">&quot;help&quot;</span><span class="s1">: (</span>
+                    <span class="s2">&quot;Min Python version to use for typing related checks, &quot;</span>
+                    <span class="s2">&quot;e.g. ``3.7``. This should be equal to the min supported Python &quot;</span>
+                    <span class="s2">&quot;version of the project.&quot;</span>
+                <span class="s1">),</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s2">&quot;runtime-typing&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s2">&quot;default&quot;</span><span class="s1">: </span><span class="s0">True</span><span class="s1">,</span>
+                <span class="s2">&quot;type&quot;</span><span class="s1">: </span><span class="s2">&quot;yn&quot;</span><span class="s1">,</span>
+                <span class="s2">&quot;metavar&quot;</span><span class="s1">: </span><span class="s2">&quot;&lt;y_or_n&gt;&quot;</span><span class="s1">,</span>
+                <span class="s2">&quot;help&quot;</span><span class="s1">: (</span>
+                    <span class="s2">&quot;Set to ``no`` if the app / libary does NOT need to &quot;</span>
+                    <span class="s2">&quot;support runtime introspection of type &quot;</span>
+                    <span class="s2">&quot;annotations. Only applies to Python version &quot;</span>
+                    <span class="s2">&quot;3.7 - 3.9&quot;</span>
+                <span class="s1">),</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, linter: PyLinter) -&gt; </span><span class="s0">None</span><span class="s1">:</span>
+        <span class="s4">&quot;&quot;&quot;Initialize checker instance.&quot;&quot;&quot;</span>
+        <span class="s1">super().__init__(linter=linter)</span>
+        <span class="s1">self._alias_name_collisions: Set[str] = set()</span>
+        <span class="s1">self._consider_using_alias_msgs: List[DeprecatedTypingAliasMsg] = []</span>
+
+    <span class="s1">@lru_cache()</span>
+    <span class="s0">def </span><span class="s1">_py37_plus(self) -&gt; bool:</span>
+        <span class="s0">return </span><span class="s1">self.config.py_version &gt;= (</span><span class="s3">3</span><span class="s1">, </span><span class="s3">7</span><span class="s1">)</span>
+
+    <span class="s1">@lru_cache()</span>
+    <span class="s0">def </span><span class="s1">_py39_plus(self) -&gt; bool:</span>
+        <span class="s0">return </span><span class="s1">self.config.py_version &gt;= (</span><span class="s3">3</span><span class="s1">, </span><span class="s3">9</span><span class="s1">)</span>
+
+    <span class="s1">@lru_cache()</span>
+    <span class="s0">def </span><span class="s1">_py310_plus(self) -&gt; bool:</span>
+        <span class="s0">return </span><span class="s1">self.config.py_version &gt;= (</span><span class="s3">3</span><span class="s1">, </span><span class="s3">10</span><span class="s1">)</span>
+
+    <span class="s1">@lru_cache()</span>
+    <span class="s0">def </span><span class="s1">_should_check_typing_alias(self) -&gt; bool:</span>
+        <span class="s4">&quot;&quot;&quot;The use of type aliases (PEP 585) requires Python 3.9 
+        or Python 3.7+ with postponed evaluation. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">(</span>
+            <span class="s1">self._py39_plus()</span>
+            <span class="s0">or </span><span class="s1">self._py37_plus()</span>
+            <span class="s0">and </span><span class="s1">self.config.runtime_typing </span><span class="s0">is False</span>
+        <span class="s1">)</span>
+
+    <span class="s1">@lru_cache()</span>
+    <span class="s0">def </span><span class="s1">_should_check_alternative_union_syntax(self) -&gt; bool:</span>
+        <span class="s4">&quot;&quot;&quot;The use of alternative union syntax (PEP 604) requires Python 3.10 
+        or Python 3.7+ with postponed evaluation. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">(</span>
+            <span class="s1">self._py310_plus()</span>
+            <span class="s0">or </span><span class="s1">self._py37_plus()</span>
+            <span class="s0">and </span><span class="s1">self.config.runtime_typing </span><span class="s0">is False</span>
+        <span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">_msg_postponed_eval_hint(self, node) -&gt; str:</span>
+        <span class="s4">&quot;&quot;&quot;Message hint if postponed evaluation isn't enabled.&quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">self._py310_plus() </span><span class="s0">or </span><span class="s2">&quot;annotations&quot; </span><span class="s0">in </span><span class="s1">node.root().future_imports:</span>
+            <span class="s0">return </span><span class="s2">&quot;&quot;</span>
+        <span class="s0">return </span><span class="s2">&quot;. Add 'from __future__ import annotations' as well&quot;</span>
+
+    <span class="s1">@check_messages(</span>
+        <span class="s2">&quot;deprecated-typing-alias&quot;</span><span class="s1">,</span>
+        <span class="s2">&quot;consider-using-alias&quot;</span><span class="s1">,</span>
+        <span class="s2">&quot;consider-alternative-union-syntax&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s0">def </span><span class="s1">visit_name(self, node: astroid.Name) -&gt; </span><span class="s0">None</span><span class="s1">:</span>
+        <span class="s0">if </span><span class="s1">self._should_check_typing_alias() </span><span class="s0">and </span><span class="s1">node.name </span><span class="s0">in </span><span class="s1">ALIAS_NAMES:</span>
+            <span class="s1">self._check_for_typing_alias(node)</span>
+        <span class="s0">if </span><span class="s1">self._should_check_alternative_union_syntax() </span><span class="s0">and </span><span class="s1">node.name </span><span class="s0">in </span><span class="s1">UNION_NAMES:</span>
+            <span class="s1">self._check_for_alternative_union_syntax(node, node.name)</span>
+
+    <span class="s1">@check_messages(</span>
+        <span class="s2">&quot;deprecated-typing-alias&quot;</span><span class="s1">,</span>
+        <span class="s2">&quot;consider-using-alias&quot;</span><span class="s1">,</span>
+        <span class="s2">&quot;consider-alternative-union-syntax&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s0">def </span><span class="s1">visit_attribute(self, node: astroid.Attribute):</span>
+        <span class="s0">if </span><span class="s1">self._should_check_typing_alias() </span><span class="s0">and </span><span class="s1">node.attrname </span><span class="s0">in </span><span class="s1">ALIAS_NAMES:</span>
+            <span class="s1">self._check_for_typing_alias(node)</span>
+        <span class="s0">if </span><span class="s1">(</span>
+            <span class="s1">self._should_check_alternative_union_syntax()</span>
+            <span class="s0">and </span><span class="s1">node.attrname </span><span class="s0">in </span><span class="s1">UNION_NAMES</span>
+        <span class="s1">):</span>
+            <span class="s1">self._check_for_alternative_union_syntax(node, node.attrname)</span>
+
+    <span class="s0">def </span><span class="s1">_check_for_alternative_union_syntax(</span>
+        <span class="s1">self,</span>
+        <span class="s1">node: Union[astroid.Name, astroid.Attribute],</span>
+        <span class="s1">name: str,</span>
+    <span class="s1">) -&gt; </span><span class="s0">None</span><span class="s1">:</span>
+        <span class="s4">&quot;&quot;&quot;Check if alternative union syntax could be used. 
+ 
+        Requires 
+        - Python 3.10 
+        - OR: Python 3.7+ with postponed evaluation in 
+              a type annotation context 
+        &quot;&quot;&quot;</span>
+        <span class="s1">inferred = safe_infer(node)</span>
+        <span class="s0">if not </span><span class="s1">(</span>
+            <span class="s1">isinstance(inferred, astroid.FunctionDef)</span>
+            <span class="s0">and </span><span class="s1">inferred.qname()</span>
+            <span class="s0">in </span><span class="s1">(</span>
+                <span class="s2">&quot;typing.Optional&quot;</span><span class="s1">,</span>
+                <span class="s2">&quot;typing.Union&quot;</span><span class="s1">,</span>
+            <span class="s1">)</span>
+            <span class="s0">or </span><span class="s1">isinstance(inferred, astroid.bases.Instance)</span>
+            <span class="s0">and </span><span class="s1">inferred.qname() == </span><span class="s2">&quot;typing._SpecialForm&quot;</span>
+        <span class="s1">):</span>
+            <span class="s0">return</span>
+        <span class="s0">if not </span><span class="s1">(self._py310_plus() </span><span class="s0">or </span><span class="s1">is_node_in_type_annotation_context(node)):</span>
+            <span class="s0">return</span>
+        <span class="s1">self.add_message(</span>
+            <span class="s2">&quot;consider-alternative-union-syntax&quot;</span><span class="s1">,</span>
+            <span class="s1">node=node,</span>
+            <span class="s1">args=(name, self._msg_postponed_eval_hint(node)),</span>
+        <span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">_check_for_typing_alias(</span>
+        <span class="s1">self,</span>
+        <span class="s1">node: Union[astroid.Name, astroid.Attribute],</span>
+    <span class="s1">) -&gt; </span><span class="s0">None</span><span class="s1">:</span>
+        <span class="s4">&quot;&quot;&quot;Check if typing alias is depecated or could be replaced. 
+ 
+        Requires 
+        - Python 3.9 
+        - OR: Python 3.7+ with postponed evaluation in 
+              a type annotation context 
+ 
+        For Python 3.7+: Only emitt message if change doesn't create 
+            any name collisions, only ever used in a type annotation 
+            context, and can safely be replaced. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">inferred = safe_infer(node)</span>
+        <span class="s0">if not </span><span class="s1">isinstance(inferred, astroid.ClassDef):</span>
+            <span class="s0">return</span>
+        <span class="s1">alias = DEPRECATED_TYPING_ALIASES.get(inferred.qname(), </span><span class="s0">None</span><span class="s1">)</span>
+        <span class="s0">if </span><span class="s1">alias </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s0">return</span>
+
+        <span class="s0">if </span><span class="s1">self._py39_plus():</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s2">&quot;deprecated-typing-alias&quot;</span><span class="s1">,</span>
+                <span class="s1">node=node,</span>
+                <span class="s1">args=(inferred.qname(), alias.name),</span>
+            <span class="s1">)</span>
+            <span class="s0">return</span>
+
+        <span class="s4"># For PY37+, check for type annotation context first</span>
+        <span class="s0">if not </span><span class="s1">is_node_in_type_annotation_context(node) </span><span class="s0">and </span><span class="s1">isinstance(</span>
+            <span class="s1">node.parent, astroid.Subscript</span>
+        <span class="s1">):</span>
+            <span class="s0">if </span><span class="s1">alias.name_collision </span><span class="s0">is True</span><span class="s1">:</span>
+                <span class="s1">self._alias_name_collisions.add(inferred.qname())</span>
+            <span class="s0">return</span>
+        <span class="s1">self._consider_using_alias_msgs.append(</span>
+            <span class="s1">DeprecatedTypingAliasMsg(</span>
+                <span class="s1">node,</span>
+                <span class="s1">inferred.qname(),</span>
+                <span class="s1">alias.name,</span>
+                <span class="s1">isinstance(node.parent, astroid.Subscript),</span>
+            <span class="s1">)</span>
+        <span class="s1">)</span>
+
+    <span class="s1">@check_messages(</span><span class="s2">&quot;consider-using-alias&quot;</span><span class="s1">)</span>
+    <span class="s0">def </span><span class="s1">leave_module(self, node: astroid.Module) -&gt; </span><span class="s0">None</span><span class="s1">:</span>
+        <span class="s4">&quot;&quot;&quot;After parsing of module is complete, add messages for 
+        'consider-using-alias' check. Make sure results are safe 
+        to recommend / collision free. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">self._py37_plus() </span><span class="s0">and not </span><span class="s1">self._py39_plus():</span>
+            <span class="s1">msg_future_import = self._msg_postponed_eval_hint(node)</span>
+            <span class="s0">while True</span><span class="s1">:</span>
+                <span class="s0">try</span><span class="s1">:</span>
+                    <span class="s1">msg = self._consider_using_alias_msgs.pop(</span><span class="s3">0</span><span class="s1">)</span>
+                <span class="s0">except </span><span class="s1">IndexError:</span>
+                    <span class="s0">break</span>
+                <span class="s0">if </span><span class="s1">msg.qname </span><span class="s0">in </span><span class="s1">self._alias_name_collisions:</span>
+                    <span class="s0">continue</span>
+                <span class="s1">self.add_message(</span>
+                    <span class="s2">&quot;consider-using-alias&quot;</span><span class="s1">,</span>
+                    <span class="s1">node=msg.node,</span>
+                    <span class="s1">args=(</span>
+                        <span class="s1">msg.qname,</span>
+                        <span class="s1">msg.alias,</span>
+                        <span class="s1">msg_future_import </span><span class="s0">if </span><span class="s1">msg.parent_subscript </span><span class="s0">else </span><span class="s2">&quot;&quot;</span><span class="s1">,</span>
+                    <span class="s1">),</span>
+                <span class="s1">)</span>
+        <span class="s4"># Clear all module cache variables</span>
+        <span class="s1">self._alias_name_collisions.clear()</span>
+        <span class="s1">self._consider_using_alias_msgs.clear()</span>
+
+
+<span class="s0">def </span><span class="s1">register(linter: PyLinter) -&gt; </span><span class="s0">None</span><span class="s1">:</span>
+    <span class="s1">linter.register_checker(TypingChecker(linter))</span>
+</pre>
+</body>
+</html>

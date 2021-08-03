@@ -1,0 +1,39 @@
+<html>
+<head>
+<title>mapreduce_checker.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+mapreduce_checker.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2020 Frank Harrison &lt;frank@doublethefish.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Marc Mueller &lt;30130371+cdce8p@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+<span class="s2">import </span><span class="s1">abc</span>
+
+
+<span class="s2">class </span><span class="s1">MapReduceMixin(metaclass=abc.ABCMeta):</span>
+    <span class="s0">&quot;&quot;&quot;A mixin design to allow multiprocess/threaded runs of a Checker&quot;&quot;&quot;</span>
+
+    <span class="s1">@abc.abstractmethod</span>
+    <span class="s2">def </span><span class="s1">get_map_data(self):</span>
+        <span class="s0">&quot;&quot;&quot;Returns mergable/reducible data that will be examined&quot;&quot;&quot;</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s1">@abc.abstractmethod</span>
+    <span class="s2">def </span><span class="s1">reduce_map_data(cls, linter, data):</span>
+        <span class="s0">&quot;&quot;&quot;For a given Checker, receives data for all mapped runs&quot;&quot;&quot;</span>
+</pre>
+</body>
+</html>

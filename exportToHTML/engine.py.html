@@ -1,0 +1,424 @@
+<html>
+<head>
+<title>engine.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+engine.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot;Coverage controllers for use by pytest-cov and nose-cov.&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">contextlib</span>
+<span class="s2">import </span><span class="s1">copy</span>
+<span class="s2">import </span><span class="s1">functools</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">random</span>
+<span class="s2">import </span><span class="s1">socket</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s2">import </span><span class="s1">coverage</span>
+<span class="s2">from </span><span class="s1">coverage.data </span><span class="s2">import </span><span class="s1">CoverageData</span>
+
+<span class="s2">from </span><span class="s1">.compat </span><span class="s2">import </span><span class="s1">StringIO</span>
+<span class="s2">from </span><span class="s1">.embed </span><span class="s2">import </span><span class="s1">cleanup</span>
+
+
+<span class="s2">class </span><span class="s1">_NullFile(object):</span>
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">write(v):</span>
+        <span class="s2">pass</span>
+
+
+<span class="s1">@contextlib.contextmanager</span>
+<span class="s2">def </span><span class="s1">_backup(obj, attr):</span>
+    <span class="s1">backup = getattr(obj, attr)</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">setattr(obj, attr, copy.copy(backup))</span>
+        <span class="s2">yield</span>
+    <span class="s2">finally</span><span class="s1">:</span>
+        <span class="s1">setattr(obj, attr, backup)</span>
+
+
+<span class="s2">def </span><span class="s1">_ensure_topdir(meth):</span>
+    <span class="s1">@functools.wraps(meth)</span>
+    <span class="s2">def </span><span class="s1">ensure_topdir_wrapper(self, *args, **kwargs):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">original_cwd = os.getcwd()</span>
+        <span class="s2">except </span><span class="s1">OSError:</span>
+            <span class="s0"># Looks like it's gone, this is non-ideal because a side-effect will</span>
+            <span class="s0"># be introduced in the tests here but we can't do anything about it.</span>
+            <span class="s1">original_cwd = </span><span class="s2">None</span>
+        <span class="s1">os.chdir(self.topdir)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">meth(self, *args, **kwargs)</span>
+        <span class="s2">finally</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">original_cwd </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s1">os.chdir(original_cwd)</span>
+
+    <span class="s2">return </span><span class="s1">ensure_topdir_wrapper</span>
+
+
+<span class="s2">class </span><span class="s1">CovController(object):</span>
+    <span class="s0">&quot;&quot;&quot;Base class for different plugin implementations.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, cov_source, cov_report, cov_config, cov_append, cov_branch, config=</span><span class="s2">None</span><span class="s1">, nodeid=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Get some common config used by multiple derived classes.&quot;&quot;&quot;</span>
+        <span class="s1">self.cov_source = cov_source</span>
+        <span class="s1">self.cov_report = cov_report</span>
+        <span class="s1">self.cov_config = cov_config</span>
+        <span class="s1">self.cov_append = cov_append</span>
+        <span class="s1">self.cov_branch = cov_branch</span>
+        <span class="s1">self.config = config</span>
+        <span class="s1">self.nodeid = nodeid</span>
+
+        <span class="s1">self.cov = </span><span class="s2">None</span>
+        <span class="s1">self.combining_cov = </span><span class="s2">None</span>
+        <span class="s1">self.data_file = </span><span class="s2">None</span>
+        <span class="s1">self.node_descs = set()</span>
+        <span class="s1">self.failed_workers = []</span>
+        <span class="s1">self.topdir = os.getcwd()</span>
+        <span class="s1">self.is_collocated = </span><span class="s2">None</span>
+
+    <span class="s1">@contextlib.contextmanager</span>
+    <span class="s2">def </span><span class="s1">ensure_topdir(self):</span>
+        <span class="s1">original_cwd = os.getcwd()</span>
+        <span class="s1">os.chdir(self.topdir)</span>
+        <span class="s2">yield</span>
+        <span class="s1">os.chdir(original_cwd)</span>
+
+    <span class="s1">@_ensure_topdir</span>
+    <span class="s2">def </span><span class="s1">pause(self):</span>
+        <span class="s1">self.cov.stop()</span>
+        <span class="s1">self.unset_env()</span>
+
+    <span class="s1">@_ensure_topdir</span>
+    <span class="s2">def </span><span class="s1">resume(self):</span>
+        <span class="s1">self.cov.start()</span>
+        <span class="s1">self.set_env()</span>
+
+    <span class="s1">@_ensure_topdir</span>
+    <span class="s2">def </span><span class="s1">set_env(self):</span>
+        <span class="s0">&quot;&quot;&quot;Put info about coverage into the env so that subprocesses can activate coverage.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.cov_source </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">os.environ[</span><span class="s3">'COV_CORE_SOURCE'</span><span class="s1">] = os.pathsep</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">os.environ[</span><span class="s3">'COV_CORE_SOURCE'</span><span class="s1">] = os.pathsep.join(self.cov_source)</span>
+        <span class="s1">config_file = os.path.abspath(self.cov_config)</span>
+        <span class="s2">if </span><span class="s1">os.path.exists(config_file):</span>
+            <span class="s1">os.environ[</span><span class="s3">'COV_CORE_CONFIG'</span><span class="s1">] = config_file</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">os.environ[</span><span class="s3">'COV_CORE_CONFIG'</span><span class="s1">] = os.pathsep</span>
+        <span class="s1">os.environ[</span><span class="s3">'COV_CORE_DATAFILE'</span><span class="s1">] = os.path.abspath(self.cov.config.data_file)</span>
+        <span class="s2">if </span><span class="s1">self.cov_branch:</span>
+            <span class="s1">os.environ[</span><span class="s3">'COV_CORE_BRANCH'</span><span class="s1">] = </span><span class="s3">'enabled'</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">unset_env():</span>
+        <span class="s0">&quot;&quot;&quot;Remove coverage info from env.&quot;&quot;&quot;</span>
+        <span class="s1">os.environ.pop(</span><span class="s3">'COV_CORE_SOURCE'</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s1">os.environ.pop(</span><span class="s3">'COV_CORE_CONFIG'</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s1">os.environ.pop(</span><span class="s3">'COV_CORE_DATAFILE'</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s1">os.environ.pop(</span><span class="s3">'COV_CORE_BRANCH'</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s1">os.environ.pop(</span><span class="s3">'COV_CORE_CONTEXT'</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">get_node_desc(platform, version_info):</span>
+        <span class="s0">&quot;&quot;&quot;Return a description of this node.&quot;&quot;&quot;</span>
+
+        <span class="s2">return </span><span class="s3">'platform %s, python %s' </span><span class="s1">% (platform, </span><span class="s3">'%s.%s.%s-%s-%s' </span><span class="s1">% version_info[:</span><span class="s4">5</span><span class="s1">])</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">sep(stream, s, txt):</span>
+        <span class="s2">if </span><span class="s1">hasattr(stream, </span><span class="s3">'sep'</span><span class="s1">):</span>
+            <span class="s1">stream.sep(s, txt)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">sep_total = max((</span><span class="s4">70 </span><span class="s1">- </span><span class="s4">2 </span><span class="s1">- len(txt)), </span><span class="s4">2</span><span class="s1">)</span>
+            <span class="s1">sep_len = sep_total // </span><span class="s4">2</span>
+            <span class="s1">sep_extra = sep_total % </span><span class="s4">2</span>
+            <span class="s1">out = </span><span class="s3">'%s %s %s</span><span class="s5">\n</span><span class="s3">' </span><span class="s1">% (s * sep_len, txt, s * (sep_len + sep_extra))</span>
+            <span class="s1">stream.write(out)</span>
+
+    <span class="s1">@_ensure_topdir</span>
+    <span class="s2">def </span><span class="s1">summary(self, stream):</span>
+        <span class="s0">&quot;&quot;&quot;Produce coverage reports.&quot;&quot;&quot;</span>
+        <span class="s1">total = </span><span class="s2">None</span>
+
+        <span class="s2">if not </span><span class="s1">self.cov_report:</span>
+            <span class="s2">with </span><span class="s1">_backup(self.cov, </span><span class="s3">&quot;config&quot;</span><span class="s1">):</span>
+                <span class="s2">return </span><span class="s1">self.cov.report(show_missing=</span><span class="s2">True</span><span class="s1">, ignore_errors=</span><span class="s2">True</span><span class="s1">, file=_NullFile)</span>
+
+        <span class="s0"># Output coverage section header.</span>
+        <span class="s2">if </span><span class="s1">len(self.node_descs) == </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s1">self.sep(stream, </span><span class="s3">'-'</span><span class="s1">, </span><span class="s3">'coverage: %s' </span><span class="s1">% </span><span class="s3">''</span><span class="s1">.join(self.node_descs))</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.sep(stream, </span><span class="s3">'-'</span><span class="s1">, </span><span class="s3">'coverage'</span><span class="s1">)</span>
+            <span class="s2">for </span><span class="s1">node_desc </span><span class="s2">in </span><span class="s1">sorted(self.node_descs):</span>
+                <span class="s1">self.sep(stream, </span><span class="s3">' '</span><span class="s1">, </span><span class="s3">'%s' </span><span class="s1">% node_desc)</span>
+
+        <span class="s0"># Report on any failed workers.</span>
+        <span class="s2">if </span><span class="s1">self.failed_workers:</span>
+            <span class="s1">self.sep(stream, </span><span class="s3">'-'</span><span class="s1">, </span><span class="s3">'coverage: failed workers'</span><span class="s1">)</span>
+            <span class="s1">stream.write(</span><span class="s3">'The following workers failed to return coverage data, '</span>
+                         <span class="s3">'ensure that pytest-cov is installed on these workers.</span><span class="s5">\n</span><span class="s3">'</span><span class="s1">)</span>
+            <span class="s2">for </span><span class="s1">node </span><span class="s2">in </span><span class="s1">self.failed_workers:</span>
+                <span class="s1">stream.write(</span><span class="s3">'%s</span><span class="s5">\n</span><span class="s3">' </span><span class="s1">% node.gateway.id)</span>
+
+        <span class="s0"># Produce terminal report if wanted.</span>
+        <span class="s2">if </span><span class="s1">any(x </span><span class="s2">in </span><span class="s1">self.cov_report </span><span class="s2">for </span><span class="s1">x </span><span class="s2">in </span><span class="s1">[</span><span class="s3">'term'</span><span class="s1">, </span><span class="s3">'term-missing'</span><span class="s1">]):</span>
+            <span class="s1">options = {</span>
+                <span class="s3">'show_missing'</span><span class="s1">: (</span><span class="s3">'term-missing' </span><span class="s2">in </span><span class="s1">self.cov_report) </span><span class="s2">or None</span><span class="s1">,</span>
+                <span class="s3">'ignore_errors'</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+                <span class="s3">'file'</span><span class="s1">: stream,</span>
+            <span class="s1">}</span>
+            <span class="s1">skip_covered = isinstance(self.cov_report, dict) </span><span class="s2">and </span><span class="s3">'skip-covered' </span><span class="s2">in </span><span class="s1">self.cov_report.values()</span>
+            <span class="s1">options.update({</span><span class="s3">'skip_covered'</span><span class="s1">: skip_covered </span><span class="s2">or None</span><span class="s1">})</span>
+            <span class="s2">with </span><span class="s1">_backup(self.cov, </span><span class="s3">&quot;config&quot;</span><span class="s1">):</span>
+                <span class="s1">total = self.cov.report(**options)</span>
+
+        <span class="s0"># Produce annotated source code report if wanted.</span>
+        <span class="s2">if </span><span class="s3">'annotate' </span><span class="s2">in </span><span class="s1">self.cov_report:</span>
+            <span class="s1">annotate_dir = self.cov_report[</span><span class="s3">'annotate'</span><span class="s1">]</span>
+
+            <span class="s2">with </span><span class="s1">_backup(self.cov, </span><span class="s3">&quot;config&quot;</span><span class="s1">):</span>
+                <span class="s1">self.cov.annotate(ignore_errors=</span><span class="s2">True</span><span class="s1">, directory=annotate_dir)</span>
+            <span class="s0"># We need to call Coverage.report here, just to get the total</span>
+            <span class="s0"># Coverage.annotate don't return any total and we need it for --cov-fail-under.</span>
+
+            <span class="s2">with </span><span class="s1">_backup(self.cov, </span><span class="s3">&quot;config&quot;</span><span class="s1">):</span>
+                <span class="s1">total = self.cov.report(ignore_errors=</span><span class="s2">True</span><span class="s1">, file=_NullFile)</span>
+            <span class="s2">if </span><span class="s1">annotate_dir:</span>
+                <span class="s1">stream.write(</span><span class="s3">'Coverage annotated source written to dir %s</span><span class="s5">\n</span><span class="s3">' </span><span class="s1">% annotate_dir)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">stream.write(</span><span class="s3">'Coverage annotated source written next to source</span><span class="s5">\n</span><span class="s3">'</span><span class="s1">)</span>
+
+        <span class="s0"># Produce html report if wanted.</span>
+        <span class="s2">if </span><span class="s3">'html' </span><span class="s2">in </span><span class="s1">self.cov_report:</span>
+            <span class="s1">output = self.cov_report[</span><span class="s3">'html'</span><span class="s1">]</span>
+            <span class="s2">with </span><span class="s1">_backup(self.cov, </span><span class="s3">&quot;config&quot;</span><span class="s1">):</span>
+                <span class="s1">total = self.cov.html_report(ignore_errors=</span><span class="s2">True</span><span class="s1">, directory=output)</span>
+            <span class="s1">stream.write(</span><span class="s3">'Coverage HTML written to dir %s</span><span class="s5">\n</span><span class="s3">' </span><span class="s1">% (self.cov.config.html_dir </span><span class="s2">if </span><span class="s1">output </span><span class="s2">is None else </span><span class="s1">output))</span>
+
+        <span class="s0"># Produce xml report if wanted.</span>
+        <span class="s2">if </span><span class="s3">'xml' </span><span class="s2">in </span><span class="s1">self.cov_report:</span>
+            <span class="s1">output = self.cov_report[</span><span class="s3">'xml'</span><span class="s1">]</span>
+            <span class="s2">with </span><span class="s1">_backup(self.cov, </span><span class="s3">&quot;config&quot;</span><span class="s1">):</span>
+                <span class="s1">total = self.cov.xml_report(ignore_errors=</span><span class="s2">True</span><span class="s1">, outfile=output)</span>
+            <span class="s1">stream.write(</span><span class="s3">'Coverage XML written to file %s</span><span class="s5">\n</span><span class="s3">' </span><span class="s1">% (self.cov.config.xml_output </span><span class="s2">if </span><span class="s1">output </span><span class="s2">is None else </span><span class="s1">output))</span>
+
+        <span class="s2">return </span><span class="s1">total</span>
+
+
+<span class="s2">class </span><span class="s1">Central(CovController):</span>
+    <span class="s0">&quot;&quot;&quot;Implementation for centralised operation.&quot;&quot;&quot;</span>
+
+    <span class="s1">@_ensure_topdir</span>
+    <span class="s2">def </span><span class="s1">start(self):</span>
+        <span class="s1">cleanup()</span>
+
+        <span class="s1">self.cov = coverage.Coverage(source=self.cov_source,</span>
+                                     <span class="s1">branch=self.cov_branch,</span>
+                                     <span class="s1">data_suffix=</span><span class="s2">True</span><span class="s1">,</span>
+                                     <span class="s1">config_file=self.cov_config)</span>
+        <span class="s1">self.combining_cov = coverage.Coverage(source=self.cov_source,</span>
+                                               <span class="s1">branch=self.cov_branch,</span>
+                                               <span class="s1">data_suffix=</span><span class="s2">True</span><span class="s1">,</span>
+                                               <span class="s1">data_file=os.path.abspath(self.cov.config.data_file),</span>
+                                               <span class="s1">config_file=self.cov_config)</span>
+
+        <span class="s0"># Erase or load any previous coverage data and start coverage.</span>
+        <span class="s2">if not </span><span class="s1">self.cov_append:</span>
+            <span class="s1">self.cov.erase()</span>
+        <span class="s1">self.cov.start()</span>
+        <span class="s1">self.set_env()</span>
+
+    <span class="s1">@_ensure_topdir</span>
+    <span class="s2">def </span><span class="s1">finish(self):</span>
+        <span class="s0">&quot;&quot;&quot;Stop coverage, save data to file and set the list of coverage objects to report on.&quot;&quot;&quot;</span>
+
+        <span class="s1">self.unset_env()</span>
+        <span class="s1">self.cov.stop()</span>
+        <span class="s1">self.cov.save()</span>
+
+        <span class="s1">self.cov = self.combining_cov</span>
+        <span class="s1">self.cov.load()</span>
+        <span class="s1">self.cov.combine()</span>
+        <span class="s1">self.cov.save()</span>
+
+        <span class="s1">node_desc = self.get_node_desc(sys.platform, sys.version_info)</span>
+        <span class="s1">self.node_descs.add(node_desc)</span>
+
+
+<span class="s2">class </span><span class="s1">DistMaster(CovController):</span>
+    <span class="s0">&quot;&quot;&quot;Implementation for distributed master.&quot;&quot;&quot;</span>
+
+    <span class="s1">@_ensure_topdir</span>
+    <span class="s2">def </span><span class="s1">start(self):</span>
+        <span class="s1">cleanup()</span>
+
+        <span class="s0"># Ensure coverage rc file rsynced if appropriate.</span>
+        <span class="s2">if </span><span class="s1">self.cov_config </span><span class="s2">and </span><span class="s1">os.path.exists(self.cov_config):</span>
+            <span class="s1">self.config.option.rsyncdir.append(self.cov_config)</span>
+
+        <span class="s1">self.cov = coverage.Coverage(source=self.cov_source,</span>
+                                     <span class="s1">branch=self.cov_branch,</span>
+                                     <span class="s1">data_suffix=</span><span class="s2">True</span><span class="s1">,</span>
+                                     <span class="s1">config_file=self.cov_config)</span>
+        <span class="s1">self.cov._warn_no_data = </span><span class="s2">False</span>
+        <span class="s1">self.cov._warn_unimported_source = </span><span class="s2">False</span>
+        <span class="s1">self.cov._warn_preimported_source = </span><span class="s2">False</span>
+        <span class="s1">self.combining_cov = coverage.Coverage(source=self.cov_source,</span>
+                                               <span class="s1">branch=self.cov_branch,</span>
+                                               <span class="s1">data_suffix=</span><span class="s2">True</span><span class="s1">,</span>
+                                               <span class="s1">data_file=os.path.abspath(self.cov.config.data_file),</span>
+                                               <span class="s1">config_file=self.cov_config)</span>
+        <span class="s2">if not </span><span class="s1">self.cov_append:</span>
+            <span class="s1">self.cov.erase()</span>
+        <span class="s1">self.cov.start()</span>
+        <span class="s1">self.cov.config.paths[</span><span class="s3">'source'</span><span class="s1">] = [self.topdir]</span>
+
+    <span class="s2">def </span><span class="s1">configure_node(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Workers need to know if they are collocated and what files have moved.&quot;&quot;&quot;</span>
+
+        <span class="s1">node.workerinput.update({</span>
+            <span class="s3">'cov_master_host'</span><span class="s1">: socket.gethostname(),</span>
+            <span class="s3">'cov_master_topdir'</span><span class="s1">: self.topdir,</span>
+            <span class="s3">'cov_master_rsync_roots'</span><span class="s1">: [str(root) </span><span class="s2">for </span><span class="s1">root </span><span class="s2">in </span><span class="s1">node.nodemanager.roots],</span>
+        <span class="s1">})</span>
+
+    <span class="s2">def </span><span class="s1">testnodedown(self, node, error):</span>
+        <span class="s0">&quot;&quot;&quot;Collect data file name from worker.&quot;&quot;&quot;</span>
+
+        <span class="s0"># If worker doesn't return any data then it is likely that this</span>
+        <span class="s0"># plugin didn't get activated on the worker side.</span>
+        <span class="s1">output = getattr(node, </span><span class="s3">'workeroutput'</span><span class="s1">, {})</span>
+        <span class="s2">if </span><span class="s3">'cov_worker_node_id' </span><span class="s2">not in </span><span class="s1">output:</span>
+            <span class="s1">self.failed_workers.append(node)</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># If worker is not collocated then we must save the data file</span>
+        <span class="s0"># that it returns to us.</span>
+        <span class="s2">if </span><span class="s3">'cov_worker_data' </span><span class="s2">in </span><span class="s1">output:</span>
+            <span class="s1">data_suffix = </span><span class="s3">'%s.%s.%06d.%s' </span><span class="s1">% (</span>
+                <span class="s1">socket.gethostname(), os.getpid(),</span>
+                <span class="s1">random.randint(</span><span class="s4">0</span><span class="s1">, </span><span class="s4">999999</span><span class="s1">),</span>
+                <span class="s1">output[</span><span class="s3">'cov_worker_node_id'</span><span class="s1">]</span>
+            <span class="s1">)</span>
+
+            <span class="s1">cov = coverage.Coverage(source=self.cov_source,</span>
+                                    <span class="s1">branch=self.cov_branch,</span>
+                                    <span class="s1">data_suffix=data_suffix,</span>
+                                    <span class="s1">config_file=self.cov_config)</span>
+            <span class="s1">cov.start()</span>
+            <span class="s2">if </span><span class="s1">coverage.version_info &lt; (</span><span class="s4">5</span><span class="s1">, </span><span class="s4">0</span><span class="s1">):</span>
+                <span class="s1">data = CoverageData()</span>
+                <span class="s1">data.read_fileobj(StringIO(output[</span><span class="s3">'cov_worker_data'</span><span class="s1">]))</span>
+                <span class="s1">cov.data.update(data)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">data = CoverageData(no_disk=</span><span class="s2">True</span><span class="s1">)</span>
+                <span class="s1">data.loads(output[</span><span class="s3">'cov_worker_data'</span><span class="s1">])</span>
+                <span class="s1">cov.get_data().update(data)</span>
+            <span class="s1">cov.stop()</span>
+            <span class="s1">cov.save()</span>
+            <span class="s1">path = output[</span><span class="s3">'cov_worker_path'</span><span class="s1">]</span>
+            <span class="s1">self.cov.config.paths[</span><span class="s3">'source'</span><span class="s1">].append(path)</span>
+
+        <span class="s0"># Record the worker types that contribute to the data file.</span>
+        <span class="s1">rinfo = node.gateway._rinfo()</span>
+        <span class="s1">node_desc = self.get_node_desc(rinfo.platform, rinfo.version_info)</span>
+        <span class="s1">self.node_descs.add(node_desc)</span>
+
+    <span class="s1">@_ensure_topdir</span>
+    <span class="s2">def </span><span class="s1">finish(self):</span>
+        <span class="s0">&quot;&quot;&quot;Combines coverage data and sets the list of coverage objects to report on.&quot;&quot;&quot;</span>
+
+        <span class="s0"># Combine all the suffix files into the data file.</span>
+        <span class="s1">self.cov.stop()</span>
+        <span class="s1">self.cov.save()</span>
+        <span class="s1">self.cov = self.combining_cov</span>
+        <span class="s1">self.cov.load()</span>
+        <span class="s1">self.cov.combine()</span>
+        <span class="s1">self.cov.save()</span>
+
+
+<span class="s2">class </span><span class="s1">DistWorker(CovController):</span>
+    <span class="s0">&quot;&quot;&quot;Implementation for distributed workers.&quot;&quot;&quot;</span>
+
+    <span class="s1">@_ensure_topdir</span>
+    <span class="s2">def </span><span class="s1">start(self):</span>
+
+        <span class="s1">cleanup()</span>
+
+        <span class="s0"># Determine whether we are collocated with master.</span>
+        <span class="s1">self.is_collocated = (socket.gethostname() == self.config.workerinput[</span><span class="s3">'cov_master_host'</span><span class="s1">] </span><span class="s2">and</span>
+                              <span class="s1">self.topdir == self.config.workerinput[</span><span class="s3">'cov_master_topdir'</span><span class="s1">])</span>
+
+        <span class="s0"># If we are not collocated then rewrite master paths to worker paths.</span>
+        <span class="s2">if not </span><span class="s1">self.is_collocated:</span>
+            <span class="s1">master_topdir = self.config.workerinput[</span><span class="s3">'cov_master_topdir'</span><span class="s1">]</span>
+            <span class="s1">worker_topdir = self.topdir</span>
+            <span class="s2">if </span><span class="s1">self.cov_source </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s1">self.cov_source = [source.replace(master_topdir, worker_topdir)</span>
+                                   <span class="s2">for </span><span class="s1">source </span><span class="s2">in </span><span class="s1">self.cov_source]</span>
+            <span class="s1">self.cov_config = self.cov_config.replace(master_topdir, worker_topdir)</span>
+
+        <span class="s0"># Erase any previous data and start coverage.</span>
+        <span class="s1">self.cov = coverage.Coverage(source=self.cov_source,</span>
+                                     <span class="s1">branch=self.cov_branch,</span>
+                                     <span class="s1">data_suffix=</span><span class="s2">True</span><span class="s1">,</span>
+                                     <span class="s1">config_file=self.cov_config)</span>
+        <span class="s1">self.cov.start()</span>
+        <span class="s1">self.set_env()</span>
+
+    <span class="s1">@_ensure_topdir</span>
+    <span class="s2">def </span><span class="s1">finish(self):</span>
+        <span class="s0">&quot;&quot;&quot;Stop coverage and send relevant info back to the master.&quot;&quot;&quot;</span>
+        <span class="s1">self.unset_env()</span>
+        <span class="s1">self.cov.stop()</span>
+
+        <span class="s2">if </span><span class="s1">self.is_collocated:</span>
+            <span class="s0"># We don't combine data if we're collocated - we can get</span>
+            <span class="s0"># race conditions in the .combine() call (it's not atomic)</span>
+            <span class="s0"># The data is going to be combined in the master.</span>
+            <span class="s1">self.cov.save()</span>
+
+            <span class="s0"># If we are collocated then just inform the master of our</span>
+            <span class="s0"># data file to indicate that we have finished.</span>
+            <span class="s1">self.config.workeroutput[</span><span class="s3">'cov_worker_node_id'</span><span class="s1">] = self.nodeid</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.cov.combine()</span>
+            <span class="s1">self.cov.save()</span>
+            <span class="s0"># If we are not collocated then add the current path</span>
+            <span class="s0"># and coverage data to the output so we can combine</span>
+            <span class="s0"># it on the master node.</span>
+
+            <span class="s0"># Send all the data to the master over the channel.</span>
+            <span class="s2">if </span><span class="s1">coverage.version_info &lt; (</span><span class="s4">5</span><span class="s1">, </span><span class="s4">0</span><span class="s1">):</span>
+                <span class="s1">buff = StringIO()</span>
+                <span class="s1">self.cov.data.write_fileobj(buff)</span>
+                <span class="s1">data = buff.getvalue()</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">data = self.cov.get_data().dumps()</span>
+
+            <span class="s1">self.config.workeroutput.update({</span>
+                <span class="s3">'cov_worker_path'</span><span class="s1">: self.topdir,</span>
+                <span class="s3">'cov_worker_node_id'</span><span class="s1">: self.nodeid,</span>
+                <span class="s3">'cov_worker_data'</span><span class="s1">: data,</span>
+            <span class="s1">})</span>
+
+    <span class="s2">def </span><span class="s1">summary(self, stream):</span>
+        <span class="s0">&quot;&quot;&quot;Only the master reports so do nothing.&quot;&quot;&quot;</span>
+
+        <span class="s2">pass</span>
+</pre>
+</body>
+</html>

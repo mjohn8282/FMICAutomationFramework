@@ -1,0 +1,58 @@
+<html>
+<head>
+<title>reader.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+reader.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s3">&quot;&quot;&quot; 
+Read a chart 
+&quot;&quot;&quot;</span>
+
+<span class="s0">from </span><span class="s1">.chartspace </span><span class="s0">import </span><span class="s1">ChartSpace, PlotArea</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s0">import </span><span class="s1">fromstring</span>
+
+<span class="s1">_types = (</span><span class="s3">'areaChart'</span><span class="s1">, </span><span class="s3">'area3DChart'</span><span class="s1">, </span><span class="s3">'lineChart'</span><span class="s1">, </span><span class="s3">'line3DChart'</span><span class="s1">,</span>
+         <span class="s3">'stockChart'</span><span class="s1">, </span><span class="s3">'radarChart'</span><span class="s1">, </span><span class="s3">'scatterChart'</span><span class="s1">, </span><span class="s3">'pieChart'</span><span class="s1">, </span><span class="s3">'pie3DChart'</span><span class="s1">,</span>
+         <span class="s3">'doughnutChart'</span><span class="s1">, </span><span class="s3">'barChart'</span><span class="s1">, </span><span class="s3">'bar3DChart'</span><span class="s1">, </span><span class="s3">'ofPieChart'</span><span class="s1">, </span><span class="s3">'surfaceChart'</span><span class="s1">,</span>
+         <span class="s3">'surface3DChart'</span><span class="s1">, </span><span class="s3">'bubbleChart'</span><span class="s1">,)</span>
+
+<span class="s1">_axes = (</span><span class="s3">'valAx'</span><span class="s1">, </span><span class="s3">'catAx'</span><span class="s1">, </span><span class="s3">'dateAx'</span><span class="s1">, </span><span class="s3">'serAx'</span><span class="s1">,)</span>
+
+
+<span class="s0">def </span><span class="s1">read_chart(chartspace):</span>
+    <span class="s1">cs = chartspace</span>
+    <span class="s1">plot = cs.chart.plotArea</span>
+
+    <span class="s1">chart = plot._charts[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s1">chart._charts = plot._charts</span>
+
+    <span class="s1">chart.title = cs.chart.title</span>
+    <span class="s1">chart.display_blanks = cs.chart.dispBlanksAs</span>
+    <span class="s1">chart.visible_cells_only = cs.chart.plotVisOnly</span>
+    <span class="s1">chart.layout = plot.layout</span>
+    <span class="s1">chart.legend = cs.chart.legend</span>
+
+    <span class="s2"># 3d attributes</span>
+    <span class="s1">chart.floor = cs.chart.floor</span>
+    <span class="s1">chart.sideWall = cs.chart.sideWall</span>
+    <span class="s1">chart.backWall = cs.chart.backWall</span>
+
+    <span class="s0">return </span><span class="s1">chart</span>
+</pre>
+</body>
+</html>

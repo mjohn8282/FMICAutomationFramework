@@ -1,0 +1,136 @@
+<html>
+<head>
+<title>formatting.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+formatting.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">collections </span><span class="s0">import </span><span class="s1">OrderedDict</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">basestring</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Sequence,</span>
+    <span class="s1">Alias,</span>
+    <span class="s1">Convertible,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">ExtensionList</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+
+<span class="s0">from </span><span class="s1">.rule </span><span class="s0">import </span><span class="s1">Rule</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.worksheet.cell_range </span><span class="s0">import </span><span class="s1">MultiCellRange</span>
+
+<span class="s0">class </span><span class="s1">ConditionalFormatting(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;conditionalFormatting&quot;</span>
+
+    <span class="s1">sqref = Convertible(expected_type=MultiCellRange)</span>
+    <span class="s1">cells = Alias(</span><span class="s3">&quot;sqref&quot;</span><span class="s1">)</span>
+    <span class="s1">pivot = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">cfRule = Sequence(expected_type=Rule)</span>
+    <span class="s1">rules = Alias(</span><span class="s3">&quot;cfRule&quot;</span><span class="s1">)</span>
+
+
+    <span class="s0">def </span><span class="s1">__init__(self, sqref=(), pivot=</span><span class="s0">None</span><span class="s1">, cfRule=(), extLst=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">self.sqref = sqref</span>
+        <span class="s1">self.pivot = pivot</span>
+        <span class="s1">self.cfRule = cfRule</span>
+
+
+    <span class="s0">def </span><span class="s1">__eq__(self, other):</span>
+        <span class="s0">if not </span><span class="s1">isinstance(other, self.__class__):</span>
+            <span class="s0">return False</span>
+        <span class="s0">return </span><span class="s1">self.sqref == other.sqref</span>
+
+
+    <span class="s0">def </span><span class="s1">__hash__(self):</span>
+        <span class="s0">return </span><span class="s1">hash(str(self.sqref))</span>
+
+
+    <span class="s0">def </span><span class="s1">__repr__(self):</span>
+        <span class="s0">return </span><span class="s3">&quot;&lt;{cls} {cells}&gt;&quot;</span><span class="s1">.format(cls=self.__class__.__name__, cells=self.sqref)</span>
+
+
+    <span class="s0">def </span><span class="s1">__contains__(self, coord):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Check whether a certain cell is affected by the formatting 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">coord </span><span class="s0">in </span><span class="s1">self.sqref</span>
+
+
+<span class="s0">class </span><span class="s1">ConditionalFormattingList(object):</span>
+    <span class="s2">&quot;&quot;&quot;Conditional formatting rules.&quot;&quot;&quot;</span>
+
+
+    <span class="s0">def </span><span class="s1">__init__(self):</span>
+        <span class="s1">self._cf_rules = OrderedDict()</span>
+        <span class="s1">self.max_priority = </span><span class="s4">0</span>
+
+
+    <span class="s0">def </span><span class="s1">add(self, range_string, cfRule):</span>
+        <span class="s2">&quot;&quot;&quot;Add a rule such as ColorScaleRule, FormulaRule or CellIsRule 
+ 
+         The priority will be added automatically. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">cf = range_string</span>
+        <span class="s0">if </span><span class="s1">isinstance(range_string, basestring):</span>
+            <span class="s1">cf = ConditionalFormatting(range_string)</span>
+        <span class="s0">if not </span><span class="s1">isinstance(cfRule, Rule):</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;Only instances of openpyexcel.formatting.rule.Rule may be added&quot;</span><span class="s1">)</span>
+        <span class="s1">rule = cfRule</span>
+        <span class="s1">self.max_priority += </span><span class="s4">1</span>
+        <span class="s0">if not </span><span class="s1">rule.priority:</span>
+            <span class="s1">rule.priority = self.max_priority</span>
+
+        <span class="s1">self._cf_rules.setdefault(cf, []).append(rule)</span>
+
+
+    <span class="s0">def </span><span class="s1">__bool__(self):</span>
+        <span class="s0">return </span><span class="s1">bool(self._cf_rules)</span>
+
+    <span class="s1">__nonzero = __bool__</span>
+
+
+    <span class="s0">def </span><span class="s1">__len__(self):</span>
+        <span class="s0">return </span><span class="s1">len(self._cf_rules)</span>
+
+
+    <span class="s0">def </span><span class="s1">__iter__(self):</span>
+        <span class="s0">for </span><span class="s1">cf, rules </span><span class="s0">in </span><span class="s1">self._cf_rules.items():</span>
+            <span class="s1">cf.rules = rules</span>
+            <span class="s0">yield </span><span class="s1">cf</span>
+
+
+    <span class="s0">def </span><span class="s1">__getitem__(self, key):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Get the rules for a cell range 
+        &quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">isinstance(key, basestring):</span>
+            <span class="s1">key = ConditionalFormatting(sqref=key)</span>
+        <span class="s0">return </span><span class="s1">self._cf_rules[key]</span>
+
+
+    <span class="s0">def </span><span class="s1">__setitem__(self, key, rule):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Add a rule for a cell range 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.add(key, rule)</span>
+</pre>
+</body>
+</html>

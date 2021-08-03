@@ -1,0 +1,266 @@
+<html>
+<head>
+<title>remote.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+.s5 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+remote.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+    This module is executed in remote subprocesses and helps to 
+    control a remote testing session and relay back information. 
+    It assumes that 'py' is importable and does not have dependencies 
+    on the rest of the xdist code.  This means that the xdist-plugin 
+    needs not to be installed in remote environments. 
+&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">time</span>
+
+<span class="s2">import </span><span class="s1">py</span>
+<span class="s2">import </span><span class="s1">pytest</span>
+<span class="s2">from </span><span class="s1">execnet.gateway_base </span><span class="s2">import </span><span class="s1">dumps, DumpError</span>
+
+<span class="s2">from </span><span class="s1">_pytest.config </span><span class="s2">import </span><span class="s1">_prepareconfig, Config</span>
+
+
+<span class="s2">class </span><span class="s1">WorkerInteractor:</span>
+    <span class="s2">def </span><span class="s1">__init__(self, config, channel):</span>
+        <span class="s1">self.config = config</span>
+        <span class="s1">self.workerid = config.workerinput.get(</span><span class="s3">&quot;workerid&quot;</span><span class="s1">, </span><span class="s3">&quot;?&quot;</span><span class="s1">)</span>
+        <span class="s1">self.testrunuid = config.workerinput[</span><span class="s3">&quot;testrunuid&quot;</span><span class="s1">]</span>
+        <span class="s1">self.log = py.log.Producer(</span><span class="s3">&quot;worker-%s&quot; </span><span class="s1">% self.workerid)</span>
+        <span class="s2">if not </span><span class="s1">config.option.debug:</span>
+            <span class="s1">py.log.setconsumer(self.log._keywords, </span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s1">self.channel = channel</span>
+        <span class="s1">config.pluginmanager.register(self)</span>
+
+    <span class="s2">def </span><span class="s1">sendevent(self, name, **kwargs):</span>
+        <span class="s1">self.log(</span><span class="s3">&quot;sending&quot;</span><span class="s1">, name, kwargs)</span>
+        <span class="s1">self.channel.send((name, kwargs))</span>
+
+    <span class="s2">def </span><span class="s1">pytest_internalerror(self, excrepr):</span>
+        <span class="s1">formatted_error = str(excrepr)</span>
+        <span class="s2">for </span><span class="s1">line </span><span class="s2">in </span><span class="s1">formatted_error.split(</span><span class="s3">&quot;</span><span class="s4">\n</span><span class="s3">&quot;</span><span class="s1">):</span>
+            <span class="s1">self.log(</span><span class="s3">&quot;IERROR&gt;&quot;</span><span class="s1">, line)</span>
+        <span class="s1">interactor.sendevent(</span><span class="s3">&quot;internal_error&quot;</span><span class="s1">, formatted_error=formatted_error)</span>
+
+    <span class="s2">def </span><span class="s1">pytest_sessionstart(self, session):</span>
+        <span class="s1">self.session = session</span>
+        <span class="s1">workerinfo = getinfodict()</span>
+        <span class="s1">self.sendevent(</span><span class="s3">&quot;workerready&quot;</span><span class="s1">, workerinfo=workerinfo)</span>
+
+    <span class="s1">@pytest.hookimpl(hookwrapper=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">pytest_sessionfinish(self, exitstatus):</span>
+        <span class="s0"># in pytest 5.0+, exitstatus is an IntEnum object</span>
+        <span class="s1">self.config.workeroutput[</span><span class="s3">&quot;exitstatus&quot;</span><span class="s1">] = int(exitstatus)</span>
+        <span class="s2">yield</span>
+        <span class="s1">self.sendevent(</span><span class="s3">&quot;workerfinished&quot;</span><span class="s1">, workeroutput=self.config.workeroutput)</span>
+
+    <span class="s2">def </span><span class="s1">pytest_collection(self, session):</span>
+        <span class="s1">self.sendevent(</span><span class="s3">&quot;collectionstart&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">pytest_runtestloop(self, session):</span>
+        <span class="s1">self.log(</span><span class="s3">&quot;entering main loop&quot;</span><span class="s1">)</span>
+        <span class="s1">torun = []</span>
+        <span class="s2">while </span><span class="s5">1</span><span class="s1">:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">name, kwargs = self.channel.receive()</span>
+            <span class="s2">except </span><span class="s1">EOFError:</span>
+                <span class="s2">return True</span>
+            <span class="s1">self.log(</span><span class="s3">&quot;received command&quot;</span><span class="s1">, name, kwargs)</span>
+            <span class="s2">if </span><span class="s1">name == </span><span class="s3">&quot;runtests&quot;</span><span class="s1">:</span>
+                <span class="s1">torun.extend(kwargs[</span><span class="s3">&quot;indices&quot;</span><span class="s1">])</span>
+            <span class="s2">elif </span><span class="s1">name == </span><span class="s3">&quot;runtests_all&quot;</span><span class="s1">:</span>
+                <span class="s1">torun.extend(range(len(session.items)))</span>
+            <span class="s1">self.log(</span><span class="s3">&quot;items to run:&quot;</span><span class="s1">, torun)</span>
+            <span class="s0"># only run if we have an item and a next item</span>
+            <span class="s2">while </span><span class="s1">len(torun) &gt;= </span><span class="s5">2</span><span class="s1">:</span>
+                <span class="s1">self.run_one_test(torun)</span>
+            <span class="s2">if </span><span class="s1">name == </span><span class="s3">&quot;shutdown&quot;</span><span class="s1">:</span>
+                <span class="s2">if </span><span class="s1">torun:</span>
+                    <span class="s1">self.run_one_test(torun)</span>
+                <span class="s2">break</span>
+        <span class="s2">return True</span>
+
+    <span class="s2">def </span><span class="s1">run_one_test(self, torun):</span>
+        <span class="s1">items = self.session.items</span>
+        <span class="s1">self.item_index = torun.pop(</span><span class="s5">0</span><span class="s1">)</span>
+        <span class="s1">item = items[self.item_index]</span>
+        <span class="s2">if </span><span class="s1">torun:</span>
+            <span class="s1">nextitem = items[torun[</span><span class="s5">0</span><span class="s1">]]</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">nextitem = </span><span class="s2">None</span>
+
+        <span class="s1">start = time.time()</span>
+        <span class="s1">self.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)</span>
+        <span class="s1">duration = time.time() - start</span>
+        <span class="s1">self.sendevent(</span>
+            <span class="s3">&quot;runtest_protocol_complete&quot;</span><span class="s1">, item_index=self.item_index, duration=duration</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">pytest_collection_finish(self, session):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">topdir = str(self.config.rootpath)</span>
+        <span class="s2">except </span><span class="s1">AttributeError:  </span><span class="s0"># pytest &lt;= 6.1.0</span>
+            <span class="s1">topdir = str(self.config.rootdir)</span>
+
+        <span class="s1">self.sendevent(</span>
+            <span class="s3">&quot;collectionfinish&quot;</span><span class="s1">,</span>
+            <span class="s1">topdir=topdir,</span>
+            <span class="s1">ids=[item.nodeid </span><span class="s2">for </span><span class="s1">item </span><span class="s2">in </span><span class="s1">session.items],</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">pytest_runtest_logstart(self, nodeid, location):</span>
+        <span class="s1">self.sendevent(</span><span class="s3">&quot;logstart&quot;</span><span class="s1">, nodeid=nodeid, location=location)</span>
+
+    <span class="s2">def </span><span class="s1">pytest_runtest_logfinish(self, nodeid, location):</span>
+        <span class="s1">self.sendevent(</span><span class="s3">&quot;logfinish&quot;</span><span class="s1">, nodeid=nodeid, location=location)</span>
+
+    <span class="s2">def </span><span class="s1">pytest_runtest_logreport(self, report):</span>
+        <span class="s1">data = self.config.hook.pytest_report_to_serializable(</span>
+            <span class="s1">config=self.config, report=report</span>
+        <span class="s1">)</span>
+        <span class="s1">data[</span><span class="s3">&quot;item_index&quot;</span><span class="s1">] = self.item_index</span>
+        <span class="s1">data[</span><span class="s3">&quot;worker_id&quot;</span><span class="s1">] = self.workerid</span>
+        <span class="s1">data[</span><span class="s3">&quot;testrun_uid&quot;</span><span class="s1">] = self.testrunuid</span>
+        <span class="s2">assert </span><span class="s1">self.session.items[self.item_index].nodeid == report.nodeid</span>
+        <span class="s1">self.sendevent(</span><span class="s3">&quot;testreport&quot;</span><span class="s1">, data=data)</span>
+
+    <span class="s2">def </span><span class="s1">pytest_collectreport(self, report):</span>
+        <span class="s0"># send only reports that have not passed to master as optimization (#330)</span>
+        <span class="s2">if not </span><span class="s1">report.passed:</span>
+            <span class="s1">data = self.config.hook.pytest_report_to_serializable(</span>
+                <span class="s1">config=self.config, report=report</span>
+            <span class="s1">)</span>
+            <span class="s1">self.sendevent(</span><span class="s3">&quot;collectreport&quot;</span><span class="s1">, data=data)</span>
+
+    <span class="s2">def </span><span class="s1">pytest_warning_recorded(self, warning_message, when, nodeid, location):</span>
+        <span class="s1">self.sendevent(</span>
+            <span class="s3">&quot;warning_recorded&quot;</span><span class="s1">,</span>
+            <span class="s1">warning_message_data=serialize_warning_message(warning_message),</span>
+            <span class="s1">when=when,</span>
+            <span class="s1">nodeid=nodeid,</span>
+            <span class="s1">location=location,</span>
+        <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">serialize_warning_message(warning_message):</span>
+    <span class="s2">if </span><span class="s1">isinstance(warning_message.message, Warning):</span>
+        <span class="s1">message_module = type(warning_message.message).__module__</span>
+        <span class="s1">message_class_name = type(warning_message.message).__name__</span>
+        <span class="s1">message_str = str(warning_message.message)</span>
+        <span class="s0"># check now if we can serialize the warning arguments (#349)</span>
+        <span class="s0"># if not, we will just use the exception message on the master node</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">dumps(warning_message.message.args)</span>
+        <span class="s2">except </span><span class="s1">DumpError:</span>
+            <span class="s1">message_args = </span><span class="s2">None</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">message_args = warning_message.message.args</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">message_str = warning_message.message</span>
+        <span class="s1">message_module = </span><span class="s2">None</span>
+        <span class="s1">message_class_name = </span><span class="s2">None</span>
+        <span class="s1">message_args = </span><span class="s2">None</span>
+    <span class="s2">if </span><span class="s1">warning_message.category:</span>
+        <span class="s1">category_module = warning_message.category.__module__</span>
+        <span class="s1">category_class_name = warning_message.category.__name__</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">category_module = </span><span class="s2">None</span>
+        <span class="s1">category_class_name = </span><span class="s2">None</span>
+
+    <span class="s1">result = {</span>
+        <span class="s3">&quot;message_str&quot;</span><span class="s1">: message_str,</span>
+        <span class="s3">&quot;message_module&quot;</span><span class="s1">: message_module,</span>
+        <span class="s3">&quot;message_class_name&quot;</span><span class="s1">: message_class_name,</span>
+        <span class="s3">&quot;message_args&quot;</span><span class="s1">: message_args,</span>
+        <span class="s3">&quot;category_module&quot;</span><span class="s1">: category_module,</span>
+        <span class="s3">&quot;category_class_name&quot;</span><span class="s1">: category_class_name,</span>
+    <span class="s1">}</span>
+    <span class="s0"># access private _WARNING_DETAILS because the attributes vary between Python versions</span>
+    <span class="s2">for </span><span class="s1">attr_name </span><span class="s2">in </span><span class="s1">warning_message._WARNING_DETAILS:</span>
+        <span class="s2">if </span><span class="s1">attr_name </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;message&quot;</span><span class="s1">, </span><span class="s3">&quot;category&quot;</span><span class="s1">):</span>
+            <span class="s2">continue</span>
+        <span class="s1">attr = getattr(warning_message, attr_name)</span>
+        <span class="s0"># Check if we can serialize the warning detail, marking `None` otherwise</span>
+        <span class="s0"># Note that we need to define the attr (even as `None`) to allow deserializing</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">dumps(attr)</span>
+        <span class="s2">except </span><span class="s1">DumpError:</span>
+            <span class="s1">result[attr_name] = repr(attr)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">result[attr_name] = attr</span>
+    <span class="s2">return </span><span class="s1">result</span>
+
+
+<span class="s2">def </span><span class="s1">getinfodict():</span>
+    <span class="s2">import </span><span class="s1">platform</span>
+
+    <span class="s2">return </span><span class="s1">dict(</span>
+        <span class="s1">version=sys.version,</span>
+        <span class="s1">version_info=tuple(sys.version_info),</span>
+        <span class="s1">sysplatform=sys.platform,</span>
+        <span class="s1">platform=platform.platform(),</span>
+        <span class="s1">executable=sys.executable,</span>
+        <span class="s1">cwd=os.getcwd(),</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">remote_initconfig(option_dict, args):</span>
+    <span class="s1">option_dict[</span><span class="s3">&quot;plugins&quot;</span><span class="s1">].append(</span><span class="s3">&quot;no:terminal&quot;</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">Config.fromdictargs(option_dict, args)</span>
+
+
+<span class="s2">def </span><span class="s1">setup_config(config, basetemp):</span>
+    <span class="s1">config.option.looponfail = </span><span class="s2">False</span>
+    <span class="s1">config.option.usepdb = </span><span class="s2">False</span>
+    <span class="s1">config.option.dist = </span><span class="s3">&quot;no&quot;</span>
+    <span class="s1">config.option.distload = </span><span class="s2">False</span>
+    <span class="s1">config.option.numprocesses = </span><span class="s2">None</span>
+    <span class="s1">config.option.maxprocesses = </span><span class="s2">None</span>
+    <span class="s1">config.option.basetemp = basetemp</span>
+
+
+<span class="s2">if </span><span class="s1">__name__ == </span><span class="s3">&quot;__channelexec__&quot;</span><span class="s1">:</span>
+    <span class="s1">channel = channel  </span><span class="s0"># noqa</span>
+    <span class="s1">workerinput, args, option_dict, change_sys_path = channel.receive()</span>
+
+    <span class="s2">if </span><span class="s1">change_sys_path:</span>
+        <span class="s1">importpath = os.getcwd()</span>
+        <span class="s1">sys.path.insert(</span><span class="s5">0</span><span class="s1">, importpath)</span>
+        <span class="s1">os.environ[</span><span class="s3">&quot;PYTHONPATH&quot;</span><span class="s1">] = (</span>
+            <span class="s1">importpath + os.pathsep + os.environ.get(</span><span class="s3">&quot;PYTHONPATH&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+        <span class="s1">)</span>
+
+    <span class="s1">os.environ[</span><span class="s3">&quot;PYTEST_XDIST_TESTRUNUID&quot;</span><span class="s1">] = workerinput[</span><span class="s3">&quot;testrunuid&quot;</span><span class="s1">]</span>
+    <span class="s1">os.environ[</span><span class="s3">&quot;PYTEST_XDIST_WORKER&quot;</span><span class="s1">] = workerinput[</span><span class="s3">&quot;workerid&quot;</span><span class="s1">]</span>
+    <span class="s1">os.environ[</span><span class="s3">&quot;PYTEST_XDIST_WORKER_COUNT&quot;</span><span class="s1">] = str(workerinput[</span><span class="s3">&quot;workercount&quot;</span><span class="s1">])</span>
+
+    <span class="s2">if </span><span class="s1">hasattr(Config, </span><span class="s3">&quot;InvocationParams&quot;</span><span class="s1">):</span>
+        <span class="s1">config = _prepareconfig(args, </span><span class="s2">None</span><span class="s1">)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">config = remote_initconfig(option_dict, args)</span>
+        <span class="s1">config.args = args</span>
+
+    <span class="s1">setup_config(config, option_dict.get(</span><span class="s3">&quot;basetemp&quot;</span><span class="s1">))</span>
+    <span class="s1">config._parser.prog = os.path.basename(workerinput[</span><span class="s3">&quot;mainargv&quot;</span><span class="s1">][</span><span class="s5">0</span><span class="s1">])</span>
+    <span class="s1">config.workerinput = workerinput</span>
+    <span class="s1">config.workeroutput = {}</span>
+    <span class="s1">interactor = WorkerInteractor(config, channel)</span>
+    <span class="s1">config.hook.pytest_cmdline_main(config=config)</span>
+</pre>
+</body>
+</html>

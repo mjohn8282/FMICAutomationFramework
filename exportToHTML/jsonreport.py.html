@@ -1,0 +1,124 @@
+<html>
+<head>
+<title>jsonreport.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+jsonreport.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># coding: utf-8</span>
+<span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;Json reporting for coverage.py&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">datetime</span>
+<span class="s2">import </span><span class="s1">json</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">__version__</span>
+<span class="s2">from </span><span class="s1">coverage.report </span><span class="s2">import </span><span class="s1">get_analysis_to_report</span>
+<span class="s2">from </span><span class="s1">coverage.results </span><span class="s2">import </span><span class="s1">Numbers</span>
+
+
+<span class="s2">class </span><span class="s1">JsonReporter(object):</span>
+    <span class="s0">&quot;&quot;&quot;A reporter for writing JSON coverage results.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, coverage):</span>
+        <span class="s1">self.coverage = coverage</span>
+        <span class="s1">self.config = self.coverage.config</span>
+        <span class="s1">self.total = Numbers()</span>
+        <span class="s1">self.report_data = {}</span>
+
+    <span class="s2">def </span><span class="s1">report(self, morfs, outfile=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Generate a json report for `morfs`. 
+ 
+        `morfs` is a list of modules or file names. 
+ 
+        `outfile` is a file object to write the json to 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">outfile = outfile </span><span class="s2">or </span><span class="s1">sys.stdout</span>
+        <span class="s1">coverage_data = self.coverage.get_data()</span>
+        <span class="s1">coverage_data.set_query_contexts(self.config.report_contexts)</span>
+        <span class="s1">self.report_data[</span><span class="s3">&quot;meta&quot;</span><span class="s1">] = {</span>
+            <span class="s3">&quot;version&quot;</span><span class="s1">: __version__,</span>
+            <span class="s3">&quot;timestamp&quot;</span><span class="s1">: datetime.datetime.now().isoformat(),</span>
+            <span class="s3">&quot;branch_coverage&quot;</span><span class="s1">: coverage_data.has_arcs(),</span>
+            <span class="s3">&quot;show_contexts&quot;</span><span class="s1">: self.config.json_show_contexts,</span>
+        <span class="s1">}</span>
+
+        <span class="s1">measured_files = {}</span>
+        <span class="s2">for </span><span class="s1">file_reporter, analysis </span><span class="s2">in </span><span class="s1">get_analysis_to_report(self.coverage, morfs):</span>
+            <span class="s1">measured_files[file_reporter.relative_filename()] = self.report_one_file(</span>
+                <span class="s1">coverage_data,</span>
+                <span class="s1">analysis</span>
+            <span class="s1">)</span>
+
+        <span class="s1">self.report_data[</span><span class="s3">&quot;files&quot;</span><span class="s1">] = measured_files</span>
+
+        <span class="s1">self.report_data[</span><span class="s3">&quot;totals&quot;</span><span class="s1">] = {</span>
+            <span class="s3">'covered_lines'</span><span class="s1">: self.total.n_executed,</span>
+            <span class="s3">'num_statements'</span><span class="s1">: self.total.n_statements,</span>
+            <span class="s3">'percent_covered'</span><span class="s1">: self.total.pc_covered,</span>
+            <span class="s3">'missing_lines'</span><span class="s1">: self.total.n_missing,</span>
+            <span class="s3">'excluded_lines'</span><span class="s1">: self.total.n_excluded,</span>
+        <span class="s1">}</span>
+
+        <span class="s2">if </span><span class="s1">coverage_data.has_arcs():</span>
+            <span class="s1">self.report_data[</span><span class="s3">&quot;totals&quot;</span><span class="s1">].update({</span>
+                <span class="s3">'num_branches'</span><span class="s1">: self.total.n_branches,</span>
+                <span class="s3">'num_partial_branches'</span><span class="s1">: self.total.n_partial_branches,</span>
+                <span class="s3">'covered_branches'</span><span class="s1">: self.total.n_executed_branches,</span>
+                <span class="s3">'missing_branches'</span><span class="s1">: self.total.n_missing_branches,</span>
+            <span class="s1">})</span>
+
+        <span class="s1">json.dump(</span>
+            <span class="s1">self.report_data,</span>
+            <span class="s1">outfile,</span>
+            <span class="s1">indent=</span><span class="s4">4 </span><span class="s2">if </span><span class="s1">self.config.json_pretty_print </span><span class="s2">else None</span>
+        <span class="s1">)</span>
+
+        <span class="s2">return </span><span class="s1">self.total.n_statements </span><span class="s2">and </span><span class="s1">self.total.pc_covered</span>
+
+    <span class="s2">def </span><span class="s1">report_one_file(self, coverage_data, analysis):</span>
+        <span class="s0">&quot;&quot;&quot;Extract the relevant report data for a single file&quot;&quot;&quot;</span>
+        <span class="s1">nums = analysis.numbers</span>
+        <span class="s1">self.total += nums</span>
+        <span class="s1">summary = {</span>
+            <span class="s3">'covered_lines'</span><span class="s1">: nums.n_executed,</span>
+            <span class="s3">'num_statements'</span><span class="s1">: nums.n_statements,</span>
+            <span class="s3">'percent_covered'</span><span class="s1">: nums.pc_covered,</span>
+            <span class="s3">'missing_lines'</span><span class="s1">: nums.n_missing,</span>
+            <span class="s3">'excluded_lines'</span><span class="s1">: nums.n_excluded,</span>
+        <span class="s1">}</span>
+        <span class="s1">reported_file = {</span>
+            <span class="s3">'executed_lines'</span><span class="s1">: sorted(analysis.executed),</span>
+            <span class="s3">'summary'</span><span class="s1">: summary,</span>
+            <span class="s3">'missing_lines'</span><span class="s1">: sorted(analysis.missing),</span>
+            <span class="s3">'excluded_lines'</span><span class="s1">: sorted(analysis.excluded)</span>
+        <span class="s1">}</span>
+        <span class="s2">if </span><span class="s1">self.config.json_show_contexts:</span>
+            <span class="s1">reported_file[</span><span class="s3">'contexts'</span><span class="s1">] = analysis.data.contexts_by_lineno(</span>
+                <span class="s1">analysis.filename,</span>
+            <span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">coverage_data.has_arcs():</span>
+            <span class="s1">reported_file[</span><span class="s3">'summary'</span><span class="s1">].update({</span>
+                <span class="s3">'num_branches'</span><span class="s1">: nums.n_branches,</span>
+                <span class="s3">'num_partial_branches'</span><span class="s1">: nums.n_partial_branches,</span>
+                <span class="s3">'covered_branches'</span><span class="s1">: nums.n_executed_branches,</span>
+                <span class="s3">'missing_branches'</span><span class="s1">: nums.n_missing_branches,</span>
+            <span class="s1">})</span>
+        <span class="s2">return </span><span class="s1">reported_file</span>
+</pre>
+</body>
+</html>

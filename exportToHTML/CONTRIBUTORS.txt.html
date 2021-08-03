@@ -1,0 +1,497 @@
+<html>
+<head>
+<title>CONTRIBUTORS.txt</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #abb2bf;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+CONTRIBUTORS.txt</font>
+</center></td></tr></table>
+<pre><span class="s0">Contributors</span>
+<span class="s0">------------</span>
+
+<span class="s0">Current team:</span>
+
+<span class="s0">* Ashley Whetter: maintainer, contributor</span>
+
+<span class="s0">* Bryce Guinta: maintainer, contributor</span>
+
+<span class="s0">* Claudiu Popa: maintainer, contributor</span>
+
+<span class="s0">* Cara Vinson: astroid committer.</span>
+
+<span class="s0">* Guillaume Peillex: committer</span>
+
+<span class="s0">* Łukasz Rogalski: committer.</span>
+
+<span class="s0">* Roy Williams (Lyft): committer</span>
+
+  <span class="s0">added check for implementing __eq__ without implementing __hash__,</span>
+  <span class="s0">Added Python 3 check for accessing Exception.message.</span>
+  <span class="s0">Added Python 3 check for calling encode/decode with invalid codecs.</span>
+  <span class="s0">Added Python 3 check for accessing sys.maxint.</span>
+  <span class="s0">Added Python 3 check for bad import statements.</span>
+  <span class="s0">Added Python 3 check for accessing deprecated methods on the 'string' module,</span>
+  <span class="s0">various patches.</span>
+
+<span class="s0">* Dmitry Pribysh: committer</span>
+
+  <span class="s0">multiple-imports, not-iterable, not-a-mapping, various patches.</span>
+
+<span class="s0">* Jim Robertson: committer</span>
+
+<span class="s0">Ex-maintainers:</span>
+
+<span class="s0">* Sylvain Thenault (Logilab): main author / maintainer</span>
+
+<span class="s0">* Torsten Marek (Google): committer / contributor</span>
+
+
+<span class="s0">We would not be here without folks that contributed patches, pull requests,</span>
+<span class="s0">issues and their time to pylint. We're incredibly grateful to all of these</span>
+<span class="s0">contributors:</span>
+
+
+<span class="s0">* Daniel Balparda (Google): GPyLint maintainer (Google's pylint variant),</span>
+  <span class="s0">various patches</span>
+
+<span class="s0">* Martin Pool (Google): warnings for anomalous backslashes, symbolic names for</span>
+  <span class="s0">messages (like 'unused'), etc</span>
+
+<span class="s0">* Alexandre Fayolle (Logilab): TkInter gui, documentation, debian support</span>
+
+<span class="s0">* Julien Cristau, Emile Anclin (Logilab): python 3 support</span>
+
+<span class="s0">* Sandro Tosi: Debian packaging</span>
+
+<span class="s0">* Mads Kiilerich, Boris Feld, Bill Wendling, Sebastian Ulrich:</span>
+  <span class="s0">various patches</span>
+
+<span class="s0">* Brian van den Broek: windows installation documentation</span>
+
+<span class="s0">* Amaury Forgeot d'Arc: check names imported from a module exists in the module</span>
+
+<span class="s0">* Benjamin Niemann: allow block level enabling/disabling of messages</span>
+
+<span class="s0">* Nathaniel Manista: suspicious lambda checking</span>
+
+<span class="s0">* David Shea: invalid sequence and slice index</span>
+
+<span class="s0">* Carl Crowder: don't evaluate the value of arguments for 'dangerous-default-value'</span>
+
+<span class="s0">* Michal Nowikowski: wrong-spelling-in-comment, wrong-spelling-in-docstring,</span>
+  <span class="s0">parallel execution on multiple CPUs and other patches.</span>
+
+<span class="s0">* David Lindquist: logging-format-interpolation warning.</span>
+
+<span class="s0">* Brett Cannon: Port source code to be Python 2/3 compatible, Python 3</span>
+  <span class="s0">checker.</span>
+
+<span class="s0">* Vlad Temian: redundant-unittest-assert and the JSON reporter.</span>
+
+<span class="s0">* Cosmin Poieană: unichr-builtin and improvements to bad-open-mode.</span>
+
+<span class="s0">* Viorel Știrbu: intern-builtin warning.</span>
+
+<span class="s0">* Dan Goldsmith: support for msg-template in HTML reporter.</span>
+
+<span class="s0">* Chris Rebert: unidiomatic-typecheck.</span>
+
+<span class="s0">* Steven Myint: duplicate-except.</span>
+
+<span class="s0">* Radu Ciorba: not-context-manager and confusing-with-statement warnings.</span>
+
+<span class="s0">* Bruno Daniel: check_docs extension.</span>
+
+<span class="s0">* James Morgensen: ignored-modules option applies to import errors.</span>
+
+<span class="s0">* Cezar Elnazli: deprecated-method</span>
+
+<span class="s0">* Stéphane Wirtel: nonlocal-without-binding</span>
+
+<span class="s0">* Laura Medioni (Logilab, on behalf of the CNES): misplaced-comparison-constant,</span>
+  <span class="s0">no-classmethod-decorator, no-staticmethod-decorator, too-many-nested-blocks,</span>
+  <span class="s0">too-many-boolean-expressions, unneeded-not, wrong-import-order, ungrouped-imports,</span>
+  <span class="s0">wrong-import-position, redefined-variable-type</span>
+
+<span class="s0">* Aru Sahni: Git ignoring, regex-based ignores</span>
+
+<span class="s0">* Mike Frysinger: contributor.</span>
+
+<span class="s0">* Moisés López (Vauxoo): Support for deprecated-modules in modules not installed,</span>
+  <span class="s0">Refactor wrong-import-order to integrate it with `isort` library</span>
+  <span class="s0">Add check too-complex with mccabe for cyclomatic complexity</span>
+  <span class="s0">Refactor wrong-import-position to skip try-import and nested cases</span>
+  <span class="s0">Add consider-merging-isinstance, superfluous-else-return</span>
+  <span class="s0">Fix consider-using-ternary for 'True and True and True or True' case</span>
+
+<span class="s0">* Luis Escobar (Vauxoo), Moisés López (Vauxoo): Add bad-docstring-quotes and docstring-first-line-empty</span>
+
+<span class="s0">* Yannick Brehon: contributor.</span>
+
+<span class="s0">* Glenn Matthews: autogenerated documentation for optional extensions,</span>
+  <span class="s0">bug fixes and enhancements for docparams (née check_docs) extension</span>
+
+<span class="s0">* Elias Dorneles: minor adjust to config defaults and docs</span>
+
+<span class="s0">* Yuri Bochkarev: Added epytext support to docparams extension.</span>
+
+<span class="s0">* Alexander Todorov: added new error conditions to 'bad-super-call',</span>
+  <span class="s0">Added new check for incorrect len(SEQUENCE) usage,</span>
+  <span class="s0">Added new extension for comparison against empty string constants,</span>
+  <span class="s0">Added new extension which detects comparing integers to zero,</span>
+  <span class="s0">Added new useless-return checker,</span>
+  <span class="s0">Added new try-except-raise checker</span>
+
+<span class="s0">* Erik Eriksson - Added overlapping-except error check.</span>
+
+<span class="s0">* Anthony Foglia (Google): Added simple string slots check.</span>
+
+<span class="s0">* Derek Gustafson: contributor</span>
+
+<span class="s0">* Petr Pulc: require whitespace around annotations</span>
+
+<span class="s0">* John Paraskevopoulos: add 'differing-param-doc' and 'differing-type-doc'</span>
+
+<span class="s0">* Martin von Gagern (Google): Added 'raising-format-tuple' warning.</span>
+
+<span class="s0">* Ahirnish Pareek, 'keyword-arg-before-var-arg' check</span>
+
+<span class="s0">* Daniel Miller: contributor.</span>
+
+<span class="s0">* Bryce Guinta: contributor</span>
+
+<span class="s0">* Martin Bašti: contributor</span>
+  <span class="s0">Added new check for shallow copy of os.environ</span>
+
+<span class="s0">* Jacques Kvam: contributor</span>
+
+<span class="s0">* Brian Shaginaw: prevent error on exception check for functions</span>
+
+<span class="s0">* Ioana Tagirta: fix bad thread instantiation check</span>
+
+<span class="s0">* Reverb Chu: contributor</span>
+
+<span class="s0">* Tobias Hernstig: contributor</span>
+
+<span class="s0">* Konstantin Manna: contributor</span>
+
+<span class="s0">* Andreas Freimuth: fix indentation checking with tabs</span>
+
+<span class="s0">* Renat Galimov: contributor</span>
+
+<span class="s0">* Thomas Snowden: fix missing-docstring for inner functions</span>
+
+<span class="s0">* Mitchell Young: minor adjustment to docparams</span>
+
+<span class="s0">* Marianna Polatoglou: minor contribution for wildcard import check</span>
+
+<span class="s0">* Ben Green: contributor</span>
+
+<span class="s0">* Benjamin Freeman: contributor</span>
+
+<span class="s0">* Fureigh: contributor</span>
+
+<span class="s0">* Jace Browning: updated default report format with clickable paths</span>
+
+<span class="s0">* Sushobhit (sushobhit27): contributor</span>
+  <span class="s0">Added new check 'comparison-with-itself'.</span>
+  <span class="s0">Added new check 'useless-import-alias'.</span>
+  <span class="s0">Added support of annotations in missing-type-doc and missing-return-type-doc.</span>
+  <span class="s0">Added new check 'comparison-with-callable'.</span>
+  <span class="s0">Removed six package dependency.</span>
+  <span class="s0">Added new check 'chained-comparison'.</span>
+  <span class="s0">Added new check 'useless-object-inheritance'.</span>
+
+<span class="s0">* Mariatta Wijaya: contributor</span>
+  <span class="s0">Added new check `logging-fstring-interpolation`</span>
+  <span class="s0">Documentation typo fixes</span>
+
+<span class="s0">* Jason Owen: contributor</span>
+
+<span class="s0">* Mark Roman Miller: fix inline defs in too-many-statements</span>
+
+<span class="s0">* Adam Dangoor: contributor</span>
+
+<span class="s0">* Gary Tyler McLeod: contributor</span>
+
+<span class="s0">* Wolfgang Grafen, Axel Muller, Fabio Zadrozny, Pierre Rouleau,</span>
+  <span class="s0">Maarten ter Huurne, Mirko Friedenhagen and all the Logilab's team (among others).</span>
+
+<span class="s0">* Matej Marusak: contributor</span>
+
+<span class="s0">* Nick Drozd: contributor, performance improvements to astroid</span>
+
+<span class="s0">* Kosarchuk Sergey: contributor</span>
+
+<span class="s0">* Carey Metcalfe: demoted `try-except-raise` from error to warning</span>
+
+<span class="s0">* Marcus Näslund (naslundx): contributor</span>
+
+<span class="s0">* Natalie Serebryakova: contributor</span>
+
+<span class="s0">* Caio Carrara: contributor</span>
+
+<span class="s0">* Roberto Leinardi: PyCharm plugin maintainer</span>
+
+<span class="s0">* Aivar Annamaa: contributor</span>
+
+<span class="s0">* Hornwitser: fix import graph</span>
+
+<span class="s0">* Yuri Gribov: contributor</span>
+
+<span class="s0">* Drew Risinger: committer (docs)</span>
+
+<span class="s0">* Ben James</span>
+
+<span class="s0">* Tomer Chachamu, Richard Goodman: simplifiable-if-expression</span>
+
+<span class="s0">* Alan Chan: contributor</span>
+
+<span class="s0">* Benjamin Drung: contributing Debian Developer</span>
+
+<span class="s0">* Scott Worley: contributor</span>
+
+<span class="s0">* Michael Hudson-Doyle</span>
+
+<span class="s0">* Lucas Cimon: contributor</span>
+
+<span class="s0">* Mike Miller: contributor</span>
+
+<span class="s0">* Sergei Lebedev: contributor</span>
+
+<span class="s0">* Sasha Bagan</span>
+
+<span class="s0">* Pablo Galindo Salgado: contributor</span>
+  <span class="s0">Fix false positive 'Non-iterable value' with async comprehensions.</span>
+
+<span class="s0">* Matus Valo</span>
+
+<span class="s0">* Sardorbek Imomaliev: contributor</span>
+
+<span class="s0">* Justin Li (justinnhli)</span>
+
+<span class="s0">* Nicolas Dickreuter</span>
+
+<span class="s0">* Pascal Corpet</span>
+
+<span class="s0">* Svetoslav Neykov: contributor</span>
+
+<span class="s0">* Federico Bond: contributor</span>
+
+<span class="s0">* Fantix King (UChicago): contributor</span>
+
+<span class="s0">* Yory (yory8): contributor</span>
+
+<span class="s0">* Thomas Hisch: contributor</span>
+
+<span class="s0">* Clément Pit-Claudel : contributor</span>
+
+<span class="s0">* Goudcode: contributor</span>
+
+<span class="s0">* Paul Renvoise : contributor</span>
+
+<span class="s0">* Bluesheeptoken: contributor</span>
+
+<span class="s0">* Michael Scott Cuthbert: contributor</span>
+
+<span class="s0">* Pierre Sassoulas : maintainer, contributor</span>
+
+<span class="s0">* Nathan Marrow</span>
+
+<span class="s0">* Taewon Kim : contributor</span>
+
+<span class="s0">* Daniil Kharkov: contributor</span>
+
+<span class="s0">* Tyler N. Thieding: contributor</span>
+
+<span class="s0">* Zeb Nicholls: contributor</span>
+    <span class="s0">- Made W9011 compatible with 'of' syntax in return types</span>
+
+<span class="s0">* Martin Vielsmaier: contributor</span>
+
+<span class="s0">* Agustin Toledo: contributor</span>
+
+<span class="s0">* Nicholas Smith: contributor</span>
+
+<span class="s0">* Peter Kolbus (Garmin): contributor</span>
+
+<span class="s0">* Oisin Moran: contributor</span>
+
+<span class="s0">* Andrzej Klajnert: contributor</span>
+
+<span class="s0">* Andrés Pérez Hortal: contributor</span>
+
+<span class="s0">* Niko Wenselowski: contributor</span>
+
+<span class="s0">* Danny Hermes: contributor</span>
+
+<span class="s0">* Eric Froemling: contributor</span>
+
+<span class="s0">* Robert Schweizer: contributor</span>
+
+<span class="s0">* Hugo van Kemenade: contributor</span>
+
+<span class="s0">* Mikhail Fesenko: contributor</span>
+
+<span class="s0">* Trevor Bekolay: contributor</span>
+    <span class="s0">- Added --list-msgs-enabled command</span>
+
+<span class="s0">* Rémi Cardona: contributor</span>
+
+<span class="s0">* Daniel Draper: contributor</span>
+
+<span class="s0">* Gabriel R. Sezefredo: contributor</span>
+    <span class="s0">- Fixed &quot;exception-escape&quot; false positive with generators</span>
+
+<span class="s0">* laike9m: contributor</span>
+
+<span class="s0">* Janne Rönkkö: contributor</span>
+
+<span class="s0">* Hugues Bruant: contributor</span>
+
+<span class="s0">* Tim Gates: contributor</span>
+
+<span class="s0">* Enji Cooper: contributor</span>
+
+<span class="s0">* Bastien Vallet: contributor</span>
+
+<span class="s0">* Pek Chhan: contributor</span>
+
+<span class="s0">* Craig Henriques: contributor</span>
+
+<span class="s0">* Matthijs Blom: contributor</span>
+
+<span class="s0">* Andy Palmer: contributor</span>
+
+<span class="s0">* Wes Turner (Google): added new check 'inconsistent-quotes'</span>
+
+<span class="s0">* Athos Ribeiro</span>
+    <span class="s0">Fixed dict-keys-not-iterating false positive for inverse containment checks</span>
+
+<span class="s0">* Anubhav: contributor</span>
+
+<span class="s0">* Ben Graham: contributor</span>
+
+<span class="s0">* Anthony Tan: contributor</span>
+
+<span class="s0">* Benny Müller: contributor</span>
+
+<span class="s0">* Bernie Gray: contributor</span>
+
+<span class="s0">* Slavfox: contributor</span>
+
+<span class="s0">* Matthew Beckers (mattlbeck): contributor</span>
+
+<span class="s0">* Yang Yang: contributor</span>
+
+<span class="s0">* Andrew J. Simmons (anjsimmo): contributor</span>
+
+<span class="s0">* Damien Baty: contributor</span>
+
+<span class="s0">* Daniel R. Neal (danrneal): contributer</span>
+
+<span class="s0">* Jeremy Fleischman (jfly): contributer</span>
+
+<span class="s0">* Shiv Venkatasubrahmanyam</span>
+
+<span class="s0">* Jochen Preusche (iilei): contributor</span>
+
+<span class="s0">* Ram Rachum (cool-RR)</span>
+
+<span class="s0">* Pieter Engelbrecht</span>
+
+<span class="s0">* Ethan Leba: contributor</span>
+
+<span class="s0">* Matěj Grabovský: contributor</span>
+
+<span class="s0">* Yeting Li (yetingli): contributor</span>
+
+<span class="s0">* Frost Ming (frostming): contributor</span>
+
+<span class="s0">* Luigi Bertaco Cristofolini (luigibertaco): contributor</span>
+
+<span class="s0">* Eli Fine (eli88fine): Fixed false positive duplicate code warning for lines with symbols only</span>
+
+<span class="s0">* Ganden Schaffner: contributor</span>
+
+<span class="s0">* Josselin Feist: contributor</span>
+
+<span class="s0">* David Cain: contributor</span>
+
+<span class="s0">* Pedro Algarvio (s0undt3ch): contributor</span>
+
+<span class="s0">* Luigi Bertaco Cristofolini (luigibertaco): contributor</span>
+
+<span class="s0">* Or Bahari</span>
+
+<span class="s0">* Joshua Cannon: contributor</span>
+
+<span class="s0">* Giuseppe Valente: contributor</span>
+
+<span class="s0">* Takashi Hirashima: contributor</span>
+
+<span class="s0">* Joffrey Mander: contributor</span>
+
+<span class="s0">* Julien Palard: contributor</span>
+
+<span class="s0">* Raphael Gaschignard: contributor</span>
+
+<span class="s0">* Sorin Sbarnea: contributor</span>
+
+<span class="s0">* Gergely Kalmár: contributor</span>
+
+<span class="s0">* Batuhan Taskaya: contributor</span>
+
+<span class="s0">* Frank Harrison (doublethefish): contributor</span>
+
+<span class="s0">* Gauthier Sebaux: contributor</span>
+
+<span class="s0">* Logan Miller (komodo472): contributor</span>
+
+<span class="s0">* Matthew Suozzo: contributor</span>
+
+<span class="s0">* Marc Mueller (cdce8p): contributor</span>
+
+<span class="s0">* David Gilman: contributor</span>
+
+<span class="s0">* Ikraduya Edian: contributor</span>
+    <span class="s0">- Added new checks 'consider-using-generator' and 'use-a-generator'.</span>
+
+<span class="s0">* Tiago Honorato: contributor</span>
+
+<span class="s0">* Lefteris Karapetsas: contributor</span>
+
+<span class="s0">* Louis Sautier: contributor</span>
+
+<span class="s0">* Quentin Young: contributor</span>
+
+<span class="s0">* Alexander Kapshuna: contributor</span>
+
+<span class="s0">* Mark Byrne: contributor</span>
+
+<span class="s0">* Konstantina Saketou: contributor</span>
+
+<span class="s0">* Andrew Howe: contributor</span>
+
+<span class="s0">* James Sinclair (irgeek): contributor</span>
+
+<span class="s0">* Andreas Finkler: contributor</span>
+
+<span class="s0">* Aidan Haase, Elizabeth Bott: contributor</span>
+
+<span class="s0">* Sebastian Müller: contributor</span>
+
+<span class="s0">* Ramiro Leal-Cavazos (ramiro050): Fixed bug preventing pylint from working with emacs tramp</span>
+
+<span class="s0">* manderj: contributor</span>
+
+<span class="s0">* qwiddle: contributor</span>
+</pre>
+</body>
+</html>

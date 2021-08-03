@@ -1,0 +1,58 @@
+<html>
+<head>
+<title>function_group.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+function_group.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Sequence,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Integer,</span>
+<span class="s1">)</span>
+
+<span class="s0">class </span><span class="s1">FunctionGroup(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;functionGroup&quot;</span>
+
+    <span class="s1">name = String()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">name=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.name = name</span>
+
+
+<span class="s0">class </span><span class="s1">FunctionGroupList(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;functionGroups&quot;</span>
+
+    <span class="s1">builtInGroupCount = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">functionGroup = Sequence(expected_type=FunctionGroup, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'functionGroup'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">builtInGroupCount=</span><span class="s4">16</span><span class="s1">,</span>
+                 <span class="s1">functionGroup=(),</span>
+                <span class="s1">):</span>
+        <span class="s1">self.builtInGroupCount = builtInGroupCount</span>
+        <span class="s1">self.functionGroup = functionGroup</span>
+</pre>
+</body>
+</html>

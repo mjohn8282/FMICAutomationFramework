@@ -1,0 +1,129 @@
+<html>
+<head>
+<title>units.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+units.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">division</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">import </span><span class="s1">math</span>
+
+
+<span class="s2">#constants</span>
+
+<span class="s1">DEFAULT_ROW_HEIGHT = </span><span class="s3">15.  </span><span class="s2"># Default row height measured in point size.</span>
+<span class="s1">BASE_COL_WIDTH = </span><span class="s3">13 </span><span class="s2"># in characters</span>
+<span class="s1">DEFAULT_COLUMN_WIDTH = </span><span class="s3">51.85 </span><span class="s2"># in points, should be characters</span>
+
+
+<span class="s1">DEFAULT_LEFT_MARGIN = </span><span class="s3">0.7 </span><span class="s2"># in inches, = right margin</span>
+<span class="s1">DEFAULT_TOP_MARGIN = </span><span class="s3">0.7874 </span><span class="s2"># in inches = bottom margin</span>
+<span class="s1">DEFAULT_HEADER = </span><span class="s3">0.3 </span><span class="s2"># in inches</span>
+
+
+<span class="s2"># Conversion functions</span>
+<span class="s4">&quot;&quot;&quot; 
+From the ECMA Spec (4th Edition part 1) 
+Page setup: &quot;Left Page Margin in inches&quot; p. 1647 
+ 
+Docs from 
+http://startbigthinksmall.wordpress.com/2010/01/04/points-inches-and-emus-measuring-units-in-office-open-xml/ 
+ 
+See also http://msdn.microsoft.com/en-us/library/dd560821(v=office.12).aspx 
+ 
+dxa: The main unit in OOXML is a twentieth of a point. Also called twips. 
+pt: point. In Excel there are 72 points to an inch 
+hp: half-points are used to specify font sizes. A font-size of 12pt equals 24 half points 
+pct: Half-points are used to specify font sizes. A font-size of 12pt equals 24 half points 
+ 
+EMU: English Metric Unit, EMUs are used for coordinates in vector-based 
+drawings and embedded pictures. One inch equates to 914400 EMUs and a 
+centimeter is 360000. For bitmaps the default resolution is 96 dpi (known as 
+PixelsPerInch in Excel). Spec p. 1122 
+ 
+For radial geometry Excel uses integert units of 1/60000th of a degree. 
+&quot;&quot;&quot;</span>
+
+
+
+<span class="s0">def </span><span class="s1">inch_to_dxa(value):</span>
+    <span class="s2">&quot;&quot;&quot;1 inch = 72 * 20 dxa&quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">int(value * </span><span class="s3">20 </span><span class="s1">* </span><span class="s3">72</span><span class="s1">)</span>
+
+<span class="s0">def </span><span class="s1">dxa_to_inch(value):</span>
+    <span class="s0">return </span><span class="s1">value / </span><span class="s3">72 </span><span class="s1">/ </span><span class="s3">20</span>
+
+
+<span class="s0">def </span><span class="s1">dxa_to_cm(value):</span>
+    <span class="s0">return </span><span class="s3">2.54 </span><span class="s1">* dxa_to_inch(value)</span>
+
+<span class="s0">def </span><span class="s1">cm_to_dxa(value):</span>
+    <span class="s1">emu = cm_to_EMU(value)</span>
+    <span class="s1">inch = EMU_to_inch(emu)</span>
+    <span class="s0">return </span><span class="s1">inch_to_dxa(inch)</span>
+
+
+<span class="s0">def </span><span class="s1">pixels_to_EMU(value):</span>
+    <span class="s2">&quot;&quot;&quot;1 pixel = 9525 EMUs&quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">int(value * </span><span class="s3">9525</span><span class="s1">)</span>
+
+<span class="s0">def </span><span class="s1">EMU_to_pixels(value):</span>
+    <span class="s0">return </span><span class="s1">round(value / </span><span class="s3">9525</span><span class="s1">)</span>
+
+
+<span class="s0">def </span><span class="s1">cm_to_EMU(value):</span>
+    <span class="s2">&quot;&quot;&quot;1 cm = 360000 EMUs&quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">int(value * </span><span class="s3">360000</span><span class="s1">)</span>
+
+<span class="s0">def </span><span class="s1">EMU_to_cm(value):</span>
+    <span class="s0">return </span><span class="s1">round(value / </span><span class="s3">360000</span><span class="s1">, </span><span class="s3">4</span><span class="s1">)</span>
+
+
+<span class="s0">def </span><span class="s1">inch_to_EMU(value):</span>
+    <span class="s2">&quot;&quot;&quot;1 inch = 914400 EMUs&quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">int(value * </span><span class="s3">914400</span><span class="s1">)</span>
+
+<span class="s0">def </span><span class="s1">EMU_to_inch(value):</span>
+    <span class="s0">return </span><span class="s1">round(value / </span><span class="s3">914400</span><span class="s1">, </span><span class="s3">4</span><span class="s1">)</span>
+
+
+<span class="s0">def </span><span class="s1">pixels_to_points(value, dpi=</span><span class="s3">96</span><span class="s1">):</span>
+    <span class="s2">&quot;&quot;&quot;96 dpi, 72i&quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">value * </span><span class="s3">72 </span><span class="s1">/ dpi</span>
+
+
+<span class="s0">def </span><span class="s1">points_to_pixels(value, dpi=</span><span class="s3">96</span><span class="s1">):</span>
+    <span class="s0">return </span><span class="s1">int(math.ceil(value * dpi / </span><span class="s3">72</span><span class="s1">))</span>
+
+
+<span class="s0">def </span><span class="s1">degrees_to_angle(value):</span>
+    <span class="s2">&quot;&quot;&quot;1 degree = 60000 angles&quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">int(round(value * </span><span class="s3">60000</span><span class="s1">))</span>
+
+
+<span class="s0">def </span><span class="s1">angle_to_degrees(value):</span>
+    <span class="s0">return </span><span class="s1">round(value / </span><span class="s3">60000</span><span class="s1">, </span><span class="s3">2</span><span class="s1">)</span>
+
+
+<span class="s0">def </span><span class="s1">short_color(color):</span>
+    <span class="s2">&quot;&quot;&quot; format a color to its short size &quot;&quot;&quot;</span>
+    <span class="s0">if </span><span class="s1">len(color) &gt; </span><span class="s3">6</span><span class="s1">:</span>
+        <span class="s0">return </span><span class="s1">color[</span><span class="s3">2</span><span class="s1">:]</span>
+    <span class="s0">return </span><span class="s1">color</span>
+</pre>
+</body>
+</html>

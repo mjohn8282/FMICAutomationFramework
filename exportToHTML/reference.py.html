@@ -1,0 +1,153 @@
+<html>
+<head>
+<title>reference.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+reference.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">itertools </span><span class="s0">import </span><span class="s1">chain</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">unicode</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">MinMax,</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Strict,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.worksheet </span><span class="s0">import </span><span class="s1">Worksheet</span>
+<span class="s0">from </span><span class="s1">openpyexcel.utils </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">get_column_letter,</span>
+    <span class="s1">range_to_tuple,</span>
+    <span class="s1">quote_sheetname</span>
+<span class="s1">)</span>
+
+
+<span class="s0">class </span><span class="s1">DummyWorksheet:</span>
+
+
+    <span class="s0">def </span><span class="s1">__init__(self, title):</span>
+        <span class="s1">self.title = title</span>
+
+
+<span class="s0">class </span><span class="s1">Reference(Strict):</span>
+
+    <span class="s2">&quot;&quot;&quot; 
+    Normalise cell range references 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">min_row = MinMax(min=</span><span class="s3">1</span><span class="s1">, max=</span><span class="s3">1000000</span><span class="s1">, expected_type=int)</span>
+    <span class="s1">max_row = MinMax(min=</span><span class="s3">1</span><span class="s1">, max=</span><span class="s3">1000000</span><span class="s1">, expected_type=int)</span>
+    <span class="s1">min_col = MinMax(min=</span><span class="s3">1</span><span class="s1">, max=</span><span class="s3">16384</span><span class="s1">, expected_type=int)</span>
+    <span class="s1">max_col = MinMax(min=</span><span class="s3">1</span><span class="s1">, max=</span><span class="s3">16384</span><span class="s1">, expected_type=int)</span>
+    <span class="s1">range_string = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">worksheet=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">min_col=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">min_row=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">max_col=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">max_row=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">range_string=</span><span class="s0">None</span>
+                 <span class="s1">):</span>
+        <span class="s0">if </span><span class="s1">range_string </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">sheetname, boundaries = range_to_tuple(range_string)</span>
+            <span class="s1">min_col, min_row, max_col, max_row = boundaries</span>
+            <span class="s1">worksheet = DummyWorksheet(sheetname)</span>
+
+        <span class="s1">self.worksheet = worksheet</span>
+        <span class="s1">self.min_col = min_col</span>
+        <span class="s1">self.min_row = min_row</span>
+        <span class="s0">if </span><span class="s1">max_col </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">max_col = min_col</span>
+        <span class="s1">self.max_col = max_col</span>
+        <span class="s0">if </span><span class="s1">max_row </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">max_row = min_row</span>
+        <span class="s1">self.max_row = max_row</span>
+
+
+    <span class="s0">def </span><span class="s1">__repr__(self):</span>
+        <span class="s0">return </span><span class="s1">unicode(self)</span>
+
+
+    <span class="s0">def </span><span class="s1">__str__(self):</span>
+        <span class="s1">fmt = </span><span class="s4">u&quot;{0}!${1}${2}:${3}${4}&quot;</span>
+        <span class="s0">if </span><span class="s1">(self.min_col == self.max_col</span>
+            <span class="s0">and </span><span class="s1">self.min_row == self.max_row):</span>
+            <span class="s1">fmt = </span><span class="s4">u&quot;{0}!${1}${2}&quot;</span>
+        <span class="s0">return </span><span class="s1">fmt.format(self.sheetname,</span>
+                          <span class="s1">get_column_letter(self.min_col), self.min_row,</span>
+                          <span class="s1">get_column_letter(self.max_col), self.max_row</span>
+                          <span class="s1">)</span>
+
+
+    <span class="s1">__unicode__ = __str__</span>
+
+
+
+    <span class="s0">def </span><span class="s1">__len__(self):</span>
+        <span class="s0">if </span><span class="s1">self.min_row == self.max_row:</span>
+            <span class="s0">return </span><span class="s3">1 </span><span class="s1">+ self.max_col - self.min_col</span>
+        <span class="s0">return </span><span class="s3">1 </span><span class="s1">+ self.max_row - self.min_row</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">rows(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Return all cells in range by column 
+        &quot;&quot;&quot;</span>
+        <span class="s0">for </span><span class="s1">row </span><span class="s0">in </span><span class="s1">range(self.min_row, self.max_row+</span><span class="s3">1</span><span class="s1">):</span>
+            <span class="s0">yield </span><span class="s1">tuple(</span><span class="s4">'%s%d' </span><span class="s1">% (get_column_letter(col), row)</span>
+                    <span class="s0">for </span><span class="s1">col </span><span class="s0">in </span><span class="s1">range(self.min_col, self.max_col+</span><span class="s3">1</span><span class="s1">))</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">cols(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Return all cells in range by row 
+        &quot;&quot;&quot;</span>
+        <span class="s0">for </span><span class="s1">col </span><span class="s0">in </span><span class="s1">range(self.min_col, self.max_col+</span><span class="s3">1</span><span class="s1">):</span>
+            <span class="s0">yield </span><span class="s1">tuple(</span><span class="s4">'%s%d' </span><span class="s1">% (get_column_letter(col), row)</span>
+                        <span class="s0">for </span><span class="s1">row </span><span class="s0">in </span><span class="s1">range(self.min_row, self.max_row+</span><span class="s3">1</span><span class="s1">))</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">cells(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Return a flattened list of all cells (by column) 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">chain.from_iterable(self.cols)</span>
+
+
+    <span class="s0">def </span><span class="s1">pop(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Return and remove the first cell 
+        &quot;&quot;&quot;</span>
+        <span class="s1">cell = next(self.cells)</span>
+        <span class="s0">if </span><span class="s1">self.min_row == self.max_row:</span>
+            <span class="s1">self.min_col += </span><span class="s3">1</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">self.min_row += </span><span class="s3">1</span>
+        <span class="s0">return </span><span class="s1">cell</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">sheetname(self):</span>
+        <span class="s0">return </span><span class="s1">quote_sheetname(self.worksheet.title)</span>
+</pre>
+</body>
+</html>

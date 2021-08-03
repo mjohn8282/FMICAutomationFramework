@@ -1,0 +1,54 @@
+<html>
+<head>
+<title>xdr.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+xdr.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s3">&quot;&quot;&quot; 
+Spreadsheet Drawing has some copies of Drawing ML elements 
+&quot;&quot;&quot;</span>
+
+<span class="s0">from </span><span class="s1">.geometry </span><span class="s0">import </span><span class="s1">Point2D, PositiveSize2D, Transform2D</span>
+
+
+<span class="s0">class </span><span class="s1">XDRPoint2D(Point2D):</span>
+
+    <span class="s1">namespace = </span><span class="s0">None</span>
+    <span class="s1">x = Point2D.x</span>
+    <span class="s1">y = Point2D.y</span>
+
+
+<span class="s0">class </span><span class="s1">XDRPositiveSize2D(PositiveSize2D):</span>
+
+    <span class="s1">namespace = </span><span class="s0">None</span>
+    <span class="s1">cx = PositiveSize2D.cx</span>
+    <span class="s1">cy = PositiveSize2D.cy</span>
+
+
+<span class="s0">class </span><span class="s1">XDRTransform2D(Transform2D):</span>
+
+    <span class="s1">namespace = </span><span class="s0">None</span>
+    <span class="s1">rot = Transform2D.rot</span>
+    <span class="s1">flipH = Transform2D.flipH</span>
+    <span class="s1">flipV = Transform2D.flipV</span>
+    <span class="s1">off = Transform2D.off</span>
+    <span class="s1">ext = Transform2D.ext</span>
+    <span class="s1">chOff = Transform2D.chOff</span>
+    <span class="s1">chExt = Transform2D.chExt</span>
+</pre>
+</body>
+</html>

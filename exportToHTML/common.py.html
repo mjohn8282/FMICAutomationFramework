@@ -1,0 +1,481 @@
+<html>
+<head>
+<title>common.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+common.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">warnings</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">posixpath</span>
+<span class="s2">import </span><span class="s1">fnmatch</span>
+<span class="s2">import </span><span class="s1">py</span>
+
+<span class="s0"># Moved from local.py.</span>
+<span class="s1">iswin32 = sys.platform == </span><span class="s3">&quot;win32&quot; </span><span class="s2">or </span><span class="s1">(getattr(os, </span><span class="s3">'_name'</span><span class="s1">, </span><span class="s2">False</span><span class="s1">) == </span><span class="s3">'nt'</span><span class="s1">)</span>
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s0"># FileNotFoundError might happen in py34, and is not available with py27.</span>
+    <span class="s1">import_errors = (ImportError, FileNotFoundError)</span>
+<span class="s2">except </span><span class="s1">NameError:</span>
+    <span class="s1">import_errors = (ImportError,)</span>
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s2">from </span><span class="s1">os </span><span class="s2">import </span><span class="s1">fspath</span>
+<span class="s2">except </span><span class="s1">ImportError:</span>
+    <span class="s2">def </span><span class="s1">fspath(path):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Return the string representation of the path. 
+        If str or bytes is passed in, it is returned unchanged. 
+        This code comes from PEP 519, modified to support earlier versions of 
+        python. 
+ 
+        This is required for python &lt; 3.6. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">isinstance(path, (py.builtin.text, py.builtin.bytes)):</span>
+            <span class="s2">return </span><span class="s1">path</span>
+
+        <span class="s0"># Work from the object's type to match method resolution of other magic</span>
+        <span class="s0"># methods.</span>
+        <span class="s1">path_type = type(path)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">path_type.__fspath__(path)</span>
+        <span class="s2">except </span><span class="s1">AttributeError:</span>
+            <span class="s2">if </span><span class="s1">hasattr(path_type, </span><span class="s3">'__fspath__'</span><span class="s1">):</span>
+                <span class="s2">raise</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s2">import </span><span class="s1">pathlib</span>
+            <span class="s2">except </span><span class="s1">import_errors:</span>
+                <span class="s2">pass</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">if </span><span class="s1">isinstance(path, pathlib.PurePath):</span>
+                    <span class="s2">return </span><span class="s1">py.builtin.text(path)</span>
+
+            <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">&quot;expected str, bytes or os.PathLike object, not &quot;</span>
+                            <span class="s1">+ path_type.__name__)</span>
+
+<span class="s2">class </span><span class="s1">Checkers:</span>
+    <span class="s1">_depend_on_existence = </span><span class="s3">'exists'</span><span class="s1">, </span><span class="s3">'link'</span><span class="s1">, </span><span class="s3">'dir'</span><span class="s1">, </span><span class="s3">'file'</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, path):</span>
+        <span class="s1">self.path = path</span>
+
+    <span class="s2">def </span><span class="s1">dir(self):</span>
+        <span class="s2">raise </span><span class="s1">NotImplementedError</span>
+
+    <span class="s2">def </span><span class="s1">file(self):</span>
+        <span class="s2">raise </span><span class="s1">NotImplementedError</span>
+
+    <span class="s2">def </span><span class="s1">dotfile(self):</span>
+        <span class="s2">return </span><span class="s1">self.path.basename.startswith(</span><span class="s3">'.'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">ext(self, arg):</span>
+        <span class="s2">if not </span><span class="s1">arg.startswith(</span><span class="s3">'.'</span><span class="s1">):</span>
+            <span class="s1">arg = </span><span class="s3">'.' </span><span class="s1">+ arg</span>
+        <span class="s2">return </span><span class="s1">self.path.ext == arg</span>
+
+    <span class="s2">def </span><span class="s1">exists(self):</span>
+        <span class="s2">raise </span><span class="s1">NotImplementedError</span>
+
+    <span class="s2">def </span><span class="s1">basename(self, arg):</span>
+        <span class="s2">return </span><span class="s1">self.path.basename == arg</span>
+
+    <span class="s2">def </span><span class="s1">basestarts(self, arg):</span>
+        <span class="s2">return </span><span class="s1">self.path.basename.startswith(arg)</span>
+
+    <span class="s2">def </span><span class="s1">relto(self, arg):</span>
+        <span class="s2">return </span><span class="s1">self.path.relto(arg)</span>
+
+    <span class="s2">def </span><span class="s1">fnmatch(self, arg):</span>
+        <span class="s2">return </span><span class="s1">self.path.fnmatch(arg)</span>
+
+    <span class="s2">def </span><span class="s1">endswith(self, arg):</span>
+        <span class="s2">return </span><span class="s1">str(self.path).endswith(arg)</span>
+
+    <span class="s2">def </span><span class="s1">_evaluate(self, kw):</span>
+        <span class="s2">for </span><span class="s1">name, value </span><span class="s2">in </span><span class="s1">kw.items():</span>
+            <span class="s1">invert = </span><span class="s2">False</span>
+            <span class="s1">meth = </span><span class="s2">None</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">meth = getattr(self, name)</span>
+            <span class="s2">except </span><span class="s1">AttributeError:</span>
+                <span class="s2">if </span><span class="s1">name[:</span><span class="s4">3</span><span class="s1">] == </span><span class="s3">'not'</span><span class="s1">:</span>
+                    <span class="s1">invert = </span><span class="s2">True</span>
+                    <span class="s2">try</span><span class="s1">:</span>
+                        <span class="s1">meth = getattr(self, name[</span><span class="s4">3</span><span class="s1">:])</span>
+                    <span class="s2">except </span><span class="s1">AttributeError:</span>
+                        <span class="s2">pass</span>
+            <span class="s2">if </span><span class="s1">meth </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s2">raise </span><span class="s1">TypeError(</span>
+                    <span class="s3">&quot;no %r checker available for %r&quot; </span><span class="s1">% (name, self.path))</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s2">if </span><span class="s1">py.code.getrawcode(meth).co_argcount &gt; </span><span class="s4">1</span><span class="s1">:</span>
+                    <span class="s2">if </span><span class="s1">(</span><span class="s2">not </span><span class="s1">meth(value)) ^ invert:</span>
+                        <span class="s2">return False</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s2">if </span><span class="s1">bool(value) ^ bool(meth()) ^ invert:</span>
+                        <span class="s2">return False</span>
+            <span class="s2">except </span><span class="s1">(py.error.ENOENT, py.error.ENOTDIR, py.error.EBUSY):</span>
+                <span class="s0"># EBUSY feels not entirely correct,</span>
+                <span class="s0"># but its kind of necessary since ENOMEDIUM</span>
+                <span class="s0"># is not accessible in python</span>
+                <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">self._depend_on_existence:</span>
+                    <span class="s2">if </span><span class="s1">name </span><span class="s2">in </span><span class="s1">kw:</span>
+                        <span class="s2">if </span><span class="s1">kw.get(name):</span>
+                            <span class="s2">return False</span>
+                    <span class="s1">name = </span><span class="s3">'not' </span><span class="s1">+ name</span>
+                    <span class="s2">if </span><span class="s1">name </span><span class="s2">in </span><span class="s1">kw:</span>
+                        <span class="s2">if not </span><span class="s1">kw.get(name):</span>
+                            <span class="s2">return False</span>
+        <span class="s2">return True</span>
+
+<span class="s2">class </span><span class="s1">NeverRaised(Exception):</span>
+    <span class="s2">pass</span>
+
+<span class="s2">class </span><span class="s1">PathBase(object):</span>
+    <span class="s0">&quot;&quot;&quot; shared implementation for filesystem path objects.&quot;&quot;&quot;</span>
+    <span class="s1">Checkers = Checkers</span>
+
+    <span class="s2">def </span><span class="s1">__div__(self, other):</span>
+        <span class="s2">return </span><span class="s1">self.join(fspath(other))</span>
+    <span class="s1">__truediv__ = __div__ </span><span class="s0"># py3k</span>
+
+    <span class="s2">def </span><span class="s1">basename(self):</span>
+        <span class="s0">&quot;&quot;&quot; basename part of path. &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._getbyspec(</span><span class="s3">'basename'</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s1">basename = property(basename, </span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">, basename.__doc__)</span>
+
+    <span class="s2">def </span><span class="s1">dirname(self):</span>
+        <span class="s0">&quot;&quot;&quot; dirname part of path. &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._getbyspec(</span><span class="s3">'dirname'</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s1">dirname = property(dirname, </span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">, dirname.__doc__)</span>
+
+    <span class="s2">def </span><span class="s1">purebasename(self):</span>
+        <span class="s0">&quot;&quot;&quot; pure base name of the path.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._getbyspec(</span><span class="s3">'purebasename'</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s1">purebasename = property(purebasename, </span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">, purebasename.__doc__)</span>
+
+    <span class="s2">def </span><span class="s1">ext(self):</span>
+        <span class="s0">&quot;&quot;&quot; extension of the path (including the '.').&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._getbyspec(</span><span class="s3">'ext'</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s1">ext = property(ext, </span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">, ext.__doc__)</span>
+
+    <span class="s2">def </span><span class="s1">dirpath(self, *args, **kwargs):</span>
+        <span class="s0">&quot;&quot;&quot; return the directory path joined with any given path arguments.  &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.new(basename=</span><span class="s3">''</span><span class="s1">).join(*args, **kwargs)</span>
+
+    <span class="s2">def </span><span class="s1">read_binary(self):</span>
+        <span class="s0">&quot;&quot;&quot; read and return a bytestring from reading the path. &quot;&quot;&quot;</span>
+        <span class="s2">with </span><span class="s1">self.open(</span><span class="s3">'rb'</span><span class="s1">) </span><span class="s2">as </span><span class="s1">f:</span>
+            <span class="s2">return </span><span class="s1">f.read()</span>
+
+    <span class="s2">def </span><span class="s1">read_text(self, encoding):</span>
+        <span class="s0">&quot;&quot;&quot; read and return a Unicode string from reading the path. &quot;&quot;&quot;</span>
+        <span class="s2">with </span><span class="s1">self.open(</span><span class="s3">&quot;r&quot;</span><span class="s1">, encoding=encoding) </span><span class="s2">as </span><span class="s1">f:</span>
+            <span class="s2">return </span><span class="s1">f.read()</span>
+
+
+    <span class="s2">def </span><span class="s1">read(self, mode=</span><span class="s3">'r'</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot; read and return a bytestring from reading the path. &quot;&quot;&quot;</span>
+        <span class="s2">with </span><span class="s1">self.open(mode) </span><span class="s2">as </span><span class="s1">f:</span>
+            <span class="s2">return </span><span class="s1">f.read()</span>
+
+    <span class="s2">def </span><span class="s1">readlines(self, cr=</span><span class="s4">1</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot; read and return a list of lines from the path. if cr is False, the 
+newline will be removed from the end of each line. &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">sys.version_info &lt; (</span><span class="s4">3</span><span class="s1">, ):</span>
+            <span class="s1">mode = </span><span class="s3">'rU'</span>
+        <span class="s2">else</span><span class="s1">:  </span><span class="s0"># python 3 deprecates mode &quot;U&quot; in favor of &quot;newline&quot; option</span>
+            <span class="s1">mode = </span><span class="s3">'r'</span>
+
+        <span class="s2">if not </span><span class="s1">cr:</span>
+            <span class="s1">content = self.read(mode)</span>
+            <span class="s2">return </span><span class="s1">content.split(</span><span class="s3">'</span><span class="s5">\n</span><span class="s3">'</span><span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">f = self.open(mode)</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s2">return </span><span class="s1">f.readlines()</span>
+            <span class="s2">finally</span><span class="s1">:</span>
+                <span class="s1">f.close()</span>
+
+    <span class="s2">def </span><span class="s1">load(self):</span>
+        <span class="s0">&quot;&quot;&quot; (deprecated) return object unpickled from self.read() &quot;&quot;&quot;</span>
+        <span class="s1">f = self.open(</span><span class="s3">'rb'</span><span class="s1">)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">import </span><span class="s1">pickle</span>
+            <span class="s2">return </span><span class="s1">py.error.checked_call(pickle.load, f)</span>
+        <span class="s2">finally</span><span class="s1">:</span>
+            <span class="s1">f.close()</span>
+
+    <span class="s2">def </span><span class="s1">move(self, target):</span>
+        <span class="s0">&quot;&quot;&quot; move this path to target. &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">target.relto(self):</span>
+            <span class="s2">raise </span><span class="s1">py.error.EINVAL(</span>
+                <span class="s1">target,</span>
+                <span class="s3">&quot;cannot move path into a subdirectory of itself&quot;</span><span class="s1">)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">self.rename(target)</span>
+        <span class="s2">except </span><span class="s1">py.error.EXDEV:  </span><span class="s0"># invalid cross-device link</span>
+            <span class="s1">self.copy(target)</span>
+            <span class="s1">self.remove()</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s0">&quot;&quot;&quot; return a string representation of this path. &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">repr(str(self))</span>
+
+    <span class="s2">def </span><span class="s1">check(self, **kw):</span>
+        <span class="s0">&quot;&quot;&quot; check a path for existence and properties. 
+ 
+            Without arguments, return True if the path exists, otherwise False. 
+ 
+            valid checkers:: 
+ 
+                file=1    # is a file 
+                file=0    # is not a file (may not even exist) 
+                dir=1     # is a dir 
+                link=1    # is a link 
+                exists=1  # exists 
+ 
+            You can specify multiple checker definitions, for example:: 
+ 
+                path.check(file=1, link=1)  # a link pointing to a file 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">kw:</span>
+            <span class="s1">kw = {</span><span class="s3">'exists'</span><span class="s1">: </span><span class="s4">1</span><span class="s1">}</span>
+        <span class="s2">return </span><span class="s1">self.Checkers(self)._evaluate(kw)</span>
+
+    <span class="s2">def </span><span class="s1">fnmatch(self, pattern):</span>
+        <span class="s0">&quot;&quot;&quot;return true if the basename/fullname matches the glob-'pattern'. 
+ 
+        valid pattern characters:: 
+ 
+            *       matches everything 
+            ?       matches any single character 
+            [seq]   matches any character in seq 
+            [!seq]  matches any char not in seq 
+ 
+        If the pattern contains a path-separator then the full path 
+        is used for pattern matching and a '*' is prepended to the 
+        pattern. 
+ 
+        if the pattern doesn't contain a path-separator the pattern 
+        is only matched against the basename. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">FNMatcher(pattern)(self)</span>
+
+    <span class="s2">def </span><span class="s1">relto(self, relpath):</span>
+        <span class="s0">&quot;&quot;&quot; return a string which is the relative part of the path 
+        to the given 'relpath'. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">isinstance(relpath, (str, PathBase)):</span>
+            <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">&quot;%r: not a string or path object&quot; </span><span class="s1">%(relpath,))</span>
+        <span class="s1">strrelpath = str(relpath)</span>
+        <span class="s2">if </span><span class="s1">strrelpath </span><span class="s2">and </span><span class="s1">strrelpath[-</span><span class="s4">1</span><span class="s1">] != self.sep:</span>
+            <span class="s1">strrelpath += self.sep</span>
+        <span class="s0">#assert strrelpath[-1] == self.sep</span>
+        <span class="s0">#assert strrelpath[-2] != self.sep</span>
+        <span class="s1">strself = self.strpath</span>
+        <span class="s2">if </span><span class="s1">sys.platform == </span><span class="s3">&quot;win32&quot; </span><span class="s2">or </span><span class="s1">getattr(os, </span><span class="s3">'_name'</span><span class="s1">, </span><span class="s2">None</span><span class="s1">) == </span><span class="s3">'nt'</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">os.path.normcase(strself).startswith(</span>
+               <span class="s1">os.path.normcase(strrelpath)):</span>
+                <span class="s2">return </span><span class="s1">strself[len(strrelpath):]</span>
+        <span class="s2">elif </span><span class="s1">strself.startswith(strrelpath):</span>
+            <span class="s2">return </span><span class="s1">strself[len(strrelpath):]</span>
+        <span class="s2">return </span><span class="s3">&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">ensure_dir(self, *args):</span>
+        <span class="s0">&quot;&quot;&quot; ensure the path joined with args is a directory. &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.ensure(*args, **{</span><span class="s3">&quot;dir&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">})</span>
+
+    <span class="s2">def </span><span class="s1">bestrelpath(self, dest):</span>
+        <span class="s0">&quot;&quot;&quot; return a string which is a relative path from self 
+            (assumed to be a directory) to dest such that 
+            self.join(bestrelpath) == dest and if not such 
+            path can be determined return dest. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">self == dest:</span>
+                <span class="s2">return </span><span class="s1">os.curdir</span>
+            <span class="s1">base = self.common(dest)</span>
+            <span class="s2">if not </span><span class="s1">base:  </span><span class="s0"># can be the case on windows</span>
+                <span class="s2">return </span><span class="s1">str(dest)</span>
+            <span class="s1">self2base = self.relto(base)</span>
+            <span class="s1">reldest = dest.relto(base)</span>
+            <span class="s2">if </span><span class="s1">self2base:</span>
+                <span class="s1">n = self2base.count(self.sep) + </span><span class="s4">1</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">n = </span><span class="s4">0</span>
+            <span class="s1">l = [os.pardir] * n</span>
+            <span class="s2">if </span><span class="s1">reldest:</span>
+                <span class="s1">l.append(reldest)</span>
+            <span class="s1">target = dest.sep.join(l)</span>
+            <span class="s2">return </span><span class="s1">target</span>
+        <span class="s2">except </span><span class="s1">AttributeError:</span>
+            <span class="s2">return </span><span class="s1">str(dest)</span>
+
+    <span class="s2">def </span><span class="s1">exists(self):</span>
+        <span class="s2">return </span><span class="s1">self.check()</span>
+
+    <span class="s2">def </span><span class="s1">isdir(self):</span>
+        <span class="s2">return </span><span class="s1">self.check(dir=</span><span class="s4">1</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">isfile(self):</span>
+        <span class="s2">return </span><span class="s1">self.check(file=</span><span class="s4">1</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">parts(self, reverse=</span><span class="s2">False</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot; return a root-first list of all ancestor directories 
+            plus the path itself. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">current = self</span>
+        <span class="s1">l = [self]</span>
+        <span class="s2">while </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s1">last = current</span>
+            <span class="s1">current = current.dirpath()</span>
+            <span class="s2">if </span><span class="s1">last == current:</span>
+                <span class="s2">break</span>
+            <span class="s1">l.append(current)</span>
+        <span class="s2">if not </span><span class="s1">reverse:</span>
+            <span class="s1">l.reverse()</span>
+        <span class="s2">return </span><span class="s1">l</span>
+
+    <span class="s2">def </span><span class="s1">common(self, other):</span>
+        <span class="s0">&quot;&quot;&quot; return the common part shared with the other path 
+            or None if there is no common part. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">last = </span><span class="s2">None</span>
+        <span class="s2">for </span><span class="s1">x, y </span><span class="s2">in </span><span class="s1">zip(self.parts(), other.parts()):</span>
+            <span class="s2">if </span><span class="s1">x != y:</span>
+                <span class="s2">return </span><span class="s1">last</span>
+            <span class="s1">last = x</span>
+        <span class="s2">return </span><span class="s1">last</span>
+
+    <span class="s2">def </span><span class="s1">__add__(self, other):</span>
+        <span class="s0">&quot;&quot;&quot; return new path object with 'other' added to the basename&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.new(basename=self.basename+str(other))</span>
+
+    <span class="s2">def </span><span class="s1">__cmp__(self, other):</span>
+        <span class="s0">&quot;&quot;&quot; return sort value (-1, 0, +1). &quot;&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">cmp(self.strpath, other.strpath)</span>
+        <span class="s2">except </span><span class="s1">AttributeError:</span>
+            <span class="s2">return </span><span class="s1">cmp(str(self), str(other)) </span><span class="s0"># self.path, other.path)</span>
+
+    <span class="s2">def </span><span class="s1">__lt__(self, other):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">self.strpath &lt; other.strpath</span>
+        <span class="s2">except </span><span class="s1">AttributeError:</span>
+            <span class="s2">return </span><span class="s1">str(self) &lt; str(other)</span>
+
+    <span class="s2">def </span><span class="s1">visit(self, fil=</span><span class="s2">None</span><span class="s1">, rec=</span><span class="s2">None</span><span class="s1">, ignore=NeverRaised, bf=</span><span class="s2">False</span><span class="s1">, sort=</span><span class="s2">False</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot; yields all paths below the current one 
+ 
+            fil is a filter (glob pattern or callable), if not matching the 
+            path will not be yielded, defaulting to None (everything is 
+            returned) 
+ 
+            rec is a filter (glob pattern or callable) that controls whether 
+            a node is descended, defaulting to None 
+ 
+            ignore is an Exception class that is ignoredwhen calling dirlist() 
+            on any of the paths (by default, all exceptions are reported) 
+ 
+            bf if True will cause a breadthfirst search instead of the 
+            default depthfirst. Default: False 
+ 
+            sort if True will sort entries within each directory level. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">x </span><span class="s2">in </span><span class="s1">Visitor(fil, rec, ignore, bf, sort).gen(self):</span>
+            <span class="s2">yield </span><span class="s1">x</span>
+
+    <span class="s2">def </span><span class="s1">_sortlist(self, res, sort):</span>
+        <span class="s2">if </span><span class="s1">sort:</span>
+            <span class="s2">if </span><span class="s1">hasattr(sort, </span><span class="s3">'__call__'</span><span class="s1">):</span>
+                <span class="s1">warnings.warn(DeprecationWarning(</span>
+                    <span class="s3">&quot;listdir(sort=callable) is deprecated and breaks on python3&quot;</span>
+                <span class="s1">), stacklevel=</span><span class="s4">3</span><span class="s1">)</span>
+                <span class="s1">res.sort(sort)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">res.sort()</span>
+
+    <span class="s2">def </span><span class="s1">samefile(self, other):</span>
+        <span class="s0">&quot;&quot;&quot; return True if other refers to the same stat object as self. &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.strpath == str(other)</span>
+
+    <span class="s2">def </span><span class="s1">__fspath__(self):</span>
+        <span class="s2">return </span><span class="s1">self.strpath</span>
+
+<span class="s2">class </span><span class="s1">Visitor:</span>
+    <span class="s2">def </span><span class="s1">__init__(self, fil, rec, ignore, bf, sort):</span>
+        <span class="s2">if </span><span class="s1">isinstance(fil, py.builtin._basestring):</span>
+            <span class="s1">fil = FNMatcher(fil)</span>
+        <span class="s2">if </span><span class="s1">isinstance(rec, py.builtin._basestring):</span>
+            <span class="s1">self.rec = FNMatcher(rec)</span>
+        <span class="s2">elif not </span><span class="s1">hasattr(rec, </span><span class="s3">'__call__'</span><span class="s1">) </span><span class="s2">and </span><span class="s1">rec:</span>
+            <span class="s1">self.rec = </span><span class="s2">lambda </span><span class="s1">path: </span><span class="s2">True</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.rec = rec</span>
+        <span class="s1">self.fil = fil</span>
+        <span class="s1">self.ignore = ignore</span>
+        <span class="s1">self.breadthfirst = bf</span>
+        <span class="s1">self.optsort = sort </span><span class="s2">and </span><span class="s1">sorted </span><span class="s2">or </span><span class="s1">(</span><span class="s2">lambda </span><span class="s1">x: x)</span>
+
+    <span class="s2">def </span><span class="s1">gen(self, path):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">entries = path.listdir()</span>
+        <span class="s2">except </span><span class="s1">self.ignore:</span>
+            <span class="s2">return</span>
+        <span class="s1">rec = self.rec</span>
+        <span class="s1">dirs = self.optsort([p </span><span class="s2">for </span><span class="s1">p </span><span class="s2">in </span><span class="s1">entries</span>
+                    <span class="s2">if </span><span class="s1">p.check(dir=</span><span class="s4">1</span><span class="s1">) </span><span class="s2">and </span><span class="s1">(rec </span><span class="s2">is None or </span><span class="s1">rec(p))])</span>
+        <span class="s2">if not </span><span class="s1">self.breadthfirst:</span>
+            <span class="s2">for </span><span class="s1">subdir </span><span class="s2">in </span><span class="s1">dirs:</span>
+                <span class="s2">for </span><span class="s1">p </span><span class="s2">in </span><span class="s1">self.gen(subdir):</span>
+                    <span class="s2">yield </span><span class="s1">p</span>
+        <span class="s2">for </span><span class="s1">p </span><span class="s2">in </span><span class="s1">self.optsort(entries):</span>
+            <span class="s2">if </span><span class="s1">self.fil </span><span class="s2">is None or </span><span class="s1">self.fil(p):</span>
+                <span class="s2">yield </span><span class="s1">p</span>
+        <span class="s2">if </span><span class="s1">self.breadthfirst:</span>
+            <span class="s2">for </span><span class="s1">subdir </span><span class="s2">in </span><span class="s1">dirs:</span>
+                <span class="s2">for </span><span class="s1">p </span><span class="s2">in </span><span class="s1">self.gen(subdir):</span>
+                    <span class="s2">yield </span><span class="s1">p</span>
+
+<span class="s2">class </span><span class="s1">FNMatcher:</span>
+    <span class="s2">def </span><span class="s1">__init__(self, pattern):</span>
+        <span class="s1">self.pattern = pattern</span>
+
+    <span class="s2">def </span><span class="s1">__call__(self, path):</span>
+        <span class="s1">pattern = self.pattern</span>
+
+        <span class="s2">if </span><span class="s1">(pattern.find(path.sep) == -</span><span class="s4">1 </span><span class="s2">and</span>
+        <span class="s1">iswin32 </span><span class="s2">and</span>
+        <span class="s1">pattern.find(posixpath.sep) != -</span><span class="s4">1</span><span class="s1">):</span>
+            <span class="s0"># Running on Windows, the pattern has no Windows path separators,</span>
+            <span class="s0"># and the pattern has one or more Posix path separators. Replace</span>
+            <span class="s0"># the Posix path separators with the Windows path separator.</span>
+            <span class="s1">pattern = pattern.replace(posixpath.sep, path.sep)</span>
+
+        <span class="s2">if </span><span class="s1">pattern.find(path.sep) == -</span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s1">name = path.basename</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">name = str(path) </span><span class="s0"># path.strpath # XXX svn?</span>
+            <span class="s2">if not </span><span class="s1">os.path.isabs(pattern):</span>
+                <span class="s1">pattern = </span><span class="s3">'*' </span><span class="s1">+ path.sep + pattern</span>
+        <span class="s2">return </span><span class="s1">fnmatch.fnmatch(name, pattern)</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<html>
+<head>
+<title>brain_numpy_utils.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_numpy_utils.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2019-2021 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+
+<span class="s0">&quot;&quot;&quot;Different utilities for the numpy brains&quot;&quot;&quot;</span>
+
+
+<span class="s2">import </span><span class="s1">astroid</span>
+
+
+<span class="s2">def </span><span class="s1">infer_numpy_member(src, node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s1">node = astroid.extract_node(src)</span>
+    <span class="s2">return </span><span class="s1">node.infer(context=context)</span>
+
+
+<span class="s2">def </span><span class="s1">_is_a_numpy_module(node: astroid.node_classes.Name) -&gt; bool:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Returns True if the node is a representation of a numpy module. 
+ 
+    For example in : 
+        import numpy as np 
+        x = np.linspace(1, 2) 
+    The node &lt;Name.np&gt; is a representation of the numpy module. 
+ 
+    :param node: node to test 
+    :return: True if the node is a representation of the numpy module. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">module_nickname = node.name</span>
+    <span class="s1">potential_import_target = [</span>
+        <span class="s1">x </span><span class="s2">for </span><span class="s1">x </span><span class="s2">in </span><span class="s1">node.lookup(module_nickname)[</span><span class="s3">1</span><span class="s1">] </span><span class="s2">if </span><span class="s1">isinstance(x, astroid.Import)</span>
+    <span class="s1">]</span>
+    <span class="s2">for </span><span class="s1">target </span><span class="s2">in </span><span class="s1">potential_import_target:</span>
+        <span class="s2">if </span><span class="s1">(</span><span class="s4">&quot;numpy&quot;</span><span class="s1">, module_nickname) </span><span class="s2">in </span><span class="s1">target.names </span><span class="s2">or </span><span class="s1">(</span>
+            <span class="s4">&quot;numpy&quot;</span><span class="s1">,</span>
+            <span class="s2">None</span><span class="s1">,</span>
+        <span class="s1">) </span><span class="s2">in </span><span class="s1">target.names:</span>
+            <span class="s2">return True</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">looks_like_numpy_member(</span>
+    <span class="s1">member_name: str, node: astroid.node_classes.NodeNG</span>
+<span class="s1">) -&gt; bool:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Returns True if the node is a member of numpy whose 
+    name is member_name. 
+ 
+    :param member_name: name of the member 
+    :param node: node to test 
+    :return: True if the node is a member of numpy 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">(</span>
+        <span class="s1">isinstance(node, astroid.Attribute)</span>
+        <span class="s2">and </span><span class="s1">node.attrname == member_name</span>
+        <span class="s2">and </span><span class="s1">isinstance(node.expr, astroid.Name)</span>
+        <span class="s2">and </span><span class="s1">_is_a_numpy_module(node.expr)</span>
+    <span class="s1">):</span>
+        <span class="s2">return True</span>
+    <span class="s2">if </span><span class="s1">(</span>
+        <span class="s1">isinstance(node, astroid.Name)</span>
+        <span class="s2">and </span><span class="s1">node.name == member_name</span>
+        <span class="s2">and </span><span class="s1">node.root().name.startswith(</span><span class="s4">&quot;numpy&quot;</span><span class="s1">)</span>
+    <span class="s1">):</span>
+        <span class="s2">return True</span>
+    <span class="s2">return False</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<html>
+<head>
+<title>test_client.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #d19a66;}
+.s3 { color: #98c379;}
+.s4 { color: #5c6370;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+test_client.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">os</span>
+<span class="s0">import </span><span class="s1">unittest</span>
+
+<span class="s0">from </span><span class="s1">mock </span><span class="s0">import </span><span class="s1">call, MagicMock, patch</span>
+
+<span class="s0">from </span><span class="s1">yarg </span><span class="s0">import </span><span class="s1">get, HTTPError</span>
+
+
+<span class="s0">class </span><span class="s1">GoodResponse(object):</span>
+    <span class="s1">status_code = </span><span class="s2">200</span>
+    <span class="s1">package = os.path.join(os.path.dirname(__file__),</span>
+                           <span class="s3">'package.json'</span><span class="s1">)</span>
+    <span class="s1">content = open(package).read()</span>
+
+
+<span class="s0">class </span><span class="s1">BadResponse(object):</span>
+    <span class="s1">status_code = </span><span class="s2">300</span>
+    <span class="s1">reason = </span><span class="s3">&quot;Mocked&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">TestClient(unittest.TestCase):</span>
+
+    <span class="s1">@patch(</span><span class="s3">'requests.get'</span><span class="s1">, return_value=BadResponse)</span>
+    <span class="s0">def </span><span class="s1">test_get(self, get_mock):</span>
+        <span class="s4"># Python 2.6....</span>
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s1">get(</span><span class="s3">&quot;test&quot;</span><span class="s1">)</span>
+        <span class="s0">except </span><span class="s1">HTTPError </span><span class="s0">as </span><span class="s1">e:</span>
+            <span class="s1">self.assertEqual(</span><span class="s2">300</span><span class="s1">, e.status_code)</span>
+            <span class="s1">self.assertEqual(e.status_code, e.errno)</span>
+            <span class="s1">self.assertEqual(e.reason, e.message)</span>
+
+    <span class="s1">@patch(</span><span class="s3">'requests.get'</span><span class="s1">, return_value=GoodResponse)</span>
+    <span class="s0">def </span><span class="s1">test_end_slash(self, get_mock):</span>
+        <span class="s1">get(</span><span class="s3">&quot;test&quot;</span><span class="s1">, pypi_server=</span><span class="s3">&quot;https://mock.test.mock/test&quot;</span><span class="s1">)</span>
+        <span class="s1">self.assertEqual(call(</span><span class="s3">'https://mock.test.mock/test/test/json'</span><span class="s1">),</span>
+                         <span class="s1">get_mock.call_args)</span>
+</pre>
+</body>
+</html>

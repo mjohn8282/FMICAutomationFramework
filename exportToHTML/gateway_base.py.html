@@ -1,0 +1,1576 @@
+<html>
+<head>
+<title>gateway_base.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+gateway_base.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># -*- coding: utf-8 -*-</span>
+<span class="s0">&quot;&quot;&quot; 
+base execnet gateway code send to the other side for bootstrapping. 
+ 
+NOTE: aims to be compatible to Python 2.5-3.X, Jython and IronPython 
+ 
+:copyright: 2004-2015 
+:authors: 
+    - Holger Krekel 
+    - Armin Rigo 
+    - Benjamin Peterson 
+    - Ronny Pfannschmidt 
+    - many others 
+&quot;&quot;&quot;</span>
+<span class="s2">from </span><span class="s1">__future__ </span><span class="s2">import </span><span class="s1">with_statement</span>
+
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">struct</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">traceback</span>
+<span class="s2">import </span><span class="s1">weakref</span>
+
+<span class="s0"># NOTE that we want to avoid try/except style importing</span>
+<span class="s0"># to avoid setting sys.exc_info() during import</span>
+<span class="s0">#</span>
+
+<span class="s1">ISPY3 = sys.version_info &gt;= (</span><span class="s3">3</span><span class="s1">, </span><span class="s3">0</span><span class="s1">)</span>
+<span class="s2">if </span><span class="s1">ISPY3:</span>
+    <span class="s2">from </span><span class="s1">io </span><span class="s2">import </span><span class="s1">BytesIO</span>
+
+    <span class="s1">exec(</span><span class="s4">&quot;do_exec = exec&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">reraise(cls, val, tb):</span>
+        <span class="s2">raise </span><span class="s1">val.with_traceback(tb)</span>
+
+    <span class="s1">unicode = str</span>
+    <span class="s1">_long_type = int</span>
+    <span class="s2">from </span><span class="s1">_thread </span><span class="s2">import </span><span class="s1">interrupt_main</span>
+
+    <span class="s1">SUBPROCESS32 = </span><span class="s2">False</span>
+<span class="s2">else</span><span class="s1">:</span>
+    <span class="s2">from </span><span class="s1">StringIO </span><span class="s2">import </span><span class="s1">StringIO </span><span class="s2">as </span><span class="s1">BytesIO</span>
+
+    <span class="s1">exec(</span>
+        <span class="s4">&quot;def do_exec(co, loc): exec co in loc</span><span class="s5">\n</span><span class="s4">&quot;</span>
+        <span class="s4">&quot;def reraise(cls, val, tb): raise cls, val, tb</span><span class="s5">\n</span><span class="s4">&quot;</span>
+    <span class="s1">)</span>
+    <span class="s1">bytes = str</span>
+    <span class="s1">_long_type = long</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">from </span><span class="s1">thread </span><span class="s2">import </span><span class="s1">interrupt_main</span>
+    <span class="s2">except </span><span class="s1">ImportError:</span>
+        <span class="s1">interrupt_main = </span><span class="s2">None</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">import </span><span class="s1">subprocess32  </span><span class="s0"># NOQA</span>
+
+        <span class="s1">SUBPROCESS32 = </span><span class="s2">True</span>
+    <span class="s2">except </span><span class="s1">ImportError:</span>
+        <span class="s1">SUBPROCESS32 = </span><span class="s2">False</span>
+        <span class="s1">sys.exc_clear()</span>
+
+
+<span class="s0"># f = open(&quot;/tmp/execnet-%s&quot; % os.getpid(), &quot;w&quot;)</span>
+<span class="s0"># def log_extra(*msg):</span>
+<span class="s0">#     f.write(&quot; &quot;.join([str(x) for x in msg]) + &quot;\n&quot;)</span>
+
+
+<span class="s2">class </span><span class="s1">EmptySemaphore:</span>
+    <span class="s1">acquire = release = </span><span class="s2">lambda </span><span class="s1">self: </span><span class="s2">None</span>
+
+
+<span class="s2">def </span><span class="s1">get_execmodel(backend):</span>
+    <span class="s2">if </span><span class="s1">hasattr(backend, </span><span class="s4">&quot;backend&quot;</span><span class="s1">):</span>
+        <span class="s2">return </span><span class="s1">backend</span>
+    <span class="s2">if </span><span class="s1">backend == </span><span class="s4">&quot;thread&quot;</span><span class="s1">:</span>
+        <span class="s1">importdef = {</span>
+            <span class="s4">&quot;get_ident&quot;</span><span class="s1">: [</span><span class="s4">&quot;thread::get_ident&quot;</span><span class="s1">, </span><span class="s4">&quot;_thread::get_ident&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;_start_new_thread&quot;</span><span class="s1">: [</span>
+                <span class="s4">&quot;thread::start_new_thread&quot;</span><span class="s1">,</span>
+                <span class="s4">&quot;_thread::start_new_thread&quot;</span><span class="s1">,</span>
+            <span class="s1">],</span>
+            <span class="s4">&quot;threading&quot;</span><span class="s1">: [</span><span class="s4">&quot;threading&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;queue&quot;</span><span class="s1">: [</span><span class="s4">&quot;queue&quot; </span><span class="s2">if </span><span class="s1">ISPY3 </span><span class="s2">else </span><span class="s4">&quot;Queue&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;sleep&quot;</span><span class="s1">: [</span><span class="s4">&quot;time::sleep&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;subprocess&quot;</span><span class="s1">: [</span><span class="s4">&quot;subprocess32&quot; </span><span class="s2">if </span><span class="s1">SUBPROCESS32 </span><span class="s2">else </span><span class="s4">&quot;subprocess&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;socket&quot;</span><span class="s1">: [</span><span class="s4">&quot;socket&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;_fdopen&quot;</span><span class="s1">: [</span><span class="s4">&quot;os::fdopen&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;_lock&quot;</span><span class="s1">: [</span><span class="s4">&quot;threading&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;_event&quot;</span><span class="s1">: [</span><span class="s4">&quot;threading&quot;</span><span class="s1">],</span>
+        <span class="s1">}</span>
+
+        <span class="s2">def </span><span class="s1">exec_start(self, func, args=()):</span>
+            <span class="s1">self._start_new_thread(func, args)</span>
+
+    <span class="s2">elif </span><span class="s1">backend == </span><span class="s4">&quot;eventlet&quot;</span><span class="s1">:</span>
+        <span class="s1">importdef = {</span>
+            <span class="s4">&quot;get_ident&quot;</span><span class="s1">: [</span><span class="s4">&quot;eventlet.green.thread::get_ident&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;_spawn_n&quot;</span><span class="s1">: [</span><span class="s4">&quot;eventlet::spawn_n&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;threading&quot;</span><span class="s1">: [</span><span class="s4">&quot;eventlet.green.threading&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;queue&quot;</span><span class="s1">: [</span><span class="s4">&quot;eventlet.queue&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;sleep&quot;</span><span class="s1">: [</span><span class="s4">&quot;eventlet::sleep&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;subprocess&quot;</span><span class="s1">: [</span><span class="s4">&quot;eventlet.green.subprocess&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;socket&quot;</span><span class="s1">: [</span><span class="s4">&quot;eventlet.green.socket&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;_fdopen&quot;</span><span class="s1">: [</span><span class="s4">&quot;eventlet.green.os::fdopen&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;_lock&quot;</span><span class="s1">: [</span><span class="s4">&quot;eventlet.green.threading&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;_event&quot;</span><span class="s1">: [</span><span class="s4">&quot;eventlet.green.threading&quot;</span><span class="s1">],</span>
+        <span class="s1">}</span>
+
+        <span class="s2">def </span><span class="s1">exec_start(self, func, args=()):</span>
+            <span class="s1">self._spawn_n(func, *args)</span>
+
+    <span class="s2">elif </span><span class="s1">backend == </span><span class="s4">&quot;gevent&quot;</span><span class="s1">:</span>
+        <span class="s1">importdef = {</span>
+            <span class="s4">&quot;get_ident&quot;</span><span class="s1">: [</span><span class="s4">&quot;gevent.thread::get_ident&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;_spawn_n&quot;</span><span class="s1">: [</span><span class="s4">&quot;gevent::spawn&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;threading&quot;</span><span class="s1">: [</span><span class="s4">&quot;threading&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;queue&quot;</span><span class="s1">: [</span><span class="s4">&quot;gevent.queue&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;sleep&quot;</span><span class="s1">: [</span><span class="s4">&quot;gevent::sleep&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;subprocess&quot;</span><span class="s1">: [</span><span class="s4">&quot;gevent.subprocess&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;socket&quot;</span><span class="s1">: [</span><span class="s4">&quot;gevent.socket&quot;</span><span class="s1">],</span>
+            <span class="s0"># XXX</span>
+            <span class="s4">&quot;_fdopen&quot;</span><span class="s1">: [</span><span class="s4">&quot;gevent.fileobject::FileObjectThread&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;_lock&quot;</span><span class="s1">: [</span><span class="s4">&quot;gevent.lock&quot;</span><span class="s1">],</span>
+            <span class="s4">&quot;_event&quot;</span><span class="s1">: [</span><span class="s4">&quot;gevent.event&quot;</span><span class="s1">],</span>
+        <span class="s1">}</span>
+
+        <span class="s2">def </span><span class="s1">exec_start(self, func, args=()):</span>
+            <span class="s1">self._spawn_n(func, *args)</span>
+
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;unknown execmodel {!r}&quot;</span><span class="s1">.format(backend))</span>
+
+    <span class="s2">class </span><span class="s1">ExecModel:</span>
+        <span class="s2">def </span><span class="s1">__init__(self, name):</span>
+            <span class="s1">self._importdef = importdef</span>
+            <span class="s1">self.backend = name</span>
+            <span class="s1">self._count = </span><span class="s3">0</span>
+
+        <span class="s2">def </span><span class="s1">__repr__(self):</span>
+            <span class="s2">return </span><span class="s4">&quot;&lt;ExecModel %r&gt;&quot; </span><span class="s1">% self.backend</span>
+
+        <span class="s2">def </span><span class="s1">__getattr__(self, name):</span>
+            <span class="s1">locs = self._importdef.get(name)</span>
+            <span class="s2">if </span><span class="s1">locs </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s2">raise </span><span class="s1">AttributeError(name)</span>
+            <span class="s2">for </span><span class="s1">loc </span><span class="s2">in </span><span class="s1">locs:</span>
+                <span class="s1">parts = loc.split(</span><span class="s4">&quot;::&quot;</span><span class="s1">)</span>
+                <span class="s1">loc = parts.pop(</span><span class="s3">0</span><span class="s1">)</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">mod = __import__(loc, </span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">, </span><span class="s4">&quot;__doc__&quot;</span><span class="s1">)</span>
+                <span class="s2">except </span><span class="s1">ImportError:</span>
+                    <span class="s2">pass</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s2">if </span><span class="s1">parts:</span>
+                        <span class="s1">mod = getattr(mod, parts[</span><span class="s3">0</span><span class="s1">])</span>
+                    <span class="s1">setattr(self, name, mod)</span>
+                    <span class="s2">return </span><span class="s1">mod</span>
+            <span class="s2">raise </span><span class="s1">AttributeError(name)</span>
+
+        <span class="s1">start = exec_start</span>
+
+        <span class="s2">def </span><span class="s1">fdopen(self, fd, mode, bufsize=</span><span class="s3">1</span><span class="s1">):</span>
+            <span class="s2">return </span><span class="s1">self._fdopen(fd, mode, bufsize)</span>
+
+        <span class="s2">def </span><span class="s1">WorkerPool(self, hasprimary=</span><span class="s2">False</span><span class="s1">):</span>
+            <span class="s2">return </span><span class="s1">WorkerPool(self, hasprimary=hasprimary)</span>
+
+        <span class="s2">def </span><span class="s1">Semaphore(self, size=</span><span class="s2">None</span><span class="s1">):</span>
+            <span class="s2">if </span><span class="s1">size </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s2">return </span><span class="s1">EmptySemaphore()</span>
+            <span class="s2">return </span><span class="s1">self._lock.Semaphore(size)</span>
+
+        <span class="s2">def </span><span class="s1">Lock(self):</span>
+            <span class="s2">return </span><span class="s1">self._lock.RLock()</span>
+
+        <span class="s2">def </span><span class="s1">RLock(self):</span>
+            <span class="s2">return </span><span class="s1">self._lock.RLock()</span>
+
+        <span class="s2">def </span><span class="s1">Event(self):</span>
+            <span class="s2">return </span><span class="s1">self._event.Event()</span>
+
+        <span class="s2">def </span><span class="s1">PopenPiped(self, args):</span>
+            <span class="s1">PIPE = self.subprocess.PIPE</span>
+            <span class="s2">return </span><span class="s1">self.subprocess.Popen(args, stdout=PIPE, stdin=PIPE)</span>
+
+    <span class="s2">return </span><span class="s1">ExecModel(backend)</span>
+
+
+<span class="s2">class </span><span class="s1">Reply(object):</span>
+    <span class="s0">&quot;&quot;&quot;reply instances provide access to the result 
+    of a function execution that got dispatched 
+    through WorkerPool.spawn() 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, task, threadmodel):</span>
+        <span class="s1">self.task = task</span>
+        <span class="s1">self._result_ready = threadmodel.Event()</span>
+        <span class="s1">self.running = </span><span class="s2">True</span>
+
+    <span class="s2">def </span><span class="s1">get(self, timeout=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;get the result object from an asynchronous function execution. 
+        if the function execution raised an exception, 
+        then calling get() will reraise that exception 
+        including its traceback. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.waitfinish(timeout)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">self._result</span>
+        <span class="s2">except </span><span class="s1">AttributeError:</span>
+            <span class="s1">reraise(*(self._excinfo[:</span><span class="s3">3</span><span class="s1">]))  </span><span class="s0"># noqa</span>
+
+    <span class="s2">def </span><span class="s1">waitfinish(self, timeout=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s2">if not </span><span class="s1">self._result_ready.wait(timeout):</span>
+            <span class="s2">raise </span><span class="s1">IOError(</span><span class="s4">&quot;timeout waiting for {!r}&quot;</span><span class="s1">.format(self.task))</span>
+
+    <span class="s2">def </span><span class="s1">run(self):</span>
+        <span class="s1">func, args, kwargs = self.task</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">self._result = func(*args, **kwargs)</span>
+            <span class="s2">except</span><span class="s1">:</span>
+                <span class="s0"># sys may be already None when shutting down the interpreter</span>
+                <span class="s2">if </span><span class="s1">sys </span><span class="s2">is not None</span><span class="s1">:</span>
+                    <span class="s1">self._excinfo = sys.exc_info()</span>
+        <span class="s2">finally</span><span class="s1">:</span>
+            <span class="s1">self._result_ready.set()</span>
+            <span class="s1">self.running = </span><span class="s2">False</span>
+
+
+<span class="s2">class </span><span class="s1">WorkerPool(object):</span>
+    <span class="s0">&quot;&quot;&quot;A WorkerPool allows to spawn function executions 
+    to threads, returning a reply object on which you 
+    can ask for the result (and get exceptions reraised). 
+ 
+    This implementation allows the main thread to integrate 
+    itself into performing function execution through 
+    calling integrate_as_primary_thread() which will return 
+    when the pool received a trigger_shutdown(). 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, execmodel, hasprimary=</span><span class="s2">False</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;by default allow unlimited number of spawns.&quot;&quot;&quot;</span>
+        <span class="s1">self.execmodel = execmodel</span>
+        <span class="s1">self._running_lock = self.execmodel.Lock()</span>
+        <span class="s1">self._running = set()</span>
+        <span class="s1">self._shuttingdown = </span><span class="s2">False</span>
+        <span class="s1">self._waitall_events = []</span>
+        <span class="s2">if </span><span class="s1">hasprimary:</span>
+            <span class="s2">if </span><span class="s1">self.execmodel.backend != </span><span class="s4">&quot;thread&quot;</span><span class="s1">:</span>
+                <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;hasprimary=True requires thread model&quot;</span><span class="s1">)</span>
+            <span class="s1">self._primary_thread_task_ready = self.execmodel.Event()</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self._primary_thread_task_ready = </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">integrate_as_primary_thread(self):</span>
+        <span class="s0">&quot;&quot;&quot;integrate the thread with which we are called as a primary 
+        thread for executing functions triggered with spawn(). 
+        &quot;&quot;&quot;</span>
+        <span class="s2">assert </span><span class="s1">self.execmodel.backend == </span><span class="s4">&quot;thread&quot;</span><span class="s1">, self.execmodel</span>
+        <span class="s1">primary_thread_task_ready = self._primary_thread_task_ready</span>
+        <span class="s0"># interacts with code at REF1</span>
+        <span class="s2">while </span><span class="s3">1</span><span class="s1">:</span>
+            <span class="s1">primary_thread_task_ready.wait()</span>
+            <span class="s1">reply = self._primary_thread_task</span>
+            <span class="s2">if </span><span class="s1">reply </span><span class="s2">is None</span><span class="s1">:  </span><span class="s0"># trigger_shutdown() woke us up</span>
+                <span class="s2">break</span>
+            <span class="s1">self._perform_spawn(reply)</span>
+            <span class="s0"># we are concurrent with trigger_shutdown and spawn</span>
+            <span class="s2">with </span><span class="s1">self._running_lock:</span>
+                <span class="s2">if </span><span class="s1">self._shuttingdown:</span>
+                    <span class="s2">break</span>
+                <span class="s1">primary_thread_task_ready.clear()</span>
+
+    <span class="s2">def </span><span class="s1">trigger_shutdown(self):</span>
+        <span class="s2">with </span><span class="s1">self._running_lock:</span>
+            <span class="s1">self._shuttingdown = </span><span class="s2">True</span>
+            <span class="s2">if </span><span class="s1">self._primary_thread_task_ready </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s1">self._primary_thread_task = </span><span class="s2">None</span>
+                <span class="s1">self._primary_thread_task_ready.set()</span>
+
+    <span class="s2">def </span><span class="s1">active_count(self):</span>
+        <span class="s2">return </span><span class="s1">len(self._running)</span>
+
+    <span class="s2">def </span><span class="s1">_perform_spawn(self, reply):</span>
+        <span class="s1">reply.run()</span>
+        <span class="s2">with </span><span class="s1">self._running_lock:</span>
+            <span class="s1">self._running.remove(reply)</span>
+            <span class="s2">if not </span><span class="s1">self._running:</span>
+                <span class="s2">while </span><span class="s1">self._waitall_events:</span>
+                    <span class="s1">waitall_event = self._waitall_events.pop()</span>
+                    <span class="s1">waitall_event.set()</span>
+
+    <span class="s2">def </span><span class="s1">_try_send_to_primary_thread(self, reply):</span>
+        <span class="s0"># REF1 in 'thread' model we give priority to running in main thread</span>
+        <span class="s0"># note that we should be called with _running_lock hold</span>
+        <span class="s1">primary_thread_task_ready = self._primary_thread_task_ready</span>
+        <span class="s2">if </span><span class="s1">primary_thread_task_ready </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s2">if not </span><span class="s1">primary_thread_task_ready.is_set():</span>
+                <span class="s1">self._primary_thread_task = reply</span>
+                <span class="s0"># wake up primary thread</span>
+                <span class="s1">primary_thread_task_ready.set()</span>
+                <span class="s2">return True</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">spawn(self, func, *args, **kwargs):</span>
+        <span class="s0">&quot;&quot;&quot;return Reply object for the asynchronous dispatch 
+        of the given func(*args, **kwargs). 
+        &quot;&quot;&quot;</span>
+        <span class="s1">reply = Reply((func, args, kwargs), self.execmodel)</span>
+        <span class="s2">with </span><span class="s1">self._running_lock:</span>
+            <span class="s2">if </span><span class="s1">self._shuttingdown:</span>
+                <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;pool is shutting down&quot;</span><span class="s1">)</span>
+            <span class="s1">self._running.add(reply)</span>
+            <span class="s2">if not </span><span class="s1">self._try_send_to_primary_thread(reply):</span>
+                <span class="s1">self.execmodel.start(self._perform_spawn, (reply,))</span>
+        <span class="s2">return </span><span class="s1">reply</span>
+
+    <span class="s2">def </span><span class="s1">terminate(self, timeout=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;trigger shutdown and wait for completion of all executions.&quot;&quot;&quot;</span>
+        <span class="s1">self.trigger_shutdown()</span>
+        <span class="s2">return </span><span class="s1">self.waitall(timeout=timeout)</span>
+
+    <span class="s2">def </span><span class="s1">waitall(self, timeout=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;wait until all active spawns have finished executing.&quot;&quot;&quot;</span>
+        <span class="s2">with </span><span class="s1">self._running_lock:</span>
+            <span class="s2">if not </span><span class="s1">self._running:</span>
+                <span class="s2">return True</span>
+            <span class="s0"># if a Reply still runs, we let run_and_release</span>
+            <span class="s0"># signal us -- note that we are still holding the</span>
+            <span class="s0"># _running_lock to avoid race conditions</span>
+            <span class="s1">my_waitall_event = self.execmodel.Event()</span>
+            <span class="s1">self._waitall_events.append(my_waitall_event)</span>
+        <span class="s2">return </span><span class="s1">my_waitall_event.wait(timeout=timeout)</span>
+
+
+<span class="s1">sysex = (KeyboardInterrupt, SystemExit)</span>
+
+
+<span class="s1">DEBUG = os.environ.get(</span><span class="s4">&quot;EXECNET_DEBUG&quot;</span><span class="s1">)</span>
+<span class="s1">pid = os.getpid()</span>
+<span class="s2">if </span><span class="s1">DEBUG == </span><span class="s4">&quot;2&quot;</span><span class="s1">:</span>
+
+    <span class="s2">def </span><span class="s1">trace(*msg):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">line = </span><span class="s4">&quot; &quot;</span><span class="s1">.join(map(str, msg))</span>
+            <span class="s1">sys.stderr.write(</span><span class="s4">&quot;[{}] {}</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">.format(pid, line))</span>
+            <span class="s1">sys.stderr.flush()</span>
+        <span class="s2">except </span><span class="s1">Exception:</span>
+            <span class="s2">pass  </span><span class="s0"># nothing we can do, likely interpreter-shutdown</span>
+
+
+<span class="s2">elif </span><span class="s1">DEBUG:</span>
+    <span class="s2">import </span><span class="s1">tempfile</span>
+    <span class="s2">import </span><span class="s1">os</span>
+
+    <span class="s1">fn = os.path.join(tempfile.gettempdir(), </span><span class="s4">&quot;execnet-debug-%d&quot; </span><span class="s1">% pid)</span>
+    <span class="s0"># sys.stderr.write(&quot;execnet-debug at %r&quot; % (fn,))</span>
+    <span class="s1">debugfile = open(fn, </span><span class="s4">&quot;w&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">trace(*msg):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">line = </span><span class="s4">&quot; &quot;</span><span class="s1">.join(map(str, msg))</span>
+            <span class="s1">debugfile.write(line + </span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">)</span>
+            <span class="s1">debugfile.flush()</span>
+        <span class="s2">except </span><span class="s1">Exception:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">v = sys.exc_info()[</span><span class="s3">1</span><span class="s1">]</span>
+                <span class="s1">sys.stderr.write(</span><span class="s4">&quot;[{}] exception during tracing: {!r}</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">.format(pid, v))</span>
+            <span class="s2">except </span><span class="s1">Exception:</span>
+                <span class="s2">pass  </span><span class="s0"># nothing we can do, likely interpreter-shutdown</span>
+
+
+<span class="s2">else</span><span class="s1">:</span>
+    <span class="s1">notrace = trace = </span><span class="s2">lambda </span><span class="s1">*msg: </span><span class="s2">None</span>
+
+
+<span class="s2">class </span><span class="s1">Popen2IO:</span>
+    <span class="s1">error = (IOError, OSError, EOFError)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, outfile, infile, execmodel):</span>
+        <span class="s0"># we need raw byte streams</span>
+        <span class="s1">self.outfile, self.infile = outfile, infile</span>
+        <span class="s2">if </span><span class="s1">sys.platform == </span><span class="s4">&quot;win32&quot;</span><span class="s1">:</span>
+            <span class="s2">import </span><span class="s1">msvcrt</span>
+
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">msvcrt.setmode(infile.fileno(), os.O_BINARY)</span>
+                <span class="s1">msvcrt.setmode(outfile.fileno(), os.O_BINARY)</span>
+            <span class="s2">except </span><span class="s1">(AttributeError, IOError):</span>
+                <span class="s2">pass</span>
+        <span class="s1">self._read = getattr(infile, </span><span class="s4">&quot;buffer&quot;</span><span class="s1">, infile).read</span>
+        <span class="s1">self._write = getattr(outfile, </span><span class="s4">&quot;buffer&quot;</span><span class="s1">, outfile).write</span>
+        <span class="s1">self.execmodel = execmodel</span>
+
+    <span class="s2">def </span><span class="s1">read(self, numbytes):</span>
+        <span class="s0">&quot;&quot;&quot;Read exactly 'numbytes' bytes from the pipe.&quot;&quot;&quot;</span>
+        <span class="s0"># a file in non-blocking mode may return less bytes, so we loop</span>
+        <span class="s1">buf = bytes()</span>
+        <span class="s2">while </span><span class="s1">numbytes &gt; len(buf):</span>
+            <span class="s1">data = self._read(numbytes - len(buf))</span>
+            <span class="s2">if not </span><span class="s1">data:</span>
+                <span class="s2">raise </span><span class="s1">EOFError(</span><span class="s4">&quot;expected %d bytes, got %d&quot; </span><span class="s1">% (numbytes, len(buf)))</span>
+            <span class="s1">buf += data</span>
+        <span class="s2">return </span><span class="s1">buf</span>
+
+    <span class="s2">def </span><span class="s1">write(self, data):</span>
+        <span class="s0">&quot;&quot;&quot;write out all data bytes.&quot;&quot;&quot;</span>
+        <span class="s2">assert </span><span class="s1">isinstance(data, bytes)</span>
+        <span class="s1">self._write(data)</span>
+        <span class="s1">self.outfile.flush()</span>
+
+    <span class="s2">def </span><span class="s1">close_read(self):</span>
+        <span class="s1">self.infile.close()</span>
+
+    <span class="s2">def </span><span class="s1">close_write(self):</span>
+        <span class="s1">self.outfile.close()</span>
+
+
+<span class="s2">class </span><span class="s1">Message:</span>
+    <span class="s0">&quot;&quot;&quot;encapsulates Messages and their wire protocol.&quot;&quot;&quot;</span>
+
+    <span class="s1">_types = []</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, msgcode, channelid=</span><span class="s3">0</span><span class="s1">, data=</span><span class="s4">&quot;&quot;</span><span class="s1">):</span>
+        <span class="s1">self.msgcode = msgcode</span>
+        <span class="s1">self.channelid = channelid</span>
+        <span class="s1">self.data = data</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">from_io(io):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">header = io.read(</span><span class="s3">9</span><span class="s1">)  </span><span class="s0"># type 1, channel 4, payload 4</span>
+            <span class="s2">if not </span><span class="s1">header:</span>
+                <span class="s2">raise </span><span class="s1">EOFError(</span><span class="s4">&quot;empty read&quot;</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">EOFError:</span>
+            <span class="s1">e = sys.exc_info()[</span><span class="s3">1</span><span class="s1">]</span>
+            <span class="s2">raise </span><span class="s1">EOFError(</span><span class="s4">&quot;couldnt load message header, &quot; </span><span class="s1">+ e.args[</span><span class="s3">0</span><span class="s1">])</span>
+        <span class="s1">msgtype, channel, payload = struct.unpack(</span><span class="s4">&quot;!bii&quot;</span><span class="s1">, header)</span>
+        <span class="s2">return </span><span class="s1">Message(msgtype, channel, io.read(payload))</span>
+
+    <span class="s2">def </span><span class="s1">to_io(self, io):</span>
+        <span class="s1">header = struct.pack(</span><span class="s4">&quot;!bii&quot;</span><span class="s1">, self.msgcode, self.channelid, len(self.data))</span>
+        <span class="s1">io.write(header + self.data)</span>
+
+    <span class="s2">def </span><span class="s1">received(self, gateway):</span>
+        <span class="s1">self._types[self.msgcode](self, gateway)</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s1">name = self._types[self.msgcode].__name__.upper()</span>
+        <span class="s2">return </span><span class="s4">&quot;&lt;Message {} channel={} lendata={}&gt;&quot;</span><span class="s1">.format(</span>
+            <span class="s1">name, self.channelid, len(self.data)</span>
+        <span class="s1">)</span>
+
+
+<span class="s2">class </span><span class="s1">GatewayReceivedTerminate(Exception):</span>
+    <span class="s0">&quot;&quot;&quot;Receiverthread got termination message.&quot;&quot;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">_setupmessages():</span>
+    <span class="s2">def </span><span class="s1">status(message, gateway):</span>
+        <span class="s0"># we use the channelid to send back information</span>
+        <span class="s0"># but don't instantiate a channel object</span>
+        <span class="s1">d = {</span>
+            <span class="s4">&quot;numchannels&quot;</span><span class="s1">: len(gateway._channelfactory._channels),</span>
+            <span class="s4">&quot;numexecuting&quot;</span><span class="s1">: gateway._execpool.active_count(),</span>
+            <span class="s4">&quot;execmodel&quot;</span><span class="s1">: gateway.execmodel.backend,</span>
+        <span class="s1">}</span>
+        <span class="s1">gateway._send(Message.CHANNEL_DATA, message.channelid, dumps_internal(d))</span>
+        <span class="s1">gateway._send(Message.CHANNEL_CLOSE, message.channelid)</span>
+
+    <span class="s2">def </span><span class="s1">channel_exec(message, gateway):</span>
+        <span class="s1">channel = gateway._channelfactory.new(message.channelid)</span>
+        <span class="s1">gateway._local_schedulexec(channel=channel, sourcetask=message.data)</span>
+
+    <span class="s2">def </span><span class="s1">channel_data(message, gateway):</span>
+        <span class="s1">gateway._channelfactory._local_receive(message.channelid, message.data)</span>
+
+    <span class="s2">def </span><span class="s1">channel_close(message, gateway):</span>
+        <span class="s1">gateway._channelfactory._local_close(message.channelid)</span>
+
+    <span class="s2">def </span><span class="s1">channel_close_error(message, gateway):</span>
+        <span class="s1">remote_error = RemoteError(loads_internal(message.data))</span>
+        <span class="s1">gateway._channelfactory._local_close(message.channelid, remote_error)</span>
+
+    <span class="s2">def </span><span class="s1">channel_last_message(message, gateway):</span>
+        <span class="s1">gateway._channelfactory._local_close(message.channelid, sendonly=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">gateway_terminate(message, gateway):</span>
+        <span class="s2">raise </span><span class="s1">GatewayReceivedTerminate(gateway)</span>
+
+    <span class="s2">def </span><span class="s1">reconfigure(message, gateway):</span>
+        <span class="s2">if </span><span class="s1">message.channelid == </span><span class="s3">0</span><span class="s1">:</span>
+            <span class="s1">target = gateway</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">target = gateway._channelfactory.new(message.channelid)</span>
+        <span class="s1">target._strconfig = loads_internal(message.data, gateway)</span>
+
+    <span class="s1">types = [</span>
+        <span class="s1">status,</span>
+        <span class="s1">reconfigure,</span>
+        <span class="s1">gateway_terminate,</span>
+        <span class="s1">channel_exec,</span>
+        <span class="s1">channel_data,</span>
+        <span class="s1">channel_close,</span>
+        <span class="s1">channel_close_error,</span>
+        <span class="s1">channel_last_message,</span>
+    <span class="s1">]</span>
+    <span class="s2">for </span><span class="s1">i, handler </span><span class="s2">in </span><span class="s1">enumerate(types):</span>
+        <span class="s1">Message._types.append(handler)</span>
+        <span class="s1">setattr(Message, handler.__name__.upper(), i)</span>
+
+
+<span class="s1">_setupmessages()</span>
+
+
+<span class="s2">def </span><span class="s1">geterrortext(excinfo, format_exception=traceback.format_exception, sysex=sysex):</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">l = format_exception(*excinfo)</span>
+        <span class="s1">errortext = </span><span class="s4">&quot;&quot;</span><span class="s1">.join(l)</span>
+    <span class="s2">except </span><span class="s1">sysex:</span>
+        <span class="s2">raise</span>
+    <span class="s2">except</span><span class="s1">:</span>
+        <span class="s1">errortext = </span><span class="s4">&quot;{}: {}&quot;</span><span class="s1">.format(excinfo[</span><span class="s3">0</span><span class="s1">].__name__, excinfo[</span><span class="s3">1</span><span class="s1">])</span>
+    <span class="s2">return </span><span class="s1">errortext</span>
+
+
+<span class="s2">class </span><span class="s1">RemoteError(Exception):</span>
+    <span class="s0">&quot;&quot;&quot;Exception containing a stringified error from the other side.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, formatted):</span>
+        <span class="s1">self.formatted = formatted</span>
+        <span class="s1">Exception.__init__(self)</span>
+
+    <span class="s2">def </span><span class="s1">__str__(self):</span>
+        <span class="s2">return </span><span class="s1">self.formatted</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s4">&quot;{}: {}&quot;</span><span class="s1">.format(self.__class__.__name__, self.formatted)</span>
+
+    <span class="s2">def </span><span class="s1">warn(self):</span>
+        <span class="s2">if </span><span class="s1">self.formatted != INTERRUPT_TEXT:</span>
+            <span class="s0"># XXX do this better</span>
+            <span class="s1">sys.stderr.write(</span><span class="s4">&quot;[%s] Warning: unhandled %r</span><span class="s5">\n</span><span class="s4">&quot; </span><span class="s1">% (os.getpid(), self))</span>
+
+
+<span class="s2">class </span><span class="s1">TimeoutError(IOError):</span>
+    <span class="s0">&quot;&quot;&quot;Exception indicating that a timeout was reached.&quot;&quot;&quot;</span>
+
+
+<span class="s1">NO_ENDMARKER_WANTED = object()</span>
+
+
+<span class="s2">class </span><span class="s1">Channel(object):</span>
+    <span class="s0">&quot;Communication channel between two Python Interpreter execution points.&quot;</span>
+    <span class="s1">RemoteError = RemoteError</span>
+    <span class="s1">TimeoutError = TimeoutError</span>
+    <span class="s1">_INTERNALWAKEUP = </span><span class="s3">1000</span>
+    <span class="s1">_executing = </span><span class="s2">False</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, gateway, id):</span>
+        <span class="s2">assert </span><span class="s1">isinstance(id, int)</span>
+        <span class="s1">self.gateway = gateway</span>
+        <span class="s0"># XXX: defaults copied from Unserializer</span>
+        <span class="s1">self._strconfig = getattr(gateway, </span><span class="s4">&quot;_strconfig&quot;</span><span class="s1">, (</span><span class="s2">True</span><span class="s1">, </span><span class="s2">False</span><span class="s1">))</span>
+        <span class="s1">self.id = id</span>
+        <span class="s1">self._items = self.gateway.execmodel.queue.Queue()</span>
+        <span class="s1">self._closed = </span><span class="s2">False</span>
+        <span class="s1">self._receiveclosed = self.gateway.execmodel.Event()</span>
+        <span class="s1">self._remoteerrors = []</span>
+
+    <span class="s2">def </span><span class="s1">_trace(self, *msg):</span>
+        <span class="s1">self.gateway._trace(self.id, *msg)</span>
+
+    <span class="s2">def </span><span class="s1">setcallback(self, callback, endmarker=NO_ENDMARKER_WANTED):</span>
+        <span class="s0">&quot;&quot;&quot;set a callback function for receiving items. 
+ 
+        All already queued items will immediately trigger the callback. 
+        Afterwards the callback will execute in the receiver thread 
+        for each received data item and calls to ``receive()`` will 
+        raise an error. 
+        If an endmarker is specified the callback will eventually 
+        be called with the endmarker when the channel closes. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">_callbacks = self.gateway._channelfactory._callbacks</span>
+        <span class="s2">with </span><span class="s1">self.gateway._receivelock:</span>
+            <span class="s2">if </span><span class="s1">self._items </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s2">raise </span><span class="s1">IOError(</span><span class="s4">&quot;{!r} has callback already registered&quot;</span><span class="s1">.format(self))</span>
+            <span class="s1">items = self._items</span>
+            <span class="s1">self._items = </span><span class="s2">None</span>
+            <span class="s2">while </span><span class="s3">1</span><span class="s1">:</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">olditem = items.get(block=</span><span class="s2">False</span><span class="s1">)</span>
+                <span class="s2">except </span><span class="s1">self.gateway.execmodel.queue.Empty:</span>
+                    <span class="s2">if not </span><span class="s1">(self._closed </span><span class="s2">or </span><span class="s1">self._receiveclosed.is_set()):</span>
+                        <span class="s1">_callbacks[self.id] = (callback, endmarker, self._strconfig)</span>
+                    <span class="s2">break</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s2">if </span><span class="s1">olditem </span><span class="s2">is </span><span class="s1">ENDMARKER:</span>
+                        <span class="s1">items.put(olditem)  </span><span class="s0"># for other receivers</span>
+                        <span class="s2">if </span><span class="s1">endmarker </span><span class="s2">is not </span><span class="s1">NO_ENDMARKER_WANTED:</span>
+                            <span class="s1">callback(endmarker)</span>
+                        <span class="s2">break</span>
+                    <span class="s2">else</span><span class="s1">:</span>
+                        <span class="s1">callback(olditem)</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s1">flag = self.isclosed() </span><span class="s2">and </span><span class="s4">&quot;closed&quot; </span><span class="s2">or </span><span class="s4">&quot;open&quot;</span>
+        <span class="s2">return </span><span class="s4">&quot;&lt;Channel id=%d %s&gt;&quot; </span><span class="s1">% (self.id, flag)</span>
+
+    <span class="s2">def </span><span class="s1">__del__(self):</span>
+        <span class="s2">if </span><span class="s1">self.gateway </span><span class="s2">is None</span><span class="s1">:  </span><span class="s0"># can be None in tests</span>
+            <span class="s2">return</span>
+        <span class="s1">self._trace(</span><span class="s4">&quot;channel.__del__&quot;</span><span class="s1">)</span>
+        <span class="s0"># no multithreading issues here, because we have the last ref to 'self'</span>
+        <span class="s2">if </span><span class="s1">self._closed:</span>
+            <span class="s0"># state transition &quot;closed&quot; --&gt; &quot;deleted&quot;</span>
+            <span class="s2">for </span><span class="s1">error </span><span class="s2">in </span><span class="s1">self._remoteerrors:</span>
+                <span class="s1">error.warn()</span>
+        <span class="s2">elif </span><span class="s1">self._receiveclosed.is_set():</span>
+            <span class="s0"># state transition &quot;sendonly&quot; --&gt; &quot;deleted&quot;</span>
+            <span class="s0"># the remote channel is already in &quot;deleted&quot; state, nothing to do</span>
+            <span class="s2">pass</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s0"># state transition &quot;opened&quot; --&gt; &quot;deleted&quot;</span>
+            <span class="s0"># check if we are in the middle of interpreter shutdown</span>
+            <span class="s0"># in which case the process will go away and we probably</span>
+            <span class="s0"># don't need to try to send a closing or last message</span>
+            <span class="s0"># (and often it won't work anymore to send things out)</span>
+            <span class="s2">if </span><span class="s1">Message </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s2">if </span><span class="s1">self._items </span><span class="s2">is None</span><span class="s1">:  </span><span class="s0"># has_callback</span>
+                    <span class="s1">msgcode = Message.CHANNEL_LAST_MESSAGE</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">msgcode = Message.CHANNEL_CLOSE</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">self.gateway._send(msgcode, self.id)</span>
+                <span class="s2">except </span><span class="s1">(IOError, ValueError):  </span><span class="s0"># ignore problems with sending</span>
+                    <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">_getremoteerror(self):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">self._remoteerrors.pop(</span><span class="s3">0</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">IndexError:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s2">return </span><span class="s1">self.gateway._error</span>
+            <span class="s2">except </span><span class="s1">AttributeError:</span>
+                <span class="s2">pass</span>
+            <span class="s2">return None</span>
+
+    <span class="s0">#</span>
+    <span class="s0"># public API for channel objects</span>
+    <span class="s0">#</span>
+    <span class="s2">def </span><span class="s1">isclosed(self):</span>
+        <span class="s0">&quot;&quot;&quot;return True if the channel is closed. A closed 
+        channel may still hold items. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._closed</span>
+
+    <span class="s2">def </span><span class="s1">makefile(self, mode=</span><span class="s4">&quot;w&quot;</span><span class="s1">, proxyclose=</span><span class="s2">False</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;return a file-like object. 
+        mode can be 'w' or 'r' for writeable/readable files. 
+        if proxyclose is true file.close() will also close the channel. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">mode == </span><span class="s4">&quot;w&quot;</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">ChannelFileWrite(channel=self, proxyclose=proxyclose)</span>
+        <span class="s2">elif </span><span class="s1">mode == </span><span class="s4">&quot;r&quot;</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">ChannelFileRead(channel=self, proxyclose=proxyclose)</span>
+        <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;mode {!r} not availabe&quot;</span><span class="s1">.format(mode))</span>
+
+    <span class="s2">def </span><span class="s1">close(self, error=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;close down this channel with an optional error message. 
+        Note that closing of a channel tied to remote_exec happens 
+        automatically at the end of execution and cannot 
+        be done explicitely. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self._executing:</span>
+            <span class="s2">raise </span><span class="s1">IOError(</span><span class="s4">&quot;cannot explicitly close channel within remote_exec&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">self._closed:</span>
+            <span class="s1">self.gateway._trace(self, </span><span class="s4">&quot;ignoring redundant call to close()&quot;</span><span class="s1">)</span>
+        <span class="s2">if not </span><span class="s1">self._closed:</span>
+            <span class="s0"># state transition &quot;opened/sendonly&quot; --&gt; &quot;closed&quot;</span>
+            <span class="s0"># threads warning: the channel might be closed under our feet,</span>
+            <span class="s0"># but it's never damaging to send too many CHANNEL_CLOSE messages</span>
+            <span class="s0"># however, if the other side triggered a close already, we</span>
+            <span class="s0"># do not send back a closed message.</span>
+            <span class="s2">if not </span><span class="s1">self._receiveclosed.is_set():</span>
+                <span class="s1">put = self.gateway._send</span>
+                <span class="s2">if </span><span class="s1">error </span><span class="s2">is not None</span><span class="s1">:</span>
+                    <span class="s1">put(Message.CHANNEL_CLOSE_ERROR, self.id, dumps_internal(error))</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">put(Message.CHANNEL_CLOSE, self.id)</span>
+                <span class="s1">self._trace(</span><span class="s4">&quot;sent channel close message&quot;</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">isinstance(error, RemoteError):</span>
+                <span class="s1">self._remoteerrors.append(error)</span>
+            <span class="s1">self._closed = </span><span class="s2">True  </span><span class="s0"># --&gt; &quot;closed&quot;</span>
+            <span class="s1">self._receiveclosed.set()</span>
+            <span class="s1">queue = self._items</span>
+            <span class="s2">if </span><span class="s1">queue </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s1">queue.put(ENDMARKER)</span>
+            <span class="s1">self.gateway._channelfactory._no_longer_opened(self.id)</span>
+
+    <span class="s2">def </span><span class="s1">waitclose(self, timeout=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;wait until this channel is closed (or the remote side 
+        otherwise signalled that no more data was being sent). 
+        The channel may still hold receiveable items, but not receive 
+        any more after waitclose() has returned.  Exceptions from executing 
+        code on the other side are reraised as local channel.RemoteErrors. 
+        EOFError is raised if the reading-connection was prematurely closed, 
+        which often indicates a dying process. 
+        self.TimeoutError is raised after the specified number of seconds 
+        (default is None, i.e. wait indefinitely). 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># wait for non-&quot;opened&quot; state</span>
+        <span class="s1">self._receiveclosed.wait(timeout=timeout)</span>
+        <span class="s2">if not </span><span class="s1">self._receiveclosed.is_set():</span>
+            <span class="s2">raise </span><span class="s1">self.TimeoutError(</span><span class="s4">&quot;Timeout after %r seconds&quot; </span><span class="s1">% timeout)</span>
+        <span class="s1">error = self._getremoteerror()</span>
+        <span class="s2">if </span><span class="s1">error:</span>
+            <span class="s2">raise </span><span class="s1">error</span>
+
+    <span class="s2">def </span><span class="s1">send(self, item):</span>
+        <span class="s0">&quot;&quot;&quot;sends the given item to the other side of the channel, 
+        possibly blocking if the sender queue is full. 
+        The item must be a simple python type and will be 
+        copied to the other side by value.  IOError is 
+        raised if the write pipe was prematurely closed. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.isclosed():</span>
+            <span class="s2">raise </span><span class="s1">IOError(</span><span class="s4">&quot;cannot send to {!r}&quot;</span><span class="s1">.format(self))</span>
+        <span class="s1">self.gateway._send(Message.CHANNEL_DATA, self.id, dumps_internal(item))</span>
+
+    <span class="s2">def </span><span class="s1">receive(self, timeout=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;receive a data item that was sent from the other side. 
+        timeout: None [default] blocked waiting.  A positive number 
+        indicates the number of seconds after which a channel.TimeoutError 
+        exception will be raised if no item was received. 
+        Note that exceptions from the remotely executing code will be 
+        reraised as channel.RemoteError exceptions containing 
+        a textual representation of the remote traceback. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">itemqueue = self._items</span>
+        <span class="s2">if </span><span class="s1">itemqueue </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">IOError(</span><span class="s4">&quot;cannot receive(), channel has receiver callback&quot;</span><span class="s1">)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">x = itemqueue.get(timeout=timeout)</span>
+        <span class="s2">except </span><span class="s1">self.gateway.execmodel.queue.Empty:</span>
+            <span class="s2">raise </span><span class="s1">self.TimeoutError(</span><span class="s4">&quot;no item after %r seconds&quot; </span><span class="s1">% timeout)</span>
+        <span class="s2">if </span><span class="s1">x </span><span class="s2">is </span><span class="s1">ENDMARKER:</span>
+            <span class="s1">itemqueue.put(x)  </span><span class="s0"># for other receivers</span>
+            <span class="s2">raise </span><span class="s1">self._getremoteerror() </span><span class="s2">or </span><span class="s1">EOFError()</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">x</span>
+
+    <span class="s2">def </span><span class="s1">__iter__(self):</span>
+        <span class="s2">return </span><span class="s1">self</span>
+
+    <span class="s2">def </span><span class="s1">next(self):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">self.receive()</span>
+        <span class="s2">except </span><span class="s1">EOFError:</span>
+            <span class="s2">raise </span><span class="s1">StopIteration</span>
+
+    <span class="s1">__next__ = next</span>
+
+    <span class="s2">def </span><span class="s1">reconfigure(self, py2str_as_py3str=</span><span class="s2">True</span><span class="s1">, py3str_as_py2str=</span><span class="s2">False</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        set the string coercion for this channel 
+        the default is to try to convert py2 str as py3 str, 
+        but not to try and convert py3 str to py2 str 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self._strconfig = (py2str_as_py3str, py3str_as_py2str)</span>
+        <span class="s1">data = dumps_internal(self._strconfig)</span>
+        <span class="s1">self.gateway._send(Message.RECONFIGURE, self.id, data=data)</span>
+
+
+<span class="s1">ENDMARKER = object()</span>
+<span class="s1">INTERRUPT_TEXT = </span><span class="s4">&quot;keyboard-interrupted&quot;</span>
+
+
+<span class="s2">class </span><span class="s1">ChannelFactory(object):</span>
+    <span class="s2">def </span><span class="s1">__init__(self, gateway, startcount=</span><span class="s3">1</span><span class="s1">):</span>
+        <span class="s1">self._channels = weakref.WeakValueDictionary()</span>
+        <span class="s1">self._callbacks = {}</span>
+        <span class="s1">self._writelock = gateway.execmodel.Lock()</span>
+        <span class="s1">self.gateway = gateway</span>
+        <span class="s1">self.count = startcount</span>
+        <span class="s1">self.finished = </span><span class="s2">False</span>
+        <span class="s1">self._list = list  </span><span class="s0"># needed during interp-shutdown</span>
+
+    <span class="s2">def </span><span class="s1">new(self, id=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;create a new Channel with 'id' (or create new id if None).&quot;&quot;&quot;</span>
+        <span class="s2">with </span><span class="s1">self._writelock:</span>
+            <span class="s2">if </span><span class="s1">self.finished:</span>
+                <span class="s2">raise </span><span class="s1">IOError(</span><span class="s4">&quot;connexion already closed: {}&quot;</span><span class="s1">.format(self.gateway))</span>
+            <span class="s2">if </span><span class="s1">id </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s1">id = self.count</span>
+                <span class="s1">self.count += </span><span class="s3">2</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">channel = self._channels[id]</span>
+            <span class="s2">except </span><span class="s1">KeyError:</span>
+                <span class="s1">channel = self._channels[id] = Channel(self.gateway, id)</span>
+            <span class="s2">return </span><span class="s1">channel</span>
+
+    <span class="s2">def </span><span class="s1">channels(self):</span>
+        <span class="s2">return </span><span class="s1">self._list(self._channels.values())</span>
+
+    <span class="s0">#</span>
+    <span class="s0"># internal methods, called from the receiver thread</span>
+    <span class="s0">#</span>
+    <span class="s2">def </span><span class="s1">_no_longer_opened(self, id):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">del </span><span class="s1">self._channels[id]</span>
+        <span class="s2">except </span><span class="s1">KeyError:</span>
+            <span class="s2">pass</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">callback, endmarker, strconfig = self._callbacks.pop(id)</span>
+        <span class="s2">except </span><span class="s1">KeyError:</span>
+            <span class="s2">pass</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">endmarker </span><span class="s2">is not </span><span class="s1">NO_ENDMARKER_WANTED:</span>
+                <span class="s1">callback(endmarker)</span>
+
+    <span class="s2">def </span><span class="s1">_local_close(self, id, remoteerror=</span><span class="s2">None</span><span class="s1">, sendonly=</span><span class="s2">False</span><span class="s1">):</span>
+        <span class="s1">channel = self._channels.get(id)</span>
+        <span class="s2">if </span><span class="s1">channel </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s0"># channel already in &quot;deleted&quot; state</span>
+            <span class="s2">if </span><span class="s1">remoteerror:</span>
+                <span class="s1">remoteerror.warn()</span>
+            <span class="s1">self._no_longer_opened(id)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s0"># state transition to &quot;closed&quot; state</span>
+            <span class="s2">if </span><span class="s1">remoteerror:</span>
+                <span class="s1">channel._remoteerrors.append(remoteerror)</span>
+            <span class="s1">queue = channel._items</span>
+            <span class="s2">if </span><span class="s1">queue </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s1">queue.put(ENDMARKER)</span>
+            <span class="s1">self._no_longer_opened(id)</span>
+            <span class="s2">if not </span><span class="s1">sendonly:  </span><span class="s0"># otherwise #--&gt; &quot;sendonly&quot;</span>
+                <span class="s1">channel._closed = </span><span class="s2">True  </span><span class="s0"># --&gt; &quot;closed&quot;</span>
+            <span class="s1">channel._receiveclosed.set()</span>
+
+    <span class="s2">def </span><span class="s1">_local_receive(self, id, data):</span>
+        <span class="s0"># executes in receiver thread</span>
+        <span class="s1">channel = self._channels.get(id)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">callback, endmarker, strconfig = self._callbacks[id]</span>
+        <span class="s2">except </span><span class="s1">KeyError:</span>
+            <span class="s1">queue = channel </span><span class="s2">and </span><span class="s1">channel._items</span>
+            <span class="s2">if </span><span class="s1">queue </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s2">pass  </span><span class="s0"># drop data</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">item = loads_internal(data, channel)</span>
+                <span class="s1">queue.put(item)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">data = loads_internal(data, channel, strconfig)</span>
+                <span class="s1">callback(data)  </span><span class="s0"># even if channel may be already closed</span>
+            <span class="s2">except </span><span class="s1">Exception:</span>
+                <span class="s1">excinfo = sys.exc_info()</span>
+                <span class="s1">self.gateway._trace(</span><span class="s4">&quot;exception during callback: %s&quot; </span><span class="s1">% excinfo[</span><span class="s3">1</span><span class="s1">])</span>
+                <span class="s1">errortext = self.gateway._geterrortext(excinfo)</span>
+                <span class="s1">self.gateway._send(</span>
+                    <span class="s1">Message.CHANNEL_CLOSE_ERROR, id, dumps_internal(errortext)</span>
+                <span class="s1">)</span>
+                <span class="s1">self._local_close(id, errortext)</span>
+
+    <span class="s2">def </span><span class="s1">_finished_receiving(self):</span>
+        <span class="s2">with </span><span class="s1">self._writelock:</span>
+            <span class="s1">self.finished = </span><span class="s2">True</span>
+        <span class="s2">for </span><span class="s1">id </span><span class="s2">in </span><span class="s1">self._list(self._channels):</span>
+            <span class="s1">self._local_close(id, sendonly=</span><span class="s2">True</span><span class="s1">)</span>
+        <span class="s2">for </span><span class="s1">id </span><span class="s2">in </span><span class="s1">self._list(self._callbacks):</span>
+            <span class="s1">self._no_longer_opened(id)</span>
+
+
+<span class="s2">class </span><span class="s1">ChannelFile(object):</span>
+    <span class="s2">def </span><span class="s1">__init__(self, channel, proxyclose=</span><span class="s2">True</span><span class="s1">):</span>
+        <span class="s1">self.channel = channel</span>
+        <span class="s1">self._proxyclose = proxyclose</span>
+
+    <span class="s2">def </span><span class="s1">isatty(self):</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">close(self):</span>
+        <span class="s2">if </span><span class="s1">self._proxyclose:</span>
+            <span class="s1">self.channel.close()</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s1">state = self.channel.isclosed() </span><span class="s2">and </span><span class="s4">&quot;closed&quot; </span><span class="s2">or </span><span class="s4">&quot;open&quot;</span>
+        <span class="s2">return </span><span class="s4">&quot;&lt;ChannelFile %d %s&gt;&quot; </span><span class="s1">% (self.channel.id, state)</span>
+
+
+<span class="s2">class </span><span class="s1">ChannelFileWrite(ChannelFile):</span>
+    <span class="s2">def </span><span class="s1">write(self, out):</span>
+        <span class="s1">self.channel.send(out)</span>
+
+    <span class="s2">def </span><span class="s1">flush(self):</span>
+        <span class="s2">pass</span>
+
+
+<span class="s2">class </span><span class="s1">ChannelFileRead(ChannelFile):</span>
+    <span class="s2">def </span><span class="s1">__init__(self, channel, proxyclose=</span><span class="s2">True</span><span class="s1">):</span>
+        <span class="s1">super(ChannelFileRead, self).__init__(channel, proxyclose)</span>
+        <span class="s1">self._buffer = </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">read(self, n):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">self._buffer </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s1">self._buffer = self.channel.receive()</span>
+            <span class="s2">while </span><span class="s1">len(self._buffer) &lt; n:</span>
+                <span class="s1">self._buffer += self.channel.receive()</span>
+        <span class="s2">except </span><span class="s1">EOFError:</span>
+            <span class="s1">self.close()</span>
+        <span class="s2">if </span><span class="s1">self._buffer </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">ret = </span><span class="s4">&quot;&quot;</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">ret = self._buffer[:n]</span>
+            <span class="s1">self._buffer = self._buffer[n:]</span>
+        <span class="s2">return </span><span class="s1">ret</span>
+
+    <span class="s2">def </span><span class="s1">readline(self):</span>
+        <span class="s2">if </span><span class="s1">self._buffer </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">i = self._buffer.find(</span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">i != -</span><span class="s3">1</span><span class="s1">:</span>
+                <span class="s2">return </span><span class="s1">self.read(i + </span><span class="s3">1</span><span class="s1">)</span>
+            <span class="s1">line = self.read(len(self._buffer) + </span><span class="s3">1</span><span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">line = self.read(</span><span class="s3">1</span><span class="s1">)</span>
+        <span class="s2">while </span><span class="s1">line </span><span class="s2">and </span><span class="s1">line[-</span><span class="s3">1</span><span class="s1">] != </span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">:</span>
+            <span class="s1">c = self.read(</span><span class="s3">1</span><span class="s1">)</span>
+            <span class="s2">if not </span><span class="s1">c:</span>
+                <span class="s2">break</span>
+            <span class="s1">line += c</span>
+        <span class="s2">return </span><span class="s1">line</span>
+
+
+<span class="s2">class </span><span class="s1">BaseGateway(object):</span>
+    <span class="s1">exc_info = sys.exc_info</span>
+    <span class="s1">_sysex = sysex</span>
+    <span class="s1">id = </span><span class="s4">&quot;&lt;worker&gt;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, io, id, _startcount=</span><span class="s3">2</span><span class="s1">):</span>
+        <span class="s1">self.execmodel = io.execmodel</span>
+        <span class="s1">self._io = io</span>
+        <span class="s1">self.id = id</span>
+        <span class="s1">self._strconfig = (Unserializer.py2str_as_py3str, Unserializer.py3str_as_py2str)</span>
+        <span class="s1">self._channelfactory = ChannelFactory(self, _startcount)</span>
+        <span class="s1">self._receivelock = self.execmodel.RLock()</span>
+        <span class="s0"># globals may be NONE at process-termination</span>
+        <span class="s1">self.__trace = trace</span>
+        <span class="s1">self._geterrortext = geterrortext</span>
+        <span class="s1">self._receivepool = self.execmodel.WorkerPool()</span>
+
+    <span class="s2">def </span><span class="s1">_trace(self, *msg):</span>
+        <span class="s1">self.__trace(self.id, *msg)</span>
+
+    <span class="s2">def </span><span class="s1">_initreceive(self):</span>
+        <span class="s1">self._receivepool.spawn(self._thread_receiver)</span>
+
+    <span class="s2">def </span><span class="s1">_thread_receiver(self):</span>
+        <span class="s2">def </span><span class="s1">log(*msg):</span>
+            <span class="s1">self._trace(</span><span class="s4">&quot;[receiver-thread]&quot;</span><span class="s1">, *msg)</span>
+
+        <span class="s1">log(</span><span class="s4">&quot;RECEIVERTHREAD: starting to run&quot;</span><span class="s1">)</span>
+        <span class="s1">io = self._io</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">while </span><span class="s3">1</span><span class="s1">:</span>
+                <span class="s1">msg = Message.from_io(io)</span>
+                <span class="s1">log(</span><span class="s4">&quot;received&quot;</span><span class="s1">, msg)</span>
+                <span class="s2">with </span><span class="s1">self._receivelock:</span>
+                    <span class="s1">msg.received(self)</span>
+                    <span class="s2">del </span><span class="s1">msg</span>
+        <span class="s2">except </span><span class="s1">(KeyboardInterrupt, GatewayReceivedTerminate):</span>
+            <span class="s2">pass</span>
+        <span class="s2">except </span><span class="s1">EOFError:</span>
+            <span class="s1">log(</span><span class="s4">&quot;EOF without prior gateway termination message&quot;</span><span class="s1">)</span>
+            <span class="s1">self._error = self.exc_info()[</span><span class="s3">1</span><span class="s1">]</span>
+        <span class="s2">except </span><span class="s1">Exception:</span>
+            <span class="s1">log(self._geterrortext(self.exc_info()))</span>
+        <span class="s1">log(</span><span class="s4">&quot;finishing receiving thread&quot;</span><span class="s1">)</span>
+        <span class="s0"># wake up and terminate any execution waiting to receive</span>
+        <span class="s1">self._channelfactory._finished_receiving()</span>
+        <span class="s1">log(</span><span class="s4">&quot;terminating execution&quot;</span><span class="s1">)</span>
+        <span class="s1">self._terminate_execution()</span>
+        <span class="s1">log(</span><span class="s4">&quot;closing read&quot;</span><span class="s1">)</span>
+        <span class="s1">self._io.close_read()</span>
+        <span class="s1">log(</span><span class="s4">&quot;closing write&quot;</span><span class="s1">)</span>
+        <span class="s1">self._io.close_write()</span>
+        <span class="s1">log(</span><span class="s4">&quot;terminating our receive pseudo pool&quot;</span><span class="s1">)</span>
+        <span class="s1">self._receivepool.trigger_shutdown()</span>
+
+    <span class="s2">def </span><span class="s1">_terminate_execution(self):</span>
+        <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">_send(self, msgcode, channelid=</span><span class="s3">0</span><span class="s1">, data=bytes()):</span>
+        <span class="s1">message = Message(msgcode, channelid, data)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">message.to_io(self._io)</span>
+            <span class="s1">self._trace(</span><span class="s4">&quot;sent&quot;</span><span class="s1">, message)</span>
+        <span class="s2">except </span><span class="s1">(IOError, ValueError):</span>
+            <span class="s1">e = sys.exc_info()[</span><span class="s3">1</span><span class="s1">]</span>
+            <span class="s1">self._trace(</span><span class="s4">&quot;failed to send&quot;</span><span class="s1">, message, e)</span>
+            <span class="s0"># ValueError might be because the IO is already closed</span>
+            <span class="s2">raise </span><span class="s1">IOError(</span><span class="s4">&quot;cannot send (already closed?)&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_local_schedulexec(self, channel, sourcetask):</span>
+        <span class="s1">channel.close(</span><span class="s4">&quot;execution disallowed&quot;</span><span class="s1">)</span>
+
+    <span class="s0"># _____________________________________________________________________</span>
+    <span class="s0">#</span>
+    <span class="s0"># High Level Interface</span>
+    <span class="s0"># _____________________________________________________________________</span>
+    <span class="s0">#</span>
+    <span class="s2">def </span><span class="s1">newchannel(self):</span>
+        <span class="s0">&quot;&quot;&quot;return a new independent channel.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._channelfactory.new()</span>
+
+    <span class="s2">def </span><span class="s1">join(self, timeout=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Wait for receiverthread to terminate.&quot;&quot;&quot;</span>
+        <span class="s1">self._trace(</span><span class="s4">&quot;waiting for receiver thread to finish&quot;</span><span class="s1">)</span>
+        <span class="s1">self._receivepool.waitall()</span>
+
+
+<span class="s2">class </span><span class="s1">WorkerGateway(BaseGateway):</span>
+    <span class="s2">def </span><span class="s1">_local_schedulexec(self, channel, sourcetask):</span>
+        <span class="s1">sourcetask = loads_internal(sourcetask)</span>
+        <span class="s1">self._execpool.spawn(self.executetask, (channel, sourcetask))</span>
+
+    <span class="s2">def </span><span class="s1">_terminate_execution(self):</span>
+        <span class="s0"># called from receiverthread</span>
+        <span class="s1">self._trace(</span><span class="s4">&quot;shutting down execution pool&quot;</span><span class="s1">)</span>
+        <span class="s1">self._execpool.trigger_shutdown()</span>
+        <span class="s2">if not </span><span class="s1">self._execpool.waitall(</span><span class="s3">5.0</span><span class="s1">):</span>
+            <span class="s1">self._trace(</span><span class="s4">&quot;execution ongoing after 5 secs,&quot; &quot; trying interrupt_main&quot;</span><span class="s1">)</span>
+            <span class="s0"># We try hard to terminate execution based on the assumption</span>
+            <span class="s0"># that there is only one gateway object running per-process.</span>
+            <span class="s2">if </span><span class="s1">sys.platform != </span><span class="s4">&quot;win32&quot;</span><span class="s1">:</span>
+                <span class="s1">self._trace(</span><span class="s4">&quot;sending ourselves a SIGINT&quot;</span><span class="s1">)</span>
+                <span class="s1">os.kill(os.getpid(), </span><span class="s3">2</span><span class="s1">)  </span><span class="s0"># send ourselves a SIGINT</span>
+            <span class="s2">elif </span><span class="s1">interrupt_main </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s1">self._trace(</span><span class="s4">&quot;calling interrupt_main()&quot;</span><span class="s1">)</span>
+                <span class="s1">interrupt_main()</span>
+            <span class="s2">if not </span><span class="s1">self._execpool.waitall(</span><span class="s3">10.0</span><span class="s1">):</span>
+                <span class="s1">self._trace(</span>
+                    <span class="s4">&quot;execution did not finish in another 10 secs, &quot; &quot;calling os._exit()&quot;</span>
+                <span class="s1">)</span>
+                <span class="s1">os._exit(</span><span class="s3">1</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">serve(self):</span>
+        <span class="s2">def </span><span class="s1">trace(msg):</span>
+            <span class="s1">self._trace(</span><span class="s4">&quot;[serve] &quot; </span><span class="s1">+ msg)</span>
+
+        <span class="s1">hasprimary = self.execmodel.backend == </span><span class="s4">&quot;thread&quot;</span>
+        <span class="s1">self._execpool = self.execmodel.WorkerPool(hasprimary=hasprimary)</span>
+        <span class="s1">trace(</span><span class="s4">&quot;spawning receiver thread&quot;</span><span class="s1">)</span>
+        <span class="s1">self._initreceive()</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">hasprimary:</span>
+                <span class="s0"># this will return when we are in shutdown</span>
+                <span class="s1">trace(</span><span class="s4">&quot;integrating as primary thread&quot;</span><span class="s1">)</span>
+                <span class="s1">self._execpool.integrate_as_primary_thread()</span>
+            <span class="s1">trace(</span><span class="s4">&quot;joining receiver thread&quot;</span><span class="s1">)</span>
+            <span class="s1">self.join()</span>
+        <span class="s2">except </span><span class="s1">KeyboardInterrupt:</span>
+            <span class="s0"># in the worker we can't really do anything sensible</span>
+            <span class="s1">trace(</span><span class="s4">&quot;swallowing keyboardinterrupt, serve finished&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">executetask(self, item):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">channel, (source, file_name, call_name, kwargs) = item</span>
+            <span class="s2">if not </span><span class="s1">ISPY3 </span><span class="s2">and </span><span class="s1">kwargs:</span>
+                <span class="s0"># some python2 versions do not accept unicode keyword params</span>
+                <span class="s0"># note: Unserializer generally turns py2-str to py3-str objects</span>
+                <span class="s1">newkwargs = {}</span>
+                <span class="s2">for </span><span class="s1">name, value </span><span class="s2">in </span><span class="s1">kwargs.items():</span>
+                    <span class="s2">if </span><span class="s1">isinstance(name, unicode):</span>
+                        <span class="s1">name = name.encode(</span><span class="s4">&quot;ascii&quot;</span><span class="s1">)</span>
+                    <span class="s1">newkwargs[name] = value</span>
+                <span class="s1">kwargs = newkwargs</span>
+            <span class="s1">loc = {</span><span class="s4">&quot;channel&quot;</span><span class="s1">: channel, </span><span class="s4">&quot;__name__&quot;</span><span class="s1">: </span><span class="s4">&quot;__channelexec__&quot;</span><span class="s1">}</span>
+            <span class="s1">self._trace(</span><span class="s4">&quot;execution starts[%s]: %s&quot; </span><span class="s1">% (channel.id, repr(source)[:</span><span class="s3">50</span><span class="s1">]))</span>
+            <span class="s1">channel._executing = </span><span class="s2">True</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">co = compile(source + </span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">, file_name </span><span class="s2">or </span><span class="s4">&quot;&lt;remote exec&gt;&quot;</span><span class="s1">, </span><span class="s4">&quot;exec&quot;</span><span class="s1">)</span>
+                <span class="s1">do_exec(co, loc)  </span><span class="s0"># noqa</span>
+                <span class="s2">if </span><span class="s1">call_name:</span>
+                    <span class="s1">self._trace(</span><span class="s4">&quot;calling %s(**%60r)&quot; </span><span class="s1">% (call_name, kwargs))</span>
+                    <span class="s1">function = loc[call_name]</span>
+                    <span class="s1">function(channel, **kwargs)</span>
+            <span class="s2">finally</span><span class="s1">:</span>
+                <span class="s1">channel._executing = </span><span class="s2">False</span>
+                <span class="s1">self._trace(</span><span class="s4">&quot;execution finished&quot;</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">KeyboardInterrupt:</span>
+            <span class="s1">channel.close(INTERRUPT_TEXT)</span>
+            <span class="s2">raise</span>
+        <span class="s2">except</span><span class="s1">:</span>
+            <span class="s1">excinfo = self.exc_info()</span>
+            <span class="s2">if not </span><span class="s1">isinstance(excinfo[</span><span class="s3">1</span><span class="s1">], EOFError):</span>
+                <span class="s2">if not </span><span class="s1">channel.gateway._channelfactory.finished:</span>
+                    <span class="s1">self._trace(</span><span class="s4">&quot;got exception: {!r}&quot;</span><span class="s1">.format(excinfo[</span><span class="s3">1</span><span class="s1">]))</span>
+                    <span class="s1">errortext = self._geterrortext(excinfo)</span>
+                    <span class="s1">channel.close(errortext)</span>
+                    <span class="s2">return</span>
+            <span class="s1">self._trace(</span><span class="s4">&quot;ignoring EOFError because receiving finished&quot;</span><span class="s1">)</span>
+        <span class="s1">channel.close()</span>
+
+
+<span class="s0">#</span>
+<span class="s0"># Cross-Python pickling code, tested from test_serializer.py</span>
+<span class="s0">#</span>
+
+
+<span class="s2">class </span><span class="s1">DataFormatError(Exception):</span>
+    <span class="s2">pass</span>
+
+
+<span class="s2">class </span><span class="s1">DumpError(DataFormatError):</span>
+    <span class="s0">&quot;&quot;&quot;Error while serializing an object.&quot;&quot;&quot;</span>
+
+
+<span class="s2">class </span><span class="s1">LoadError(DataFormatError):</span>
+    <span class="s0">&quot;&quot;&quot;Error while unserializing an object.&quot;&quot;&quot;</span>
+
+
+<span class="s2">if </span><span class="s1">ISPY3:</span>
+
+    <span class="s2">def </span><span class="s1">bchr(n):</span>
+        <span class="s2">return </span><span class="s1">bytes([n])</span>
+
+
+<span class="s2">else</span><span class="s1">:</span>
+    <span class="s1">bchr = chr</span>
+
+<span class="s1">DUMPFORMAT_VERSION = bchr(</span><span class="s3">1</span><span class="s1">)</span>
+
+<span class="s1">FOUR_BYTE_INT_MAX = </span><span class="s3">2147483647</span>
+
+<span class="s1">FLOAT_FORMAT = </span><span class="s4">&quot;!d&quot;</span>
+<span class="s1">FLOAT_FORMAT_SIZE = struct.calcsize(FLOAT_FORMAT)</span>
+<span class="s1">COMPLEX_FORMAT = </span><span class="s4">&quot;!dd&quot;</span>
+<span class="s1">COMPLEX_FORMAT_SIZE = struct.calcsize(COMPLEX_FORMAT)</span>
+
+
+<span class="s2">class </span><span class="s1">_Stop(Exception):</span>
+    <span class="s2">pass</span>
+
+
+<span class="s2">class </span><span class="s1">Unserializer(object):</span>
+    <span class="s1">num2func = {}  </span><span class="s0"># is filled after this class definition</span>
+    <span class="s1">py2str_as_py3str = </span><span class="s2">True  </span><span class="s0"># True</span>
+    <span class="s1">py3str_as_py2str = </span><span class="s2">False  </span><span class="s0"># false means py2 will get unicode</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, stream, channel_or_gateway=</span><span class="s2">None</span><span class="s1">, strconfig=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">gateway = getattr(channel_or_gateway, </span><span class="s4">&quot;gateway&quot;</span><span class="s1">, channel_or_gateway)</span>
+        <span class="s1">strconfig = getattr(channel_or_gateway, </span><span class="s4">&quot;_strconfig&quot;</span><span class="s1">, strconfig)</span>
+        <span class="s2">if </span><span class="s1">strconfig:</span>
+            <span class="s1">self.py2str_as_py3str, self.py3str_as_py2str = strconfig</span>
+        <span class="s1">self.stream = stream</span>
+        <span class="s1">self.channelfactory = getattr(gateway, </span><span class="s4">&quot;_channelfactory&quot;</span><span class="s1">, gateway)</span>
+
+    <span class="s2">def </span><span class="s1">load(self, versioned=</span><span class="s2">False</span><span class="s1">):</span>
+        <span class="s2">if </span><span class="s1">versioned:</span>
+            <span class="s1">ver = self.stream.read(</span><span class="s3">1</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">ver != DUMPFORMAT_VERSION:</span>
+                <span class="s2">raise </span><span class="s1">LoadError(</span><span class="s4">&quot;wrong dumpformat version %r&quot; </span><span class="s1">% ver)</span>
+        <span class="s1">self.stack = []</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">while True</span><span class="s1">:</span>
+                <span class="s1">opcode = self.stream.read(</span><span class="s3">1</span><span class="s1">)</span>
+                <span class="s2">if not </span><span class="s1">opcode:</span>
+                    <span class="s2">raise </span><span class="s1">EOFError</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">loader = self.num2func[opcode]</span>
+                <span class="s2">except </span><span class="s1">KeyError:</span>
+                    <span class="s2">raise </span><span class="s1">LoadError(</span>
+                        <span class="s4">&quot;unkown opcode %r - &quot; &quot;wire protocol corruption?&quot; </span><span class="s1">% (opcode,)</span>
+                    <span class="s1">)</span>
+                <span class="s1">loader(self)</span>
+        <span class="s2">except </span><span class="s1">_Stop:</span>
+            <span class="s2">if </span><span class="s1">len(self.stack) != </span><span class="s3">1</span><span class="s1">:</span>
+                <span class="s2">raise </span><span class="s1">LoadError(</span><span class="s4">&quot;internal unserialization error&quot;</span><span class="s1">)</span>
+            <span class="s2">return </span><span class="s1">self.stack.pop(</span><span class="s3">0</span><span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">LoadError(</span><span class="s4">&quot;didn't get STOP&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">load_none(self):</span>
+        <span class="s1">self.stack.append(</span><span class="s2">None</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">load_true(self):</span>
+        <span class="s1">self.stack.append(</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">load_false(self):</span>
+        <span class="s1">self.stack.append(</span><span class="s2">False</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">load_int(self):</span>
+        <span class="s1">i = self._read_int4()</span>
+        <span class="s1">self.stack.append(i)</span>
+
+    <span class="s2">def </span><span class="s1">load_longint(self):</span>
+        <span class="s1">s = self._read_byte_string()</span>
+        <span class="s1">self.stack.append(int(s))</span>
+
+    <span class="s2">if </span><span class="s1">ISPY3:</span>
+        <span class="s1">load_long = load_int</span>
+        <span class="s1">load_longlong = load_longint</span>
+    <span class="s2">else</span><span class="s1">:</span>
+
+        <span class="s2">def </span><span class="s1">load_long(self):</span>
+            <span class="s1">i = self._read_int4()</span>
+            <span class="s1">self.stack.append(long(i))</span>
+
+        <span class="s2">def </span><span class="s1">load_longlong(self):</span>
+            <span class="s1">l = self._read_byte_string()</span>
+            <span class="s1">self.stack.append(long(l))</span>
+
+    <span class="s2">def </span><span class="s1">load_float(self):</span>
+        <span class="s1">binary = self.stream.read(FLOAT_FORMAT_SIZE)</span>
+        <span class="s1">self.stack.append(struct.unpack(FLOAT_FORMAT, binary)[</span><span class="s3">0</span><span class="s1">])</span>
+
+    <span class="s2">def </span><span class="s1">load_complex(self):</span>
+        <span class="s1">binary = self.stream.read(COMPLEX_FORMAT_SIZE)</span>
+        <span class="s1">self.stack.append(complex(*struct.unpack(COMPLEX_FORMAT, binary)))</span>
+
+    <span class="s2">def </span><span class="s1">_read_int4(self):</span>
+        <span class="s2">return </span><span class="s1">struct.unpack(</span><span class="s4">&quot;!i&quot;</span><span class="s1">, self.stream.read(</span><span class="s3">4</span><span class="s1">))[</span><span class="s3">0</span><span class="s1">]</span>
+
+    <span class="s2">def </span><span class="s1">_read_byte_string(self):</span>
+        <span class="s1">length = self._read_int4()</span>
+        <span class="s1">as_bytes = self.stream.read(length)</span>
+        <span class="s2">return </span><span class="s1">as_bytes</span>
+
+    <span class="s2">def </span><span class="s1">load_py3string(self):</span>
+        <span class="s1">as_bytes = self._read_byte_string()</span>
+        <span class="s2">if not </span><span class="s1">ISPY3 </span><span class="s2">and </span><span class="s1">self.py3str_as_py2str:</span>
+            <span class="s0"># XXX Should we try to decode into latin-1?</span>
+            <span class="s1">self.stack.append(as_bytes)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.stack.append(as_bytes.decode(</span><span class="s4">&quot;utf-8&quot;</span><span class="s1">))</span>
+
+    <span class="s2">def </span><span class="s1">load_py2string(self):</span>
+        <span class="s1">as_bytes = self._read_byte_string()</span>
+        <span class="s2">if </span><span class="s1">ISPY3 </span><span class="s2">and </span><span class="s1">self.py2str_as_py3str:</span>
+            <span class="s1">s = as_bytes.decode(</span><span class="s4">&quot;latin-1&quot;</span><span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">s = as_bytes</span>
+        <span class="s1">self.stack.append(s)</span>
+
+    <span class="s2">def </span><span class="s1">load_bytes(self):</span>
+        <span class="s1">s = self._read_byte_string()</span>
+        <span class="s1">self.stack.append(s)</span>
+
+    <span class="s2">def </span><span class="s1">load_unicode(self):</span>
+        <span class="s1">self.stack.append(self._read_byte_string().decode(</span><span class="s4">&quot;utf-8&quot;</span><span class="s1">))</span>
+
+    <span class="s2">def </span><span class="s1">load_newlist(self):</span>
+        <span class="s1">length = self._read_int4()</span>
+        <span class="s1">self.stack.append([</span><span class="s2">None</span><span class="s1">] * length)</span>
+
+    <span class="s2">def </span><span class="s1">load_setitem(self):</span>
+        <span class="s2">if </span><span class="s1">len(self.stack) &lt; </span><span class="s3">3</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">LoadError(</span><span class="s4">&quot;not enough items for setitem&quot;</span><span class="s1">)</span>
+        <span class="s1">value = self.stack.pop()</span>
+        <span class="s1">key = self.stack.pop()</span>
+        <span class="s1">self.stack[-</span><span class="s3">1</span><span class="s1">][key] = value</span>
+
+    <span class="s2">def </span><span class="s1">load_newdict(self):</span>
+        <span class="s1">self.stack.append({})</span>
+
+    <span class="s2">def </span><span class="s1">_load_collection(self, type_):</span>
+        <span class="s1">length = self._read_int4()</span>
+        <span class="s2">if </span><span class="s1">length:</span>
+            <span class="s1">res = type_(self.stack[-length:])</span>
+            <span class="s2">del </span><span class="s1">self.stack[-length:]</span>
+            <span class="s1">self.stack.append(res)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.stack.append(type_())</span>
+
+    <span class="s2">def </span><span class="s1">load_buildtuple(self):</span>
+        <span class="s1">self._load_collection(tuple)</span>
+
+    <span class="s2">def </span><span class="s1">load_set(self):</span>
+        <span class="s1">self._load_collection(set)</span>
+
+    <span class="s2">def </span><span class="s1">load_frozenset(self):</span>
+        <span class="s1">self._load_collection(frozenset)</span>
+
+    <span class="s2">def </span><span class="s1">load_stop(self):</span>
+        <span class="s2">raise </span><span class="s1">_Stop</span>
+
+    <span class="s2">def </span><span class="s1">load_channel(self):</span>
+        <span class="s1">id = self._read_int4()</span>
+        <span class="s1">newchannel = self.channelfactory.new(id)</span>
+        <span class="s1">self.stack.append(newchannel)</span>
+
+
+<span class="s0"># automatically build opcodes and byte-encoding</span>
+
+
+<span class="s2">class </span><span class="s1">opcode:</span>
+    <span class="s0">&quot;&quot;&quot;container for name -&gt; num mappings.&quot;&quot;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">_buildopcodes():</span>
+    <span class="s1">l = []</span>
+    <span class="s1">later_added = {</span><span class="s4">&quot;COMPLEX&quot;</span><span class="s1">: </span><span class="s3">1</span><span class="s1">}</span>
+    <span class="s2">for </span><span class="s1">name, func </span><span class="s2">in </span><span class="s1">Unserializer.__dict__.items():</span>
+        <span class="s2">if </span><span class="s1">name.startswith(</span><span class="s4">&quot;load_&quot;</span><span class="s1">):</span>
+            <span class="s1">opname = name[</span><span class="s3">5</span><span class="s1">:].upper()</span>
+            <span class="s1">l.append((opname, func))</span>
+    <span class="s1">l.sort(key=</span><span class="s2">lambda </span><span class="s1">x: (later_added.get(x[</span><span class="s3">0</span><span class="s1">], </span><span class="s3">0</span><span class="s1">), x[</span><span class="s3">0</span><span class="s1">]))</span>
+
+    <span class="s2">for </span><span class="s1">i, (opname, func) </span><span class="s2">in </span><span class="s1">enumerate(l):</span>
+        <span class="s2">assert </span><span class="s1">i &lt; </span><span class="s3">26</span><span class="s1">, </span><span class="s4">&quot;xxx&quot;</span>
+        <span class="s1">i = bchr(</span><span class="s3">64 </span><span class="s1">+ i)</span>
+        <span class="s1">Unserializer.num2func[i] = func</span>
+        <span class="s1">setattr(opcode, opname, i)</span>
+
+
+<span class="s1">_buildopcodes()</span>
+
+
+<span class="s2">def </span><span class="s1">dumps(obj):</span>
+    <span class="s0">&quot;&quot;&quot;return a serialized bytestring of the given obj. 
+ 
+    The obj and all contained objects must be of a builtin 
+    python type (so nested dicts, sets, etc. are all ok but 
+    not user-level instances). 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">_Serializer().save(obj, versioned=</span><span class="s2">True</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">dump(byteio, obj):</span>
+    <span class="s0">&quot;&quot;&quot;write a serialized bytestring of the given obj to the given stream.&quot;&quot;&quot;</span>
+    <span class="s1">_Serializer(write=byteio.write).save(obj, versioned=</span><span class="s2">True</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">loads(bytestring, py2str_as_py3str=</span><span class="s2">False</span><span class="s1">, py3str_as_py2str=</span><span class="s2">False</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;return the object as deserialized from the given bytestring. 
+ 
+    py2str_as_py3str: if true then string (str) objects previously 
+                      dumped on Python2 will be loaded as Python3 
+                      strings which really are text objects. 
+    py3str_as_py2str: if true then string (str) objects previously 
+                      dumped on Python3 will be loaded as Python2 
+                      strings instead of unicode objects. 
+ 
+    if the bytestring was dumped with an incompatible protocol 
+    version or if the bytestring is corrupted, the 
+    ``execnet.DataFormatError`` will be raised. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">io = BytesIO(bytestring)</span>
+    <span class="s2">return </span><span class="s1">load(</span>
+        <span class="s1">io, py2str_as_py3str=py2str_as_py3str, py3str_as_py2str=py3str_as_py2str</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">load(io, py2str_as_py3str=</span><span class="s2">False</span><span class="s1">, py3str_as_py2str=</span><span class="s2">False</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;derserialize an object form the specified stream. 
+ 
+    Behaviour and parameters are otherwise the same as with ``loads`` 
+    &quot;&quot;&quot;</span>
+    <span class="s1">strconfig = (py2str_as_py3str, py3str_as_py2str)</span>
+    <span class="s2">return </span><span class="s1">Unserializer(io, strconfig=strconfig).load(versioned=</span><span class="s2">True</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">loads_internal(bytestring, channelfactory=</span><span class="s2">None</span><span class="s1">, strconfig=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s1">io = BytesIO(bytestring)</span>
+    <span class="s2">return </span><span class="s1">Unserializer(io, channelfactory, strconfig).load()</span>
+
+
+<span class="s2">def </span><span class="s1">dumps_internal(obj):</span>
+    <span class="s2">return </span><span class="s1">_Serializer().save(obj)</span>
+
+
+<span class="s2">class </span><span class="s1">_Serializer(object):</span>
+    <span class="s1">_dispatch = {}</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, write=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s2">if </span><span class="s1">write </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">self._streamlist = []</span>
+            <span class="s1">write = self._streamlist.append</span>
+        <span class="s1">self._write = write</span>
+
+    <span class="s2">def </span><span class="s1">save(self, obj, versioned=</span><span class="s2">False</span><span class="s1">):</span>
+        <span class="s0"># calling here is not re-entrant but multiple instances</span>
+        <span class="s0"># may write to the same stream because of the common platform</span>
+        <span class="s0"># atomic-write guaruantee (concurrent writes each happen atomicly)</span>
+        <span class="s2">if </span><span class="s1">versioned:</span>
+            <span class="s1">self._write(DUMPFORMAT_VERSION)</span>
+        <span class="s1">self._save(obj)</span>
+        <span class="s1">self._write(opcode.STOP)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">streamlist = self._streamlist</span>
+        <span class="s2">except </span><span class="s1">AttributeError:</span>
+            <span class="s2">return None</span>
+        <span class="s2">return </span><span class="s1">type(streamlist[</span><span class="s3">0</span><span class="s1">])().join(streamlist)</span>
+
+    <span class="s2">def </span><span class="s1">_save(self, obj):</span>
+        <span class="s1">tp = type(obj)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">dispatch = self._dispatch[tp]</span>
+        <span class="s2">except </span><span class="s1">KeyError:</span>
+            <span class="s1">methodname = </span><span class="s4">&quot;save_&quot; </span><span class="s1">+ tp.__name__</span>
+            <span class="s1">meth = getattr(self.__class__, methodname, </span><span class="s2">None</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">meth </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s2">raise </span><span class="s1">DumpError(</span><span class="s4">&quot;can't serialize {}&quot;</span><span class="s1">.format(tp))</span>
+            <span class="s1">dispatch = self._dispatch[tp] = meth</span>
+        <span class="s1">dispatch(self, obj)</span>
+
+    <span class="s2">def </span><span class="s1">save_NoneType(self, non):</span>
+        <span class="s1">self._write(opcode.NONE)</span>
+
+    <span class="s2">def </span><span class="s1">save_bool(self, boolean):</span>
+        <span class="s2">if </span><span class="s1">boolean:</span>
+            <span class="s1">self._write(opcode.TRUE)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self._write(opcode.FALSE)</span>
+
+    <span class="s2">def </span><span class="s1">save_bytes(self, bytes_):</span>
+        <span class="s1">self._write(opcode.BYTES)</span>
+        <span class="s1">self._write_byte_sequence(bytes_)</span>
+
+    <span class="s2">if </span><span class="s1">ISPY3:</span>
+
+        <span class="s2">def </span><span class="s1">save_str(self, s):</span>
+            <span class="s1">self._write(opcode.PY3STRING)</span>
+            <span class="s1">self._write_unicode_string(s)</span>
+
+    <span class="s2">else</span><span class="s1">:</span>
+
+        <span class="s2">def </span><span class="s1">save_str(self, s):</span>
+            <span class="s1">self._write(opcode.PY2STRING)</span>
+            <span class="s1">self._write_byte_sequence(s)</span>
+
+        <span class="s2">def </span><span class="s1">save_unicode(self, s):</span>
+            <span class="s1">self._write(opcode.UNICODE)</span>
+            <span class="s1">self._write_unicode_string(s)</span>
+
+    <span class="s2">def </span><span class="s1">_write_unicode_string(self, s):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">as_bytes = s.encode(</span><span class="s4">&quot;utf-8&quot;</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">UnicodeEncodeError:</span>
+            <span class="s2">raise </span><span class="s1">DumpError(</span><span class="s4">&quot;strings must be utf-8 encodable&quot;</span><span class="s1">)</span>
+        <span class="s1">self._write_byte_sequence(as_bytes)</span>
+
+    <span class="s2">def </span><span class="s1">_write_byte_sequence(self, bytes_):</span>
+        <span class="s1">self._write_int4(len(bytes_), </span><span class="s4">&quot;string is too long&quot;</span><span class="s1">)</span>
+        <span class="s1">self._write(bytes_)</span>
+
+    <span class="s2">def </span><span class="s1">_save_integral(self, i, short_op, long_op):</span>
+        <span class="s2">if </span><span class="s1">i &lt;= FOUR_BYTE_INT_MAX:</span>
+            <span class="s1">self._write(short_op)</span>
+            <span class="s1">self._write_int4(i)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self._write(long_op)</span>
+            <span class="s1">self._write_byte_sequence(str(i).rstrip(</span><span class="s4">&quot;L&quot;</span><span class="s1">).encode(</span><span class="s4">&quot;ascii&quot;</span><span class="s1">))</span>
+
+    <span class="s2">def </span><span class="s1">save_int(self, i):</span>
+        <span class="s1">self._save_integral(i, opcode.INT, opcode.LONGINT)</span>
+
+    <span class="s2">def </span><span class="s1">save_long(self, l):</span>
+        <span class="s1">self._save_integral(l, opcode.LONG, opcode.LONGLONG)</span>
+
+    <span class="s2">def </span><span class="s1">save_float(self, flt):</span>
+        <span class="s1">self._write(opcode.FLOAT)</span>
+        <span class="s1">self._write(struct.pack(FLOAT_FORMAT, flt))</span>
+
+    <span class="s2">def </span><span class="s1">save_complex(self, cpx):</span>
+        <span class="s1">self._write(opcode.COMPLEX)</span>
+        <span class="s1">self._write(struct.pack(COMPLEX_FORMAT, cpx.real, cpx.imag))</span>
+
+    <span class="s2">def </span><span class="s1">_write_int4(self, i, error=</span><span class="s4">&quot;int must be less than %i&quot; </span><span class="s1">% (FOUR_BYTE_INT_MAX,)):</span>
+        <span class="s2">if </span><span class="s1">i &gt; FOUR_BYTE_INT_MAX:</span>
+            <span class="s2">raise </span><span class="s1">DumpError(error)</span>
+        <span class="s1">self._write(struct.pack(</span><span class="s4">&quot;!i&quot;</span><span class="s1">, i))</span>
+
+    <span class="s2">def </span><span class="s1">save_list(self, L):</span>
+        <span class="s1">self._write(opcode.NEWLIST)</span>
+        <span class="s1">self._write_int4(len(L), </span><span class="s4">&quot;list is too long&quot;</span><span class="s1">)</span>
+        <span class="s2">for </span><span class="s1">i, item </span><span class="s2">in </span><span class="s1">enumerate(L):</span>
+            <span class="s1">self._write_setitem(i, item)</span>
+
+    <span class="s2">def </span><span class="s1">_write_setitem(self, key, value):</span>
+        <span class="s1">self._save(key)</span>
+        <span class="s1">self._save(value)</span>
+        <span class="s1">self._write(opcode.SETITEM)</span>
+
+    <span class="s2">def </span><span class="s1">save_dict(self, d):</span>
+        <span class="s1">self._write(opcode.NEWDICT)</span>
+        <span class="s2">for </span><span class="s1">key, value </span><span class="s2">in </span><span class="s1">d.items():</span>
+            <span class="s1">self._write_setitem(key, value)</span>
+
+    <span class="s2">def </span><span class="s1">save_tuple(self, tup):</span>
+        <span class="s2">for </span><span class="s1">item </span><span class="s2">in </span><span class="s1">tup:</span>
+            <span class="s1">self._save(item)</span>
+        <span class="s1">self._write(opcode.BUILDTUPLE)</span>
+        <span class="s1">self._write_int4(len(tup), </span><span class="s4">&quot;tuple is too long&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_write_set(self, s, op):</span>
+        <span class="s2">for </span><span class="s1">item </span><span class="s2">in </span><span class="s1">s:</span>
+            <span class="s1">self._save(item)</span>
+        <span class="s1">self._write(op)</span>
+        <span class="s1">self._write_int4(len(s), </span><span class="s4">&quot;set is too long&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">save_set(self, s):</span>
+        <span class="s1">self._write_set(s, opcode.SET)</span>
+
+    <span class="s2">def </span><span class="s1">save_frozenset(self, s):</span>
+        <span class="s1">self._write_set(s, opcode.FROZENSET)</span>
+
+    <span class="s2">def </span><span class="s1">save_Channel(self, channel):</span>
+        <span class="s1">self._write(opcode.CHANNEL)</span>
+        <span class="s1">self._write_int4(channel.id)</span>
+
+
+<span class="s2">def </span><span class="s1">init_popen_io(execmodel):</span>
+    <span class="s2">if not </span><span class="s1">hasattr(os, </span><span class="s4">&quot;dup&quot;</span><span class="s1">):  </span><span class="s0"># jython</span>
+        <span class="s1">io = Popen2IO(sys.stdout, sys.stdin, execmodel)</span>
+        <span class="s2">import </span><span class="s1">tempfile</span>
+
+        <span class="s1">sys.stdin = tempfile.TemporaryFile(</span><span class="s4">&quot;r&quot;</span><span class="s1">)</span>
+        <span class="s1">sys.stdout = tempfile.TemporaryFile(</span><span class="s4">&quot;w&quot;</span><span class="s1">)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">devnull = os.devnull</span>
+        <span class="s2">except </span><span class="s1">AttributeError:</span>
+            <span class="s2">if </span><span class="s1">os.name == </span><span class="s4">&quot;nt&quot;</span><span class="s1">:</span>
+                <span class="s1">devnull = </span><span class="s4">&quot;NUL&quot;</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">devnull = </span><span class="s4">&quot;/dev/null&quot;</span>
+        <span class="s0"># stdin</span>
+        <span class="s1">stdin = execmodel.fdopen(os.dup(</span><span class="s3">0</span><span class="s1">), </span><span class="s4">&quot;r&quot;</span><span class="s1">, </span><span class="s3">1</span><span class="s1">)</span>
+        <span class="s1">fd = os.open(devnull, os.O_RDONLY)</span>
+        <span class="s1">os.dup2(fd, </span><span class="s3">0</span><span class="s1">)</span>
+        <span class="s1">os.close(fd)</span>
+
+        <span class="s0"># stdout</span>
+        <span class="s1">stdout = execmodel.fdopen(os.dup(</span><span class="s3">1</span><span class="s1">), </span><span class="s4">&quot;w&quot;</span><span class="s1">, </span><span class="s3">1</span><span class="s1">)</span>
+        <span class="s1">fd = os.open(devnull, os.O_WRONLY)</span>
+        <span class="s1">os.dup2(fd, </span><span class="s3">1</span><span class="s1">)</span>
+
+        <span class="s0"># stderr for win32</span>
+        <span class="s2">if </span><span class="s1">os.name == </span><span class="s4">&quot;nt&quot;</span><span class="s1">:</span>
+            <span class="s1">sys.stderr = execmodel.fdopen(os.dup(</span><span class="s3">2</span><span class="s1">), </span><span class="s4">&quot;w&quot;</span><span class="s1">, </span><span class="s3">1</span><span class="s1">)</span>
+            <span class="s1">os.dup2(fd, </span><span class="s3">2</span><span class="s1">)</span>
+        <span class="s1">os.close(fd)</span>
+        <span class="s1">io = Popen2IO(stdout, stdin, execmodel)</span>
+        <span class="s1">sys.stdin = execmodel.fdopen(</span><span class="s3">0</span><span class="s1">, </span><span class="s4">&quot;r&quot;</span><span class="s1">, </span><span class="s3">1</span><span class="s1">)</span>
+        <span class="s1">sys.stdout = execmodel.fdopen(</span><span class="s3">1</span><span class="s1">, </span><span class="s4">&quot;w&quot;</span><span class="s1">, </span><span class="s3">1</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">io</span>
+
+
+<span class="s2">def </span><span class="s1">serve(io, id):</span>
+    <span class="s1">trace(</span><span class="s4">&quot;creating workergateway on {!r}&quot;</span><span class="s1">.format(io))</span>
+    <span class="s1">WorkerGateway(io=io, id=id, _startcount=</span><span class="s3">2</span><span class="s1">).serve()</span>
+</pre>
+</body>
+</html>

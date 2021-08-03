@@ -1,0 +1,173 @@
+<html>
+<head>
+<title>line.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+line.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Float,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">MinMax,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">NoneSet,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Alias,</span>
+    <span class="s1">Sequence</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">Coordinate, Percentage</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">NestedInteger,</span>
+    <span class="s1">NestedSet,</span>
+    <span class="s1">NestedNoneSet,</span>
+    <span class="s1">EmptyTag,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">safe_string</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">DRAWING_NS</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s0">import </span><span class="s1">Element</span>
+
+<span class="s0">from </span><span class="s1">.colors </span><span class="s0">import </span><span class="s1">ColorChoiceDescriptor</span>
+<span class="s0">from </span><span class="s1">.fill </span><span class="s0">import </span><span class="s1">GradientFillProperties, PatternFillProperties</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">ExtensionList </span><span class="s0">as </span><span class="s1">OfficeArtExtensionList</span>
+
+<span class="s3">&quot;&quot;&quot; 
+Line elements from drawing main schema 
+&quot;&quot;&quot;</span>
+
+<span class="s0">class </span><span class="s1">LineEndProperties(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;end&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">type = NoneSet(values=([</span><span class="s3">'none'</span><span class="s1">, </span><span class="s3">'triangle'</span><span class="s1">, </span><span class="s3">'stealth'</span><span class="s1">, </span><span class="s3">'diamond'</span><span class="s1">, </span><span class="s3">'oval'</span><span class="s1">, </span><span class="s3">'arrow'</span><span class="s1">]))</span>
+    <span class="s1">w = NoneSet(values=([</span><span class="s3">'sm'</span><span class="s1">, </span><span class="s3">'med'</span><span class="s1">, </span><span class="s3">'lg'</span><span class="s1">]))</span>
+    <span class="s1">len = NoneSet(values=([</span><span class="s3">'sm'</span><span class="s1">, </span><span class="s3">'med'</span><span class="s1">, </span><span class="s3">'lg'</span><span class="s1">]))</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">type=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">w=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">len=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.type = type</span>
+        <span class="s1">self.w = w</span>
+        <span class="s1">self.len = len</span>
+
+
+<span class="s0">class </span><span class="s1">DashStop(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;ds&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">d = Integer()</span>
+    <span class="s1">length = Alias(</span><span class="s3">'d'</span><span class="s1">)</span>
+    <span class="s1">sp = Integer()</span>
+    <span class="s1">space = Alias(</span><span class="s3">'sp'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">d=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">sp=</span><span class="s4">0</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.d = d</span>
+        <span class="s1">self.sp = sp</span>
+
+
+<span class="s0">class </span><span class="s1">DashStopList(Serialisable):</span>
+
+    <span class="s1">ds = Sequence(expected_type=DashStop, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">ds=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.ds = ds</span>
+
+
+<span class="s0">class </span><span class="s1">LineProperties(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;ln&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">w = MinMax(min=</span><span class="s4">0</span><span class="s1">, max=</span><span class="s4">20116800</span><span class="s1">, allow_none=</span><span class="s0">True</span><span class="s1">) </span><span class="s2"># EMU</span>
+    <span class="s1">width = Alias(</span><span class="s3">'w'</span><span class="s1">)</span>
+    <span class="s1">cap = NoneSet(values=([</span><span class="s3">'rnd'</span><span class="s1">, </span><span class="s3">'sq'</span><span class="s1">, </span><span class="s3">'flat'</span><span class="s1">]))</span>
+    <span class="s1">cmpd = NoneSet(values=([</span><span class="s3">'sng'</span><span class="s1">, </span><span class="s3">'dbl'</span><span class="s1">, </span><span class="s3">'thickThin'</span><span class="s1">, </span><span class="s3">'thinThick'</span><span class="s1">, </span><span class="s3">'tri'</span><span class="s1">]))</span>
+    <span class="s1">algn = NoneSet(values=([</span><span class="s3">'ctr'</span><span class="s1">, </span><span class="s3">'in'</span><span class="s1">]))</span>
+
+    <span class="s1">noFill = EmptyTag()</span>
+    <span class="s1">solidFill = ColorChoiceDescriptor()</span>
+    <span class="s1">gradFill = Typed(expected_type=GradientFillProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">pattFill = Typed(expected_type=PatternFillProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">prstDash = NestedNoneSet(values=([</span><span class="s3">'solid'</span><span class="s1">, </span><span class="s3">'dot'</span><span class="s1">, </span><span class="s3">'dash'</span><span class="s1">, </span><span class="s3">'lgDash'</span><span class="s1">, </span><span class="s3">'dashDot'</span><span class="s1">,</span>
+                       <span class="s3">'lgDashDot'</span><span class="s1">, </span><span class="s3">'lgDashDotDot'</span><span class="s1">, </span><span class="s3">'sysDash'</span><span class="s1">, </span><span class="s3">'sysDot'</span><span class="s1">, </span><span class="s3">'sysDashDot'</span><span class="s1">,</span>
+                       <span class="s3">'sysDashDotDot'</span><span class="s1">]), namespace=namespace)</span>
+    <span class="s1">dashStyle = Alias(</span><span class="s3">'prstDash'</span><span class="s1">)</span>
+
+    <span class="s1">custDash = Typed(expected_type=DashStop, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">round = EmptyTag()</span>
+    <span class="s1">bevel = EmptyTag()</span>
+    <span class="s1">miter = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">, attribute=</span><span class="s3">&quot;lim&quot;</span><span class="s1">)</span>
+
+    <span class="s1">headEnd = Typed(expected_type=LineEndProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">tailEnd = Typed(expected_type=LineEndProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=OfficeArtExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'noFill'</span><span class="s1">, </span><span class="s3">'solidFill'</span><span class="s1">, </span><span class="s3">'gradFill'</span><span class="s1">, </span><span class="s3">'pattFill'</span><span class="s1">,</span>
+                    <span class="s3">'prstDash'</span><span class="s1">, </span><span class="s3">'custDash'</span><span class="s1">, </span><span class="s3">'round'</span><span class="s1">, </span><span class="s3">'bevel'</span><span class="s1">, </span><span class="s3">'miter'</span><span class="s1">, </span><span class="s3">'headEnd'</span><span class="s1">, </span><span class="s3">'tailEnd'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">w=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">cap=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">cmpd=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">algn=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noFill=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">solidFill=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">gradFill=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pattFill=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">prstDash=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">custDash=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">round=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">bevel=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">miter=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">headEnd=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">tailEnd=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.w = w</span>
+        <span class="s1">self.cap = cap</span>
+        <span class="s1">self.cmpd = cmpd</span>
+        <span class="s1">self.algn = algn</span>
+        <span class="s1">self.noFill = noFill</span>
+        <span class="s1">self.solidFill = solidFill</span>
+        <span class="s1">self.gradFill = gradFill</span>
+        <span class="s1">self.pattFill = pattFill</span>
+        <span class="s0">if </span><span class="s1">prstDash </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">prstDash = </span><span class="s3">&quot;solid&quot;</span>
+        <span class="s1">self.prstDash = prstDash</span>
+        <span class="s1">self.custDash = custDash</span>
+        <span class="s1">self.round = round</span>
+        <span class="s1">self.bevel = bevel</span>
+        <span class="s1">self.miter = miter</span>
+        <span class="s1">self.headEnd = headEnd</span>
+        <span class="s1">self.tailEnd = tailEnd</span>
+</pre>
+</body>
+</html>

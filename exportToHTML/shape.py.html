@@ -1,0 +1,437 @@
+<html>
+<head>
+<title>shape.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+shape.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.styles.colors </span><span class="s0">import </span><span class="s1">Color, BLACK, WHITE</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.utils.units </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">pixels_to_EMU,</span>
+    <span class="s1">EMU_to_pixels,</span>
+    <span class="s1">short_color,</span>
+<span class="s1">)</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">deprecated</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s0">import </span><span class="s1">Element, SubElement, tostring</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">DRAWING_NS,</span>
+    <span class="s1">SHEET_DRAWING_NS,</span>
+    <span class="s1">CHART_NS,</span>
+    <span class="s1">CHART_DRAWING_NS,</span>
+    <span class="s1">PKG_REL_NS</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.compat.strings </span><span class="s0">import </span><span class="s1">safe_string</span>
+
+
+<span class="s0">class </span><span class="s1">Shape(object):</span>
+    <span class="s2">&quot;&quot;&quot; a drawing inside a chart 
+        coordiantes are specified by the user in the axis units 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">MARGIN_LEFT = </span><span class="s3">6 </span><span class="s1">+ </span><span class="s3">13 </span><span class="s1">+ </span><span class="s3">1</span>
+    <span class="s1">MARGIN_BOTTOM = </span><span class="s3">17 </span><span class="s1">+ </span><span class="s3">11</span>
+
+    <span class="s1">FONT_WIDTH = </span><span class="s3">7</span>
+    <span class="s1">FONT_HEIGHT = </span><span class="s3">8</span>
+
+    <span class="s1">ROUND_RECT = </span><span class="s4">'roundRect'</span>
+    <span class="s1">RECT = </span><span class="s4">'rect'</span>
+
+    <span class="s2"># other shapes to define :</span>
+    <span class="s4">''' 
+    &quot;line&quot; 
+    &quot;lineInv&quot; 
+    &quot;triangle&quot; 
+    &quot;rtTriangle&quot; 
+    &quot;diamond&quot; 
+    &quot;parallelogram&quot; 
+    &quot;trapezoid&quot; 
+    &quot;nonIsoscelesTrapezoid&quot; 
+    &quot;pentagon&quot; 
+    &quot;hexagon&quot; 
+    &quot;heptagon&quot; 
+    &quot;octagon&quot; 
+    &quot;decagon&quot; 
+    &quot;dodecagon&quot; 
+    &quot;star4&quot; 
+    &quot;star5&quot; 
+    &quot;star6&quot; 
+    &quot;star7&quot; 
+    &quot;star8&quot; 
+    &quot;star10&quot; 
+    &quot;star12&quot; 
+    &quot;star16&quot; 
+    &quot;star24&quot; 
+    &quot;star32&quot; 
+    &quot;roundRect&quot; 
+    &quot;round1Rect&quot; 
+    &quot;round2SameRect&quot; 
+    &quot;round2DiagRect&quot; 
+    &quot;snipRoundRect&quot; 
+    &quot;snip1Rect&quot; 
+    &quot;snip2SameRect&quot; 
+    &quot;snip2DiagRect&quot; 
+    &quot;plaque&quot; 
+    &quot;ellipse&quot; 
+    &quot;teardrop&quot; 
+    &quot;homePlate&quot; 
+    &quot;chevron&quot; 
+    &quot;pieWedge&quot; 
+    &quot;pie&quot; 
+    &quot;blockArc&quot; 
+    &quot;donut&quot; 
+    &quot;noSmoking&quot; 
+    &quot;rightArrow&quot; 
+    &quot;leftArrow&quot; 
+    &quot;upArrow&quot; 
+    &quot;downArrow&quot; 
+    &quot;stripedRightArrow&quot; 
+    &quot;notchedRightArrow&quot; 
+    &quot;bentUpArrow&quot; 
+    &quot;leftRightArrow&quot; 
+    &quot;upDownArrow&quot; 
+    &quot;leftUpArrow&quot; 
+    &quot;leftRightUpArrow&quot; 
+    &quot;quadArrow&quot; 
+    &quot;leftArrowCallout&quot; 
+    &quot;rightArrowCallout&quot; 
+    &quot;upArrowCallout&quot; 
+    &quot;downArrowCallout&quot; 
+    &quot;leftRightArrowCallout&quot; 
+    &quot;upDownArrowCallout&quot; 
+    &quot;quadArrowCallout&quot; 
+    &quot;bentArrow&quot; 
+    &quot;uturnArrow&quot; 
+    &quot;circularArrow&quot; 
+    &quot;leftCircularArrow&quot; 
+    &quot;leftRightCircularArrow&quot; 
+    &quot;curvedRightArrow&quot; 
+    &quot;curvedLeftArrow&quot; 
+    &quot;curvedUpArrow&quot; 
+    &quot;curvedDownArrow&quot; 
+    &quot;swooshArrow&quot; 
+    &quot;cube&quot; 
+    &quot;can&quot; 
+    &quot;lightningBolt&quot; 
+    &quot;heart&quot; 
+    &quot;sun&quot; 
+    &quot;moon&quot; 
+    &quot;smileyFace&quot; 
+    &quot;irregularSeal1&quot; 
+    &quot;irregularSeal2&quot; 
+    &quot;foldedCorner&quot; 
+    &quot;bevel&quot; 
+    &quot;frame&quot; 
+    &quot;halfFrame&quot; 
+    &quot;corner&quot; 
+    &quot;diagStripe&quot; 
+    &quot;chord&quot; 
+    &quot;arc&quot; 
+    &quot;leftBracket&quot; 
+    &quot;rightBracket&quot; 
+    &quot;leftBrace&quot; 
+    &quot;rightBrace&quot; 
+    &quot;bracketPair&quot; 
+    &quot;bracePair&quot; 
+    &quot;straightConnector1&quot; 
+    &quot;bentConnector2&quot; 
+    &quot;bentConnector3&quot; 
+    &quot;bentConnector4&quot; 
+    &quot;bentConnector5&quot; 
+    &quot;curvedConnector2&quot; 
+    &quot;curvedConnector3&quot; 
+    &quot;curvedConnector4&quot; 
+    &quot;curvedConnector5&quot; 
+    &quot;callout1&quot; 
+    &quot;callout2&quot; 
+    &quot;callout3&quot; 
+    &quot;accentCallout1&quot; 
+    &quot;accentCallout2&quot; 
+    &quot;accentCallout3&quot; 
+    &quot;borderCallout1&quot; 
+    &quot;borderCallout2&quot; 
+    &quot;borderCallout3&quot; 
+    &quot;accentBorderCallout1&quot; 
+    &quot;accentBorderCallout2&quot; 
+    &quot;accentBorderCallout3&quot; 
+    &quot;wedgeRectCallout&quot; 
+    &quot;wedgeRoundRectCallout&quot; 
+    &quot;wedgeEllipseCallout&quot; 
+    &quot;cloudCallout&quot; 
+    &quot;cloud&quot; 
+    &quot;ribbon&quot; 
+    &quot;ribbon2&quot; 
+    &quot;ellipseRibbon&quot; 
+    &quot;ellipseRibbon2&quot; 
+    &quot;leftRightRibbon&quot; 
+    &quot;verticalScroll&quot; 
+    &quot;horizontalScroll&quot; 
+    &quot;wave&quot; 
+    &quot;doubleWave&quot; 
+    &quot;plus&quot; 
+    &quot;flowChartProcess&quot; 
+    &quot;flowChartDecision&quot; 
+    &quot;flowChartInputOutput&quot; 
+    &quot;flowChartPredefinedProcess&quot; 
+    &quot;flowChartInternalStorage&quot; 
+    &quot;flowChartDocument&quot; 
+    &quot;flowChartMultidocument&quot; 
+    &quot;flowChartTerminator&quot; 
+    &quot;flowChartPreparation&quot; 
+    &quot;flowChartManualInput&quot; 
+    &quot;flowChartManualOperation&quot; 
+    &quot;flowChartConnector&quot; 
+    &quot;flowChartPunchedCard&quot; 
+    &quot;flowChartPunchedTape&quot; 
+    &quot;flowChartSummingJunction&quot; 
+    &quot;flowChartOr&quot; 
+    &quot;flowChartCollate&quot; 
+    &quot;flowChartSort&quot; 
+    &quot;flowChartExtract&quot; 
+    &quot;flowChartMerge&quot; 
+    &quot;flowChartOfflineStorage&quot; 
+    &quot;flowChartOnlineStorage&quot; 
+    &quot;flowChartMagneticTape&quot; 
+    &quot;flowChartMagneticDisk&quot; 
+    &quot;flowChartMagneticDrum&quot; 
+    &quot;flowChartDisplay&quot; 
+    &quot;flowChartDelay&quot; 
+    &quot;flowChartAlternateProcess&quot; 
+    &quot;flowChartOffpageConnector&quot; 
+    &quot;actionButtonBlank&quot; 
+    &quot;actionButtonHome&quot; 
+    &quot;actionButtonHelp&quot; 
+    &quot;actionButtonInformation&quot; 
+    &quot;actionButtonForwardNext&quot; 
+    &quot;actionButtonBackPrevious&quot; 
+    &quot;actionButtonEnd&quot; 
+    &quot;actionButtonBeginning&quot; 
+    &quot;actionButtonReturn&quot; 
+    &quot;actionButtonDocument&quot; 
+    &quot;actionButtonSound&quot; 
+    &quot;actionButtonMovie&quot; 
+    &quot;gear6&quot; 
+    &quot;gear9&quot; 
+    &quot;funnel&quot; 
+    &quot;mathPlus&quot; 
+    &quot;mathMinus&quot; 
+    &quot;mathMultiply&quot; 
+    &quot;mathDivide&quot; 
+    &quot;mathEqual&quot; 
+    &quot;mathNotEqual&quot; 
+    &quot;cornerTabs&quot; 
+    &quot;squareTabs&quot; 
+    &quot;plaqueTabs&quot; 
+    &quot;chartX&quot; 
+    &quot;chartStar&quot; 
+    &quot;chartPlus&quot; 
+    '''</span>
+
+    <span class="s1">@deprecated(</span><span class="s4">&quot;Chart Drawings need a complete rewrite&quot;</span><span class="s1">)</span>
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">chart,</span>
+                 <span class="s1">coordinates=((</span><span class="s3">0</span><span class="s1">, </span><span class="s3">0</span><span class="s1">), (</span><span class="s3">1</span><span class="s1">, </span><span class="s3">1</span><span class="s1">)),</span>
+                 <span class="s1">text=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">scheme=</span><span class="s4">&quot;accent1&quot;</span><span class="s1">):</span>
+        <span class="s1">self.chart = chart</span>
+        <span class="s1">self.coordinates = coordinates  </span><span class="s2"># in axis units</span>
+        <span class="s1">self.text = text</span>
+        <span class="s1">self.scheme = scheme</span>
+        <span class="s1">self.style = Shape.RECT</span>
+        <span class="s1">self.border_width = </span><span class="s3">0</span>
+        <span class="s1">self.border_color = BLACK  </span><span class="s2"># &quot;F3B3C5&quot;</span>
+        <span class="s1">self.color = WHITE</span>
+        <span class="s1">self.text_color = BLACK</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">border_color(self):</span>
+        <span class="s0">return </span><span class="s1">self._border_color</span>
+
+    <span class="s1">@border_color.setter</span>
+    <span class="s0">def </span><span class="s1">border_color(self, color):</span>
+        <span class="s1">self._border_color = short_color(color)</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">color(self):</span>
+        <span class="s0">return </span><span class="s1">self._color</span>
+
+    <span class="s1">@color.setter</span>
+    <span class="s0">def </span><span class="s1">color(self, color):</span>
+        <span class="s1">self._color = short_color(color)</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">text_color(self):</span>
+        <span class="s0">return </span><span class="s1">self._text_color</span>
+
+    <span class="s1">@text_color.setter</span>
+    <span class="s0">def </span><span class="s1">text_color(self, color):</span>
+        <span class="s1">self._text_color = short_color(color)</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">border_width(self):</span>
+        <span class="s0">return </span><span class="s1">self._border_width</span>
+
+    <span class="s1">@border_width.setter</span>
+    <span class="s0">def </span><span class="s1">border_width(self, w):</span>
+        <span class="s1">self._border_width = w</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">coordinates(self):</span>
+        <span class="s2">&quot;&quot;&quot;Return coordindates in axis units&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self._coordinates</span>
+
+    <span class="s1">@coordinates.setter</span>
+    <span class="s0">def </span><span class="s1">coordinates(self, coords):</span>
+        <span class="s2">&quot;&quot;&quot; set shape coordinates in percentages (left, top, right, bottom) 
+        &quot;&quot;&quot;</span>
+        <span class="s2"># this needs refactoring to reflect changes in charts</span>
+        <span class="s1">self.axis_coordinates = coords</span>
+        <span class="s1">(x1, y1), (x2, y2) = coords </span><span class="s2"># bottom left, top right</span>
+        <span class="s1">drawing_width = pixels_to_EMU(self.chart.drawing.width)</span>
+        <span class="s1">drawing_height = pixels_to_EMU(self.chart.drawing.height)</span>
+        <span class="s1">plot_width = drawing_width * self.chart.width</span>
+        <span class="s1">plot_height = drawing_height * self.chart.height</span>
+
+        <span class="s1">margin_left = self.chart._get_margin_left() * drawing_width</span>
+        <span class="s1">xunit = plot_width / self.chart.get_x_units()</span>
+
+        <span class="s1">margin_top = self.chart._get_margin_top() * drawing_height</span>
+        <span class="s1">yunit = self.chart.get_y_units()</span>
+
+        <span class="s1">x_start = (margin_left + (float(x1) * xunit)) / drawing_width</span>
+        <span class="s1">y_start = ((margin_top</span>
+                    <span class="s1">+ plot_height</span>
+                    <span class="s1">- (float(y1) * yunit))</span>
+                    <span class="s1">/ drawing_height)</span>
+
+        <span class="s1">x_end = (margin_left + (float(x2) * xunit)) / drawing_width</span>
+        <span class="s1">y_end = ((margin_top</span>
+                  <span class="s1">+ plot_height</span>
+                  <span class="s1">- (float(y2) * yunit))</span>
+                  <span class="s1">/ drawing_height)</span>
+
+        <span class="s2"># allow user to specify y's in whatever order</span>
+        <span class="s2"># excel expect y_end to be lower</span>
+        <span class="s0">if </span><span class="s1">y_end &lt; y_start:</span>
+            <span class="s1">y_end, y_start = y_start, y_end</span>
+
+        <span class="s1">self._coordinates = (</span>
+            <span class="s1">self._norm_pct(x_start), self._norm_pct(y_start),</span>
+            <span class="s1">self._norm_pct(x_end), self._norm_pct(y_end)</span>
+        <span class="s1">)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s0">def </span><span class="s1">_norm_pct(pct):</span>
+        <span class="s2">&quot;&quot;&quot; force shapes to appear by truncating too large sizes &quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">pct &gt; </span><span class="s3">1</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s3">1</span>
+        <span class="s0">elif </span><span class="s1">pct &lt; </span><span class="s3">0</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s3">0</span>
+        <span class="s0">return </span><span class="s1">pct</span>
+
+
+<span class="s0">class </span><span class="s1">ShapeWriter(object):</span>
+    <span class="s2">&quot;&quot;&quot; one file per shape &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, shapes):</span>
+
+        <span class="s1">self._shapes = shapes</span>
+
+    <span class="s0">def </span><span class="s1">write(self, shape_id):</span>
+
+        <span class="s1">root = Element(</span><span class="s4">'{%s}userShapes' </span><span class="s1">% CHART_NS)</span>
+
+        <span class="s0">for </span><span class="s1">shape </span><span class="s0">in </span><span class="s1">self._shapes:</span>
+            <span class="s1">anchor = SubElement(root, </span><span class="s4">'{%s}relSizeAnchor' </span><span class="s1">% CHART_DRAWING_NS)</span>
+
+            <span class="s1">xstart, ystart, xend, yend = shape.coordinates</span>
+
+            <span class="s1">_from = SubElement(anchor, </span><span class="s4">'{%s}from' </span><span class="s1">% CHART_DRAWING_NS)</span>
+            <span class="s1">SubElement(_from, </span><span class="s4">'{%s}x' </span><span class="s1">% CHART_DRAWING_NS).text = str(xstart)</span>
+            <span class="s1">SubElement(_from, </span><span class="s4">'{%s}y' </span><span class="s1">% CHART_DRAWING_NS).text = str(ystart)</span>
+
+            <span class="s1">_to = SubElement(anchor, </span><span class="s4">'{%s}to' </span><span class="s1">% CHART_DRAWING_NS)</span>
+            <span class="s1">SubElement(_to, </span><span class="s4">'{%s}x' </span><span class="s1">% CHART_DRAWING_NS).text = str(xend)</span>
+            <span class="s1">SubElement(_to, </span><span class="s4">'{%s}y' </span><span class="s1">% CHART_DRAWING_NS).text = str(yend)</span>
+
+            <span class="s1">sp = SubElement(anchor, </span><span class="s4">'{%s}sp' </span><span class="s1">% CHART_DRAWING_NS, {</span><span class="s4">'macro'</span><span class="s1">:</span><span class="s4">''</span><span class="s1">, </span><span class="s4">'textlink'</span><span class="s1">:</span><span class="s4">''</span><span class="s1">})</span>
+            <span class="s1">nvspr = SubElement(sp, </span><span class="s4">'{%s}nvSpPr' </span><span class="s1">% CHART_DRAWING_NS)</span>
+            <span class="s1">SubElement(nvspr, </span><span class="s4">'{%s}cNvPr' </span><span class="s1">% CHART_DRAWING_NS, {</span><span class="s4">'id'</span><span class="s1">:str(shape_id), </span><span class="s4">'name'</span><span class="s1">:</span><span class="s4">'shape %s' </span><span class="s1">% shape_id})</span>
+            <span class="s1">SubElement(nvspr, </span><span class="s4">'{%s}cNvSpPr' </span><span class="s1">% CHART_DRAWING_NS)</span>
+
+            <span class="s1">sppr = SubElement(sp, </span><span class="s4">'{%s}spPr' </span><span class="s1">% CHART_DRAWING_NS)</span>
+            <span class="s1">frm = SubElement(sppr, </span><span class="s4">'{%s}xfrm' </span><span class="s1">% DRAWING_NS,)</span>
+            <span class="s2"># no transformation</span>
+            <span class="s1">SubElement(frm, </span><span class="s4">'{%s}off' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'x'</span><span class="s1">:</span><span class="s4">'0'</span><span class="s1">, </span><span class="s4">'y'</span><span class="s1">:</span><span class="s4">'0'</span><span class="s1">})</span>
+            <span class="s1">SubElement(frm, </span><span class="s4">'{%s}ext' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'cx'</span><span class="s1">:</span><span class="s4">'0'</span><span class="s1">, </span><span class="s4">'cy'</span><span class="s1">:</span><span class="s4">'0'</span><span class="s1">})</span>
+
+            <span class="s1">prstgeom = SubElement(sppr, </span><span class="s4">'{%s}prstGeom' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'prst'</span><span class="s1">:str(shape.style)})</span>
+            <span class="s1">SubElement(prstgeom, </span><span class="s4">'{%s}avLst' </span><span class="s1">% DRAWING_NS)</span>
+
+            <span class="s1">fill = SubElement(sppr, </span><span class="s4">'{%s}solidFill' </span><span class="s1">% DRAWING_NS, )</span>
+            <span class="s1">SubElement(fill, </span><span class="s4">'{%s}srgbClr' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'val'</span><span class="s1">:shape.color})</span>
+
+            <span class="s1">border = SubElement(sppr, </span><span class="s4">'{%s}ln' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'w'</span><span class="s1">:str(shape._border_width)})</span>
+            <span class="s1">sf = SubElement(border, </span><span class="s4">'{%s}solidFill' </span><span class="s1">% DRAWING_NS)</span>
+            <span class="s1">SubElement(sf, </span><span class="s4">'{%s}srgbClr' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'val'</span><span class="s1">:shape.border_color})</span>
+
+            <span class="s1">self._write_style(sp)</span>
+            <span class="s1">self._write_text(sp, shape)</span>
+
+            <span class="s1">shape_id += </span><span class="s3">1</span>
+
+        <span class="s0">return </span><span class="s1">tostring(root)</span>
+
+    <span class="s0">def </span><span class="s1">_write_text(self, node, shape):</span>
+        <span class="s2">&quot;&quot;&quot; write text in the shape &quot;&quot;&quot;</span>
+
+        <span class="s1">tx_body = SubElement(node, </span><span class="s4">'{%s}txBody' </span><span class="s1">% CHART_DRAWING_NS)</span>
+        <span class="s1">SubElement(tx_body, </span><span class="s4">'{%s}bodyPr' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'vertOverflow'</span><span class="s1">:</span><span class="s4">'clip'</span><span class="s1">})</span>
+        <span class="s1">SubElement(tx_body, </span><span class="s4">'{%s}lstStyle' </span><span class="s1">% DRAWING_NS)</span>
+        <span class="s1">p = SubElement(tx_body, </span><span class="s4">'{%s}p' </span><span class="s1">% DRAWING_NS)</span>
+        <span class="s0">if </span><span class="s1">shape.text:</span>
+            <span class="s1">r = SubElement(p, </span><span class="s4">'{%s}r' </span><span class="s1">% DRAWING_NS)</span>
+            <span class="s1">rpr = SubElement(r, </span><span class="s4">'{%s}rPr' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'lang'</span><span class="s1">:</span><span class="s4">'en-US'</span><span class="s1">})</span>
+            <span class="s1">fill = SubElement(rpr, </span><span class="s4">'{%s}solidFill' </span><span class="s1">% DRAWING_NS)</span>
+            <span class="s1">SubElement(fill, </span><span class="s4">'{%s}srgbClr' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'val'</span><span class="s1">:shape.text_color})</span>
+
+            <span class="s1">SubElement(r, </span><span class="s4">'{%s}t' </span><span class="s1">% DRAWING_NS).text = shape.text</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">SubElement(p, </span><span class="s4">'{%s}endParaRPr' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'lang'</span><span class="s1">:</span><span class="s4">'en-US'</span><span class="s1">})</span>
+
+    <span class="s0">def </span><span class="s1">_write_style(self, node):</span>
+        <span class="s2">&quot;&quot;&quot; write style theme &quot;&quot;&quot;</span>
+
+        <span class="s1">style = SubElement(node, </span><span class="s4">'{%s}style' </span><span class="s1">% CHART_DRAWING_NS)</span>
+
+        <span class="s1">ln_ref = SubElement(style, </span><span class="s4">'{%s}lnRef' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'idx'</span><span class="s1">:</span><span class="s4">'2'</span><span class="s1">})</span>
+        <span class="s1">scheme_clr = SubElement(ln_ref, </span><span class="s4">'{%s}schemeClr' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'val'</span><span class="s1">:</span><span class="s4">'accent1'</span><span class="s1">})</span>
+        <span class="s1">SubElement(scheme_clr, </span><span class="s4">'{%s}shade' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'val'</span><span class="s1">:</span><span class="s4">'50000'</span><span class="s1">})</span>
+
+        <span class="s1">fill_ref = SubElement(style, </span><span class="s4">'{%s}fillRef' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'idx'</span><span class="s1">:</span><span class="s4">'1'</span><span class="s1">})</span>
+        <span class="s1">SubElement(fill_ref, </span><span class="s4">'{%s}schemeClr' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'val'</span><span class="s1">:</span><span class="s4">'accent1'</span><span class="s1">})</span>
+
+        <span class="s1">effect_ref = SubElement(style, </span><span class="s4">'{%s}effectRef' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'idx'</span><span class="s1">:</span><span class="s4">'0'</span><span class="s1">})</span>
+        <span class="s1">SubElement(effect_ref, </span><span class="s4">'{%s}schemeClr' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'val'</span><span class="s1">:</span><span class="s4">'accent1'</span><span class="s1">})</span>
+
+        <span class="s1">font_ref = SubElement(style, </span><span class="s4">'{%s}fontRef' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'idx'</span><span class="s1">:</span><span class="s4">'minor'</span><span class="s1">})</span>
+        <span class="s1">SubElement(font_ref, </span><span class="s4">'{%s}schemeClr' </span><span class="s1">% DRAWING_NS, {</span><span class="s4">'val'</span><span class="s1">:</span><span class="s4">'lt1'</span><span class="s1">})</span>
+</pre>
+</body>
+</html>

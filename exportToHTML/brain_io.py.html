@@ -1,0 +1,66 @@
+<html>
+<head>
+<title>brain_io.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_io.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2016, 2018, 2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020-2021 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;Astroid brain hints for some of the _io C objects.&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+
+<span class="s1">BUFFERED = {</span><span class="s3">&quot;BufferedWriter&quot;</span><span class="s1">, </span><span class="s3">&quot;BufferedReader&quot;</span><span class="s1">}</span>
+<span class="s1">TextIOWrapper = </span><span class="s3">&quot;TextIOWrapper&quot;</span>
+<span class="s1">FileIO = </span><span class="s3">&quot;FileIO&quot;</span>
+<span class="s1">BufferedWriter = </span><span class="s3">&quot;BufferedWriter&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">_generic_io_transform(node, name, cls):</span>
+    <span class="s0">&quot;&quot;&quot;Transform the given name, by adding the given *class* as a member of the node.&quot;&quot;&quot;</span>
+
+    <span class="s1">io_module = astroid.MANAGER.ast_from_module_name(</span><span class="s3">&quot;_io&quot;</span><span class="s1">)</span>
+    <span class="s1">attribute_object = io_module[cls]</span>
+    <span class="s1">instance = attribute_object.instantiate_class()</span>
+    <span class="s1">node.locals[name] = [instance]</span>
+
+
+<span class="s2">def </span><span class="s1">_transform_text_io_wrapper(node):</span>
+    <span class="s0"># This is not always correct, since it can vary with the type of the descriptor,</span>
+    <span class="s0"># being stdout, stderr or stdin. But we cannot get access to the name of the</span>
+    <span class="s0"># stream, which is why we are using the BufferedWriter class as a default</span>
+    <span class="s0"># value</span>
+    <span class="s2">return </span><span class="s1">_generic_io_transform(node, name=</span><span class="s3">&quot;buffer&quot;</span><span class="s1">, cls=BufferedWriter)</span>
+
+
+<span class="s2">def </span><span class="s1">_transform_buffered(node):</span>
+    <span class="s2">return </span><span class="s1">_generic_io_transform(node, name=</span><span class="s3">&quot;raw&quot;</span><span class="s1">, cls=FileIO)</span>
+
+
+<span class="s1">astroid.MANAGER.register_transform(</span>
+    <span class="s1">astroid.ClassDef, _transform_buffered, </span><span class="s2">lambda </span><span class="s1">node: node.name </span><span class="s2">in </span><span class="s1">BUFFERED</span>
+<span class="s1">)</span>
+<span class="s1">astroid.MANAGER.register_transform(</span>
+    <span class="s1">astroid.ClassDef,</span>
+    <span class="s1">_transform_text_io_wrapper,</span>
+    <span class="s2">lambda </span><span class="s1">node: node.name == TextIOWrapper,</span>
+<span class="s1">)</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<html>
+<head>
+<title>ExcelParser.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+ExcelParser.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">openpyxl</span>
+
+
+
+<span class="s0">def </span><span class="s1">getexcelrowcount(filename,sheetname):</span>
+    <span class="s1">workbook = openpyxl.load_workbook(filename, sheetname)</span>
+    <span class="s1">row = workbook[sheetname]</span>
+    <span class="s0">return </span><span class="s1">row.max_row</span>
+
+<span class="s0">def </span><span class="s1">getexcelcolumncount(filename,sheetname):</span>
+    <span class="s1">workbook = openpyxl.load_workbook(filename, sheetname)</span>
+    <span class="s1">col = workbook[sheetname]</span>
+    <span class="s0">return </span><span class="s1">col.max_column</span>
+
+<span class="s0">def </span><span class="s1">reader(filename,sheetname,rownum,colnum):</span>
+    <span class="s1">workbook=openpyxl.load_workbook(filename,sheetname)</span>
+    <span class="s1">sheeet=workbook[sheetname]</span>
+    <span class="s1">data= sheeet.cell(row=rownum,column=colnum)</span>
+    <span class="s0">return </span><span class="s1">data.value</span>
+
+
+
+
+
+
+
+
+
+</pre>
+</body>
+</html>

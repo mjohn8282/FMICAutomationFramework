@@ -1,0 +1,93 @@
+<html>
+<head>
+<title>brain_responses.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_responses.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+Astroid hooks for responses. 
+ 
+It might need to be manually updated from the public methods of 
+:class:`responses.RequestsMock`. 
+ 
+See: https://github.com/getsentry/responses/blob/master/responses.py 
+ 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">astroid</span>
+
+
+<span class="s2">def </span><span class="s1">responses_funcs():</span>
+    <span class="s2">return </span><span class="s1">astroid.parse(</span>
+        <span class="s3">&quot;&quot;&quot; 
+        DELETE = &quot;DELETE&quot; 
+        GET = &quot;GET&quot; 
+        HEAD = &quot;HEAD&quot; 
+        OPTIONS = &quot;OPTIONS&quot; 
+        PATCH = &quot;PATCH&quot; 
+        POST = &quot;POST&quot; 
+        PUT = &quot;PUT&quot; 
+        response_callback = None 
+ 
+        def reset(): 
+            return 
+ 
+        def add( 
+            method=None,  # method or ``Response`` 
+            url=None, 
+            body=&quot;&quot;, 
+            adding_headers=None, 
+            *args, 
+            **kwargs 
+        ): 
+            return 
+ 
+        def add_passthru(prefix): 
+            return 
+ 
+        def remove(method_or_response=None, url=None): 
+            return 
+ 
+        def replace(method_or_response=None, url=None, body=&quot;&quot;, *args, **kwargs): 
+            return 
+ 
+        def add_callback( 
+            method, url, callback, match_querystring=False, content_type=&quot;text/plain&quot; 
+        ): 
+            return 
+ 
+        calls = [] 
+ 
+        def __enter__(): 
+            return 
+ 
+        def __exit__(type, value, traceback): 
+            success = type is None 
+            return success 
+ 
+        def activate(func): 
+            return func 
+ 
+        def start(): 
+            return 
+ 
+        def stop(allow_assert=True): 
+            return 
+        &quot;&quot;&quot;</span>
+    <span class="s1">)</span>
+
+
+<span class="s1">astroid.register_module_extender(astroid.MANAGER, </span><span class="s3">&quot;responses&quot;</span><span class="s1">, responses_funcs)</span>
+</pre>
+</body>
+</html>

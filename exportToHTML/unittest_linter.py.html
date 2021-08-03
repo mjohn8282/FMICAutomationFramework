@@ -1,0 +1,59 @@
+<html>
+<head>
+<title>unittest_linter.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+unittest_linter.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s2">from </span><span class="s1">pylint.testutils.global_test_linter </span><span class="s2">import </span><span class="s1">linter</span>
+<span class="s2">from </span><span class="s1">pylint.testutils.output_line </span><span class="s2">import </span><span class="s1">Message</span>
+
+
+<span class="s2">class </span><span class="s1">UnittestLinter:</span>
+    <span class="s0">&quot;&quot;&quot;A fake linter class to capture checker messages.&quot;&quot;&quot;</span>
+
+    <span class="s0"># pylint: disable=unused-argument, no-self-use</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self):</span>
+        <span class="s1">self._messages = []</span>
+        <span class="s1">self.stats = {}</span>
+
+    <span class="s2">def </span><span class="s1">release_messages(self):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">self._messages</span>
+        <span class="s2">finally</span><span class="s1">:</span>
+            <span class="s1">self._messages = []</span>
+
+    <span class="s2">def </span><span class="s1">add_message(</span>
+        <span class="s1">self, msg_id, line=</span><span class="s2">None</span><span class="s1">, node=</span><span class="s2">None</span><span class="s1">, args=</span><span class="s2">None</span><span class="s1">, confidence=</span><span class="s2">None</span><span class="s1">, col_offset=</span><span class="s2">None</span>
+    <span class="s1">):</span>
+        <span class="s0"># Do not test col_offset for now since changing Message breaks everything</span>
+        <span class="s1">self._messages.append(Message(msg_id, line, node, args, confidence))</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">is_message_enabled(*unused_args, **unused_kwargs):</span>
+        <span class="s2">return True</span>
+
+    <span class="s2">def </span><span class="s1">add_stats(self, **kwargs):</span>
+        <span class="s2">for </span><span class="s1">name, value </span><span class="s2">in </span><span class="s1">kwargs.items():</span>
+            <span class="s1">self.stats[name] = value</span>
+        <span class="s2">return </span><span class="s1">self.stats</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">options_providers(self):</span>
+        <span class="s2">return </span><span class="s1">linter.options_providers</span>
+</pre>
+</body>
+</html>

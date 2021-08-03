@@ -1,0 +1,55 @@
+<html>
+<head>
+<title>exceptions.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+exceptions.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+
+<span class="s3">&quot;&quot;&quot;Definitions for openpyexcel shared exception classes.&quot;&quot;&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">CellCoordinatesException(Exception):</span>
+    <span class="s2">&quot;&quot;&quot;Error for converting between numeric and A1-style cell references.&quot;&quot;&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">IllegalCharacterError(Exception):</span>
+    <span class="s2">&quot;&quot;&quot;The data submitted which cannot be used directly in Excel files. It 
+    must be removed or escaped.&quot;&quot;&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">NamedRangeException(Exception):</span>
+    <span class="s2">&quot;&quot;&quot;Error for badly formatted named ranges.&quot;&quot;&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">SheetTitleException(Exception):</span>
+    <span class="s2">&quot;&quot;&quot;Error for bad sheet names.&quot;&quot;&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">InvalidFileException(Exception):</span>
+    <span class="s2">&quot;&quot;&quot;Error for trying to open a non-ooxml file.&quot;&quot;&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">ReadOnlyWorkbookException(Exception):</span>
+    <span class="s2">&quot;&quot;&quot;Error for trying to modify a read-only workbook&quot;&quot;&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">WorkbookAlreadySaved(Exception):</span>
+    <span class="s2">&quot;&quot;&quot;Error when attempting to perform operations on a dump workbook 
+    while it has already been dumped once&quot;&quot;&quot;</span>
+</pre>
+</body>
+</html>

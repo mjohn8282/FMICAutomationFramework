@@ -1,0 +1,186 @@
+<html>
+<head>
+<title>plotarea.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+plotarea.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Sequence,</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Alias,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">ExtensionList,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.sequence </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">MultiSequence,</span>
+    <span class="s1">MultiSequencePart,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">NestedBool,</span>
+    <span class="s1">NestedNoneSet,</span>
+    <span class="s1">NestedInteger,</span>
+    <span class="s1">NestedString,</span>
+    <span class="s1">NestedMinMax,</span>
+    <span class="s1">NestedText,</span>
+<span class="s1">)</span>
+
+<span class="s0">from </span><span class="s1">.area_chart </span><span class="s0">import </span><span class="s1">AreaChart, AreaChart3D</span>
+<span class="s0">from </span><span class="s1">.bar_chart </span><span class="s0">import </span><span class="s1">BarChart, BarChart3D</span>
+<span class="s0">from </span><span class="s1">.bubble_chart </span><span class="s0">import </span><span class="s1">BubbleChart</span>
+<span class="s0">from </span><span class="s1">.line_chart </span><span class="s0">import </span><span class="s1">LineChart, LineChart3D</span>
+<span class="s0">from </span><span class="s1">.pie_chart </span><span class="s0">import </span><span class="s1">PieChart, PieChart3D, ProjectedPieChart, DoughnutChart</span>
+<span class="s0">from </span><span class="s1">.radar_chart </span><span class="s0">import </span><span class="s1">RadarChart</span>
+<span class="s0">from </span><span class="s1">.scatter_chart </span><span class="s0">import </span><span class="s1">ScatterChart</span>
+<span class="s0">from </span><span class="s1">.stock_chart </span><span class="s0">import </span><span class="s1">StockChart</span>
+<span class="s0">from </span><span class="s1">.surface_chart </span><span class="s0">import </span><span class="s1">SurfaceChart, SurfaceChart3D</span>
+<span class="s0">from </span><span class="s1">.layout </span><span class="s0">import </span><span class="s1">Layout</span>
+<span class="s0">from </span><span class="s1">.shapes </span><span class="s0">import </span><span class="s1">GraphicalProperties</span>
+<span class="s0">from </span><span class="s1">.text </span><span class="s0">import </span><span class="s1">RichText</span>
+
+<span class="s0">from </span><span class="s1">.axis </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">NumericAxis,</span>
+    <span class="s1">TextAxis,</span>
+    <span class="s1">SeriesAxis,</span>
+    <span class="s1">DateAxis,</span>
+<span class="s1">)</span>
+
+
+<span class="s0">class </span><span class="s1">DataTable(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;dTable&quot;</span>
+
+    <span class="s1">showHorzBorder = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">showVertBorder = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">showOutline = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">showKeys = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">spPr = Typed(expected_type=GraphicalProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">graphicalProperties = Alias(</span><span class="s3">'spPr'</span><span class="s1">)</span>
+    <span class="s1">txPr = Typed(expected_type=RichText, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'showHorzBorder'</span><span class="s1">, </span><span class="s3">'showVertBorder'</span><span class="s1">, </span><span class="s3">'showOutline'</span><span class="s1">,</span>
+                    <span class="s3">'showKeys'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">, </span><span class="s3">'txPr'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">showHorzBorder=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">showVertBorder=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">showOutline=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">showKeys=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">txPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.showHorzBorder = showHorzBorder</span>
+        <span class="s1">self.showVertBorder = showVertBorder</span>
+        <span class="s1">self.showOutline = showOutline</span>
+        <span class="s1">self.showKeys = showKeys</span>
+        <span class="s1">self.spPr = spPr</span>
+        <span class="s1">self.txPr = txPr</span>
+
+
+<span class="s0">class </span><span class="s1">PlotArea(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;plotArea&quot;</span>
+
+    <span class="s1">layout = Typed(expected_type=Layout, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">dTable = Typed(expected_type=DataTable, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">spPr = Typed(expected_type=GraphicalProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">graphicalProperties = Alias(</span><span class="s3">&quot;spPr&quot;</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s2"># at least one chart</span>
+    <span class="s1">_charts = MultiSequence()</span>
+    <span class="s1">areaChart = MultiSequencePart(expected_type=AreaChart, store=</span><span class="s3">&quot;_charts&quot;</span><span class="s1">)</span>
+    <span class="s1">area3DChart = MultiSequencePart(expected_type=AreaChart3D, store=</span><span class="s3">&quot;_charts&quot;</span><span class="s1">)</span>
+    <span class="s1">lineChart = MultiSequencePart(expected_type=LineChart, store=</span><span class="s3">&quot;_charts&quot;</span><span class="s1">)</span>
+    <span class="s1">line3DChart = MultiSequencePart(expected_type=LineChart3D, store=</span><span class="s3">&quot;_charts&quot;</span><span class="s1">)</span>
+    <span class="s1">stockChart = MultiSequencePart(expected_type=StockChart, store=</span><span class="s3">&quot;_charts&quot;</span><span class="s1">)</span>
+    <span class="s1">radarChart = MultiSequencePart(expected_type=RadarChart, store=</span><span class="s3">&quot;_charts&quot;</span><span class="s1">)</span>
+    <span class="s1">scatterChart = MultiSequencePart(expected_type=ScatterChart, store=</span><span class="s3">&quot;_charts&quot;</span><span class="s1">)</span>
+    <span class="s1">pieChart = MultiSequencePart(expected_type=PieChart, store=</span><span class="s3">&quot;_charts&quot;</span><span class="s1">)</span>
+    <span class="s1">pie3DChart = MultiSequencePart(expected_type=PieChart3D, store=</span><span class="s3">&quot;_charts&quot;</span><span class="s1">)</span>
+    <span class="s1">doughnutChart = MultiSequencePart(expected_type=DoughnutChart, store=</span><span class="s3">&quot;_charts&quot;</span><span class="s1">)</span>
+    <span class="s1">barChart = MultiSequencePart(expected_type=BarChart, store=</span><span class="s3">&quot;_charts&quot;</span><span class="s1">)</span>
+    <span class="s1">bar3DChart = MultiSequencePart(expected_type=BarChart3D, store=</span><span class="s3">&quot;_charts&quot;</span><span class="s1">)</span>
+    <span class="s1">ofPieChart = MultiSequencePart(expected_type=ProjectedPieChart, store=</span><span class="s3">&quot;_charts&quot;</span><span class="s1">)</span>
+    <span class="s1">surfaceChart = MultiSequencePart(expected_type=SurfaceChart, store=</span><span class="s3">&quot;_charts&quot;</span><span class="s1">)</span>
+    <span class="s1">surface3DChart = MultiSequencePart(expected_type=SurfaceChart3D, store=</span><span class="s3">&quot;_charts&quot;</span><span class="s1">)</span>
+    <span class="s1">bubbleChart = MultiSequencePart(expected_type=BubbleChart, store=</span><span class="s3">&quot;_charts&quot;</span><span class="s1">)</span>
+
+    <span class="s2"># axes</span>
+    <span class="s1">_axes = MultiSequence()</span>
+    <span class="s1">valAx = MultiSequencePart(expected_type=NumericAxis, store=</span><span class="s3">&quot;_axes&quot;</span><span class="s1">)</span>
+    <span class="s1">catAx = MultiSequencePart(expected_type=TextAxis, store=</span><span class="s3">&quot;_axes&quot;</span><span class="s1">)</span>
+    <span class="s1">dateAx = MultiSequencePart(expected_type=DateAxis, store=</span><span class="s3">&quot;_axes&quot;</span><span class="s1">)</span>
+    <span class="s1">serAx = MultiSequencePart(expected_type=SeriesAxis, store=</span><span class="s3">&quot;_axes&quot;</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'layout'</span><span class="s1">, </span><span class="s3">'_charts'</span><span class="s1">, </span><span class="s3">'_axes'</span><span class="s1">, </span><span class="s3">'dTable'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">layout=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dTable=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">_charts=(),</span>
+                 <span class="s1">_axes=(),</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.layout = layout</span>
+        <span class="s1">self.dTable = dTable</span>
+        <span class="s1">self.spPr = spPr</span>
+        <span class="s1">self._charts = _charts</span>
+        <span class="s1">self._axes = _axes</span>
+
+
+    <span class="s0">def </span><span class="s1">to_tree(self, tagname=</span><span class="s0">None</span><span class="s1">, idx=</span><span class="s0">None</span><span class="s1">, namespace=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">axIds = set((ax.axId </span><span class="s0">for </span><span class="s1">ax </span><span class="s0">in </span><span class="s1">self._axes))</span>
+        <span class="s0">for </span><span class="s1">chart </span><span class="s0">in </span><span class="s1">self._charts:</span>
+            <span class="s0">for </span><span class="s1">id, axis </span><span class="s0">in </span><span class="s1">chart._axes.items():</span>
+                <span class="s0">if </span><span class="s1">id </span><span class="s0">not in </span><span class="s1">axIds:</span>
+                    <span class="s1">setattr(self, axis.tagname, axis)</span>
+                    <span class="s1">axIds.add(id)</span>
+
+        <span class="s0">return </span><span class="s1">super(PlotArea, self).to_tree(tagname)</span>
+
+
+    <span class="s1">@classmethod</span>
+    <span class="s0">def </span><span class="s1">from_tree(cls, node):</span>
+        <span class="s1">self = super(PlotArea, cls).from_tree(node)</span>
+        <span class="s1">axes = dict((axis.axId, axis) </span><span class="s0">for </span><span class="s1">axis </span><span class="s0">in </span><span class="s1">self._axes)</span>
+        <span class="s0">for </span><span class="s1">chart </span><span class="s0">in </span><span class="s1">self._charts:</span>
+            <span class="s0">if </span><span class="s1">isinstance(chart, ScatterChart):</span>
+                <span class="s1">x, y = (axes[axId] </span><span class="s0">for </span><span class="s1">axId </span><span class="s0">in </span><span class="s1">chart.axId)</span>
+                <span class="s1">chart.x_axis = x</span>
+                <span class="s1">chart.y_axis = y</span>
+                <span class="s0">continue</span>
+
+            <span class="s0">for </span><span class="s1">axId </span><span class="s0">in </span><span class="s1">chart.axId:</span>
+                <span class="s0">if not </span><span class="s1">axId:</span>
+                    <span class="s0">continue</span>
+                <span class="s1">axis = axes[axId]</span>
+                <span class="s0">if </span><span class="s1">axis.tagname </span><span class="s0">in </span><span class="s1">(</span><span class="s3">&quot;catAx&quot;</span><span class="s1">, </span><span class="s3">&quot;dateAx&quot;</span><span class="s1">):</span>
+                    <span class="s1">chart.x_axis = axis</span>
+                <span class="s0">elif </span><span class="s1">axis.tagname == </span><span class="s3">&quot;valAx&quot;</span><span class="s1">:</span>
+                    <span class="s1">chart.y_axis = axis</span>
+                <span class="s0">elif </span><span class="s1">axis.tagname == </span><span class="s3">&quot;serAx&quot;</span><span class="s1">:</span>
+                    <span class="s1">chart.z_axis = axis</span>
+
+        <span class="s0">return </span><span class="s1">self</span>
+</pre>
+</body>
+</html>

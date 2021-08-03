@@ -1,0 +1,455 @@
+<html>
+<head>
+<title>files.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+files.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;File wrangling.&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">hashlib</span>
+<span class="s2">import </span><span class="s1">fnmatch</span>
+<span class="s2">import </span><span class="s1">ntpath</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">os.path</span>
+<span class="s2">import </span><span class="s1">posixpath</span>
+<span class="s2">import </span><span class="s1">re</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">env</span>
+<span class="s2">from </span><span class="s1">coverage.backward </span><span class="s2">import </span><span class="s1">unicode_class</span>
+<span class="s2">from </span><span class="s1">coverage.misc </span><span class="s2">import </span><span class="s1">contract, CoverageException, join_regex, isolate_module</span>
+
+
+<span class="s1">os = isolate_module(os)</span>
+
+
+<span class="s2">def </span><span class="s1">set_relative_directory():</span>
+    <span class="s0">&quot;&quot;&quot;Set the directory that `relative_filename` will be relative to.&quot;&quot;&quot;</span>
+    <span class="s2">global </span><span class="s1">RELATIVE_DIR, CANONICAL_FILENAME_CACHE</span>
+
+    <span class="s0"># The absolute path to our current directory.</span>
+    <span class="s1">RELATIVE_DIR = os.path.normcase(abs_file(os.curdir) + os.sep)</span>
+
+    <span class="s0"># Cache of results of calling the canonical_filename() method, to</span>
+    <span class="s0"># avoid duplicating work.</span>
+    <span class="s1">CANONICAL_FILENAME_CACHE = {}</span>
+
+
+<span class="s2">def </span><span class="s1">relative_directory():</span>
+    <span class="s0">&quot;&quot;&quot;Return the directory that `relative_filename` is relative to.&quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">RELATIVE_DIR</span>
+
+
+<span class="s1">@contract(returns=</span><span class="s3">'unicode'</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">relative_filename(filename):</span>
+    <span class="s0">&quot;&quot;&quot;Return the relative form of `filename`. 
+ 
+    The file name will be relative to the current directory when the 
+    `set_relative_directory` was called. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">fnorm = os.path.normcase(filename)</span>
+    <span class="s2">if </span><span class="s1">fnorm.startswith(RELATIVE_DIR):</span>
+        <span class="s1">filename = filename[len(RELATIVE_DIR):]</span>
+    <span class="s2">return </span><span class="s1">unicode_filename(filename)</span>
+
+
+<span class="s1">@contract(returns=</span><span class="s3">'unicode'</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">canonical_filename(filename):</span>
+    <span class="s0">&quot;&quot;&quot;Return a canonical file name for `filename`. 
+ 
+    An absolute path with no redundant components and normalized case. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">filename </span><span class="s2">not in </span><span class="s1">CANONICAL_FILENAME_CACHE:</span>
+        <span class="s1">cf = filename</span>
+        <span class="s2">if not </span><span class="s1">os.path.isabs(filename):</span>
+            <span class="s2">for </span><span class="s1">path </span><span class="s2">in </span><span class="s1">[os.curdir] + sys.path:</span>
+                <span class="s2">if </span><span class="s1">path </span><span class="s2">is None</span><span class="s1">:</span>
+                    <span class="s2">continue</span>
+                <span class="s1">f = os.path.join(path, filename)</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">exists = os.path.exists(f)</span>
+                <span class="s2">except </span><span class="s1">UnicodeError:</span>
+                    <span class="s1">exists = </span><span class="s2">False</span>
+                <span class="s2">if </span><span class="s1">exists:</span>
+                    <span class="s1">cf = f</span>
+                    <span class="s2">break</span>
+        <span class="s1">cf = abs_file(cf)</span>
+        <span class="s1">CANONICAL_FILENAME_CACHE[filename] = cf</span>
+    <span class="s2">return </span><span class="s1">CANONICAL_FILENAME_CACHE[filename]</span>
+
+
+<span class="s1">MAX_FLAT = </span><span class="s4">200</span>
+
+<span class="s1">@contract(filename=</span><span class="s3">'unicode'</span><span class="s1">, returns=</span><span class="s3">'unicode'</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">flat_rootname(filename):</span>
+    <span class="s0">&quot;&quot;&quot;A base for a flat file name to correspond to this file. 
+ 
+    Useful for writing files about the code where you want all the files in 
+    the same directory, but need to differentiate same-named files from 
+    different directories. 
+ 
+    For example, the file a/b/c.py will return 'a_b_c_py' 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">name = ntpath.splitdrive(filename)[</span><span class="s4">1</span><span class="s1">]</span>
+    <span class="s1">name = re.sub(</span><span class="s3">r&quot;[\\/.:]&quot;</span><span class="s1">, </span><span class="s3">&quot;_&quot;</span><span class="s1">, name)</span>
+    <span class="s2">if </span><span class="s1">len(name) &gt; MAX_FLAT:</span>
+        <span class="s1">h = hashlib.sha1(name.encode(</span><span class="s3">'UTF-8'</span><span class="s1">)).hexdigest()</span>
+        <span class="s1">name = name[-(MAX_FLAT-len(h)-</span><span class="s4">1</span><span class="s1">):] + </span><span class="s3">'_' </span><span class="s1">+ h</span>
+    <span class="s2">return </span><span class="s1">name</span>
+
+
+<span class="s2">if </span><span class="s1">env.WINDOWS:</span>
+
+    <span class="s1">_ACTUAL_PATH_CACHE = {}</span>
+    <span class="s1">_ACTUAL_PATH_LIST_CACHE = {}</span>
+
+    <span class="s2">def </span><span class="s1">actual_path(path):</span>
+        <span class="s0">&quot;&quot;&quot;Get the actual path of `path`, including the correct case.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">env.PY2 </span><span class="s2">and </span><span class="s1">isinstance(path, unicode_class):</span>
+            <span class="s1">path = path.encode(sys.getfilesystemencoding())</span>
+        <span class="s2">if </span><span class="s1">path </span><span class="s2">in </span><span class="s1">_ACTUAL_PATH_CACHE:</span>
+            <span class="s2">return </span><span class="s1">_ACTUAL_PATH_CACHE[path]</span>
+
+        <span class="s1">head, tail = os.path.split(path)</span>
+        <span class="s2">if not </span><span class="s1">tail:</span>
+            <span class="s0"># This means head is the drive spec: normalize it.</span>
+            <span class="s1">actpath = head.upper()</span>
+        <span class="s2">elif not </span><span class="s1">head:</span>
+            <span class="s1">actpath = tail</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">head = actual_path(head)</span>
+            <span class="s2">if </span><span class="s1">head </span><span class="s2">in </span><span class="s1">_ACTUAL_PATH_LIST_CACHE:</span>
+                <span class="s1">files = _ACTUAL_PATH_LIST_CACHE[head]</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">files = os.listdir(head)</span>
+                <span class="s2">except </span><span class="s1">Exception:</span>
+                    <span class="s0"># This will raise OSError, or this bizarre TypeError:</span>
+                    <span class="s0"># https://bugs.python.org/issue1776160</span>
+                    <span class="s1">files = []</span>
+                <span class="s1">_ACTUAL_PATH_LIST_CACHE[head] = files</span>
+            <span class="s1">normtail = os.path.normcase(tail)</span>
+            <span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">files:</span>
+                <span class="s2">if </span><span class="s1">os.path.normcase(f) == normtail:</span>
+                    <span class="s1">tail = f</span>
+                    <span class="s2">break</span>
+            <span class="s1">actpath = os.path.join(head, tail)</span>
+        <span class="s1">_ACTUAL_PATH_CACHE[path] = actpath</span>
+        <span class="s2">return </span><span class="s1">actpath</span>
+
+<span class="s2">else</span><span class="s1">:</span>
+    <span class="s2">def </span><span class="s1">actual_path(filename):</span>
+        <span class="s0">&quot;&quot;&quot;The actual path for non-Windows platforms.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">filename</span>
+
+
+<span class="s2">if </span><span class="s1">env.PY2:</span>
+    <span class="s1">@contract(returns=</span><span class="s3">'unicode'</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">unicode_filename(filename):</span>
+        <span class="s0">&quot;&quot;&quot;Return a Unicode version of `filename`.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">isinstance(filename, str):</span>
+            <span class="s1">encoding = sys.getfilesystemencoding() </span><span class="s2">or </span><span class="s1">sys.getdefaultencoding()</span>
+            <span class="s1">filename = filename.decode(encoding, </span><span class="s3">&quot;replace&quot;</span><span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">filename</span>
+<span class="s2">else</span><span class="s1">:</span>
+    <span class="s1">@contract(filename=</span><span class="s3">'unicode'</span><span class="s1">, returns=</span><span class="s3">'unicode'</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">unicode_filename(filename):</span>
+        <span class="s0">&quot;&quot;&quot;Return a Unicode version of `filename`.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">filename</span>
+
+
+<span class="s1">@contract(returns=</span><span class="s3">'unicode'</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">abs_file(path):</span>
+    <span class="s0">&quot;&quot;&quot;Return the absolute normalized form of `path`.&quot;&quot;&quot;</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">path = os.path.realpath(path)</span>
+    <span class="s2">except </span><span class="s1">UnicodeError:</span>
+        <span class="s2">pass</span>
+    <span class="s1">path = os.path.abspath(path)</span>
+    <span class="s1">path = actual_path(path)</span>
+    <span class="s1">path = unicode_filename(path)</span>
+    <span class="s2">return </span><span class="s1">path</span>
+
+
+<span class="s2">def </span><span class="s1">python_reported_file(filename):</span>
+    <span class="s0">&quot;&quot;&quot;Return the string as Python would describe this file name.&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">env.PYBEHAVIOR.report_absolute_files:</span>
+        <span class="s1">filename = os.path.abspath(filename)</span>
+    <span class="s2">return </span><span class="s1">filename</span>
+
+
+<span class="s1">RELATIVE_DIR = </span><span class="s2">None</span>
+<span class="s1">CANONICAL_FILENAME_CACHE = </span><span class="s2">None</span>
+<span class="s1">set_relative_directory()</span>
+
+
+<span class="s2">def </span><span class="s1">isabs_anywhere(filename):</span>
+    <span class="s0">&quot;&quot;&quot;Is `filename` an absolute path on any OS?&quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">ntpath.isabs(filename) </span><span class="s2">or </span><span class="s1">posixpath.isabs(filename)</span>
+
+
+<span class="s2">def </span><span class="s1">prep_patterns(patterns):</span>
+    <span class="s0">&quot;&quot;&quot;Prepare the file patterns for use in a `FnmatchMatcher`. 
+ 
+    If a pattern starts with a wildcard, it is used as a pattern 
+    as-is.  If it does not start with a wildcard, then it is made 
+    absolute with the current directory. 
+ 
+    If `patterns` is None, an empty list is returned. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">prepped = []</span>
+    <span class="s2">for </span><span class="s1">p </span><span class="s2">in </span><span class="s1">patterns </span><span class="s2">or </span><span class="s1">[]:</span>
+        <span class="s2">if </span><span class="s1">p.startswith((</span><span class="s3">&quot;*&quot;</span><span class="s1">, </span><span class="s3">&quot;?&quot;</span><span class="s1">)):</span>
+            <span class="s1">prepped.append(p)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">prepped.append(abs_file(p))</span>
+    <span class="s2">return </span><span class="s1">prepped</span>
+
+
+<span class="s2">class </span><span class="s1">TreeMatcher(object):</span>
+    <span class="s0">&quot;&quot;&quot;A matcher for files in a tree. 
+ 
+    Construct with a list of paths, either files or directories. Paths match 
+    with the `match` method if they are one of the files, or if they are 
+    somewhere in a subtree rooted at one of the directories. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">def </span><span class="s1">__init__(self, paths):</span>
+        <span class="s1">self.paths = list(paths)</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;&lt;TreeMatcher %r&gt;&quot; </span><span class="s1">% self.paths</span>
+
+    <span class="s2">def </span><span class="s1">info(self):</span>
+        <span class="s0">&quot;&quot;&quot;A list of strings for displaying when dumping state.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.paths</span>
+
+    <span class="s2">def </span><span class="s1">match(self, fpath):</span>
+        <span class="s0">&quot;&quot;&quot;Does `fpath` indicate a file in one of our trees?&quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">p </span><span class="s2">in </span><span class="s1">self.paths:</span>
+            <span class="s2">if </span><span class="s1">fpath.startswith(p):</span>
+                <span class="s2">if </span><span class="s1">fpath == p:</span>
+                    <span class="s0"># This is the same file!</span>
+                    <span class="s2">return True</span>
+                <span class="s2">if </span><span class="s1">fpath[len(p)] == os.sep:</span>
+                    <span class="s0"># This is a file in the directory</span>
+                    <span class="s2">return True</span>
+        <span class="s2">return False</span>
+
+
+<span class="s2">class </span><span class="s1">ModuleMatcher(object):</span>
+    <span class="s0">&quot;&quot;&quot;A matcher for modules in a tree.&quot;&quot;&quot;</span>
+    <span class="s2">def </span><span class="s1">__init__(self, module_names):</span>
+        <span class="s1">self.modules = list(module_names)</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;&lt;ModuleMatcher %r&gt;&quot; </span><span class="s1">% (self.modules)</span>
+
+    <span class="s2">def </span><span class="s1">info(self):</span>
+        <span class="s0">&quot;&quot;&quot;A list of strings for displaying when dumping state.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.modules</span>
+
+    <span class="s2">def </span><span class="s1">match(self, module_name):</span>
+        <span class="s0">&quot;&quot;&quot;Does `module_name` indicate a module in one of our packages?&quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">module_name:</span>
+            <span class="s2">return False</span>
+
+        <span class="s2">for </span><span class="s1">m </span><span class="s2">in </span><span class="s1">self.modules:</span>
+            <span class="s2">if </span><span class="s1">module_name.startswith(m):</span>
+                <span class="s2">if </span><span class="s1">module_name == m:</span>
+                    <span class="s2">return True</span>
+                <span class="s2">if </span><span class="s1">module_name[len(m)] == </span><span class="s3">'.'</span><span class="s1">:</span>
+                    <span class="s0"># This is a module in the package</span>
+                    <span class="s2">return True</span>
+
+        <span class="s2">return False</span>
+
+
+<span class="s2">class </span><span class="s1">FnmatchMatcher(object):</span>
+    <span class="s0">&quot;&quot;&quot;A matcher for files by file name pattern.&quot;&quot;&quot;</span>
+    <span class="s2">def </span><span class="s1">__init__(self, pats):</span>
+        <span class="s1">self.pats = list(pats)</span>
+        <span class="s1">self.re = fnmatches_to_regex(self.pats, case_insensitive=env.WINDOWS)</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;&lt;FnmatchMatcher %r&gt;&quot; </span><span class="s1">% self.pats</span>
+
+    <span class="s2">def </span><span class="s1">info(self):</span>
+        <span class="s0">&quot;&quot;&quot;A list of strings for displaying when dumping state.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.pats</span>
+
+    <span class="s2">def </span><span class="s1">match(self, fpath):</span>
+        <span class="s0">&quot;&quot;&quot;Does `fpath` match one of our file name patterns?&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.re.match(fpath) </span><span class="s2">is not None</span>
+
+
+<span class="s2">def </span><span class="s1">sep(s):</span>
+    <span class="s0">&quot;&quot;&quot;Find the path separator used in this string, or os.sep if none.&quot;&quot;&quot;</span>
+    <span class="s1">sep_match = re.search(</span><span class="s3">r&quot;[\\/]&quot;</span><span class="s1">, s)</span>
+    <span class="s2">if </span><span class="s1">sep_match:</span>
+        <span class="s1">the_sep = sep_match.group(</span><span class="s4">0</span><span class="s1">)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">the_sep = os.sep</span>
+    <span class="s2">return </span><span class="s1">the_sep</span>
+
+
+<span class="s2">def </span><span class="s1">fnmatches_to_regex(patterns, case_insensitive=</span><span class="s2">False</span><span class="s1">, partial=</span><span class="s2">False</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Convert fnmatch patterns to a compiled regex that matches any of them. 
+ 
+    Slashes are always converted to match either slash or backslash, for 
+    Windows support, even when running elsewhere. 
+ 
+    If `partial` is true, then the pattern will match if the target string 
+    starts with the pattern. Otherwise, it must match the entire string. 
+ 
+    Returns: a compiled regex object.  Use the .match method to compare target 
+    strings. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">regexes = (fnmatch.translate(pattern) </span><span class="s2">for </span><span class="s1">pattern </span><span class="s2">in </span><span class="s1">patterns)</span>
+    <span class="s0"># Python3.7 fnmatch translates &quot;/&quot; as &quot;/&quot;. Before that, it translates as &quot;\/&quot;,</span>
+    <span class="s0"># so we have to deal with maybe a backslash.</span>
+    <span class="s1">regexes = (re.sub(</span><span class="s3">r&quot;\\?/&quot;</span><span class="s1">, </span><span class="s3">r&quot;[\\\\/]&quot;</span><span class="s1">, regex) </span><span class="s2">for </span><span class="s1">regex </span><span class="s2">in </span><span class="s1">regexes)</span>
+
+    <span class="s2">if </span><span class="s1">partial:</span>
+        <span class="s0"># fnmatch always adds a \Z to match the whole string, which we don't</span>
+        <span class="s0"># want, so we remove the \Z.  While removing it, we only replace \Z if</span>
+        <span class="s0"># followed by paren (introducing flags), or at end, to keep from</span>
+        <span class="s0"># destroying a literal \Z in the pattern.</span>
+        <span class="s1">regexes = (re.sub(</span><span class="s3">r'\\Z(\(\?|$)'</span><span class="s1">, </span><span class="s3">r'\1'</span><span class="s1">, regex) </span><span class="s2">for </span><span class="s1">regex </span><span class="s2">in </span><span class="s1">regexes)</span>
+
+    <span class="s1">flags = </span><span class="s4">0</span>
+    <span class="s2">if </span><span class="s1">case_insensitive:</span>
+        <span class="s1">flags |= re.IGNORECASE</span>
+    <span class="s1">compiled = re.compile(join_regex(regexes), flags=flags)</span>
+
+    <span class="s2">return </span><span class="s1">compiled</span>
+
+
+<span class="s2">class </span><span class="s1">PathAliases(object):</span>
+    <span class="s0">&quot;&quot;&quot;A collection of aliases for paths. 
+ 
+    When combining data files from remote machines, often the paths to source 
+    code are different, for example, due to OS differences, or because of 
+    serialized checkouts on continuous integration machines. 
+ 
+    A `PathAliases` object tracks a list of pattern/result pairs, and can 
+    map a path through those aliases to produce a unified path. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">def </span><span class="s1">__init__(self):</span>
+        <span class="s1">self.aliases = []</span>
+
+    <span class="s2">def </span><span class="s1">pprint(self):       </span><span class="s0"># pragma: debugging</span>
+        <span class="s0">&quot;&quot;&quot;Dump the important parts of the PathAliases, for debugging.&quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">regex, result </span><span class="s2">in </span><span class="s1">self.aliases:</span>
+            <span class="s1">print(</span><span class="s3">&quot;{!r} --&gt; {!r}&quot;</span><span class="s1">.format(regex.pattern, result))</span>
+
+    <span class="s2">def </span><span class="s1">add(self, pattern, result):</span>
+        <span class="s0">&quot;&quot;&quot;Add the `pattern`/`result` pair to the list of aliases. 
+ 
+        `pattern` is an `fnmatch`-style pattern.  `result` is a simple 
+        string.  When mapping paths, if a path starts with a match against 
+        `pattern`, then that match is replaced with `result`.  This models 
+        isomorphic source trees being rooted at different places on two 
+        different machines. 
+ 
+        `pattern` can't end with a wildcard component, since that would 
+        match an entire tree, and not just its root. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">pattern_sep = sep(pattern)</span>
+
+        <span class="s2">if </span><span class="s1">len(pattern) &gt; </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s1">pattern = pattern.rstrip(</span><span class="s3">r&quot;\/&quot;</span><span class="s1">)</span>
+
+        <span class="s0"># The pattern can't end with a wildcard component.</span>
+        <span class="s2">if </span><span class="s1">pattern.endswith(</span><span class="s3">&quot;*&quot;</span><span class="s1">):</span>
+            <span class="s2">raise </span><span class="s1">CoverageException(</span><span class="s3">&quot;Pattern must not end with wildcards.&quot;</span><span class="s1">)</span>
+
+        <span class="s0"># The pattern is meant to match a filepath.  Let's make it absolute</span>
+        <span class="s0"># unless it already is, or is meant to match any prefix.</span>
+        <span class="s2">if not </span><span class="s1">pattern.startswith(</span><span class="s3">'*'</span><span class="s1">) </span><span class="s2">and not </span><span class="s1">isabs_anywhere(pattern +</span>
+                                                              <span class="s1">pattern_sep):</span>
+            <span class="s1">pattern = abs_file(pattern)</span>
+        <span class="s2">if not </span><span class="s1">pattern.endswith(pattern_sep):</span>
+            <span class="s1">pattern += pattern_sep</span>
+
+        <span class="s0"># Make a regex from the pattern.</span>
+        <span class="s1">regex = fnmatches_to_regex([pattern], case_insensitive=</span><span class="s2">True</span><span class="s1">, partial=</span><span class="s2">True</span><span class="s1">)</span>
+
+        <span class="s0"># Normalize the result: it must end with a path separator.</span>
+        <span class="s1">result_sep = sep(result)</span>
+        <span class="s1">result = result.rstrip(</span><span class="s3">r&quot;\/&quot;</span><span class="s1">) + result_sep</span>
+        <span class="s1">self.aliases.append((regex, result))</span>
+
+    <span class="s2">def </span><span class="s1">map(self, path):</span>
+        <span class="s0">&quot;&quot;&quot;Map `path` through the aliases. 
+ 
+        `path` is checked against all of the patterns.  The first pattern to 
+        match is used to replace the root of the path with the result root. 
+        Only one pattern is ever used.  If no patterns match, `path` is 
+        returned unchanged. 
+ 
+        The separator style in the result is made to match that of the result 
+        in the alias. 
+ 
+        Returns the mapped path.  If a mapping has happened, this is a 
+        canonical path.  If no mapping has happened, it is the original value 
+        of `path` unchanged. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">regex, result </span><span class="s2">in </span><span class="s1">self.aliases:</span>
+            <span class="s1">m = regex.match(path)</span>
+            <span class="s2">if </span><span class="s1">m:</span>
+                <span class="s1">new = path.replace(m.group(</span><span class="s4">0</span><span class="s1">), result)</span>
+                <span class="s1">new = new.replace(sep(path), sep(result))</span>
+                <span class="s1">new = canonical_filename(new)</span>
+                <span class="s2">return </span><span class="s1">new</span>
+        <span class="s2">return </span><span class="s1">path</span>
+
+
+<span class="s2">def </span><span class="s1">find_python_files(dirname):</span>
+    <span class="s0">&quot;&quot;&quot;Yield all of the importable Python files in `dirname`, recursively. 
+ 
+    To be importable, the files have to be in a directory with a __init__.py, 
+    except for `dirname` itself, which isn't required to have one.  The 
+    assumption is that `dirname` was specified directly, so the user knows 
+    best, but sub-directories are checked for a __init__.py to be sure we only 
+    find the importable files. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">for </span><span class="s1">i, (dirpath, dirnames, filenames) </span><span class="s2">in </span><span class="s1">enumerate(os.walk(dirname)):</span>
+        <span class="s2">if </span><span class="s1">i &gt; </span><span class="s4">0 </span><span class="s2">and </span><span class="s3">'__init__.py' </span><span class="s2">not in </span><span class="s1">filenames:</span>
+            <span class="s0"># If a directory doesn't have __init__.py, then it isn't</span>
+            <span class="s0"># importable and neither are its files</span>
+            <span class="s2">del </span><span class="s1">dirnames[:]</span>
+            <span class="s2">continue</span>
+        <span class="s2">for </span><span class="s1">filename </span><span class="s2">in </span><span class="s1">filenames:</span>
+            <span class="s0"># We're only interested in files that look like reasonable Python</span>
+            <span class="s0"># files: Must end with .py or .pyw, and must not have certain funny</span>
+            <span class="s0"># characters that probably mean they are editor junk.</span>
+            <span class="s2">if </span><span class="s1">re.match(</span><span class="s3">r&quot;^[^.#~!$@%^&amp;*()+=,]+\.pyw?$&quot;</span><span class="s1">, filename):</span>
+                <span class="s2">yield </span><span class="s1">os.path.join(dirpath, filename)</span>
+</pre>
+</body>
+</html>

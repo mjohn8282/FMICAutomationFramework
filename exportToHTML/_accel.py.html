@@ -1,0 +1,166 @@
+<html>
+<head>
+<title>_accel.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+_accel.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># cython: language_level=3</span>
+<span class="s0"># cython: infer_types=True</span>
+
+<span class="s2">import </span><span class="s1">cython</span>
+
+<span class="s1">MAX_COL_INDEX = cython.declare(cython.int, </span><span class="s3">18278</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">cache_column_letters(col_string_cache: list, string_col_cache: list):</span>
+    <span class="s1">letters: str</span>
+    <span class="s2">from </span><span class="s1">string </span><span class="s2">import </span><span class="s1">ascii_uppercase </span><span class="s2">as </span><span class="s1">letters</span>
+
+    <span class="s1">letter0 = letter1 = letter2 = letter3 = </span><span class="s3">0</span>
+    <span class="s1">ch1 = ch2 = ch3 = prefix = letters[</span><span class="s3">0</span><span class="s1">]</span>
+    <span class="s2">for </span><span class="s1">i </span><span class="s2">in </span><span class="s1">range(</span><span class="s3">1</span><span class="s1">, MAX_COL_INDEX + </span><span class="s3">1</span><span class="s1">):</span>
+        <span class="s1">ch0 = letters[letter0]</span>
+        <span class="s2">if </span><span class="s1">i &gt; </span><span class="s3">26</span><span class="s1">*</span><span class="s3">26</span><span class="s1">*</span><span class="s3">26</span><span class="s1">:</span>
+            <span class="s1">col = ch3 + prefix + ch0</span>
+        <span class="s2">elif </span><span class="s1">i &gt; </span><span class="s3">26 </span><span class="s1">* </span><span class="s3">26</span><span class="s1">:</span>
+            <span class="s1">col = prefix + ch0</span>
+        <span class="s2">elif </span><span class="s1">i &gt; </span><span class="s3">26</span><span class="s1">:</span>
+            <span class="s1">col = ch1 + ch0</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">col = ch0</span>
+        <span class="s1">string_col_cache[i] = col</span>
+        <span class="s1">col_string_cache[i] = i</span>
+
+        <span class="s0"># next digit in base-26</span>
+        <span class="s1">letter0 += </span><span class="s3">1</span>
+        <span class="s2">if </span><span class="s1">letter0 &gt;= </span><span class="s3">26</span><span class="s1">:</span>
+            <span class="s1">letter0 = </span><span class="s3">0</span>
+            <span class="s1">letter1 += </span><span class="s3">1</span>
+            <span class="s2">if </span><span class="s1">letter1 &gt;= </span><span class="s3">26</span><span class="s1">:</span>
+                <span class="s1">letter1 = </span><span class="s3">0</span>
+                <span class="s1">letter2 += </span><span class="s3">1</span>
+                <span class="s2">if </span><span class="s1">letter2 &gt;= </span><span class="s3">26</span><span class="s1">:</span>
+                    <span class="s1">letter2 = </span><span class="s3">0</span>
+                    <span class="s1">letter3 += </span><span class="s3">1</span>
+                    <span class="s1">ch3 = letters[letter3]</span>
+                <span class="s1">ch2 = letters[letter2]</span>
+            <span class="s1">ch1 = letters[letter1]</span>
+            <span class="s1">prefix = ch2 + ch1</span>
+
+
+<span class="s1">_COL_STRING_CACHE = cython.declare(list, [</span><span class="s3">0</span><span class="s1">] * MAX_COL_INDEX)</span>
+<span class="s1">_STRING_COL_CACHE = cython.declare(list, [</span><span class="s3">0</span><span class="s1">] * MAX_COL_INDEX)</span>
+<span class="s0">#cache_column_letters(_STRING_COL_CACHE, _STRING_COL_CACHE)</span>
+
+
+<span class="s2">def </span><span class="s1">get_column_letter(idx):</span>
+    <span class="s0">&quot;&quot;&quot;Convert a column index into a column letter 
+    (3 -&gt; 'C') 
+    &quot;&quot;&quot;</span>
+    <span class="s1">int_idx = cython.cast(cython.int, idx)  </span><span class="s0"># may also raise ValueError</span>
+    <span class="s2">if </span><span class="s3">1 </span><span class="s1">&lt;= int_idx &lt;= MAX_COL_INDEX:</span>
+        <span class="s2">return </span><span class="s1">_STRING_COL_CACHE[int_idx]</span>
+    <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s4">f&quot;Invalid column index </span><span class="s5">{</span><span class="s1">idx</span><span class="s5">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">column_index_from_string(str_col: str):</span>
+    <span class="s0">&quot;&quot;&quot;Convert a column name into a numerical index 
+    ('A' -&gt; 1) 
+    &quot;&quot;&quot;</span>
+    <span class="s0"># we use a function argument to get indexed name lookup</span>
+    <span class="s1">col: cython.int = </span><span class="s3">0</span>
+    <span class="s1">invalid = MAX_COL_INDEX + </span><span class="s3">1</span>
+    <span class="s2">for </span><span class="s1">ch </span><span class="s2">in </span><span class="s1">str_col:</span>
+        <span class="s2">if </span><span class="s4">'A' </span><span class="s1">&lt;= ch &lt;= </span><span class="s4">'Z'</span><span class="s1">:</span>
+            <span class="s1">digit = ord(ch) - ord(</span><span class="s4">'A'</span><span class="s1">)</span>
+        <span class="s2">elif </span><span class="s4">'a' </span><span class="s1">&lt;= ch &lt;= </span><span class="s4">'z'</span><span class="s1">:</span>
+            <span class="s1">digit = ord(ch) - ord(</span><span class="s4">'a'</span><span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">col = invalid</span>
+            <span class="s2">break</span>
+        <span class="s1">col = col * </span><span class="s3">26 </span><span class="s1">+ digit</span>
+        <span class="s2">if </span><span class="s1">col &gt;= invalid:</span>
+            <span class="s2">break</span>
+    <span class="s2">if </span><span class="s1">col &gt;= invalid:</span>
+        <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s4">f&quot;</span><span class="s5">{</span><span class="s1">str_col</span><span class="s5">} </span><span class="s4">is not a valid column name&quot;</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">_COL_STRING_CACHE[col]</span>
+
+
+<span class="s2">def </span><span class="s1">coordinate_to_tuple(coordinate: str):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Convert an Excel style coordinate to (row, colum) tuple 
+    &quot;&quot;&quot;</span>
+    <span class="s1">length = len(coordinate)</span>
+    <span class="s2">if not </span><span class="s1">(</span><span class="s3">2 </span><span class="s1">&lt;= length &lt;= </span><span class="s3">1 </span><span class="s1">+ </span><span class="s3">3 </span><span class="s1">+ </span><span class="s3">1 </span><span class="s1">+ </span><span class="s3">7</span><span class="s1">):  </span><span class="s0"># A1 - $ZZZ$12345</span>
+        <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s4">f&quot;invalid coordinate: </span><span class="s5">{</span><span class="s1">coordinate</span><span class="s5">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+    <span class="s1">start: cython.int = </span><span class="s3">1 </span><span class="s2">if </span><span class="s1">coordinate[</span><span class="s3">0</span><span class="s1">] == </span><span class="s4">'$' </span><span class="s2">else </span><span class="s3">0</span>
+
+    <span class="s1">i: cython.int = start</span>
+    <span class="s1">col: cython.int = </span><span class="s3">0</span>
+    <span class="s1">digit: cython.int</span>
+    <span class="s2">while </span><span class="s1">i &lt; length:</span>
+        <span class="s1">ch = coordinate[i]</span>
+        <span class="s2">if </span><span class="s4">'A' </span><span class="s1">&lt;= ch &lt;= </span><span class="s4">'Z'</span><span class="s1">:</span>
+            <span class="s1">digit = ord(ch) - ord(</span><span class="s4">'A'</span><span class="s1">)</span>
+        <span class="s2">elif </span><span class="s4">'a' </span><span class="s1">&lt;= ch &lt;= </span><span class="s4">'z'</span><span class="s1">:</span>
+            <span class="s1">digit = ord(ch) - ord(</span><span class="s4">'a'</span><span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">break</span>
+        <span class="s1">col = col * </span><span class="s3">26 </span><span class="s1">+ digit</span>
+        <span class="s1">i += </span><span class="s3">1</span>
+
+    <span class="s2">if </span><span class="s1">i &gt;= length </span><span class="s2">or </span><span class="s1">i &gt; start + </span><span class="s3">3</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s4">f&quot;invalid coordinate: </span><span class="s5">{</span><span class="s1">coordinate</span><span class="s5">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+
+    <span class="s2">if </span><span class="s1">coordinate[i] == </span><span class="s4">'$'</span><span class="s1">:</span>
+        <span class="s1">i += </span><span class="s3">1</span>
+
+    <span class="s1">row: cython.int = </span><span class="s3">0</span>
+    <span class="s2">while </span><span class="s1">i &lt; length </span><span class="s2">and </span><span class="s4">'0' </span><span class="s1">&lt;= coordinate[i] &lt;= </span><span class="s4">'9'</span><span class="s1">:</span>
+        <span class="s1">row = row * </span><span class="s3">10 </span><span class="s1">+ (ord(coordinate[i]) - ord(</span><span class="s4">'0'</span><span class="s1">))</span>
+        <span class="s1">i += </span><span class="s3">1</span>
+
+    <span class="s2">if </span><span class="s1">i &lt; length:</span>
+        <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s4">f&quot;invalid coordinate: </span><span class="s5">{</span><span class="s1">coordinate</span><span class="s5">}</span><span class="s4">&quot;</span><span class="s1">)</span>
+
+    <span class="s2">return </span><span class="s1">row, col</span>
+
+
+<span class="s2">def </span><span class="s1">cast_number(value: str):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Convert numbers as string to an int or float 
+    &quot;&quot;&quot;</span>
+    <span class="s0"># optimises for the common case of integers that fit into a C long</span>
+    <span class="s1">intval: cython.long = </span><span class="s3">0</span>
+    <span class="s1">safe_max_long: cython.long = </span><span class="s3">2 </span><span class="s1">** (cython.sizeof(cython.long) * </span><span class="s3">8 </span><span class="s1">- </span><span class="s3">2</span><span class="s1">)</span>
+    <span class="s1">too_large = safe_max_long + </span><span class="s3">10</span>
+    <span class="s2">for </span><span class="s1">ch </span><span class="s2">in </span><span class="s1">value:</span>
+        <span class="s2">if </span><span class="s1">ch </span><span class="s2">in </span><span class="s4">'.eE'</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">float(value)</span>
+        <span class="s2">elif </span><span class="s1">ch </span><span class="s2">in </span><span class="s4">'0123456789'</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">intval &gt;= safe_max_long // </span><span class="s3">10</span><span class="s1">:</span>
+                <span class="s1">intval = too_large</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">intval = intval * </span><span class="s3">10 </span><span class="s1">+ (ord(ch) - ord(</span><span class="s4">'0'</span><span class="s1">))</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">intval = too_large</span>
+
+    <span class="s2">if </span><span class="s1">intval &lt; too_large:</span>
+        <span class="s2">return </span><span class="s1">intval</span>
+    <span class="s2">return </span><span class="s1">int(value)</span>
+</pre>
+</body>
+</html>

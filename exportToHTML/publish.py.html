@@ -1,0 +1,79 @@
+<html>
+<head>
+<title>publish.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+publish.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">Sequence</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+
+
+<span class="s0">class </span><span class="s1">WebPublishItem(Serialisable):</span>
+    <span class="s1">tagname = </span><span class="s3">&quot;webPublishItem&quot;</span>
+
+    <span class="s1">id = Integer()</span>
+    <span class="s1">divId = String()</span>
+    <span class="s1">sourceType = Set(values=([</span><span class="s3">'sheet'</span><span class="s1">, </span><span class="s3">'printArea'</span><span class="s1">, </span><span class="s3">'autoFilter'</span><span class="s1">, </span><span class="s3">'range'</span><span class="s1">, </span><span class="s3">'chart'</span><span class="s1">, </span><span class="s3">'pivotTable'</span><span class="s1">, </span><span class="s3">'query'</span><span class="s1">, </span><span class="s3">'label'</span><span class="s1">]))</span>
+    <span class="s1">sourceRef = String()</span>
+    <span class="s1">sourceObject = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">destinationFile = String()</span>
+    <span class="s1">title = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">autoRepublish = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">id=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">divId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sourceType=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sourceRef=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sourceObject=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">destinationFile=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">title=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">autoRepublish=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.id = id</span>
+        <span class="s1">self.divId = divId</span>
+        <span class="s1">self.sourceType = sourceType</span>
+        <span class="s1">self.sourceRef = sourceRef</span>
+        <span class="s1">self.sourceObject = sourceObject</span>
+        <span class="s1">self.destinationFile = destinationFile</span>
+        <span class="s1">self.title = title</span>
+        <span class="s1">self.autoRepublish = autoRepublish</span>
+
+
+<span class="s0">class </span><span class="s1">WebPublishItems(Serialisable):</span>
+    <span class="s1">tagname = </span><span class="s3">&quot;WebPublishItems&quot;</span>
+
+    <span class="s1">count = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">webPublishItem = Sequence(expected_type=WebPublishItem, )</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'webPublishItem'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">count=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">webPublishItem=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.count = len(webPublishItem)</span>
+        <span class="s1">self.webPublishItem = webPublishItem</span>
+</pre>
+</body>
+</html>

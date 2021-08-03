@@ -1,0 +1,81 @@
+<html>
+<head>
+<title>xspec.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+xspec.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># -*- coding: utf-8 -*-</span>
+<span class="s0">&quot;&quot;&quot; 
+(c) 2008-2013, holger krekel 
+&quot;&quot;&quot;</span>
+
+
+<span class="s2">class </span><span class="s1">XSpec:</span>
+    <span class="s0">&quot;&quot;&quot;Execution Specification: key1=value1//key2=value2 ... 
+    * keys need to be unique within the specification scope 
+    * neither key nor value are allowed to contain &quot;//&quot; 
+    * keys are not allowed to contain &quot;=&quot; 
+    * keys are not allowed to start with underscore 
+    * if no &quot;=value&quot; is given, assume a boolean True value 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0"># XXX allow customization, for only allow specific key names</span>
+    <span class="s1">popen = (</span>
+        <span class="s1">ssh</span>
+    <span class="s1">) = socket = python = chdir = nice = dont_write_bytecode = execmodel = </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, string):</span>
+        <span class="s1">self._spec = string</span>
+        <span class="s1">self.env = {}</span>
+        <span class="s2">for </span><span class="s1">keyvalue </span><span class="s2">in </span><span class="s1">string.split(</span><span class="s3">&quot;//&quot;</span><span class="s1">):</span>
+            <span class="s1">i = keyvalue.find(</span><span class="s3">&quot;=&quot;</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">i == -</span><span class="s4">1</span><span class="s1">:</span>
+                <span class="s1">key, value = keyvalue, </span><span class="s2">True</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">key, value = keyvalue[:i], keyvalue[i + </span><span class="s4">1 </span><span class="s1">:]</span>
+            <span class="s2">if </span><span class="s1">key[</span><span class="s4">0</span><span class="s1">] == </span><span class="s3">&quot;_&quot;</span><span class="s1">:</span>
+                <span class="s2">raise </span><span class="s1">AttributeError(</span><span class="s3">&quot;%r not a valid XSpec key&quot; </span><span class="s1">% key)</span>
+            <span class="s2">if </span><span class="s1">key </span><span class="s2">in </span><span class="s1">self.__dict__:</span>
+                <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;duplicate key: {!r} in {!r}&quot;</span><span class="s1">.format(key, string))</span>
+            <span class="s2">if </span><span class="s1">key.startswith(</span><span class="s3">&quot;env:&quot;</span><span class="s1">):</span>
+                <span class="s1">self.env[key[</span><span class="s4">4</span><span class="s1">:]] = value</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">setattr(self, key, value)</span>
+
+    <span class="s2">def </span><span class="s1">__getattr__(self, name):</span>
+        <span class="s2">if </span><span class="s1">name[</span><span class="s4">0</span><span class="s1">] == </span><span class="s3">&quot;_&quot;</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">AttributeError(name)</span>
+        <span class="s2">return None</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;&lt;XSpec {!r}&gt;&quot;</span><span class="s1">.format(self._spec)</span>
+
+    <span class="s2">def </span><span class="s1">__str__(self):</span>
+        <span class="s2">return </span><span class="s1">self._spec</span>
+
+    <span class="s2">def </span><span class="s1">__hash__(self):</span>
+        <span class="s2">return </span><span class="s1">hash(self._spec)</span>
+
+    <span class="s2">def </span><span class="s1">__eq__(self, other):</span>
+        <span class="s2">return </span><span class="s1">self._spec == getattr(other, </span><span class="s3">&quot;_spec&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__ne__(self, other):</span>
+        <span class="s2">return </span><span class="s1">self._spec != getattr(other, </span><span class="s3">&quot;_spec&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_samefilesystem(self):</span>
+        <span class="s2">return </span><span class="s1">self.popen </span><span class="s2">is not None and </span><span class="s1">self.chdir </span><span class="s2">is None</span>
+</pre>
+</body>
+</html>

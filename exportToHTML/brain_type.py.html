@@ -1,0 +1,83 @@
+<html>
+<head>
+<title>brain_type.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_type.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+Astroid hooks for type support. 
+ 
+Starting from python3.9, type object behaves as it had __class_getitem__ method. 
+However it was not possible to simply add this method inside type's body, otherwise 
+all types would also have this method. In this case it would have been possible 
+to write str[int]. 
+Guido Van Rossum proposed a hack to handle this in the interpreter: 
+https://github.com/python/cpython/blob/master/Objects/abstract.c#L186-L189 
+ 
+This brain follows the same logic. It is no wise to add permanently the __class_getitem__ method 
+to the type object. Instead we choose to add it only in the case of a subscript node 
+which inside name node is type. 
+Doing this type[int] is allowed whereas str[int] is not. 
+ 
+Thanks to Lukasz Langa for fruitful discussion. 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">MANAGER, extract_node, inference_tip, nodes</span>
+
+<span class="s1">PY39 = sys.version_info &gt;= (</span><span class="s3">3</span><span class="s1">, </span><span class="s3">9</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_looks_like_type_subscript(node):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Try to figure out if a Name node is used inside a type related subscript 
+ 
+    :param node: node to check 
+    :type node: astroid.node_classes.NodeNG 
+    :return: true if the node is a Name node inside a type related subscript 
+    :rtype: bool 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">isinstance(node, nodes.Name) </span><span class="s2">and </span><span class="s1">isinstance(node.parent, nodes.Subscript):</span>
+        <span class="s2">return </span><span class="s1">node.name == </span><span class="s4">&quot;type&quot;</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">infer_type_sub(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Infer a type[...] subscript 
+ 
+    :param node: node to infer 
+    :type node: astroid.node_classes.NodeNG 
+    :param context: inference context 
+    :type context: astroid.context.InferenceContext 
+    :return: the inferred node 
+    :rtype: nodes.NodeNG 
+    &quot;&quot;&quot;</span>
+    <span class="s1">class_src = </span><span class="s4">&quot;&quot;&quot; 
+    class type: 
+        def __class_getitem__(cls, key): 
+            return cls 
+     &quot;&quot;&quot;</span>
+    <span class="s1">node = extract_node(class_src)</span>
+    <span class="s2">return </span><span class="s1">node.infer(context=context)</span>
+
+
+<span class="s2">if </span><span class="s1">PY39:</span>
+    <span class="s1">MANAGER.register_transform(</span>
+        <span class="s1">nodes.Name, inference_tip(infer_type_sub), _looks_like_type_subscript</span>
+    <span class="s1">)</span>
+</pre>
+</body>
+</html>

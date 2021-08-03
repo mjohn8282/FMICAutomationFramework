@@ -1,0 +1,82 @@
+<html>
+<head>
+<title>custom.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+custom.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.worksheet.header_footer </span><span class="s0">import </span><span class="s1">HeaderFooter</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Sequence</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">Guid</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.worksheet.page </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">PageMargins,</span>
+    <span class="s1">PrintPageSetup</span>
+<span class="s1">)</span>
+
+
+<span class="s0">class </span><span class="s1">CustomChartsheetView(Serialisable):</span>
+    <span class="s1">tagname = </span><span class="s3">&quot;customSheetView&quot;</span>
+
+    <span class="s1">guid = Guid()</span>
+    <span class="s1">scale = Integer()</span>
+    <span class="s1">state = Set(values=([</span><span class="s3">'visible'</span><span class="s1">, </span><span class="s3">'hidden'</span><span class="s1">, </span><span class="s3">'veryHidden'</span><span class="s1">]))</span>
+    <span class="s1">zoomToFit = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">pageMargins = Typed(expected_type=PageMargins, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">pageSetup = Typed(expected_type=PrintPageSetup, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">headerFooter = Typed(expected_type=HeaderFooter, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'pageMargins'</span><span class="s1">, </span><span class="s3">'pageSetup'</span><span class="s1">, </span><span class="s3">'headerFooter'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">guid=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">scale=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">state=</span><span class="s3">'visible'</span><span class="s1">,</span>
+                 <span class="s1">zoomToFit=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pageMargins=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pageSetup=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">headerFooter=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.guid = guid</span>
+        <span class="s1">self.scale = scale</span>
+        <span class="s1">self.state = state</span>
+        <span class="s1">self.zoomToFit = zoomToFit</span>
+        <span class="s1">self.pageMargins = pageMargins</span>
+        <span class="s1">self.pageSetup = pageSetup</span>
+        <span class="s1">self.headerFooter = headerFooter</span>
+
+
+<span class="s0">class </span><span class="s1">CustomChartsheetViews(Serialisable):</span>
+    <span class="s1">tagname = </span><span class="s3">&quot;customSheetViews&quot;</span>
+
+    <span class="s1">customSheetView = Sequence(expected_type=CustomChartsheetView, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'customSheetView'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">customSheetView=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.customSheetView = customSheetView</span>
+</pre>
+</body>
+</html>

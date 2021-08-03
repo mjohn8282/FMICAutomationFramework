@@ -1,0 +1,617 @@
+<html>
+<head>
+<title>geometry.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+geometry.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Float,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">MinMax,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">NoneSet,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Alias,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">Coordinate, Percentage</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">EmptyTag</span>
+    <span class="s1">)</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">ExtensionList </span><span class="s0">as </span><span class="s1">OfficeArtExtensionList</span>
+<span class="s0">from </span><span class="s1">.colors </span><span class="s0">import </span><span class="s1">ColorChoiceDescriptor</span>
+<span class="s0">from </span><span class="s1">.fill </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">GradientFillProperties,</span>
+    <span class="s1">BlipFillProperties,</span>
+    <span class="s1">PatternFillProperties,</span>
+    <span class="s1">)</span>
+<span class="s0">from </span><span class="s1">.line </span><span class="s0">import </span><span class="s1">LineProperties</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.styles.colors </span><span class="s0">import </span><span class="s1">Color</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">DRAWING_NS</span>
+
+
+<span class="s0">class </span><span class="s1">Point2D(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;off&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">x = Coordinate()</span>
+    <span class="s1">y = Coordinate()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">x=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">y=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.x = x</span>
+        <span class="s1">self.y = y</span>
+
+
+<span class="s0">class </span><span class="s1">PositiveSize2D(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;ext&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s3">&quot;&quot;&quot; 
+    Dimensions in EMUs 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">cx = Integer()</span>
+    <span class="s1">width = Alias(</span><span class="s3">'cx'</span><span class="s1">)</span>
+    <span class="s1">cy = Integer()</span>
+    <span class="s1">height = Alias(</span><span class="s3">'cy'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">cx=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">cy=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.cx = cx</span>
+        <span class="s1">self.cy = cy</span>
+
+
+<span class="s0">class </span><span class="s1">Transform2D(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;xfrm&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">rot = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">flipH = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">flipV = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">off = Typed(expected_type=Point2D, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">ext = Typed(expected_type=PositiveSize2D, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">chOff = Typed(expected_type=Point2D, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">chExt = Typed(expected_type=PositiveSize2D, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'off'</span><span class="s1">, </span><span class="s3">'ext'</span><span class="s1">, </span><span class="s3">'chOff'</span><span class="s1">, </span><span class="s3">'chExt'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">rot=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">flipH=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">flipV=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">off=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">ext=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">chOff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">chExt=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.rot = rot</span>
+        <span class="s1">self.flipH = flipH</span>
+        <span class="s1">self.flipV = flipV</span>
+        <span class="s1">self.off = off</span>
+        <span class="s1">self.ext = ext</span>
+        <span class="s1">self.chOff = chOff</span>
+        <span class="s1">self.chExt = chExt</span>
+
+
+<span class="s0">class </span><span class="s1">GroupTransform2D(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;xfrm&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">rot = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">flipH = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">flipV = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">off = Typed(expected_type=Point2D, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">ext = Typed(expected_type=PositiveSize2D, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">chOff = Typed(expected_type=Point2D, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">chExt = Typed(expected_type=PositiveSize2D, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">&quot;off&quot;</span><span class="s1">, </span><span class="s3">&quot;ext&quot;</span><span class="s1">, </span><span class="s3">&quot;chOff&quot;</span><span class="s1">, </span><span class="s3">&quot;chExt&quot;</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">rot=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">flipH=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">flipV=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">off=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">ext=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">chOff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">chExt=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.rot = rot</span>
+        <span class="s1">self.flipH = flipH</span>
+        <span class="s1">self.flipV = flipV</span>
+        <span class="s1">self.off = off</span>
+        <span class="s1">self.ext = ext</span>
+        <span class="s1">self.chOff = chOff</span>
+        <span class="s1">self.chExt = chExt</span>
+
+
+<span class="s0">class </span><span class="s1">SphereCoords(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;sphereCoords&quot; </span><span class="s2"># usually</span>
+
+    <span class="s1">lat = Integer()</span>
+    <span class="s1">lon = Integer()</span>
+    <span class="s1">rev = Integer()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">lat=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lon=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rev=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.lat = lat</span>
+        <span class="s1">self.lon = lon</span>
+        <span class="s1">self.rev = rev</span>
+
+
+<span class="s0">class </span><span class="s1">Camera(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;camera&quot;</span>
+
+    <span class="s1">prst = Set(values=[</span>
+        <span class="s3">'legacyObliqueTopLeft'</span><span class="s1">, </span><span class="s3">'legacyObliqueTop'</span><span class="s1">, </span><span class="s3">'legacyObliqueTopRight'</span><span class="s1">, </span><span class="s3">'legacyObliqueLeft'</span><span class="s1">,</span>
+         <span class="s3">'legacyObliqueFront'</span><span class="s1">, </span><span class="s3">'legacyObliqueRight'</span><span class="s1">, </span><span class="s3">'legacyObliqueBottomLeft'</span><span class="s1">,</span>
+         <span class="s3">'legacyObliqueBottom'</span><span class="s1">, </span><span class="s3">'legacyObliqueBottomRight'</span><span class="s1">, </span><span class="s3">'legacyPerspectiveTopLeft'</span><span class="s1">,</span>
+         <span class="s3">'legacyPerspectiveTop'</span><span class="s1">, </span><span class="s3">'legacyPerspectiveTopRight'</span><span class="s1">, </span><span class="s3">'legacyPerspectiveLeft'</span><span class="s1">,</span>
+         <span class="s3">'legacyPerspectiveFront'</span><span class="s1">, </span><span class="s3">'legacyPerspectiveRight'</span><span class="s1">, </span><span class="s3">'legacyPerspectiveBottomLeft'</span><span class="s1">,</span>
+         <span class="s3">'legacyPerspectiveBottom'</span><span class="s1">, </span><span class="s3">'legacyPerspectiveBottomRight'</span><span class="s1">, </span><span class="s3">'orthographicFront'</span><span class="s1">,</span>
+         <span class="s3">'isometricTopUp'</span><span class="s1">, </span><span class="s3">'isometricTopDown'</span><span class="s1">, </span><span class="s3">'isometricBottomUp'</span><span class="s1">, </span><span class="s3">'isometricBottomDown'</span><span class="s1">,</span>
+         <span class="s3">'isometricLeftUp'</span><span class="s1">, </span><span class="s3">'isometricLeftDown'</span><span class="s1">, </span><span class="s3">'isometricRightUp'</span><span class="s1">, </span><span class="s3">'isometricRightDown'</span><span class="s1">,</span>
+         <span class="s3">'isometricOffAxis1Left'</span><span class="s1">, </span><span class="s3">'isometricOffAxis1Right'</span><span class="s1">, </span><span class="s3">'isometricOffAxis1Top'</span><span class="s1">,</span>
+         <span class="s3">'isometricOffAxis2Left'</span><span class="s1">, </span><span class="s3">'isometricOffAxis2Right'</span><span class="s1">, </span><span class="s3">'isometricOffAxis2Top'</span><span class="s1">,</span>
+         <span class="s3">'isometricOffAxis3Left'</span><span class="s1">, </span><span class="s3">'isometricOffAxis3Right'</span><span class="s1">, </span><span class="s3">'isometricOffAxis3Bottom'</span><span class="s1">,</span>
+         <span class="s3">'isometricOffAxis4Left'</span><span class="s1">, </span><span class="s3">'isometricOffAxis4Right'</span><span class="s1">, </span><span class="s3">'isometricOffAxis4Bottom'</span><span class="s1">,</span>
+         <span class="s3">'obliqueTopLeft'</span><span class="s1">,  </span><span class="s3">'obliqueTop'</span><span class="s1">, </span><span class="s3">'obliqueTopRight'</span><span class="s1">, </span><span class="s3">'obliqueLeft'</span><span class="s1">, </span><span class="s3">'obliqueRight'</span><span class="s1">,</span>
+         <span class="s3">'obliqueBottomLeft'</span><span class="s1">, </span><span class="s3">'obliqueBottom'</span><span class="s1">, </span><span class="s3">'obliqueBottomRight'</span><span class="s1">, </span><span class="s3">'perspectiveFront'</span><span class="s1">,</span>
+         <span class="s3">'perspectiveLeft'</span><span class="s1">, </span><span class="s3">'perspectiveRight'</span><span class="s1">, </span><span class="s3">'perspectiveAbove'</span><span class="s1">, </span><span class="s3">'perspectiveBelow'</span><span class="s1">,</span>
+         <span class="s3">'perspectiveAboveLeftFacing'</span><span class="s1">, </span><span class="s3">'perspectiveAboveRightFacing'</span><span class="s1">,</span>
+         <span class="s3">'perspectiveContrastingLeftFacing'</span><span class="s1">, </span><span class="s3">'perspectiveContrastingRightFacing'</span><span class="s1">,</span>
+         <span class="s3">'perspectiveHeroicLeftFacing'</span><span class="s1">, </span><span class="s3">'perspectiveHeroicRightFacing'</span><span class="s1">,</span>
+         <span class="s3">'perspectiveHeroicExtremeLeftFacing'</span><span class="s1">, </span><span class="s3">'perspectiveHeroicExtremeRightFacing'</span><span class="s1">,</span>
+         <span class="s3">'perspectiveRelaxed'</span><span class="s1">, </span><span class="s3">'perspectiveRelaxedModerately'</span><span class="s1">])</span>
+    <span class="s1">fov = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">zoom = Typed(expected_type=Percentage, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">rot = Typed(expected_type=SphereCoords, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">prst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fov=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">zoom=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rot=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.prst = prst</span>
+        <span class="s1">self.fov = fov</span>
+        <span class="s1">self.zoom = zoom</span>
+        <span class="s1">self.rot = rot</span>
+
+
+<span class="s0">class </span><span class="s1">LightRig(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;lightRig&quot;</span>
+
+    <span class="s1">rig = Set(values=[</span><span class="s3">'legacyFlat1'</span><span class="s1">, </span><span class="s3">'legacyFlat2'</span><span class="s1">, </span><span class="s3">'legacyFlat3'</span><span class="s1">, </span><span class="s3">'legacyFlat4'</span><span class="s1">, </span><span class="s3">'legacyNormal1'</span><span class="s1">,</span>
+         <span class="s3">'legacyNormal2'</span><span class="s1">, </span><span class="s3">'legacyNormal3'</span><span class="s1">, </span><span class="s3">'legacyNormal4'</span><span class="s1">, </span><span class="s3">'legacyHarsh1'</span><span class="s1">,</span>
+         <span class="s3">'legacyHarsh2'</span><span class="s1">, </span><span class="s3">'legacyHarsh3'</span><span class="s1">, </span><span class="s3">'legacyHarsh4'</span><span class="s1">, </span><span class="s3">'threePt'</span><span class="s1">, </span><span class="s3">'balanced'</span><span class="s1">,</span>
+         <span class="s3">'soft'</span><span class="s1">, </span><span class="s3">'harsh'</span><span class="s1">, </span><span class="s3">'flood'</span><span class="s1">, </span><span class="s3">'contrasting'</span><span class="s1">, </span><span class="s3">'morning'</span><span class="s1">, </span><span class="s3">'sunrise'</span><span class="s1">, </span><span class="s3">'sunset'</span><span class="s1">,</span>
+         <span class="s3">'chilly'</span><span class="s1">, </span><span class="s3">'freezing'</span><span class="s1">, </span><span class="s3">'flat'</span><span class="s1">, </span><span class="s3">'twoPt'</span><span class="s1">, </span><span class="s3">'glow'</span><span class="s1">, </span><span class="s3">'brightRoom'</span><span class="s1">]</span>
+    <span class="s1">)</span>
+    <span class="s1">dir = Set(values=([</span><span class="s3">'tl'</span><span class="s1">, </span><span class="s3">'t'</span><span class="s1">, </span><span class="s3">'tr'</span><span class="s1">, </span><span class="s3">'l'</span><span class="s1">, </span><span class="s3">'r'</span><span class="s1">, </span><span class="s3">'bl'</span><span class="s1">, </span><span class="s3">'b'</span><span class="s1">, </span><span class="s3">'br'</span><span class="s1">]))</span>
+    <span class="s1">rot = Typed(expected_type=SphereCoords, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">rig=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dir=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rot=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.rig = rig</span>
+        <span class="s1">self.dir = dir</span>
+        <span class="s1">self.rot = rot</span>
+
+
+<span class="s0">class </span><span class="s1">Vector3D(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;vector&quot;</span>
+
+    <span class="s1">dx = Integer() </span><span class="s2"># can be in or universl measure :-/</span>
+    <span class="s1">dy = Integer()</span>
+    <span class="s1">dz = Integer()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">dx=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dy=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dz=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.dx = dx</span>
+        <span class="s1">self.dy = dy</span>
+        <span class="s1">self.dz = dz</span>
+
+
+<span class="s0">class </span><span class="s1">Point3D(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;anchor&quot;</span>
+
+    <span class="s1">x = Integer()</span>
+    <span class="s1">y = Integer()</span>
+    <span class="s1">z = Integer()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">x=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">y=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">z=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.x = x</span>
+        <span class="s1">self.y = y</span>
+        <span class="s1">self.z = z</span>
+
+
+<span class="s0">class </span><span class="s1">Backdrop(Serialisable):</span>
+
+    <span class="s1">anchor = Typed(expected_type=Point3D, )</span>
+    <span class="s1">norm = Typed(expected_type=Vector3D, )</span>
+    <span class="s1">up = Typed(expected_type=Vector3D, )</span>
+    <span class="s1">extLst = Typed(expected_type=OfficeArtExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">anchor=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">norm=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">up=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.anchor = anchor</span>
+        <span class="s1">self.norm = norm</span>
+        <span class="s1">self.up = up</span>
+        <span class="s1">self.extLst = extLst</span>
+
+
+<span class="s0">class </span><span class="s1">Scene3D(Serialisable):</span>
+
+    <span class="s1">camera = Typed(expected_type=Camera, )</span>
+    <span class="s1">lightRig = Typed(expected_type=LightRig, )</span>
+    <span class="s1">backdrop = Typed(expected_type=Backdrop, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=OfficeArtExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">camera=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lightRig=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">backdrop=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.camera = camera</span>
+        <span class="s1">self.lightRig = lightRig</span>
+        <span class="s1">self.backdrop = backdrop</span>
+        <span class="s1">self.extLst = extLst</span>
+
+
+<span class="s0">class </span><span class="s1">Bevel(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;bevel&quot;</span>
+
+    <span class="s1">w = Integer()</span>
+    <span class="s1">h = Integer()</span>
+    <span class="s1">prst = NoneSet(values=</span>
+               <span class="s1">[</span><span class="s3">'relaxedInset'</span><span class="s1">, </span><span class="s3">'circle'</span><span class="s1">, </span><span class="s3">'slope'</span><span class="s1">, </span><span class="s3">'cross'</span><span class="s1">, </span><span class="s3">'angle'</span><span class="s1">,</span>
+                <span class="s3">'softRound'</span><span class="s1">, </span><span class="s3">'convex'</span><span class="s1">, </span><span class="s3">'coolSlant'</span><span class="s1">, </span><span class="s3">'divot'</span><span class="s1">, </span><span class="s3">'riblet'</span><span class="s1">,</span>
+                 <span class="s3">'hardEdge'</span><span class="s1">, </span><span class="s3">'artDeco'</span><span class="s1">]</span>
+               <span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">w=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">h=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">prst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.w = w</span>
+        <span class="s1">self.h = h</span>
+        <span class="s1">self.prst = prst</span>
+
+
+<span class="s0">class </span><span class="s1">Shape3D(Serialisable):</span>
+
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">z = Typed(expected_type=Coordinate, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extrusionH = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">contourW = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">prstMaterial = NoneSet(values=[</span>
+        <span class="s3">'legacyMatte'</span><span class="s1">,</span><span class="s3">'legacyPlastic'</span><span class="s1">, </span><span class="s3">'legacyMetal'</span><span class="s1">, </span><span class="s3">'legacyWireframe'</span><span class="s1">, </span><span class="s3">'matte'</span><span class="s1">, </span><span class="s3">'plastic'</span><span class="s1">,</span>
+        <span class="s3">'metal'</span><span class="s1">, </span><span class="s3">'warmMatte'</span><span class="s1">, </span><span class="s3">'translucentPowder'</span><span class="s1">, </span><span class="s3">'powder'</span><span class="s1">, </span><span class="s3">'dkEdge'</span><span class="s1">,</span>
+        <span class="s3">'softEdge'</span><span class="s1">, </span><span class="s3">'clear'</span><span class="s1">, </span><span class="s3">'flat'</span><span class="s1">, </span><span class="s3">'softmetal'</span><span class="s1">]</span>
+                       <span class="s1">)</span>
+    <span class="s1">bevelT = Typed(expected_type=Bevel, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">bevelB = Typed(expected_type=Bevel, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extrusionClr = Typed(expected_type=Color, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">contourClr = Typed(expected_type=Color, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=OfficeArtExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">z=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extrusionH=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">contourW=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">prstMaterial=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">bevelT=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">bevelB=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extrusionClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">contourClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.z = z</span>
+        <span class="s1">self.extrusionH = extrusionH</span>
+        <span class="s1">self.contourW = contourW</span>
+        <span class="s1">self.prstMaterial = prstMaterial</span>
+        <span class="s1">self.bevelT = bevelT</span>
+        <span class="s1">self.bevelB = bevelB</span>
+        <span class="s1">self.extrusionClr = extrusionClr</span>
+        <span class="s1">self.contourClr = contourClr</span>
+        <span class="s1">self.extLst = extLst</span>
+
+
+<span class="s0">class </span><span class="s1">Path2D(Serialisable):</span>
+
+    <span class="s1">w = Float()</span>
+    <span class="s1">h = Float()</span>
+    <span class="s1">fill = NoneSet(values=([</span><span class="s3">'norm'</span><span class="s1">, </span><span class="s3">'lighten'</span><span class="s1">, </span><span class="s3">'lightenLess'</span><span class="s1">, </span><span class="s3">'darken'</span><span class="s1">, </span><span class="s3">'darkenLess'</span><span class="s1">]))</span>
+    <span class="s1">stroke = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extrusionOk = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">w=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">h=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fill=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">stroke=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extrusionOk=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.w = w</span>
+        <span class="s1">self.h = h</span>
+        <span class="s1">self.fill = fill</span>
+        <span class="s1">self.stroke = stroke</span>
+        <span class="s1">self.extrusionOk = extrusionOk</span>
+
+
+<span class="s0">class </span><span class="s1">Path2DList(Serialisable):</span>
+
+    <span class="s1">path = Typed(expected_type=Path2D, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">path=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.path = path</span>
+
+
+<span class="s0">class </span><span class="s1">GeomRect(Serialisable):</span>
+
+    <span class="s1">l = Coordinate()</span>
+    <span class="s1">t = Coordinate()</span>
+    <span class="s1">r = Coordinate()</span>
+    <span class="s1">b = Coordinate()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">l=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">t=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">r=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">b=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.l = l</span>
+        <span class="s1">self.t = t</span>
+        <span class="s1">self.r = r</span>
+        <span class="s1">self.b = b</span>
+
+
+<span class="s0">class </span><span class="s1">AdjPoint2D(Serialisable):</span>
+
+    <span class="s1">x = Coordinate()</span>
+    <span class="s1">y = Coordinate()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">x=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">y=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.x = x</span>
+        <span class="s1">self.y = y</span>
+
+
+<span class="s0">class </span><span class="s1">ConnectionSite(Serialisable):</span>
+
+    <span class="s1">ang = MinMax(min=</span><span class="s4">0</span><span class="s1">, max=</span><span class="s4">360</span><span class="s1">) </span><span class="s2"># guess work, can also be a name</span>
+    <span class="s1">pos = Typed(expected_type=AdjPoint2D, )</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">ang=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pos=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.ang = ang</span>
+        <span class="s1">self.pos = pos</span>
+
+
+<span class="s0">class </span><span class="s1">ConnectionSiteList(Serialisable):</span>
+
+    <span class="s1">cxn = Typed(expected_type=ConnectionSite, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">cxn=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.cxn = cxn</span>
+
+
+<span class="s0">class </span><span class="s1">AdjustHandleList(Serialisable):</span>
+
+    <span class="s0">pass</span>
+
+<span class="s0">class </span><span class="s1">GeomGuide(Serialisable):</span>
+
+    <span class="s1">name = String()</span>
+    <span class="s1">fmla = String()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">name=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fmla=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.fmla = fmla</span>
+
+
+<span class="s0">class </span><span class="s1">GeomGuideList(Serialisable):</span>
+
+    <span class="s1">gd = Typed(expected_type=GeomGuide, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">gd=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.gd = gd</span>
+
+
+<span class="s0">class </span><span class="s1">CustomGeometry2D(Serialisable):</span>
+
+    <span class="s1">avLst = Typed(expected_type=GeomGuideList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">gdLst = Typed(expected_type=GeomGuideList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">ahLst = Typed(expected_type=AdjustHandleList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">cxnLst = Typed(expected_type=ConnectionSiteList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">rect = Typed(expected_type=GeomRect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">pathLst = Typed(expected_type=Path2DList, )</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">avLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">gdLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">ahLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">cxnLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rect=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pathLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.avLst = avLst</span>
+        <span class="s1">self.gdLst = gdLst</span>
+        <span class="s1">self.ahLst = ahLst</span>
+        <span class="s1">self.cxnLst = cxnLst</span>
+        <span class="s1">self.rect = rect</span>
+        <span class="s1">self.pathLst = pathLst</span>
+
+
+<span class="s0">class </span><span class="s1">PresetGeometry2D(Serialisable):</span>
+
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">prst = Set(values=(</span>
+        <span class="s1">[</span><span class="s3">'line'</span><span class="s1">, </span><span class="s3">'lineInv'</span><span class="s1">, </span><span class="s3">'triangle'</span><span class="s1">, </span><span class="s3">'rtTriangle'</span><span class="s1">, </span><span class="s3">'rect'</span><span class="s1">,</span>
+         <span class="s3">'diamond'</span><span class="s1">, </span><span class="s3">'parallelogram'</span><span class="s1">, </span><span class="s3">'trapezoid'</span><span class="s1">, </span><span class="s3">'nonIsoscelesTrapezoid'</span><span class="s1">,</span>
+         <span class="s3">'pentagon'</span><span class="s1">, </span><span class="s3">'hexagon'</span><span class="s1">, </span><span class="s3">'heptagon'</span><span class="s1">, </span><span class="s3">'octagon'</span><span class="s1">, </span><span class="s3">'decagon'</span><span class="s1">, </span><span class="s3">'dodecagon'</span><span class="s1">,</span>
+         <span class="s3">'star4'</span><span class="s1">, </span><span class="s3">'star5'</span><span class="s1">, </span><span class="s3">'star6'</span><span class="s1">, </span><span class="s3">'star7'</span><span class="s1">, </span><span class="s3">'star8'</span><span class="s1">, </span><span class="s3">'star10'</span><span class="s1">, </span><span class="s3">'star12'</span><span class="s1">,</span>
+         <span class="s3">'star16'</span><span class="s1">, </span><span class="s3">'star24'</span><span class="s1">, </span><span class="s3">'star32'</span><span class="s1">, </span><span class="s3">'roundRect'</span><span class="s1">, </span><span class="s3">'round1Rect'</span><span class="s1">,</span>
+         <span class="s3">'round2SameRect'</span><span class="s1">, </span><span class="s3">'round2DiagRect'</span><span class="s1">, </span><span class="s3">'snipRoundRect'</span><span class="s1">, </span><span class="s3">'snip1Rect'</span><span class="s1">,</span>
+         <span class="s3">'snip2SameRect'</span><span class="s1">, </span><span class="s3">'snip2DiagRect'</span><span class="s1">, </span><span class="s3">'plaque'</span><span class="s1">, </span><span class="s3">'ellipse'</span><span class="s1">, </span><span class="s3">'teardrop'</span><span class="s1">,</span>
+         <span class="s3">'homePlate'</span><span class="s1">, </span><span class="s3">'chevron'</span><span class="s1">, </span><span class="s3">'pieWedge'</span><span class="s1">, </span><span class="s3">'pie'</span><span class="s1">, </span><span class="s3">'blockArc'</span><span class="s1">, </span><span class="s3">'donut'</span><span class="s1">,</span>
+         <span class="s3">'noSmoking'</span><span class="s1">, </span><span class="s3">'rightArrow'</span><span class="s1">, </span><span class="s3">'leftArrow'</span><span class="s1">, </span><span class="s3">'upArrow'</span><span class="s1">, </span><span class="s3">'downArrow'</span><span class="s1">,</span>
+         <span class="s3">'stripedRightArrow'</span><span class="s1">, </span><span class="s3">'notchedRightArrow'</span><span class="s1">, </span><span class="s3">'bentUpArrow'</span><span class="s1">,</span>
+         <span class="s3">'leftRightArrow'</span><span class="s1">, </span><span class="s3">'upDownArrow'</span><span class="s1">, </span><span class="s3">'leftUpArrow'</span><span class="s1">, </span><span class="s3">'leftRightUpArrow'</span><span class="s1">,</span>
+         <span class="s3">'quadArrow'</span><span class="s1">, </span><span class="s3">'leftArrowCallout'</span><span class="s1">, </span><span class="s3">'rightArrowCallout'</span><span class="s1">, </span><span class="s3">'upArrowCallout'</span><span class="s1">,</span>
+         <span class="s3">'downArrowCallout'</span><span class="s1">, </span><span class="s3">'leftRightArrowCallout'</span><span class="s1">, </span><span class="s3">'upDownArrowCallout'</span><span class="s1">,</span>
+         <span class="s3">'quadArrowCallout'</span><span class="s1">, </span><span class="s3">'bentArrow'</span><span class="s1">, </span><span class="s3">'uturnArrow'</span><span class="s1">, </span><span class="s3">'circularArrow'</span><span class="s1">,</span>
+         <span class="s3">'leftCircularArrow'</span><span class="s1">, </span><span class="s3">'leftRightCircularArrow'</span><span class="s1">, </span><span class="s3">'curvedRightArrow'</span><span class="s1">,</span>
+         <span class="s3">'curvedLeftArrow'</span><span class="s1">, </span><span class="s3">'curvedUpArrow'</span><span class="s1">, </span><span class="s3">'curvedDownArrow'</span><span class="s1">, </span><span class="s3">'swooshArrow'</span><span class="s1">,</span>
+         <span class="s3">'cube'</span><span class="s1">, </span><span class="s3">'can'</span><span class="s1">, </span><span class="s3">'lightningBolt'</span><span class="s1">, </span><span class="s3">'heart'</span><span class="s1">, </span><span class="s3">'sun'</span><span class="s1">, </span><span class="s3">'moon'</span><span class="s1">, </span><span class="s3">'smileyFace'</span><span class="s1">,</span>
+         <span class="s3">'irregularSeal1'</span><span class="s1">, </span><span class="s3">'irregularSeal2'</span><span class="s1">, </span><span class="s3">'foldedCorner'</span><span class="s1">, </span><span class="s3">'bevel'</span><span class="s1">, </span><span class="s3">'frame'</span><span class="s1">,</span>
+         <span class="s3">'halfFrame'</span><span class="s1">, </span><span class="s3">'corner'</span><span class="s1">, </span><span class="s3">'diagStripe'</span><span class="s1">, </span><span class="s3">'chord'</span><span class="s1">, </span><span class="s3">'arc'</span><span class="s1">, </span><span class="s3">'leftBracket'</span><span class="s1">,</span>
+         <span class="s3">'rightBracket'</span><span class="s1">, </span><span class="s3">'leftBrace'</span><span class="s1">, </span><span class="s3">'rightBrace'</span><span class="s1">, </span><span class="s3">'bracketPair'</span><span class="s1">, </span><span class="s3">'bracePair'</span><span class="s1">,</span>
+         <span class="s3">'straightConnector1'</span><span class="s1">, </span><span class="s3">'bentConnector2'</span><span class="s1">, </span><span class="s3">'bentConnector3'</span><span class="s1">,</span>
+         <span class="s3">'bentConnector4'</span><span class="s1">, </span><span class="s3">'bentConnector5'</span><span class="s1">, </span><span class="s3">'curvedConnector2'</span><span class="s1">,</span>
+         <span class="s3">'curvedConnector3'</span><span class="s1">, </span><span class="s3">'curvedConnector4'</span><span class="s1">, </span><span class="s3">'curvedConnector5'</span><span class="s1">, </span><span class="s3">'callout1'</span><span class="s1">,</span>
+         <span class="s3">'callout2'</span><span class="s1">, </span><span class="s3">'callout3'</span><span class="s1">, </span><span class="s3">'accentCallout1'</span><span class="s1">, </span><span class="s3">'accentCallout2'</span><span class="s1">,</span>
+         <span class="s3">'accentCallout3'</span><span class="s1">, </span><span class="s3">'borderCallout1'</span><span class="s1">, </span><span class="s3">'borderCallout2'</span><span class="s1">, </span><span class="s3">'borderCallout3'</span><span class="s1">,</span>
+         <span class="s3">'accentBorderCallout1'</span><span class="s1">, </span><span class="s3">'accentBorderCallout2'</span><span class="s1">, </span><span class="s3">'accentBorderCallout3'</span><span class="s1">,</span>
+         <span class="s3">'wedgeRectCallout'</span><span class="s1">, </span><span class="s3">'wedgeRoundRectCallout'</span><span class="s1">, </span><span class="s3">'wedgeEllipseCallout'</span><span class="s1">,</span>
+         <span class="s3">'cloudCallout'</span><span class="s1">, </span><span class="s3">'cloud'</span><span class="s1">, </span><span class="s3">'ribbon'</span><span class="s1">, </span><span class="s3">'ribbon2'</span><span class="s1">, </span><span class="s3">'ellipseRibbon'</span><span class="s1">,</span>
+         <span class="s3">'ellipseRibbon2'</span><span class="s1">, </span><span class="s3">'leftRightRibbon'</span><span class="s1">, </span><span class="s3">'verticalScroll'</span><span class="s1">,</span>
+         <span class="s3">'horizontalScroll'</span><span class="s1">, </span><span class="s3">'wave'</span><span class="s1">, </span><span class="s3">'doubleWave'</span><span class="s1">, </span><span class="s3">'plus'</span><span class="s1">, </span><span class="s3">'flowChartProcess'</span><span class="s1">,</span>
+         <span class="s3">'flowChartDecision'</span><span class="s1">, </span><span class="s3">'flowChartInputOutput'</span><span class="s1">,</span>
+         <span class="s3">'flowChartPredefinedProcess'</span><span class="s1">, </span><span class="s3">'flowChartInternalStorage'</span><span class="s1">,</span>
+         <span class="s3">'flowChartDocument'</span><span class="s1">, </span><span class="s3">'flowChartMultidocument'</span><span class="s1">, </span><span class="s3">'flowChartTerminator'</span><span class="s1">,</span>
+         <span class="s3">'flowChartPreparation'</span><span class="s1">, </span><span class="s3">'flowChartManualInput'</span><span class="s1">,</span>
+         <span class="s3">'flowChartManualOperation'</span><span class="s1">, </span><span class="s3">'flowChartConnector'</span><span class="s1">, </span><span class="s3">'flowChartPunchedCard'</span><span class="s1">,</span>
+         <span class="s3">'flowChartPunchedTape'</span><span class="s1">, </span><span class="s3">'flowChartSummingJunction'</span><span class="s1">, </span><span class="s3">'flowChartOr'</span><span class="s1">,</span>
+         <span class="s3">'flowChartCollate'</span><span class="s1">, </span><span class="s3">'flowChartSort'</span><span class="s1">, </span><span class="s3">'flowChartExtract'</span><span class="s1">,</span>
+         <span class="s3">'flowChartMerge'</span><span class="s1">, </span><span class="s3">'flowChartOfflineStorage'</span><span class="s1">, </span><span class="s3">'flowChartOnlineStorage'</span><span class="s1">,</span>
+         <span class="s3">'flowChartMagneticTape'</span><span class="s1">, </span><span class="s3">'flowChartMagneticDisk'</span><span class="s1">,</span>
+         <span class="s3">'flowChartMagneticDrum'</span><span class="s1">, </span><span class="s3">'flowChartDisplay'</span><span class="s1">, </span><span class="s3">'flowChartDelay'</span><span class="s1">,</span>
+         <span class="s3">'flowChartAlternateProcess'</span><span class="s1">, </span><span class="s3">'flowChartOffpageConnector'</span><span class="s1">,</span>
+         <span class="s3">'actionButtonBlank'</span><span class="s1">, </span><span class="s3">'actionButtonHome'</span><span class="s1">, </span><span class="s3">'actionButtonHelp'</span><span class="s1">,</span>
+         <span class="s3">'actionButtonInformation'</span><span class="s1">, </span><span class="s3">'actionButtonForwardNext'</span><span class="s1">,</span>
+         <span class="s3">'actionButtonBackPrevious'</span><span class="s1">, </span><span class="s3">'actionButtonEnd'</span><span class="s1">, </span><span class="s3">'actionButtonBeginning'</span><span class="s1">,</span>
+         <span class="s3">'actionButtonReturn'</span><span class="s1">, </span><span class="s3">'actionButtonDocument'</span><span class="s1">, </span><span class="s3">'actionButtonSound'</span><span class="s1">,</span>
+         <span class="s3">'actionButtonMovie'</span><span class="s1">, </span><span class="s3">'gear6'</span><span class="s1">, </span><span class="s3">'gear9'</span><span class="s1">, </span><span class="s3">'funnel'</span><span class="s1">, </span><span class="s3">'mathPlus'</span><span class="s1">, </span><span class="s3">'mathMinus'</span><span class="s1">,</span>
+         <span class="s3">'mathMultiply'</span><span class="s1">, </span><span class="s3">'mathDivide'</span><span class="s1">, </span><span class="s3">'mathEqual'</span><span class="s1">, </span><span class="s3">'mathNotEqual'</span><span class="s1">, </span><span class="s3">'cornerTabs'</span><span class="s1">,</span>
+         <span class="s3">'squareTabs'</span><span class="s1">, </span><span class="s3">'plaqueTabs'</span><span class="s1">, </span><span class="s3">'chartX'</span><span class="s1">, </span><span class="s3">'chartStar'</span><span class="s1">, </span><span class="s3">'chartPlus'</span><span class="s1">]))</span>
+    <span class="s1">avLst = Typed(expected_type=GeomGuideList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">prst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">avLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.prst = prst</span>
+        <span class="s1">self.avLst = avLst</span>
+
+
+<span class="s0">class </span><span class="s1">FontReference(Serialisable):</span>
+
+    <span class="s1">idx = NoneSet(values=([</span><span class="s3">'major'</span><span class="s1">, </span><span class="s3">'minor'</span><span class="s1">]))</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">idx=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.idx = idx</span>
+
+
+<span class="s0">class </span><span class="s1">StyleMatrixReference(Serialisable):</span>
+
+    <span class="s1">idx = Integer()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">idx=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.idx = idx</span>
+
+
+<span class="s0">class </span><span class="s1">ShapeStyle(Serialisable):</span>
+
+    <span class="s1">lnRef = Typed(expected_type=StyleMatrixReference, )</span>
+    <span class="s1">fillRef = Typed(expected_type=StyleMatrixReference, )</span>
+    <span class="s1">effectRef = Typed(expected_type=StyleMatrixReference, )</span>
+    <span class="s1">fontRef = Typed(expected_type=FontReference, )</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">lnRef=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fillRef=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">effectRef=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fontRef=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.lnRef = lnRef</span>
+        <span class="s1">self.fillRef = fillRef</span>
+        <span class="s1">self.effectRef = effectRef</span>
+        <span class="s1">self.fontRef = fontRef</span>
+</pre>
+</body>
+</html>

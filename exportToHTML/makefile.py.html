@@ -1,0 +1,72 @@
+<html>
+<head>
+<title>makefile.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+makefile.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># -*- coding: utf-8 -*-</span>
+<span class="s0">&quot;&quot;&quot; 
+backports.makefile 
+~~~~~~~~~~~~~~~~~~ 
+ 
+Backports the Python 3 ``socket.makefile`` method for use with anything that 
+wants to create a &quot;fake&quot; socket object. 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">io</span>
+<span class="s2">from </span><span class="s1">socket </span><span class="s2">import </span><span class="s1">SocketIO</span>
+
+
+<span class="s2">def </span><span class="s1">backport_makefile(</span>
+    <span class="s1">self, mode=</span><span class="s3">&quot;r&quot;</span><span class="s1">, buffering=</span><span class="s2">None</span><span class="s1">, encoding=</span><span class="s2">None</span><span class="s1">, errors=</span><span class="s2">None</span><span class="s1">, newline=</span><span class="s2">None</span>
+<span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Backport of ``socket.makefile`` from Python 3.5. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if not </span><span class="s1">set(mode) &lt;= {</span><span class="s3">&quot;r&quot;</span><span class="s1">, </span><span class="s3">&quot;w&quot;</span><span class="s1">, </span><span class="s3">&quot;b&quot;</span><span class="s1">}:</span>
+        <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;invalid mode %r (only r, w, b allowed)&quot; </span><span class="s1">% (mode,))</span>
+    <span class="s1">writing = </span><span class="s3">&quot;w&quot; </span><span class="s2">in </span><span class="s1">mode</span>
+    <span class="s1">reading = </span><span class="s3">&quot;r&quot; </span><span class="s2">in </span><span class="s1">mode </span><span class="s2">or not </span><span class="s1">writing</span>
+    <span class="s2">assert </span><span class="s1">reading </span><span class="s2">or </span><span class="s1">writing</span>
+    <span class="s1">binary = </span><span class="s3">&quot;b&quot; </span><span class="s2">in </span><span class="s1">mode</span>
+    <span class="s1">rawmode = </span><span class="s3">&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">reading:</span>
+        <span class="s1">rawmode += </span><span class="s3">&quot;r&quot;</span>
+    <span class="s2">if </span><span class="s1">writing:</span>
+        <span class="s1">rawmode += </span><span class="s3">&quot;w&quot;</span>
+    <span class="s1">raw = SocketIO(self, rawmode)</span>
+    <span class="s1">self._makefile_refs += </span><span class="s4">1</span>
+    <span class="s2">if </span><span class="s1">buffering </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s1">buffering = -</span><span class="s4">1</span>
+    <span class="s2">if </span><span class="s1">buffering &lt; </span><span class="s4">0</span><span class="s1">:</span>
+        <span class="s1">buffering = io.DEFAULT_BUFFER_SIZE</span>
+    <span class="s2">if </span><span class="s1">buffering == </span><span class="s4">0</span><span class="s1">:</span>
+        <span class="s2">if not </span><span class="s1">binary:</span>
+            <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;unbuffered streams must be binary&quot;</span><span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">raw</span>
+    <span class="s2">if </span><span class="s1">reading </span><span class="s2">and </span><span class="s1">writing:</span>
+        <span class="s1">buffer = io.BufferedRWPair(raw, raw, buffering)</span>
+    <span class="s2">elif </span><span class="s1">reading:</span>
+        <span class="s1">buffer = io.BufferedReader(raw, buffering)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">assert </span><span class="s1">writing</span>
+        <span class="s1">buffer = io.BufferedWriter(raw, buffering)</span>
+    <span class="s2">if </span><span class="s1">binary:</span>
+        <span class="s2">return </span><span class="s1">buffer</span>
+    <span class="s1">text = io.TextIOWrapper(buffer, encoding, errors, newline)</span>
+    <span class="s1">text.mode = mode</span>
+    <span class="s2">return </span><span class="s1">text</span>
+</pre>
+</body>
+</html>

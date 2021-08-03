@@ -1,0 +1,59 @@
+<html>
+<head>
+<title>collect.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+.s3 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+collect.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">sys</span>
+<span class="s0">import </span><span class="s1">warnings</span>
+<span class="s0">from </span><span class="s1">types </span><span class="s0">import </span><span class="s1">ModuleType</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Any</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">List</span>
+
+<span class="s0">import </span><span class="s1">pytest</span>
+<span class="s0">from </span><span class="s1">_pytest.deprecated </span><span class="s0">import </span><span class="s1">PYTEST_COLLECT_MODULE</span>
+
+<span class="s1">COLLECT_FAKEMODULE_ATTRIBUTES = [</span>
+    <span class="s2">&quot;Collector&quot;</span><span class="s1">,</span>
+    <span class="s2">&quot;Module&quot;</span><span class="s1">,</span>
+    <span class="s2">&quot;Function&quot;</span><span class="s1">,</span>
+    <span class="s2">&quot;Instance&quot;</span><span class="s1">,</span>
+    <span class="s2">&quot;Session&quot;</span><span class="s1">,</span>
+    <span class="s2">&quot;Item&quot;</span><span class="s1">,</span>
+    <span class="s2">&quot;Class&quot;</span><span class="s1">,</span>
+    <span class="s2">&quot;File&quot;</span><span class="s1">,</span>
+    <span class="s2">&quot;_fillfuncargs&quot;</span><span class="s1">,</span>
+<span class="s1">]</span>
+
+
+<span class="s0">class </span><span class="s1">FakeCollectModule(ModuleType):</span>
+    <span class="s0">def </span><span class="s1">__init__(self) -&gt; </span><span class="s0">None</span><span class="s1">:</span>
+        <span class="s1">super().__init__(</span><span class="s2">&quot;pytest.collect&quot;</span><span class="s1">)</span>
+        <span class="s1">self.__all__ = list(COLLECT_FAKEMODULE_ATTRIBUTES)</span>
+        <span class="s1">self.__pytest = pytest</span>
+
+    <span class="s0">def </span><span class="s1">__dir__(self) -&gt; List[str]:</span>
+        <span class="s0">return </span><span class="s1">dir(super()) + self.__all__</span>
+
+    <span class="s0">def </span><span class="s1">__getattr__(self, name: str) -&gt; Any:</span>
+        <span class="s0">if </span><span class="s1">name </span><span class="s0">not in </span><span class="s1">self.__all__:</span>
+            <span class="s0">raise </span><span class="s1">AttributeError(name)</span>
+        <span class="s1">warnings.warn(PYTEST_COLLECT_MODULE.format(name=name), stacklevel=</span><span class="s3">2</span><span class="s1">)</span>
+        <span class="s0">return </span><span class="s1">getattr(pytest, name)</span>
+
+
+<span class="s1">sys.modules[</span><span class="s2">&quot;pytest.collect&quot;</span><span class="s1">] = FakeCollectModule()</span>
+</pre>
+</body>
+</html>

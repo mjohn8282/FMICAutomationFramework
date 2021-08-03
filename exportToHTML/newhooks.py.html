@@ -1,0 +1,86 @@
+<html>
+<head>
+<title>newhooks.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+newhooks.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+xdist hooks. 
+ 
+Additionally, pytest-xdist will also decorate a few other hooks 
+with the worker instance that executed the hook originally: 
+ 
+``pytest_runtest_logreport``: ``rep`` parameter has a ``node`` attribute. 
+ 
+You can use this hooks just as you would use normal pytest hooks, but some care 
+must be taken in plugins in case ``xdist`` is not installed. Please see: 
+ 
+    http://pytest.org/en/latest/writing_plugins.html#optionally-using-hooks-from-3rd-party-plugins 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">pytest</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_xdist_setupnodes(config, specs):</span>
+    <span class="s0">&quot;&quot;&quot; called before any remote node is set up. &quot;&quot;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_xdist_newgateway(gateway):</span>
+    <span class="s0">&quot;&quot;&quot; called on new raw gateway creation. &quot;&quot;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_xdist_rsyncstart(source, gateways):</span>
+    <span class="s0">&quot;&quot;&quot; called before rsyncing a directory to remote gateways takes place. &quot;&quot;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_xdist_rsyncfinish(source, gateways):</span>
+    <span class="s0">&quot;&quot;&quot; called after rsyncing a directory to remote gateways takes place. &quot;&quot;&quot;</span>
+
+
+<span class="s1">@pytest.mark.firstresult</span>
+<span class="s2">def </span><span class="s1">pytest_xdist_getremotemodule():</span>
+    <span class="s0">&quot;&quot;&quot; called when creating remote node&quot;&quot;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_configure_node(node):</span>
+    <span class="s0">&quot;&quot;&quot; configure node information before it gets instantiated. &quot;&quot;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_testnodeready(node):</span>
+    <span class="s0">&quot;&quot;&quot; Test Node is ready to operate. &quot;&quot;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_testnodedown(node, error):</span>
+    <span class="s0">&quot;&quot;&quot; Test Node is down. &quot;&quot;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_xdist_node_collection_finished(node, ids):</span>
+    <span class="s0">&quot;&quot;&quot;called by the master node when a node finishes collecting. 
+    &quot;&quot;&quot;</span>
+
+
+<span class="s1">@pytest.mark.firstresult</span>
+<span class="s2">def </span><span class="s1">pytest_xdist_make_scheduler(config, log):</span>
+    <span class="s0">&quot;&quot;&quot; return a node scheduler implementation &quot;&quot;&quot;</span>
+
+
+<span class="s1">@pytest.mark.firstresult</span>
+<span class="s2">def </span><span class="s1">pytest_xdist_auto_num_workers(config):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Return the number of workers to spawn when ``--numprocesses=auto`` is given in the 
+    command-line. 
+ 
+    .. versionadded:: 2.1 
+    &quot;&quot;&quot;</span>
+</pre>
+</body>
+</html>

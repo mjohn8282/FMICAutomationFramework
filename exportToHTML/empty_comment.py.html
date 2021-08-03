@@ -1,0 +1,77 @@
+<html>
+<head>
+<title>empty_comment.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+empty_comment.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">pylint.checkers </span><span class="s0">import </span><span class="s1">BaseChecker</span>
+<span class="s0">from </span><span class="s1">pylint.interfaces </span><span class="s0">import </span><span class="s1">IRawChecker</span>
+
+
+<span class="s0">def </span><span class="s1">is_line_commented(line):</span>
+    <span class="s2">&quot;&quot;&quot;Checks if a `# symbol that is not part of a string was found in line&quot;&quot;&quot;</span>
+
+    <span class="s1">comment_idx = line.find(</span><span class="s3">b&quot;#&quot;</span><span class="s1">)</span>
+    <span class="s0">if </span><span class="s1">comment_idx == -</span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s0">return False</span>
+    <span class="s0">if </span><span class="s1">comment_part_of_string(line, comment_idx):</span>
+        <span class="s0">return </span><span class="s1">is_line_commented(line[:comment_idx] + line[comment_idx + </span><span class="s4">1 </span><span class="s1">:])</span>
+    <span class="s0">return True</span>
+
+
+<span class="s0">def </span><span class="s1">comment_part_of_string(line, comment_idx):</span>
+    <span class="s2">&quot;&quot;&quot;checks if the symbol at comment_idx is part of a string&quot;&quot;&quot;</span>
+
+    <span class="s0">if </span><span class="s1">(</span>
+        <span class="s1">line[:comment_idx].count(</span><span class="s3">b&quot;'&quot;</span><span class="s1">) % </span><span class="s4">2 </span><span class="s1">== </span><span class="s4">1</span>
+        <span class="s0">and </span><span class="s1">line[comment_idx:].count(</span><span class="s3">b&quot;'&quot;</span><span class="s1">) % </span><span class="s4">2 </span><span class="s1">== </span><span class="s4">1</span>
+    <span class="s1">) </span><span class="s0">or </span><span class="s1">(</span>
+        <span class="s1">line[:comment_idx].count(</span><span class="s3">b'&quot;'</span><span class="s1">) % </span><span class="s4">2 </span><span class="s1">== </span><span class="s4">1</span>
+        <span class="s0">and </span><span class="s1">line[comment_idx:].count(</span><span class="s3">b'&quot;'</span><span class="s1">) % </span><span class="s4">2 </span><span class="s1">== </span><span class="s4">1</span>
+    <span class="s1">):</span>
+        <span class="s0">return True</span>
+    <span class="s0">return False</span>
+
+
+<span class="s0">class </span><span class="s1">CommentChecker(BaseChecker):</span>
+    <span class="s1">__implements__ = IRawChecker</span>
+
+    <span class="s1">name = </span><span class="s3">&quot;refactoring&quot;</span>
+    <span class="s1">msgs = {</span>
+        <span class="s3">&quot;R2044&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Line with empty comment&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;empty-comment&quot;</span><span class="s1">,</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;Used when a # symbol appears on a line not followed by an actual comment&quot;</span>
+            <span class="s1">),</span>
+        <span class="s1">)</span>
+    <span class="s1">}</span>
+    <span class="s1">options = ()</span>
+    <span class="s1">priority = -</span><span class="s4">1  </span><span class="s2"># low priority</span>
+
+    <span class="s0">def </span><span class="s1">process_module(self, node):</span>
+        <span class="s0">with </span><span class="s1">node.stream() </span><span class="s0">as </span><span class="s1">stream:</span>
+            <span class="s0">for </span><span class="s1">(line_num, line) </span><span class="s0">in </span><span class="s1">enumerate(stream):</span>
+                <span class="s1">line = line.rstrip()</span>
+                <span class="s0">if </span><span class="s1">line.endswith(</span><span class="s3">b&quot;#&quot;</span><span class="s1">):</span>
+                    <span class="s0">if not </span><span class="s1">is_line_commented(line[:-</span><span class="s4">1</span><span class="s1">]):</span>
+                        <span class="s1">self.add_message(</span><span class="s3">&quot;empty-comment&quot;</span><span class="s1">, line=line_num + </span><span class="s4">1</span><span class="s1">)</span>
+
+
+<span class="s0">def </span><span class="s1">register(linter):</span>
+    <span class="s1">linter.register_checker(CommentChecker(linter))</span>
+</pre>
+</body>
+</html>

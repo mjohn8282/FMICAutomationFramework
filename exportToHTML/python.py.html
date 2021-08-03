@@ -1,0 +1,271 @@
+<html>
+<head>
+<title>python.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+.s5 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+python.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;Python source expertise for coverage.py&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">os.path</span>
+<span class="s2">import </span><span class="s1">types</span>
+<span class="s2">import </span><span class="s1">zipimport</span>
+
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">env, files</span>
+<span class="s2">from </span><span class="s1">coverage.misc </span><span class="s2">import </span><span class="s1">contract, expensive, isolate_module, join_regex</span>
+<span class="s2">from </span><span class="s1">coverage.misc </span><span class="s2">import </span><span class="s1">CoverageException, NoSource</span>
+<span class="s2">from </span><span class="s1">coverage.parser </span><span class="s2">import </span><span class="s1">PythonParser</span>
+<span class="s2">from </span><span class="s1">coverage.phystokens </span><span class="s2">import </span><span class="s1">source_token_lines, source_encoding</span>
+<span class="s2">from </span><span class="s1">coverage.plugin </span><span class="s2">import </span><span class="s1">FileReporter</span>
+
+<span class="s1">os = isolate_module(os)</span>
+
+
+<span class="s1">@contract(returns=</span><span class="s3">'bytes'</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">read_python_source(filename):</span>
+    <span class="s0">&quot;&quot;&quot;Read the Python source text from `filename`. 
+ 
+    Returns bytes. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">with </span><span class="s1">open(filename, </span><span class="s3">&quot;rb&quot;</span><span class="s1">) </span><span class="s2">as </span><span class="s1">f:</span>
+        <span class="s1">source = f.read()</span>
+
+    <span class="s2">if </span><span class="s1">env.IRONPYTHON:</span>
+        <span class="s0"># IronPython reads Unicode strings even for &quot;rb&quot; files.</span>
+        <span class="s1">source = bytes(source)</span>
+
+    <span class="s2">return </span><span class="s1">source.replace(</span><span class="s3">b&quot;</span><span class="s4">\r\n</span><span class="s3">&quot;</span><span class="s1">, </span><span class="s3">b&quot;</span><span class="s4">\n</span><span class="s3">&quot;</span><span class="s1">).replace(</span><span class="s3">b&quot;</span><span class="s4">\r</span><span class="s3">&quot;</span><span class="s1">, </span><span class="s3">b&quot;</span><span class="s4">\n</span><span class="s3">&quot;</span><span class="s1">)</span>
+
+
+<span class="s1">@contract(returns=</span><span class="s3">'unicode'</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">get_python_source(filename):</span>
+    <span class="s0">&quot;&quot;&quot;Return the source code, as unicode.&quot;&quot;&quot;</span>
+    <span class="s1">base, ext = os.path.splitext(filename)</span>
+    <span class="s2">if </span><span class="s1">ext == </span><span class="s3">&quot;.py&quot; </span><span class="s2">and </span><span class="s1">env.WINDOWS:</span>
+        <span class="s1">exts = [</span><span class="s3">&quot;.py&quot;</span><span class="s1">, </span><span class="s3">&quot;.pyw&quot;</span><span class="s1">]</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">exts = [ext]</span>
+
+    <span class="s2">for </span><span class="s1">ext </span><span class="s2">in </span><span class="s1">exts:</span>
+        <span class="s1">try_filename = base + ext</span>
+        <span class="s2">if </span><span class="s1">os.path.exists(try_filename):</span>
+            <span class="s0"># A regular text file: open it.</span>
+            <span class="s1">source = read_python_source(try_filename)</span>
+            <span class="s2">break</span>
+
+        <span class="s0"># Maybe it's in a zip file?</span>
+        <span class="s1">source = get_zip_bytes(try_filename)</span>
+        <span class="s2">if </span><span class="s1">source </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s2">break</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s0"># Couldn't find source.</span>
+        <span class="s1">exc_msg = </span><span class="s3">&quot;No source for code: '%s'.</span><span class="s4">\n</span><span class="s3">&quot; </span><span class="s1">% (filename,)</span>
+        <span class="s1">exc_msg += </span><span class="s3">&quot;Aborting report output, consider using -i.&quot;</span>
+        <span class="s2">raise </span><span class="s1">NoSource(exc_msg)</span>
+
+    <span class="s0"># Replace \f because of http://bugs.python.org/issue19035</span>
+    <span class="s1">source = source.replace(</span><span class="s3">b'</span><span class="s4">\f</span><span class="s3">'</span><span class="s1">, </span><span class="s3">b' '</span><span class="s1">)</span>
+    <span class="s1">source = source.decode(source_encoding(source), </span><span class="s3">&quot;replace&quot;</span><span class="s1">)</span>
+
+    <span class="s0"># Python code should always end with a line with a newline.</span>
+    <span class="s2">if </span><span class="s1">source </span><span class="s2">and </span><span class="s1">source[-</span><span class="s5">1</span><span class="s1">] != </span><span class="s3">'</span><span class="s4">\n</span><span class="s3">'</span><span class="s1">:</span>
+        <span class="s1">source += </span><span class="s3">'</span><span class="s4">\n</span><span class="s3">'</span>
+
+    <span class="s2">return </span><span class="s1">source</span>
+
+
+<span class="s1">@contract(returns=</span><span class="s3">'bytes|None'</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">get_zip_bytes(filename):</span>
+    <span class="s0">&quot;&quot;&quot;Get data from `filename` if it is a zip file path. 
+ 
+    Returns the bytestring data read from the zip file, or None if no zip file 
+    could be found or `filename` isn't in it.  The data returned will be 
+    an empty string if the file is empty. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">markers = [</span><span class="s3">'.zip'</span><span class="s1">+os.sep, </span><span class="s3">'.egg'</span><span class="s1">+os.sep, </span><span class="s3">'.pex'</span><span class="s1">+os.sep]</span>
+    <span class="s2">for </span><span class="s1">marker </span><span class="s2">in </span><span class="s1">markers:</span>
+        <span class="s2">if </span><span class="s1">marker </span><span class="s2">in </span><span class="s1">filename:</span>
+            <span class="s1">parts = filename.split(marker)</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">zi = zipimport.zipimporter(parts[</span><span class="s5">0</span><span class="s1">]+marker[:-</span><span class="s5">1</span><span class="s1">])</span>
+            <span class="s2">except </span><span class="s1">zipimport.ZipImportError:</span>
+                <span class="s2">continue</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">data = zi.get_data(parts[</span><span class="s5">1</span><span class="s1">])</span>
+            <span class="s2">except </span><span class="s1">IOError:</span>
+                <span class="s2">continue</span>
+            <span class="s2">return </span><span class="s1">data</span>
+    <span class="s2">return None</span>
+
+
+<span class="s2">def </span><span class="s1">source_for_file(filename):</span>
+    <span class="s0">&quot;&quot;&quot;Return the source filename for `filename`. 
+ 
+    Given a file name being traced, return the best guess as to the source 
+    file to attribute it to. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">filename.endswith(</span><span class="s3">&quot;.py&quot;</span><span class="s1">):</span>
+        <span class="s0"># .py files are themselves source files.</span>
+        <span class="s2">return </span><span class="s1">filename</span>
+
+    <span class="s2">elif </span><span class="s1">filename.endswith((</span><span class="s3">&quot;.pyc&quot;</span><span class="s1">, </span><span class="s3">&quot;.pyo&quot;</span><span class="s1">)):</span>
+        <span class="s0"># Bytecode files probably have source files near them.</span>
+        <span class="s1">py_filename = filename[:-</span><span class="s5">1</span><span class="s1">]</span>
+        <span class="s2">if </span><span class="s1">os.path.exists(py_filename):</span>
+            <span class="s0"># Found a .py file, use that.</span>
+            <span class="s2">return </span><span class="s1">py_filename</span>
+        <span class="s2">if </span><span class="s1">env.WINDOWS:</span>
+            <span class="s0"># On Windows, it could be a .pyw file.</span>
+            <span class="s1">pyw_filename = py_filename + </span><span class="s3">&quot;w&quot;</span>
+            <span class="s2">if </span><span class="s1">os.path.exists(pyw_filename):</span>
+                <span class="s2">return </span><span class="s1">pyw_filename</span>
+        <span class="s0"># Didn't find source, but it's probably the .py file we want.</span>
+        <span class="s2">return </span><span class="s1">py_filename</span>
+
+    <span class="s2">elif </span><span class="s1">filename.endswith(</span><span class="s3">&quot;$py.class&quot;</span><span class="s1">):</span>
+        <span class="s0"># Jython is easy to guess.</span>
+        <span class="s2">return </span><span class="s1">filename[:-</span><span class="s5">9</span><span class="s1">] + </span><span class="s3">&quot;.py&quot;</span>
+
+    <span class="s0"># No idea, just use the file name as-is.</span>
+    <span class="s2">return </span><span class="s1">filename</span>
+
+
+<span class="s2">def </span><span class="s1">source_for_morf(morf):</span>
+    <span class="s0">&quot;&quot;&quot;Get the source filename for the module-or-file `morf`.&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">hasattr(morf, </span><span class="s3">'__file__'</span><span class="s1">) </span><span class="s2">and </span><span class="s1">morf.__file__:</span>
+        <span class="s1">filename = morf.__file__</span>
+    <span class="s2">elif </span><span class="s1">isinstance(morf, types.ModuleType):</span>
+        <span class="s0"># A module should have had .__file__, otherwise we can't use it.</span>
+        <span class="s0"># This could be a PEP-420 namespace package.</span>
+        <span class="s2">raise </span><span class="s1">CoverageException(</span><span class="s3">&quot;Module {} has no file&quot;</span><span class="s1">.format(morf))</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">filename = morf</span>
+
+    <span class="s1">filename = source_for_file(files.unicode_filename(filename))</span>
+    <span class="s2">return </span><span class="s1">filename</span>
+
+
+<span class="s2">class </span><span class="s1">PythonFileReporter(FileReporter):</span>
+    <span class="s0">&quot;&quot;&quot;Report support for a Python file.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, morf, coverage=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">self.coverage = coverage</span>
+
+        <span class="s1">filename = source_for_morf(morf)</span>
+
+        <span class="s1">super(PythonFileReporter, self).__init__(files.canonical_filename(filename))</span>
+
+        <span class="s2">if </span><span class="s1">hasattr(morf, </span><span class="s3">'__name__'</span><span class="s1">):</span>
+            <span class="s1">name = morf.__name__.replace(</span><span class="s3">&quot;.&quot;</span><span class="s1">, os.sep)</span>
+            <span class="s2">if </span><span class="s1">os.path.basename(filename).startswith(</span><span class="s3">'__init__.'</span><span class="s1">):</span>
+                <span class="s1">name += os.sep + </span><span class="s3">&quot;__init__&quot;</span>
+            <span class="s1">name += </span><span class="s3">&quot;.py&quot;</span>
+            <span class="s1">name = files.unicode_filename(name)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">name = files.relative_filename(filename)</span>
+        <span class="s1">self.relname = name</span>
+
+        <span class="s1">self._source = </span><span class="s2">None</span>
+        <span class="s1">self._parser = </span><span class="s2">None</span>
+        <span class="s1">self._excluded = </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;&lt;PythonFileReporter {!r}&gt;&quot;</span><span class="s1">.format(self.filename)</span>
+
+    <span class="s1">@contract(returns=</span><span class="s3">'unicode'</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">relative_filename(self):</span>
+        <span class="s2">return </span><span class="s1">self.relname</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">parser(self):</span>
+        <span class="s0">&quot;&quot;&quot;Lazily create a :class:`PythonParser`.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self._parser </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">self._parser = PythonParser(</span>
+                <span class="s1">filename=self.filename,</span>
+                <span class="s1">exclude=self.coverage._exclude_regex(</span><span class="s3">'exclude'</span><span class="s1">),</span>
+            <span class="s1">)</span>
+            <span class="s1">self._parser.parse_source()</span>
+        <span class="s2">return </span><span class="s1">self._parser</span>
+
+    <span class="s2">def </span><span class="s1">lines(self):</span>
+        <span class="s0">&quot;&quot;&quot;Return the line numbers of statements in the file.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.parser.statements</span>
+
+    <span class="s2">def </span><span class="s1">excluded_lines(self):</span>
+        <span class="s0">&quot;&quot;&quot;Return the line numbers of statements in the file.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.parser.excluded</span>
+
+    <span class="s2">def </span><span class="s1">translate_lines(self, lines):</span>
+        <span class="s2">return </span><span class="s1">self.parser.translate_lines(lines)</span>
+
+    <span class="s2">def </span><span class="s1">translate_arcs(self, arcs):</span>
+        <span class="s2">return </span><span class="s1">self.parser.translate_arcs(arcs)</span>
+
+    <span class="s1">@expensive</span>
+    <span class="s2">def </span><span class="s1">no_branch_lines(self):</span>
+        <span class="s1">no_branch = self.parser.lines_matching(</span>
+            <span class="s1">join_regex(self.coverage.config.partial_list),</span>
+            <span class="s1">join_regex(self.coverage.config.partial_always_list)</span>
+            <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">no_branch</span>
+
+    <span class="s1">@expensive</span>
+    <span class="s2">def </span><span class="s1">arcs(self):</span>
+        <span class="s2">return </span><span class="s1">self.parser.arcs()</span>
+
+    <span class="s1">@expensive</span>
+    <span class="s2">def </span><span class="s1">exit_counts(self):</span>
+        <span class="s2">return </span><span class="s1">self.parser.exit_counts()</span>
+
+    <span class="s2">def </span><span class="s1">missing_arc_description(self, start, end, executed_arcs=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s2">return </span><span class="s1">self.parser.missing_arc_description(start, end, executed_arcs)</span>
+
+    <span class="s1">@contract(returns=</span><span class="s3">'unicode'</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">source(self):</span>
+        <span class="s2">if </span><span class="s1">self._source </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">self._source = get_python_source(self.filename)</span>
+        <span class="s2">return </span><span class="s1">self._source</span>
+
+    <span class="s2">def </span><span class="s1">should_be_python(self):</span>
+        <span class="s0">&quot;&quot;&quot;Does it seem like this file should contain Python? 
+ 
+        This is used to decide if a file reported as part of the execution of 
+        a program was really likely to have contained Python in the first 
+        place. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># Get the file extension.</span>
+        <span class="s1">_, ext = os.path.splitext(self.filename)</span>
+
+        <span class="s0"># Anything named *.py* should be Python.</span>
+        <span class="s2">if </span><span class="s1">ext.startswith(</span><span class="s3">'.py'</span><span class="s1">):</span>
+            <span class="s2">return True</span>
+        <span class="s0"># A file with no extension should be Python.</span>
+        <span class="s2">if not </span><span class="s1">ext:</span>
+            <span class="s2">return True</span>
+        <span class="s0"># Everything else is probably not Python.</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">source_token_lines(self):</span>
+        <span class="s2">return </span><span class="s1">source_token_lines(self.source())</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<html>
+<head>
+<title>each.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+each.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">py.log </span><span class="s0">import </span><span class="s1">Producer</span>
+
+<span class="s0">from </span><span class="s1">xdist.workermanage </span><span class="s0">import </span><span class="s1">parse_spec_config</span>
+<span class="s0">from </span><span class="s1">xdist.report </span><span class="s0">import </span><span class="s1">report_collection_diff</span>
+
+
+<span class="s0">class </span><span class="s1">EachScheduling:</span>
+    <span class="s2">&quot;&quot;&quot;Implement scheduling of test items on all nodes 
+ 
+    If a node gets added after the test run is started then it is 
+    assumed to replace a node which got removed before it finished 
+    its collection.  In this case it will only be used if a node 
+    with the same spec got removed earlier. 
+ 
+    Any nodes added after the run is started will only get items 
+    assigned if a node with a matching spec was removed before it 
+    finished all its pending items.  The new node will then be 
+    assigned the remaining items from the removed node. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, config, log=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">self.config = config</span>
+        <span class="s1">self.numnodes = len(parse_spec_config(config))</span>
+        <span class="s1">self.node2collection = {}</span>
+        <span class="s1">self.node2pending = {}</span>
+        <span class="s1">self._started = []</span>
+        <span class="s1">self._removed2pending = {}</span>
+        <span class="s0">if </span><span class="s1">log </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">self.log = Producer(</span><span class="s3">&quot;eachsched&quot;</span><span class="s1">)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">self.log = log.eachsched</span>
+        <span class="s1">self.collection_is_completed = </span><span class="s0">False</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">nodes(self):</span>
+        <span class="s2">&quot;&quot;&quot;A list of all nodes in the scheduler.&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">list(self.node2pending.keys())</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">tests_finished(self):</span>
+        <span class="s0">if not </span><span class="s1">self.collection_is_completed:</span>
+            <span class="s0">return False</span>
+        <span class="s0">if </span><span class="s1">self._removed2pending:</span>
+            <span class="s0">return False</span>
+        <span class="s0">for </span><span class="s1">pending </span><span class="s0">in </span><span class="s1">self.node2pending.values():</span>
+            <span class="s0">if </span><span class="s1">len(pending) &gt;= </span><span class="s4">2</span><span class="s1">:</span>
+                <span class="s0">return False</span>
+        <span class="s0">return True</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">has_pending(self):</span>
+        <span class="s2">&quot;&quot;&quot;Return True if there are pending test items 
+ 
+        This indicates that collection has finished and nodes are 
+        still processing test items, so this can be thought of as 
+        &quot;the scheduler is active&quot;. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">for </span><span class="s1">pending </span><span class="s0">in </span><span class="s1">self.node2pending.values():</span>
+            <span class="s0">if </span><span class="s1">pending:</span>
+                <span class="s0">return True</span>
+        <span class="s0">return False</span>
+
+    <span class="s0">def </span><span class="s1">add_node(self, node):</span>
+        <span class="s0">assert </span><span class="s1">node </span><span class="s0">not in </span><span class="s1">self.node2pending</span>
+        <span class="s1">self.node2pending[node] = []</span>
+
+    <span class="s0">def </span><span class="s1">add_node_collection(self, node, collection):</span>
+        <span class="s2">&quot;&quot;&quot;Add the collected test items from a node 
+ 
+        Collection is complete once all nodes have submitted their 
+        collection.  In this case its pending list is set to an empty 
+        list.  When the collection is already completed this 
+        submission is from a node which was restarted to replace a 
+        dead node.  In this case we already assign the pending items 
+        here.  In either case ``.schedule()`` will instruct the 
+        node to start running the required tests. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">assert </span><span class="s1">node </span><span class="s0">in </span><span class="s1">self.node2pending</span>
+        <span class="s0">if not </span><span class="s1">self.collection_is_completed:</span>
+            <span class="s1">self.node2collection[node] = list(collection)</span>
+            <span class="s1">self.node2pending[node] = []</span>
+            <span class="s0">if </span><span class="s1">len(self.node2collection) &gt;= self.numnodes:</span>
+                <span class="s1">self.collection_is_completed = </span><span class="s0">True</span>
+        <span class="s0">elif </span><span class="s1">self._removed2pending:</span>
+            <span class="s0">for </span><span class="s1">deadnode </span><span class="s0">in </span><span class="s1">self._removed2pending:</span>
+                <span class="s0">if </span><span class="s1">deadnode.gateway.spec == node.gateway.spec:</span>
+                    <span class="s1">dead_collection = self.node2collection[deadnode]</span>
+                    <span class="s0">if </span><span class="s1">collection != dead_collection:</span>
+                        <span class="s1">msg = report_collection_diff(</span>
+                            <span class="s1">dead_collection,</span>
+                            <span class="s1">collection,</span>
+                            <span class="s1">deadnode.gateway.id,</span>
+                            <span class="s1">node.gateway.id,</span>
+                        <span class="s1">)</span>
+                        <span class="s1">self.log(msg)</span>
+                        <span class="s0">return</span>
+                    <span class="s1">pending = self._removed2pending.pop(deadnode)</span>
+                    <span class="s1">self.node2pending[node] = pending</span>
+                    <span class="s0">break</span>
+
+    <span class="s0">def </span><span class="s1">mark_test_complete(self, node, item_index, duration=</span><span class="s4">0</span><span class="s1">):</span>
+        <span class="s1">self.node2pending[node].remove(item_index)</span>
+
+    <span class="s0">def </span><span class="s1">remove_node(self, node):</span>
+        <span class="s2"># KeyError if we didn't get an add_node() yet</span>
+        <span class="s1">pending = self.node2pending.pop(node)</span>
+        <span class="s0">if not </span><span class="s1">pending:</span>
+            <span class="s0">return</span>
+        <span class="s1">crashitem = self.node2collection[node][pending.pop(</span><span class="s4">0</span><span class="s1">)]</span>
+        <span class="s0">if </span><span class="s1">pending:</span>
+            <span class="s1">self._removed2pending[node] = pending</span>
+        <span class="s0">return </span><span class="s1">crashitem</span>
+
+    <span class="s0">def </span><span class="s1">schedule(self):</span>
+        <span class="s2">&quot;&quot;&quot;Schedule the test items on the nodes 
+ 
+        If the node's pending list is empty it is a new node which 
+        needs to run all the tests.  If the pending list is already 
+        populated (by ``.add_node_collection()``) then it replaces a 
+        dead node and we only need to run those tests. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">assert </span><span class="s1">self.collection_is_completed</span>
+        <span class="s0">for </span><span class="s1">node, pending </span><span class="s0">in </span><span class="s1">self.node2pending.items():</span>
+            <span class="s0">if </span><span class="s1">node </span><span class="s0">in </span><span class="s1">self._started:</span>
+                <span class="s0">continue</span>
+            <span class="s0">if not </span><span class="s1">pending:</span>
+                <span class="s1">pending[:] = range(len(self.node2collection[node]))</span>
+                <span class="s1">node.send_runtest_all()</span>
+                <span class="s1">node.shutdown()</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">node.send_runtest_some(pending)</span>
+            <span class="s1">self._started.append(node)</span>
+</pre>
+</body>
+</html>

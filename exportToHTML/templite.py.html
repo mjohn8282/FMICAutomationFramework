@@ -1,0 +1,324 @@
+<html>
+<head>
+<title>templite.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+templite.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;A simple Python template renderer, for a nano-subset of Django syntax. 
+ 
+For a detailed discussion of this code, see this chapter from 500 Lines: 
+http://aosabook.org/en/500L/a-template-engine.html 
+ 
+&quot;&quot;&quot;</span>
+
+<span class="s0"># Coincidentally named the same as http://code.activestate.com/recipes/496702/</span>
+
+<span class="s2">import </span><span class="s1">re</span>
+
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">env</span>
+
+
+<span class="s2">class </span><span class="s1">TempliteSyntaxError(ValueError):</span>
+    <span class="s0">&quot;&quot;&quot;Raised when a template has a syntax error.&quot;&quot;&quot;</span>
+    <span class="s2">pass</span>
+
+
+<span class="s2">class </span><span class="s1">TempliteValueError(ValueError):</span>
+    <span class="s0">&quot;&quot;&quot;Raised when an expression won't evaluate in a template.&quot;&quot;&quot;</span>
+    <span class="s2">pass</span>
+
+
+<span class="s2">class </span><span class="s1">CodeBuilder(object):</span>
+    <span class="s0">&quot;&quot;&quot;Build source code conveniently.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, indent=</span><span class="s3">0</span><span class="s1">):</span>
+        <span class="s1">self.code = []</span>
+        <span class="s1">self.indent_level = indent</span>
+
+    <span class="s2">def </span><span class="s1">__str__(self):</span>
+        <span class="s2">return </span><span class="s4">&quot;&quot;</span><span class="s1">.join(str(c) </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">self.code)</span>
+
+    <span class="s2">def </span><span class="s1">add_line(self, line):</span>
+        <span class="s0">&quot;&quot;&quot;Add a line of source to the code. 
+ 
+        Indentation and newline will be added for you, don't provide them. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.code.extend([</span><span class="s4">&quot; &quot; </span><span class="s1">* self.indent_level, line, </span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">])</span>
+
+    <span class="s2">def </span><span class="s1">add_section(self):</span>
+        <span class="s0">&quot;&quot;&quot;Add a section, a sub-CodeBuilder.&quot;&quot;&quot;</span>
+        <span class="s1">section = CodeBuilder(self.indent_level)</span>
+        <span class="s1">self.code.append(section)</span>
+        <span class="s2">return </span><span class="s1">section</span>
+
+    <span class="s1">INDENT_STEP = </span><span class="s3">4      </span><span class="s0"># PEP8 says so!</span>
+
+    <span class="s2">def </span><span class="s1">indent(self):</span>
+        <span class="s0">&quot;&quot;&quot;Increase the current indent for following lines.&quot;&quot;&quot;</span>
+        <span class="s1">self.indent_level += self.INDENT_STEP</span>
+
+    <span class="s2">def </span><span class="s1">dedent(self):</span>
+        <span class="s0">&quot;&quot;&quot;Decrease the current indent for following lines.&quot;&quot;&quot;</span>
+        <span class="s1">self.indent_level -= self.INDENT_STEP</span>
+
+    <span class="s2">def </span><span class="s1">get_globals(self):</span>
+        <span class="s0">&quot;&quot;&quot;Execute the code, and return a dict of globals it defines.&quot;&quot;&quot;</span>
+        <span class="s0"># A check that the caller really finished all the blocks they started.</span>
+        <span class="s2">assert </span><span class="s1">self.indent_level == </span><span class="s3">0</span>
+        <span class="s0"># Get the Python source as a single string.</span>
+        <span class="s1">python_source = str(self)</span>
+        <span class="s0"># Execute the source, defining globals, and return them.</span>
+        <span class="s1">global_namespace = {}</span>
+        <span class="s1">exec(python_source, global_namespace)</span>
+        <span class="s2">return </span><span class="s1">global_namespace</span>
+
+
+<span class="s2">class </span><span class="s1">Templite(object):</span>
+    <span class="s0">&quot;&quot;&quot;A simple template renderer, for a nano-subset of Django syntax. 
+ 
+    Supported constructs are extended variable access:: 
+ 
+        {{var.modifier.modifier|filter|filter}} 
+ 
+    loops:: 
+ 
+        {% for var in list %}...{% endfor %} 
+ 
+    and ifs:: 
+ 
+        {% if var %}...{% endif %} 
+ 
+    Comments are within curly-hash markers:: 
+ 
+        {# This will be ignored #} 
+ 
+    Lines between `{% joined %}` and `{% endjoined %}` will have lines stripped 
+    and joined.  Be careful, this could join words together! 
+ 
+    Any of these constructs can have a hyphen at the end (`-}}`, `-%}`, `-#}`), 
+    which will collapse the whitespace following the tag. 
+ 
+    Construct a Templite with the template text, then use `render` against a 
+    dictionary context to create a finished string:: 
+ 
+        templite = Templite(''' 
+            &lt;h1&gt;Hello {{name|upper}}!&lt;/h1&gt; 
+            {% for topic in topics %} 
+                &lt;p&gt;You are interested in {{topic}}.&lt;/p&gt; 
+            {% endif %} 
+            ''', 
+            {'upper': str.upper}, 
+        ) 
+        text = templite.render({ 
+            'name': &quot;Ned&quot;, 
+            'topics': ['Python', 'Geometry', 'Juggling'], 
+        }) 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">def </span><span class="s1">__init__(self, text, *contexts):</span>
+        <span class="s0">&quot;&quot;&quot;Construct a Templite with the given `text`. 
+ 
+        `contexts` are dictionaries of values to use for future renderings. 
+        These are good for filters and global values. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.context = {}</span>
+        <span class="s2">for </span><span class="s1">context </span><span class="s2">in </span><span class="s1">contexts:</span>
+            <span class="s1">self.context.update(context)</span>
+
+        <span class="s1">self.all_vars = set()</span>
+        <span class="s1">self.loop_vars = set()</span>
+
+        <span class="s0"># We construct a function in source form, then compile it and hold onto</span>
+        <span class="s0"># it, and execute it to render the template.</span>
+        <span class="s1">code = CodeBuilder()</span>
+
+        <span class="s1">code.add_line(</span><span class="s4">&quot;def render_function(context, do_dots):&quot;</span><span class="s1">)</span>
+        <span class="s1">code.indent()</span>
+        <span class="s1">vars_code = code.add_section()</span>
+        <span class="s1">code.add_line(</span><span class="s4">&quot;result = []&quot;</span><span class="s1">)</span>
+        <span class="s1">code.add_line(</span><span class="s4">&quot;append_result = result.append&quot;</span><span class="s1">)</span>
+        <span class="s1">code.add_line(</span><span class="s4">&quot;extend_result = result.extend&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">env.PY2:</span>
+            <span class="s1">code.add_line(</span><span class="s4">&quot;to_str = unicode&quot;</span><span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">code.add_line(</span><span class="s4">&quot;to_str = str&quot;</span><span class="s1">)</span>
+
+        <span class="s1">buffered = []</span>
+
+        <span class="s2">def </span><span class="s1">flush_output():</span>
+            <span class="s0">&quot;&quot;&quot;Force `buffered` to the code builder.&quot;&quot;&quot;</span>
+            <span class="s2">if </span><span class="s1">len(buffered) == </span><span class="s3">1</span><span class="s1">:</span>
+                <span class="s1">code.add_line(</span><span class="s4">&quot;append_result(%s)&quot; </span><span class="s1">% buffered[</span><span class="s3">0</span><span class="s1">])</span>
+            <span class="s2">elif </span><span class="s1">len(buffered) &gt; </span><span class="s3">1</span><span class="s1">:</span>
+                <span class="s1">code.add_line(</span><span class="s4">&quot;extend_result([%s])&quot; </span><span class="s1">% </span><span class="s4">&quot;, &quot;</span><span class="s1">.join(buffered))</span>
+            <span class="s2">del </span><span class="s1">buffered[:]</span>
+
+        <span class="s1">ops_stack = []</span>
+
+        <span class="s0"># Split the text to form a list of tokens.</span>
+        <span class="s1">tokens = re.split(</span><span class="s4">r&quot;(?s)({{.*?}}|{%.*?%}|{#.*?#})&quot;</span><span class="s1">, text)</span>
+
+        <span class="s1">squash = in_joined = </span><span class="s2">False</span>
+
+        <span class="s2">for </span><span class="s1">token </span><span class="s2">in </span><span class="s1">tokens:</span>
+            <span class="s2">if </span><span class="s1">token.startswith(</span><span class="s4">'{'</span><span class="s1">):</span>
+                <span class="s1">start, end = </span><span class="s3">2</span><span class="s1">, -</span><span class="s3">2</span>
+                <span class="s1">squash = (token[-</span><span class="s3">3</span><span class="s1">] == </span><span class="s4">'-'</span><span class="s1">)</span>
+                <span class="s2">if </span><span class="s1">squash:</span>
+                    <span class="s1">end = -</span><span class="s3">3</span>
+
+                <span class="s2">if </span><span class="s1">token.startswith(</span><span class="s4">'{#'</span><span class="s1">):</span>
+                    <span class="s0"># Comment: ignore it and move on.</span>
+                    <span class="s2">continue</span>
+                <span class="s2">elif </span><span class="s1">token.startswith(</span><span class="s4">'{{'</span><span class="s1">):</span>
+                    <span class="s0"># An expression to evaluate.</span>
+                    <span class="s1">expr = self._expr_code(token[start:end].strip())</span>
+                    <span class="s1">buffered.append(</span><span class="s4">&quot;to_str(%s)&quot; </span><span class="s1">% expr)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s0"># token.startswith('{%')</span>
+                    <span class="s0"># Action tag: split into words and parse further.</span>
+                    <span class="s1">flush_output()</span>
+
+                    <span class="s1">words = token[start:end].strip().split()</span>
+                    <span class="s2">if </span><span class="s1">words[</span><span class="s3">0</span><span class="s1">] == </span><span class="s4">'if'</span><span class="s1">:</span>
+                        <span class="s0"># An if statement: evaluate the expression to determine if.</span>
+                        <span class="s2">if </span><span class="s1">len(words) != </span><span class="s3">2</span><span class="s1">:</span>
+                            <span class="s1">self._syntax_error(</span><span class="s4">&quot;Don't understand if&quot;</span><span class="s1">, token)</span>
+                        <span class="s1">ops_stack.append(</span><span class="s4">'if'</span><span class="s1">)</span>
+                        <span class="s1">code.add_line(</span><span class="s4">&quot;if %s:&quot; </span><span class="s1">% self._expr_code(words[</span><span class="s3">1</span><span class="s1">]))</span>
+                        <span class="s1">code.indent()</span>
+                    <span class="s2">elif </span><span class="s1">words[</span><span class="s3">0</span><span class="s1">] == </span><span class="s4">'for'</span><span class="s1">:</span>
+                        <span class="s0"># A loop: iterate over expression result.</span>
+                        <span class="s2">if </span><span class="s1">len(words) != </span><span class="s3">4 </span><span class="s2">or </span><span class="s1">words[</span><span class="s3">2</span><span class="s1">] != </span><span class="s4">'in'</span><span class="s1">:</span>
+                            <span class="s1">self._syntax_error(</span><span class="s4">&quot;Don't understand for&quot;</span><span class="s1">, token)</span>
+                        <span class="s1">ops_stack.append(</span><span class="s4">'for'</span><span class="s1">)</span>
+                        <span class="s1">self._variable(words[</span><span class="s3">1</span><span class="s1">], self.loop_vars)</span>
+                        <span class="s1">code.add_line(</span>
+                            <span class="s4">&quot;for c_%s in %s:&quot; </span><span class="s1">% (</span>
+                                <span class="s1">words[</span><span class="s3">1</span><span class="s1">],</span>
+                                <span class="s1">self._expr_code(words[</span><span class="s3">3</span><span class="s1">])</span>
+                            <span class="s1">)</span>
+                        <span class="s1">)</span>
+                        <span class="s1">code.indent()</span>
+                    <span class="s2">elif </span><span class="s1">words[</span><span class="s3">0</span><span class="s1">] == </span><span class="s4">'joined'</span><span class="s1">:</span>
+                        <span class="s1">ops_stack.append(</span><span class="s4">'joined'</span><span class="s1">)</span>
+                        <span class="s1">in_joined = </span><span class="s2">True</span>
+                    <span class="s2">elif </span><span class="s1">words[</span><span class="s3">0</span><span class="s1">].startswith(</span><span class="s4">'end'</span><span class="s1">):</span>
+                        <span class="s0"># Endsomething.  Pop the ops stack.</span>
+                        <span class="s2">if </span><span class="s1">len(words) != </span><span class="s3">1</span><span class="s1">:</span>
+                            <span class="s1">self._syntax_error(</span><span class="s4">&quot;Don't understand end&quot;</span><span class="s1">, token)</span>
+                        <span class="s1">end_what = words[</span><span class="s3">0</span><span class="s1">][</span><span class="s3">3</span><span class="s1">:]</span>
+                        <span class="s2">if not </span><span class="s1">ops_stack:</span>
+                            <span class="s1">self._syntax_error(</span><span class="s4">&quot;Too many ends&quot;</span><span class="s1">, token)</span>
+                        <span class="s1">start_what = ops_stack.pop()</span>
+                        <span class="s2">if </span><span class="s1">start_what != end_what:</span>
+                            <span class="s1">self._syntax_error(</span><span class="s4">&quot;Mismatched end tag&quot;</span><span class="s1">, end_what)</span>
+                        <span class="s2">if </span><span class="s1">end_what == </span><span class="s4">'joined'</span><span class="s1">:</span>
+                            <span class="s1">in_joined = </span><span class="s2">False</span>
+                        <span class="s2">else</span><span class="s1">:</span>
+                            <span class="s1">code.dedent()</span>
+                    <span class="s2">else</span><span class="s1">:</span>
+                        <span class="s1">self._syntax_error(</span><span class="s4">&quot;Don't understand tag&quot;</span><span class="s1">, words[</span><span class="s3">0</span><span class="s1">])</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s0"># Literal content.  If it isn't empty, output it.</span>
+                <span class="s2">if </span><span class="s1">in_joined:</span>
+                    <span class="s1">token = re.sub(</span><span class="s4">r&quot;\s*\n\s*&quot;</span><span class="s1">, </span><span class="s4">&quot;&quot;</span><span class="s1">, token.strip())</span>
+                <span class="s2">elif </span><span class="s1">squash:</span>
+                    <span class="s1">token = token.lstrip()</span>
+                <span class="s2">if </span><span class="s1">token:</span>
+                    <span class="s1">buffered.append(repr(token))</span>
+
+        <span class="s2">if </span><span class="s1">ops_stack:</span>
+            <span class="s1">self._syntax_error(</span><span class="s4">&quot;Unmatched action tag&quot;</span><span class="s1">, ops_stack[-</span><span class="s3">1</span><span class="s1">])</span>
+
+        <span class="s1">flush_output()</span>
+
+        <span class="s2">for </span><span class="s1">var_name </span><span class="s2">in </span><span class="s1">self.all_vars - self.loop_vars:</span>
+            <span class="s1">vars_code.add_line(</span><span class="s4">&quot;c_%s = context[%r]&quot; </span><span class="s1">% (var_name, var_name))</span>
+
+        <span class="s1">code.add_line(</span><span class="s4">'return &quot;&quot;.join(result)'</span><span class="s1">)</span>
+        <span class="s1">code.dedent()</span>
+        <span class="s1">self._render_function = code.get_globals()[</span><span class="s4">'render_function'</span><span class="s1">]</span>
+
+    <span class="s2">def </span><span class="s1">_expr_code(self, expr):</span>
+        <span class="s0">&quot;&quot;&quot;Generate a Python expression for `expr`.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s4">&quot;|&quot; </span><span class="s2">in </span><span class="s1">expr:</span>
+            <span class="s1">pipes = expr.split(</span><span class="s4">&quot;|&quot;</span><span class="s1">)</span>
+            <span class="s1">code = self._expr_code(pipes[</span><span class="s3">0</span><span class="s1">])</span>
+            <span class="s2">for </span><span class="s1">func </span><span class="s2">in </span><span class="s1">pipes[</span><span class="s3">1</span><span class="s1">:]:</span>
+                <span class="s1">self._variable(func, self.all_vars)</span>
+                <span class="s1">code = </span><span class="s4">&quot;c_%s(%s)&quot; </span><span class="s1">% (func, code)</span>
+        <span class="s2">elif </span><span class="s4">&quot;.&quot; </span><span class="s2">in </span><span class="s1">expr:</span>
+            <span class="s1">dots = expr.split(</span><span class="s4">&quot;.&quot;</span><span class="s1">)</span>
+            <span class="s1">code = self._expr_code(dots[</span><span class="s3">0</span><span class="s1">])</span>
+            <span class="s1">args = </span><span class="s4">&quot;, &quot;</span><span class="s1">.join(repr(d) </span><span class="s2">for </span><span class="s1">d </span><span class="s2">in </span><span class="s1">dots[</span><span class="s3">1</span><span class="s1">:])</span>
+            <span class="s1">code = </span><span class="s4">&quot;do_dots(%s, %s)&quot; </span><span class="s1">% (code, args)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self._variable(expr, self.all_vars)</span>
+            <span class="s1">code = </span><span class="s4">&quot;c_%s&quot; </span><span class="s1">% expr</span>
+        <span class="s2">return </span><span class="s1">code</span>
+
+    <span class="s2">def </span><span class="s1">_syntax_error(self, msg, thing):</span>
+        <span class="s0">&quot;&quot;&quot;Raise a syntax error using `msg`, and showing `thing`.&quot;&quot;&quot;</span>
+        <span class="s2">raise </span><span class="s1">TempliteSyntaxError(</span><span class="s4">&quot;%s: %r&quot; </span><span class="s1">% (msg, thing))</span>
+
+    <span class="s2">def </span><span class="s1">_variable(self, name, vars_set):</span>
+        <span class="s0">&quot;&quot;&quot;Track that `name` is used as a variable. 
+ 
+        Adds the name to `vars_set`, a set of variable names. 
+ 
+        Raises an syntax error if `name` is not a valid name. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">re.match(</span><span class="s4">r&quot;[_a-zA-Z][_a-zA-Z0-9]*$&quot;</span><span class="s1">, name):</span>
+            <span class="s1">self._syntax_error(</span><span class="s4">&quot;Not a valid name&quot;</span><span class="s1">, name)</span>
+        <span class="s1">vars_set.add(name)</span>
+
+    <span class="s2">def </span><span class="s1">render(self, context=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Render this template by applying it to `context`. 
+ 
+        `context` is a dictionary of values to use in this rendering. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># Make the complete context we'll use.</span>
+        <span class="s1">render_context = dict(self.context)</span>
+        <span class="s2">if </span><span class="s1">context:</span>
+            <span class="s1">render_context.update(context)</span>
+        <span class="s2">return </span><span class="s1">self._render_function(render_context, self._do_dots)</span>
+
+    <span class="s2">def </span><span class="s1">_do_dots(self, value, *dots):</span>
+        <span class="s0">&quot;&quot;&quot;Evaluate dotted expressions at run-time.&quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">dot </span><span class="s2">in </span><span class="s1">dots:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">value = getattr(value, dot)</span>
+            <span class="s2">except </span><span class="s1">AttributeError:</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">value = value[dot]</span>
+                <span class="s2">except </span><span class="s1">(TypeError, KeyError):</span>
+                    <span class="s2">raise </span><span class="s1">TempliteValueError(</span>
+                        <span class="s4">&quot;Couldn't evaluate %r.%s&quot; </span><span class="s1">% (value, dot)</span>
+                    <span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">callable(value):</span>
+                <span class="s1">value = value()</span>
+        <span class="s2">return </span><span class="s1">value</span>
+</pre>
+</body>
+</html>

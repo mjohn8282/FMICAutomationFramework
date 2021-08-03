@@ -1,0 +1,843 @@
+<html>
+<head>
+<title>logging.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+logging.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot;Access and control log capturing.&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">logging</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">re</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">from </span><span class="s1">contextlib </span><span class="s2">import </span><span class="s1">contextmanager</span>
+<span class="s2">from </span><span class="s1">io </span><span class="s2">import </span><span class="s1">StringIO</span>
+<span class="s2">from </span><span class="s1">pathlib </span><span class="s2">import </span><span class="s1">Path</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">AbstractSet</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Dict</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Generator</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">List</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Mapping</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Optional</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Tuple</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">TypeVar</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Union</span>
+
+<span class="s2">from </span><span class="s1">_pytest </span><span class="s2">import </span><span class="s1">nodes</span>
+<span class="s2">from </span><span class="s1">_pytest._io </span><span class="s2">import </span><span class="s1">TerminalWriter</span>
+<span class="s2">from </span><span class="s1">_pytest.capture </span><span class="s2">import </span><span class="s1">CaptureManager</span>
+<span class="s2">from </span><span class="s1">_pytest.compat </span><span class="s2">import </span><span class="s1">final</span>
+<span class="s2">from </span><span class="s1">_pytest.compat </span><span class="s2">import </span><span class="s1">nullcontext</span>
+<span class="s2">from </span><span class="s1">_pytest.config </span><span class="s2">import </span><span class="s1">_strtobool</span>
+<span class="s2">from </span><span class="s1">_pytest.config </span><span class="s2">import </span><span class="s1">Config</span>
+<span class="s2">from </span><span class="s1">_pytest.config </span><span class="s2">import </span><span class="s1">create_terminal_writer</span>
+<span class="s2">from </span><span class="s1">_pytest.config </span><span class="s2">import </span><span class="s1">hookimpl</span>
+<span class="s2">from </span><span class="s1">_pytest.config </span><span class="s2">import </span><span class="s1">UsageError</span>
+<span class="s2">from </span><span class="s1">_pytest.config.argparsing </span><span class="s2">import </span><span class="s1">Parser</span>
+<span class="s2">from </span><span class="s1">_pytest.deprecated </span><span class="s2">import </span><span class="s1">check_ispytest</span>
+<span class="s2">from </span><span class="s1">_pytest.fixtures </span><span class="s2">import </span><span class="s1">fixture</span>
+<span class="s2">from </span><span class="s1">_pytest.fixtures </span><span class="s2">import </span><span class="s1">FixtureRequest</span>
+<span class="s2">from </span><span class="s1">_pytest.main </span><span class="s2">import </span><span class="s1">Session</span>
+<span class="s2">from </span><span class="s1">_pytest.store </span><span class="s2">import </span><span class="s1">StoreKey</span>
+<span class="s2">from </span><span class="s1">_pytest.terminal </span><span class="s2">import </span><span class="s1">TerminalReporter</span>
+
+
+<span class="s1">DEFAULT_LOG_FORMAT = </span><span class="s3">&quot;%(levelname)-8s %(name)s:%(filename)s:%(lineno)d %(message)s&quot;</span>
+<span class="s1">DEFAULT_LOG_DATE_FORMAT = </span><span class="s3">&quot;%H:%M:%S&quot;</span>
+<span class="s1">_ANSI_ESCAPE_SEQ = re.compile(</span><span class="s3">r&quot;\x1b\[[\d;]+m&quot;</span><span class="s1">)</span>
+<span class="s1">caplog_handler_key = StoreKey[</span><span class="s3">&quot;LogCaptureHandler&quot;</span><span class="s1">]()</span>
+<span class="s1">caplog_records_key = StoreKey[Dict[str, List[logging.LogRecord]]]()</span>
+
+
+<span class="s2">def </span><span class="s1">_remove_ansi_escape_sequences(text: str) -&gt; str:</span>
+    <span class="s2">return </span><span class="s1">_ANSI_ESCAPE_SEQ.sub(</span><span class="s3">&quot;&quot;</span><span class="s1">, text)</span>
+
+
+<span class="s2">class </span><span class="s1">ColoredLevelFormatter(logging.Formatter):</span>
+    <span class="s0">&quot;&quot;&quot;A logging formatter which colorizes the %(levelname)..s part of the 
+    log format passed to __init__.&quot;&quot;&quot;</span>
+
+    <span class="s1">LOGLEVEL_COLOROPTS: Mapping[int, AbstractSet[str]] = {</span>
+        <span class="s1">logging.CRITICAL: {</span><span class="s3">&quot;red&quot;</span><span class="s1">},</span>
+        <span class="s1">logging.ERROR: {</span><span class="s3">&quot;red&quot;</span><span class="s1">, </span><span class="s3">&quot;bold&quot;</span><span class="s1">},</span>
+        <span class="s1">logging.WARNING: {</span><span class="s3">&quot;yellow&quot;</span><span class="s1">},</span>
+        <span class="s1">logging.WARN: {</span><span class="s3">&quot;yellow&quot;</span><span class="s1">},</span>
+        <span class="s1">logging.INFO: {</span><span class="s3">&quot;green&quot;</span><span class="s1">},</span>
+        <span class="s1">logging.DEBUG: {</span><span class="s3">&quot;purple&quot;</span><span class="s1">},</span>
+        <span class="s1">logging.NOTSET: set(),</span>
+    <span class="s1">}</span>
+    <span class="s1">LEVELNAME_FMT_REGEX = re.compile(</span><span class="s3">r&quot;%\(levelname\)([+-.]?\d*s)&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, terminalwriter: TerminalWriter, *args, **kwargs) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">super().__init__(*args, **kwargs)</span>
+        <span class="s1">self._original_fmt = self._style._fmt</span>
+        <span class="s1">self._level_to_fmt_mapping: Dict[int, str] = {}</span>
+
+        <span class="s2">assert </span><span class="s1">self._fmt </span><span class="s2">is not None</span>
+        <span class="s1">levelname_fmt_match = self.LEVELNAME_FMT_REGEX.search(self._fmt)</span>
+        <span class="s2">if not </span><span class="s1">levelname_fmt_match:</span>
+            <span class="s2">return</span>
+        <span class="s1">levelname_fmt = levelname_fmt_match.group()</span>
+
+        <span class="s2">for </span><span class="s1">level, color_opts </span><span class="s2">in </span><span class="s1">self.LOGLEVEL_COLOROPTS.items():</span>
+            <span class="s1">formatted_levelname = levelname_fmt % {</span>
+                <span class="s3">&quot;levelname&quot;</span><span class="s1">: logging.getLevelName(level)</span>
+            <span class="s1">}</span>
+
+            <span class="s0"># add ANSI escape sequences around the formatted levelname</span>
+            <span class="s1">color_kwargs = {name: </span><span class="s2">True for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">color_opts}</span>
+            <span class="s1">colorized_formatted_levelname = terminalwriter.markup(</span>
+                <span class="s1">formatted_levelname, **color_kwargs</span>
+            <span class="s1">)</span>
+            <span class="s1">self._level_to_fmt_mapping[level] = self.LEVELNAME_FMT_REGEX.sub(</span>
+                <span class="s1">colorized_formatted_levelname, self._fmt</span>
+            <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">format(self, record: logging.LogRecord) -&gt; str:</span>
+        <span class="s1">fmt = self._level_to_fmt_mapping.get(record.levelno, self._original_fmt)</span>
+        <span class="s1">self._style._fmt = fmt</span>
+        <span class="s2">return </span><span class="s1">super().format(record)</span>
+
+
+<span class="s2">class </span><span class="s1">PercentStyleMultiline(logging.PercentStyle):</span>
+    <span class="s0">&quot;&quot;&quot;A logging style with special support for multiline messages. 
+ 
+    If the message of a record consists of multiple lines, this style 
+    formats the message as if each line were logged separately. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, fmt: str, auto_indent: Union[int, str, bool, </span><span class="s2">None</span><span class="s1">]) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">super().__init__(fmt)</span>
+        <span class="s1">self._auto_indent = self._get_auto_indent(auto_indent)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_update_message(</span>
+        <span class="s1">record_dict: Dict[str, object], message: str</span>
+    <span class="s1">) -&gt; Dict[str, object]:</span>
+        <span class="s1">tmp = record_dict.copy()</span>
+        <span class="s1">tmp[</span><span class="s3">&quot;message&quot;</span><span class="s1">] = message</span>
+        <span class="s2">return </span><span class="s1">tmp</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_get_auto_indent(auto_indent_option: Union[int, str, bool, </span><span class="s2">None</span><span class="s1">]) -&gt; int:</span>
+        <span class="s0">&quot;&quot;&quot;Determine the current auto indentation setting. 
+ 
+        Specify auto indent behavior (on/off/fixed) by passing in 
+        extra={&quot;auto_indent&quot;: [value]} to the call to logging.log() or 
+        using a --log-auto-indent [value] command line or the 
+        log_auto_indent [value] config option. 
+ 
+        Default behavior is auto-indent off. 
+ 
+        Using the string &quot;True&quot; or &quot;on&quot; or the boolean True as the value 
+        turns auto indent on, using the string &quot;False&quot; or &quot;off&quot; or the 
+        boolean False or the int 0 turns it off, and specifying a 
+        positive integer fixes the indentation position to the value 
+        specified. 
+ 
+        Any other values for the option are invalid, and will silently be 
+        converted to the default. 
+ 
+        :param None|bool|int|str auto_indent_option: 
+            User specified option for indentation from command line, config 
+            or extra kwarg. Accepts int, bool or str. str option accepts the 
+            same range of values as boolean config options, as well as 
+            positive integers represented in str form. 
+ 
+        :returns: 
+            Indentation value, which can be 
+            -1 (automatically determine indentation) or 
+            0 (auto-indent turned off) or 
+            &gt;0 (explicitly set indentation position). 
+        &quot;&quot;&quot;</span>
+
+        <span class="s2">if </span><span class="s1">auto_indent_option </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s4">0</span>
+        <span class="s2">elif </span><span class="s1">isinstance(auto_indent_option, bool):</span>
+            <span class="s2">if </span><span class="s1">auto_indent_option:</span>
+                <span class="s2">return </span><span class="s1">-</span><span class="s4">1</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">return </span><span class="s4">0</span>
+        <span class="s2">elif </span><span class="s1">isinstance(auto_indent_option, int):</span>
+            <span class="s2">return </span><span class="s1">int(auto_indent_option)</span>
+        <span class="s2">elif </span><span class="s1">isinstance(auto_indent_option, str):</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s2">return </span><span class="s1">int(auto_indent_option)</span>
+            <span class="s2">except </span><span class="s1">ValueError:</span>
+                <span class="s2">pass</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s2">if </span><span class="s1">_strtobool(auto_indent_option):</span>
+                    <span class="s2">return </span><span class="s1">-</span><span class="s4">1</span>
+            <span class="s2">except </span><span class="s1">ValueError:</span>
+                <span class="s2">return </span><span class="s4">0</span>
+
+        <span class="s2">return </span><span class="s4">0</span>
+
+    <span class="s2">def </span><span class="s1">format(self, record: logging.LogRecord) -&gt; str:</span>
+        <span class="s2">if </span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">&quot; </span><span class="s2">in </span><span class="s1">record.message:</span>
+            <span class="s2">if </span><span class="s1">hasattr(record, </span><span class="s3">&quot;auto_indent&quot;</span><span class="s1">):</span>
+                <span class="s0"># Passed in from the &quot;extra={}&quot; kwarg on the call to logging.log().</span>
+                <span class="s1">auto_indent = self._get_auto_indent(record.auto_indent)  </span><span class="s0"># type: ignore[attr-defined]</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">auto_indent = self._auto_indent</span>
+
+            <span class="s2">if </span><span class="s1">auto_indent:</span>
+                <span class="s1">lines = record.message.splitlines()</span>
+                <span class="s1">formatted = self._fmt % self._update_message(record.__dict__, lines[</span><span class="s4">0</span><span class="s1">])</span>
+
+                <span class="s2">if </span><span class="s1">auto_indent &lt; </span><span class="s4">0</span><span class="s1">:</span>
+                    <span class="s1">indentation = _remove_ansi_escape_sequences(formatted).find(</span>
+                        <span class="s1">lines[</span><span class="s4">0</span><span class="s1">]</span>
+                    <span class="s1">)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s0"># Optimizes logging by allowing a fixed indentation.</span>
+                    <span class="s1">indentation = auto_indent</span>
+                <span class="s1">lines[</span><span class="s4">0</span><span class="s1">] = formatted</span>
+                <span class="s2">return </span><span class="s1">(</span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">&quot; </span><span class="s1">+ </span><span class="s3">&quot; &quot; </span><span class="s1">* indentation).join(lines)</span>
+        <span class="s2">return </span><span class="s1">self._fmt % record.__dict__</span>
+
+
+<span class="s2">def </span><span class="s1">get_option_ini(config: Config, *names: str):</span>
+    <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">names:</span>
+        <span class="s1">ret = config.getoption(name)  </span><span class="s0"># 'default' arg won't work as expected</span>
+        <span class="s2">if </span><span class="s1">ret </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">ret = config.getini(name)</span>
+        <span class="s2">if </span><span class="s1">ret:</span>
+            <span class="s2">return </span><span class="s1">ret</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_addoption(parser: Parser) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+    <span class="s0">&quot;&quot;&quot;Add options to control log capturing.&quot;&quot;&quot;</span>
+    <span class="s1">group = parser.getgroup(</span><span class="s3">&quot;logging&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">add_option_ini(option, dest, default=</span><span class="s2">None</span><span class="s1">, type=</span><span class="s2">None</span><span class="s1">, **kwargs):</span>
+        <span class="s1">parser.addini(</span>
+            <span class="s1">dest, default=default, type=type, help=</span><span class="s3">&quot;default value for &quot; </span><span class="s1">+ option</span>
+        <span class="s1">)</span>
+        <span class="s1">group.addoption(option, dest=dest, **kwargs)</span>
+
+    <span class="s1">add_option_ini(</span>
+        <span class="s3">&quot;--log-level&quot;</span><span class="s1">,</span>
+        <span class="s1">dest=</span><span class="s3">&quot;log_level&quot;</span><span class="s1">,</span>
+        <span class="s1">default=</span><span class="s2">None</span><span class="s1">,</span>
+        <span class="s1">metavar=</span><span class="s3">&quot;LEVEL&quot;</span><span class="s1">,</span>
+        <span class="s1">help=(</span>
+            <span class="s3">&quot;level of messages to catch/display.</span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;Not set by default, so it depends on the root/parent log handler's&quot;</span>
+            <span class="s3">' effective level, where it is &quot;WARNING&quot; by default.'</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+    <span class="s1">add_option_ini(</span>
+        <span class="s3">&quot;--log-format&quot;</span><span class="s1">,</span>
+        <span class="s1">dest=</span><span class="s3">&quot;log_format&quot;</span><span class="s1">,</span>
+        <span class="s1">default=DEFAULT_LOG_FORMAT,</span>
+        <span class="s1">help=</span><span class="s3">&quot;log format as used by the logging module.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">add_option_ini(</span>
+        <span class="s3">&quot;--log-date-format&quot;</span><span class="s1">,</span>
+        <span class="s1">dest=</span><span class="s3">&quot;log_date_format&quot;</span><span class="s1">,</span>
+        <span class="s1">default=DEFAULT_LOG_DATE_FORMAT,</span>
+        <span class="s1">help=</span><span class="s3">&quot;log date format as used by the logging module.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">parser.addini(</span>
+        <span class="s3">&quot;log_cli&quot;</span><span class="s1">,</span>
+        <span class="s1">default=</span><span class="s2">False</span><span class="s1">,</span>
+        <span class="s1">type=</span><span class="s3">&quot;bool&quot;</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">'enable log display during test run (also known as &quot;live logging&quot;).'</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">add_option_ini(</span>
+        <span class="s3">&quot;--log-cli-level&quot;</span><span class="s1">, dest=</span><span class="s3">&quot;log_cli_level&quot;</span><span class="s1">, default=</span><span class="s2">None</span><span class="s1">, help=</span><span class="s3">&quot;cli logging level.&quot;</span>
+    <span class="s1">)</span>
+    <span class="s1">add_option_ini(</span>
+        <span class="s3">&quot;--log-cli-format&quot;</span><span class="s1">,</span>
+        <span class="s1">dest=</span><span class="s3">&quot;log_cli_format&quot;</span><span class="s1">,</span>
+        <span class="s1">default=</span><span class="s2">None</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;log format as used by the logging module.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">add_option_ini(</span>
+        <span class="s3">&quot;--log-cli-date-format&quot;</span><span class="s1">,</span>
+        <span class="s1">dest=</span><span class="s3">&quot;log_cli_date_format&quot;</span><span class="s1">,</span>
+        <span class="s1">default=</span><span class="s2">None</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;log date format as used by the logging module.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">add_option_ini(</span>
+        <span class="s3">&quot;--log-file&quot;</span><span class="s1">,</span>
+        <span class="s1">dest=</span><span class="s3">&quot;log_file&quot;</span><span class="s1">,</span>
+        <span class="s1">default=</span><span class="s2">None</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;path to a file when logging will be written to.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">add_option_ini(</span>
+        <span class="s3">&quot;--log-file-level&quot;</span><span class="s1">,</span>
+        <span class="s1">dest=</span><span class="s3">&quot;log_file_level&quot;</span><span class="s1">,</span>
+        <span class="s1">default=</span><span class="s2">None</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;log file logging level.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">add_option_ini(</span>
+        <span class="s3">&quot;--log-file-format&quot;</span><span class="s1">,</span>
+        <span class="s1">dest=</span><span class="s3">&quot;log_file_format&quot;</span><span class="s1">,</span>
+        <span class="s1">default=DEFAULT_LOG_FORMAT,</span>
+        <span class="s1">help=</span><span class="s3">&quot;log format as used by the logging module.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">add_option_ini(</span>
+        <span class="s3">&quot;--log-file-date-format&quot;</span><span class="s1">,</span>
+        <span class="s1">dest=</span><span class="s3">&quot;log_file_date_format&quot;</span><span class="s1">,</span>
+        <span class="s1">default=DEFAULT_LOG_DATE_FORMAT,</span>
+        <span class="s1">help=</span><span class="s3">&quot;log date format as used by the logging module.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">add_option_ini(</span>
+        <span class="s3">&quot;--log-auto-indent&quot;</span><span class="s1">,</span>
+        <span class="s1">dest=</span><span class="s3">&quot;log_auto_indent&quot;</span><span class="s1">,</span>
+        <span class="s1">default=</span><span class="s2">None</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Auto-indent multiline messages passed to the logging module. Accepts true|on, false|off or an integer.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+
+
+<span class="s1">_HandlerType = TypeVar(</span><span class="s3">&quot;_HandlerType&quot;</span><span class="s1">, bound=logging.Handler)</span>
+
+
+<span class="s0"># Not using @contextmanager for performance reasons.</span>
+<span class="s2">class </span><span class="s1">catching_logs:</span>
+    <span class="s0">&quot;&quot;&quot;Context manager that prepares the whole logging machinery properly.&quot;&quot;&quot;</span>
+
+    <span class="s1">__slots__ = (</span><span class="s3">&quot;handler&quot;</span><span class="s1">, </span><span class="s3">&quot;level&quot;</span><span class="s1">, </span><span class="s3">&quot;orig_level&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, handler: _HandlerType, level: Optional[int] = </span><span class="s2">None</span><span class="s1">) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">self.handler = handler</span>
+        <span class="s1">self.level = level</span>
+
+    <span class="s2">def </span><span class="s1">__enter__(self):</span>
+        <span class="s1">root_logger = logging.getLogger()</span>
+        <span class="s2">if </span><span class="s1">self.level </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">self.handler.setLevel(self.level)</span>
+        <span class="s1">root_logger.addHandler(self.handler)</span>
+        <span class="s2">if </span><span class="s1">self.level </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">self.orig_level = root_logger.level</span>
+            <span class="s1">root_logger.setLevel(min(self.orig_level, self.level))</span>
+        <span class="s2">return </span><span class="s1">self.handler</span>
+
+    <span class="s2">def </span><span class="s1">__exit__(self, type, value, traceback):</span>
+        <span class="s1">root_logger = logging.getLogger()</span>
+        <span class="s2">if </span><span class="s1">self.level </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">root_logger.setLevel(self.orig_level)</span>
+        <span class="s1">root_logger.removeHandler(self.handler)</span>
+
+
+<span class="s2">class </span><span class="s1">LogCaptureHandler(logging.StreamHandler):</span>
+    <span class="s0">&quot;&quot;&quot;A logging handler that stores log records and the log text.&quot;&quot;&quot;</span>
+
+    <span class="s1">stream: StringIO</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot;Create a new log handler.&quot;&quot;&quot;</span>
+        <span class="s1">super().__init__(StringIO())</span>
+        <span class="s1">self.records: List[logging.LogRecord] = []</span>
+
+    <span class="s2">def </span><span class="s1">emit(self, record: logging.LogRecord) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot;Keep the log records in a list in addition to the log text.&quot;&quot;&quot;</span>
+        <span class="s1">self.records.append(record)</span>
+        <span class="s1">super().emit(record)</span>
+
+    <span class="s2">def </span><span class="s1">reset(self) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">self.records = []</span>
+        <span class="s1">self.stream = StringIO()</span>
+
+    <span class="s2">def </span><span class="s1">handleError(self, record: logging.LogRecord) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s2">if </span><span class="s1">logging.raiseExceptions:</span>
+            <span class="s0"># Fail the test if the log message is bad (emit failed).</span>
+            <span class="s0"># The default behavior of logging is to print &quot;Logging error&quot;</span>
+            <span class="s0"># to stderr with the call stack and some extra details.</span>
+            <span class="s0"># pytest wants to make such mistakes visible during testing.</span>
+            <span class="s2">raise</span>
+
+
+<span class="s1">@final</span>
+<span class="s2">class </span><span class="s1">LogCaptureFixture:</span>
+    <span class="s0">&quot;&quot;&quot;Provides access and control of log capturing.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, item: nodes.Node, *, _ispytest: bool = </span><span class="s2">False</span><span class="s1">) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">check_ispytest(_ispytest)</span>
+        <span class="s1">self._item = item</span>
+        <span class="s1">self._initial_handler_level: Optional[int] = </span><span class="s2">None</span>
+        <span class="s0"># Dict of log name -&gt; log level.</span>
+        <span class="s1">self._initial_logger_levels: Dict[Optional[str], int] = {}</span>
+
+    <span class="s2">def </span><span class="s1">_finalize(self) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot;Finalize the fixture. 
+ 
+        This restores the log levels changed by :meth:`set_level`. 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># Restore log levels.</span>
+        <span class="s2">if </span><span class="s1">self._initial_handler_level </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">self.handler.setLevel(self._initial_handler_level)</span>
+        <span class="s2">for </span><span class="s1">logger_name, level </span><span class="s2">in </span><span class="s1">self._initial_logger_levels.items():</span>
+            <span class="s1">logger = logging.getLogger(logger_name)</span>
+            <span class="s1">logger.setLevel(level)</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">handler(self) -&gt; LogCaptureHandler:</span>
+        <span class="s0">&quot;&quot;&quot;Get the logging handler used by the fixture. 
+ 
+        :rtype: LogCaptureHandler 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._item._store[caplog_handler_key]</span>
+
+    <span class="s2">def </span><span class="s1">get_records(self, when: str) -&gt; List[logging.LogRecord]:</span>
+        <span class="s0">&quot;&quot;&quot;Get the logging records for one of the possible test phases. 
+ 
+        :param str when: 
+            Which test phase to obtain the records from. Valid values are: &quot;setup&quot;, &quot;call&quot; and &quot;teardown&quot;. 
+ 
+        :returns: The list of captured records at the given stage. 
+        :rtype: List[logging.LogRecord] 
+ 
+        .. versionadded:: 3.4 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._item._store[caplog_records_key].get(when, [])</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">text(self) -&gt; str:</span>
+        <span class="s0">&quot;&quot;&quot;The formatted log text.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">_remove_ansi_escape_sequences(self.handler.stream.getvalue())</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">records(self) -&gt; List[logging.LogRecord]:</span>
+        <span class="s0">&quot;&quot;&quot;The list of log records.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.handler.records</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">record_tuples(self) -&gt; List[Tuple[str, int, str]]:</span>
+        <span class="s0">&quot;&quot;&quot;A list of a stripped down version of log records intended 
+        for use in assertion comparison. 
+ 
+        The format of the tuple is: 
+ 
+            (logger_name, log_level, message) 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">[(r.name, r.levelno, r.getMessage()) </span><span class="s2">for </span><span class="s1">r </span><span class="s2">in </span><span class="s1">self.records]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">messages(self) -&gt; List[str]:</span>
+        <span class="s0">&quot;&quot;&quot;A list of format-interpolated log messages. 
+ 
+        Unlike 'records', which contains the format string and parameters for 
+        interpolation, log messages in this list are all interpolated. 
+ 
+        Unlike 'text', which contains the output from the handler, log 
+        messages in this list are unadorned with levels, timestamps, etc, 
+        making exact comparisons more reliable. 
+ 
+        Note that traceback or stack info (from :func:`logging.exception` or 
+        the `exc_info` or `stack_info` arguments to the logging functions) is 
+        not included, as this is added by the formatter in the handler. 
+ 
+        .. versionadded:: 3.7 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">[r.getMessage() </span><span class="s2">for </span><span class="s1">r </span><span class="s2">in </span><span class="s1">self.records]</span>
+
+    <span class="s2">def </span><span class="s1">clear(self) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot;Reset the list of log records and the captured log text.&quot;&quot;&quot;</span>
+        <span class="s1">self.handler.reset()</span>
+
+    <span class="s2">def </span><span class="s1">set_level(self, level: Union[int, str], logger: Optional[str] = </span><span class="s2">None</span><span class="s1">) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot;Set the level of a logger for the duration of a test. 
+ 
+        .. versionchanged:: 3.4 
+            The levels of the loggers changed by this function will be 
+            restored to their initial values at the end of the test. 
+ 
+        :param int level: The level. 
+        :param str logger: The logger to update. If not given, the root logger. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">logger_obj = logging.getLogger(logger)</span>
+        <span class="s0"># Save the original log-level to restore it during teardown.</span>
+        <span class="s1">self._initial_logger_levels.setdefault(logger, logger_obj.level)</span>
+        <span class="s1">logger_obj.setLevel(level)</span>
+        <span class="s2">if </span><span class="s1">self._initial_handler_level </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">self._initial_handler_level = self.handler.level</span>
+        <span class="s1">self.handler.setLevel(level)</span>
+
+    <span class="s1">@contextmanager</span>
+    <span class="s2">def </span><span class="s1">at_level(</span>
+        <span class="s1">self, level: int, logger: Optional[str] = </span><span class="s2">None</span>
+    <span class="s1">) -&gt; Generator[</span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">]:</span>
+        <span class="s0">&quot;&quot;&quot;Context manager that sets the level for capturing of logs. After 
+        the end of the 'with' statement the level is restored to its original 
+        value. 
+ 
+        :param int level: The level. 
+        :param str logger: The logger to update. If not given, the root logger. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">logger_obj = logging.getLogger(logger)</span>
+        <span class="s1">orig_level = logger_obj.level</span>
+        <span class="s1">logger_obj.setLevel(level)</span>
+        <span class="s1">handler_orig_level = self.handler.level</span>
+        <span class="s1">self.handler.setLevel(level)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">yield</span>
+        <span class="s2">finally</span><span class="s1">:</span>
+            <span class="s1">logger_obj.setLevel(orig_level)</span>
+            <span class="s1">self.handler.setLevel(handler_orig_level)</span>
+
+
+<span class="s1">@fixture</span>
+<span class="s2">def </span><span class="s1">caplog(request: FixtureRequest) -&gt; Generator[LogCaptureFixture, </span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">]:</span>
+    <span class="s0">&quot;&quot;&quot;Access and control log capturing. 
+ 
+    Captured logs are available through the following properties/methods:: 
+ 
+    * caplog.messages        -&gt; list of format-interpolated log messages 
+    * caplog.text            -&gt; string containing formatted log output 
+    * caplog.records         -&gt; list of logging.LogRecord instances 
+    * caplog.record_tuples   -&gt; list of (logger_name, level, message) tuples 
+    * caplog.clear()         -&gt; clear captured records and formatted log output string 
+    &quot;&quot;&quot;</span>
+    <span class="s1">result = LogCaptureFixture(request.node, _ispytest=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s2">yield </span><span class="s1">result</span>
+    <span class="s1">result._finalize()</span>
+
+
+<span class="s2">def </span><span class="s1">get_log_level_for_setting(config: Config, *setting_names: str) -&gt; Optional[int]:</span>
+    <span class="s2">for </span><span class="s1">setting_name </span><span class="s2">in </span><span class="s1">setting_names:</span>
+        <span class="s1">log_level = config.getoption(setting_name)</span>
+        <span class="s2">if </span><span class="s1">log_level </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">log_level = config.getini(setting_name)</span>
+        <span class="s2">if </span><span class="s1">log_level:</span>
+            <span class="s2">break</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">return None</span>
+
+    <span class="s2">if </span><span class="s1">isinstance(log_level, str):</span>
+        <span class="s1">log_level = log_level.upper()</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">int(getattr(logging, log_level, log_level))</span>
+    <span class="s2">except </span><span class="s1">ValueError </span><span class="s2">as </span><span class="s1">e:</span>
+        <span class="s0"># Python logging does not recognise this as a logging level</span>
+        <span class="s2">raise </span><span class="s1">UsageError(</span>
+            <span class="s3">&quot;'{}' is not recognized as a logging level name for &quot;</span>
+            <span class="s3">&quot;'{}'. Please consider passing the &quot;</span>
+            <span class="s3">&quot;logging level num instead.&quot;</span><span class="s1">.format(log_level, setting_name)</span>
+        <span class="s1">) </span><span class="s2">from </span><span class="s1">e</span>
+
+
+<span class="s0"># run after terminalreporter/capturemanager are configured</span>
+<span class="s1">@hookimpl(trylast=</span><span class="s2">True</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">pytest_configure(config: Config) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+    <span class="s1">config.pluginmanager.register(LoggingPlugin(config), </span><span class="s3">&quot;logging-plugin&quot;</span><span class="s1">)</span>
+
+
+<span class="s2">class </span><span class="s1">LoggingPlugin:</span>
+    <span class="s0">&quot;&quot;&quot;Attaches to the logging module and captures log messages for each test.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, config: Config) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot;Create a new plugin to capture log messages. 
+ 
+        The formatter can be safely shared across all handlers so 
+        create a single one for the entire test session here. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self._config = config</span>
+
+        <span class="s0"># Report logging.</span>
+        <span class="s1">self.formatter = self._create_formatter(</span>
+            <span class="s1">get_option_ini(config, </span><span class="s3">&quot;log_format&quot;</span><span class="s1">),</span>
+            <span class="s1">get_option_ini(config, </span><span class="s3">&quot;log_date_format&quot;</span><span class="s1">),</span>
+            <span class="s1">get_option_ini(config, </span><span class="s3">&quot;log_auto_indent&quot;</span><span class="s1">),</span>
+        <span class="s1">)</span>
+        <span class="s1">self.log_level = get_log_level_for_setting(config, </span><span class="s3">&quot;log_level&quot;</span><span class="s1">)</span>
+        <span class="s1">self.caplog_handler = LogCaptureHandler()</span>
+        <span class="s1">self.caplog_handler.setFormatter(self.formatter)</span>
+        <span class="s1">self.report_handler = LogCaptureHandler()</span>
+        <span class="s1">self.report_handler.setFormatter(self.formatter)</span>
+
+        <span class="s0"># File logging.</span>
+        <span class="s1">self.log_file_level = get_log_level_for_setting(config, </span><span class="s3">&quot;log_file_level&quot;</span><span class="s1">)</span>
+        <span class="s1">log_file = get_option_ini(config, </span><span class="s3">&quot;log_file&quot;</span><span class="s1">) </span><span class="s2">or </span><span class="s1">os.devnull</span>
+        <span class="s2">if </span><span class="s1">log_file != os.devnull:</span>
+            <span class="s1">directory = os.path.dirname(os.path.abspath(log_file))</span>
+            <span class="s2">if not </span><span class="s1">os.path.isdir(directory):</span>
+                <span class="s1">os.makedirs(directory)</span>
+
+        <span class="s1">self.log_file_handler = _FileHandler(log_file, mode=</span><span class="s3">&quot;w&quot;</span><span class="s1">, encoding=</span><span class="s3">&quot;UTF-8&quot;</span><span class="s1">)</span>
+        <span class="s1">log_file_format = get_option_ini(config, </span><span class="s3">&quot;log_file_format&quot;</span><span class="s1">, </span><span class="s3">&quot;log_format&quot;</span><span class="s1">)</span>
+        <span class="s1">log_file_date_format = get_option_ini(</span>
+            <span class="s1">config, </span><span class="s3">&quot;log_file_date_format&quot;</span><span class="s1">, </span><span class="s3">&quot;log_date_format&quot;</span>
+        <span class="s1">)</span>
+
+        <span class="s1">log_file_formatter = logging.Formatter(</span>
+            <span class="s1">log_file_format, datefmt=log_file_date_format</span>
+        <span class="s1">)</span>
+        <span class="s1">self.log_file_handler.setFormatter(log_file_formatter)</span>
+
+        <span class="s0"># CLI/live logging.</span>
+        <span class="s1">self.log_cli_level = get_log_level_for_setting(</span>
+            <span class="s1">config, </span><span class="s3">&quot;log_cli_level&quot;</span><span class="s1">, </span><span class="s3">&quot;log_level&quot;</span>
+        <span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">self._log_cli_enabled():</span>
+            <span class="s1">terminal_reporter = config.pluginmanager.get_plugin(</span><span class="s3">&quot;terminalreporter&quot;</span><span class="s1">)</span>
+            <span class="s1">capture_manager = config.pluginmanager.get_plugin(</span><span class="s3">&quot;capturemanager&quot;</span><span class="s1">)</span>
+            <span class="s0"># if capturemanager plugin is disabled, live logging still works.</span>
+            <span class="s1">self.log_cli_handler: Union[</span>
+                <span class="s1">_LiveLoggingStreamHandler, _LiveLoggingNullHandler</span>
+            <span class="s1">] = _LiveLoggingStreamHandler(terminal_reporter, capture_manager)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.log_cli_handler = _LiveLoggingNullHandler()</span>
+        <span class="s1">log_cli_formatter = self._create_formatter(</span>
+            <span class="s1">get_option_ini(config, </span><span class="s3">&quot;log_cli_format&quot;</span><span class="s1">, </span><span class="s3">&quot;log_format&quot;</span><span class="s1">),</span>
+            <span class="s1">get_option_ini(config, </span><span class="s3">&quot;log_cli_date_format&quot;</span><span class="s1">, </span><span class="s3">&quot;log_date_format&quot;</span><span class="s1">),</span>
+            <span class="s1">get_option_ini(config, </span><span class="s3">&quot;log_auto_indent&quot;</span><span class="s1">),</span>
+        <span class="s1">)</span>
+        <span class="s1">self.log_cli_handler.setFormatter(log_cli_formatter)</span>
+
+    <span class="s2">def </span><span class="s1">_create_formatter(self, log_format, log_date_format, auto_indent):</span>
+        <span class="s0"># Color option doesn't exist if terminal plugin is disabled.</span>
+        <span class="s1">color = getattr(self._config.option, </span><span class="s3">&quot;color&quot;</span><span class="s1">, </span><span class="s3">&quot;no&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">color != </span><span class="s3">&quot;no&quot; </span><span class="s2">and </span><span class="s1">ColoredLevelFormatter.LEVELNAME_FMT_REGEX.search(</span>
+            <span class="s1">log_format</span>
+        <span class="s1">):</span>
+            <span class="s1">formatter: logging.Formatter = ColoredLevelFormatter(</span>
+                <span class="s1">create_terminal_writer(self._config), log_format, log_date_format</span>
+            <span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">formatter = logging.Formatter(log_format, log_date_format)</span>
+
+        <span class="s1">formatter._style = PercentStyleMultiline(</span>
+            <span class="s1">formatter._style._fmt, auto_indent=auto_indent</span>
+        <span class="s1">)</span>
+
+        <span class="s2">return </span><span class="s1">formatter</span>
+
+    <span class="s2">def </span><span class="s1">set_log_path(self, fname: str) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot;Set the filename parameter for Logging.FileHandler(). 
+ 
+        Creates parent directory if it does not exist. 
+ 
+        .. warning:: 
+            This is an experimental API. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">fpath = Path(fname)</span>
+
+        <span class="s2">if not </span><span class="s1">fpath.is_absolute():</span>
+            <span class="s1">fpath = self._config.rootpath / fpath</span>
+
+        <span class="s2">if not </span><span class="s1">fpath.parent.exists():</span>
+            <span class="s1">fpath.parent.mkdir(exist_ok=</span><span class="s2">True</span><span class="s1">, parents=</span><span class="s2">True</span><span class="s1">)</span>
+
+        <span class="s1">stream = fpath.open(mode=</span><span class="s3">&quot;w&quot;</span><span class="s1">, encoding=</span><span class="s3">&quot;UTF-8&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">sys.version_info &gt;= (</span><span class="s4">3</span><span class="s1">, </span><span class="s4">7</span><span class="s1">):</span>
+            <span class="s1">old_stream = self.log_file_handler.setStream(stream)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">old_stream = self.log_file_handler.stream</span>
+            <span class="s1">self.log_file_handler.acquire()</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">self.log_file_handler.flush()</span>
+                <span class="s1">self.log_file_handler.stream = stream</span>
+            <span class="s2">finally</span><span class="s1">:</span>
+                <span class="s1">self.log_file_handler.release()</span>
+        <span class="s2">if </span><span class="s1">old_stream:</span>
+            <span class="s1">old_stream.close()</span>
+
+    <span class="s2">def </span><span class="s1">_log_cli_enabled(self):</span>
+        <span class="s0">&quot;&quot;&quot;Return whether live logging is enabled.&quot;&quot;&quot;</span>
+        <span class="s1">enabled = self._config.getoption(</span>
+            <span class="s3">&quot;--log-cli-level&quot;</span>
+        <span class="s1">) </span><span class="s2">is not None or </span><span class="s1">self._config.getini(</span><span class="s3">&quot;log_cli&quot;</span><span class="s1">)</span>
+        <span class="s2">if not </span><span class="s1">enabled:</span>
+            <span class="s2">return False</span>
+
+        <span class="s1">terminal_reporter = self._config.pluginmanager.get_plugin(</span><span class="s3">&quot;terminalreporter&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">terminal_reporter </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s0"># terminal reporter is disabled e.g. by pytest-xdist.</span>
+            <span class="s2">return False</span>
+
+        <span class="s2">return True</span>
+
+    <span class="s1">@hookimpl(hookwrapper=</span><span class="s2">True</span><span class="s1">, tryfirst=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">pytest_sessionstart(self) -&gt; Generator[</span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">]:</span>
+        <span class="s1">self.log_cli_handler.set_when(</span><span class="s3">&quot;sessionstart&quot;</span><span class="s1">)</span>
+
+        <span class="s2">with </span><span class="s1">catching_logs(self.log_cli_handler, level=self.log_cli_level):</span>
+            <span class="s2">with </span><span class="s1">catching_logs(self.log_file_handler, level=self.log_file_level):</span>
+                <span class="s2">yield</span>
+
+    <span class="s1">@hookimpl(hookwrapper=</span><span class="s2">True</span><span class="s1">, tryfirst=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">pytest_collection(self) -&gt; Generator[</span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">]:</span>
+        <span class="s1">self.log_cli_handler.set_when(</span><span class="s3">&quot;collection&quot;</span><span class="s1">)</span>
+
+        <span class="s2">with </span><span class="s1">catching_logs(self.log_cli_handler, level=self.log_cli_level):</span>
+            <span class="s2">with </span><span class="s1">catching_logs(self.log_file_handler, level=self.log_file_level):</span>
+                <span class="s2">yield</span>
+
+    <span class="s1">@hookimpl(hookwrapper=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">pytest_runtestloop(self, session: Session) -&gt; Generator[</span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">]:</span>
+        <span class="s2">if </span><span class="s1">session.config.option.collectonly:</span>
+            <span class="s2">yield</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">self._log_cli_enabled() </span><span class="s2">and </span><span class="s1">self._config.getoption(</span><span class="s3">&quot;verbose&quot;</span><span class="s1">) &lt; </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s0"># The verbose flag is needed to avoid messy test progress output.</span>
+            <span class="s1">self._config.option.verbose = </span><span class="s4">1</span>
+
+        <span class="s2">with </span><span class="s1">catching_logs(self.log_cli_handler, level=self.log_cli_level):</span>
+            <span class="s2">with </span><span class="s1">catching_logs(self.log_file_handler, level=self.log_file_level):</span>
+                <span class="s2">yield  </span><span class="s0"># Run all the tests.</span>
+
+    <span class="s1">@hookimpl</span>
+    <span class="s2">def </span><span class="s1">pytest_runtest_logstart(self) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">self.log_cli_handler.reset()</span>
+        <span class="s1">self.log_cli_handler.set_when(</span><span class="s3">&quot;start&quot;</span><span class="s1">)</span>
+
+    <span class="s1">@hookimpl</span>
+    <span class="s2">def </span><span class="s1">pytest_runtest_logreport(self) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">self.log_cli_handler.set_when(</span><span class="s3">&quot;logreport&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_runtest_for(self, item: nodes.Item, when: str) -&gt; Generator[</span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">]:</span>
+        <span class="s0">&quot;&quot;&quot;Implement the internals of the pytest_runtest_xxx() hooks.&quot;&quot;&quot;</span>
+        <span class="s2">with </span><span class="s1">catching_logs(</span>
+            <span class="s1">self.caplog_handler, level=self.log_level,</span>
+        <span class="s1">) </span><span class="s2">as </span><span class="s1">caplog_handler, catching_logs(</span>
+            <span class="s1">self.report_handler, level=self.log_level,</span>
+        <span class="s1">) </span><span class="s2">as </span><span class="s1">report_handler:</span>
+            <span class="s1">caplog_handler.reset()</span>
+            <span class="s1">report_handler.reset()</span>
+            <span class="s1">item._store[caplog_records_key][when] = caplog_handler.records</span>
+            <span class="s1">item._store[caplog_handler_key] = caplog_handler</span>
+
+            <span class="s2">yield</span>
+
+            <span class="s1">log = report_handler.stream.getvalue().strip()</span>
+            <span class="s1">item.add_report_section(when, </span><span class="s3">&quot;log&quot;</span><span class="s1">, log)</span>
+
+    <span class="s1">@hookimpl(hookwrapper=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">pytest_runtest_setup(self, item: nodes.Item) -&gt; Generator[</span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">]:</span>
+        <span class="s1">self.log_cli_handler.set_when(</span><span class="s3">&quot;setup&quot;</span><span class="s1">)</span>
+
+        <span class="s1">empty: Dict[str, List[logging.LogRecord]] = {}</span>
+        <span class="s1">item._store[caplog_records_key] = empty</span>
+        <span class="s2">yield from </span><span class="s1">self._runtest_for(item, </span><span class="s3">&quot;setup&quot;</span><span class="s1">)</span>
+
+    <span class="s1">@hookimpl(hookwrapper=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">pytest_runtest_call(self, item: nodes.Item) -&gt; Generator[</span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">]:</span>
+        <span class="s1">self.log_cli_handler.set_when(</span><span class="s3">&quot;call&quot;</span><span class="s1">)</span>
+
+        <span class="s2">yield from </span><span class="s1">self._runtest_for(item, </span><span class="s3">&quot;call&quot;</span><span class="s1">)</span>
+
+    <span class="s1">@hookimpl(hookwrapper=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">pytest_runtest_teardown(self, item: nodes.Item) -&gt; Generator[</span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">]:</span>
+        <span class="s1">self.log_cli_handler.set_when(</span><span class="s3">&quot;teardown&quot;</span><span class="s1">)</span>
+
+        <span class="s2">yield from </span><span class="s1">self._runtest_for(item, </span><span class="s3">&quot;teardown&quot;</span><span class="s1">)</span>
+        <span class="s2">del </span><span class="s1">item._store[caplog_records_key]</span>
+        <span class="s2">del </span><span class="s1">item._store[caplog_handler_key]</span>
+
+    <span class="s1">@hookimpl</span>
+    <span class="s2">def </span><span class="s1">pytest_runtest_logfinish(self) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">self.log_cli_handler.set_when(</span><span class="s3">&quot;finish&quot;</span><span class="s1">)</span>
+
+    <span class="s1">@hookimpl(hookwrapper=</span><span class="s2">True</span><span class="s1">, tryfirst=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">pytest_sessionfinish(self) -&gt; Generator[</span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">]:</span>
+        <span class="s1">self.log_cli_handler.set_when(</span><span class="s3">&quot;sessionfinish&quot;</span><span class="s1">)</span>
+
+        <span class="s2">with </span><span class="s1">catching_logs(self.log_cli_handler, level=self.log_cli_level):</span>
+            <span class="s2">with </span><span class="s1">catching_logs(self.log_file_handler, level=self.log_file_level):</span>
+                <span class="s2">yield</span>
+
+    <span class="s1">@hookimpl</span>
+    <span class="s2">def </span><span class="s1">pytest_unconfigure(self) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0"># Close the FileHandler explicitly.</span>
+        <span class="s0"># (logging.shutdown might have lost the weakref?!)</span>
+        <span class="s1">self.log_file_handler.close()</span>
+
+
+<span class="s2">class </span><span class="s1">_FileHandler(logging.FileHandler):</span>
+    <span class="s0">&quot;&quot;&quot;A logging FileHandler with pytest tweaks.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">handleError(self, record: logging.LogRecord) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0"># Handled by LogCaptureHandler.</span>
+        <span class="s2">pass</span>
+
+
+<span class="s2">class </span><span class="s1">_LiveLoggingStreamHandler(logging.StreamHandler):</span>
+    <span class="s0">&quot;&quot;&quot;A logging StreamHandler used by the live logging feature: it will 
+    write a newline before the first log message in each test. 
+ 
+    During live logging we must also explicitly disable stdout/stderr 
+    capturing otherwise it will get captured and won't appear in the 
+    terminal. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0"># Officially stream needs to be a IO[str], but TerminalReporter</span>
+    <span class="s0"># isn't. So force it.</span>
+    <span class="s1">stream: TerminalReporter = </span><span class="s2">None  </span><span class="s0"># type: ignore</span>
+
+    <span class="s2">def </span><span class="s1">__init__(</span>
+        <span class="s1">self,</span>
+        <span class="s1">terminal_reporter: TerminalReporter,</span>
+        <span class="s1">capture_manager: Optional[CaptureManager],</span>
+    <span class="s1">) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">logging.StreamHandler.__init__(self, stream=terminal_reporter)  </span><span class="s0"># type: ignore[arg-type]</span>
+        <span class="s1">self.capture_manager = capture_manager</span>
+        <span class="s1">self.reset()</span>
+        <span class="s1">self.set_when(</span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s1">self._test_outcome_written = </span><span class="s2">False</span>
+
+    <span class="s2">def </span><span class="s1">reset(self) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot;Reset the handler; should be called before the start of each test.&quot;&quot;&quot;</span>
+        <span class="s1">self._first_record_emitted = </span><span class="s2">False</span>
+
+    <span class="s2">def </span><span class="s1">set_when(self, when: Optional[str]) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot;Prepare for the given test phase (setup/call/teardown).&quot;&quot;&quot;</span>
+        <span class="s1">self._when = when</span>
+        <span class="s1">self._section_name_shown = </span><span class="s2">False</span>
+        <span class="s2">if </span><span class="s1">when == </span><span class="s3">&quot;start&quot;</span><span class="s1">:</span>
+            <span class="s1">self._test_outcome_written = </span><span class="s2">False</span>
+
+    <span class="s2">def </span><span class="s1">emit(self, record: logging.LogRecord) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">ctx_manager = (</span>
+            <span class="s1">self.capture_manager.global_and_fixture_disabled()</span>
+            <span class="s2">if </span><span class="s1">self.capture_manager</span>
+            <span class="s2">else </span><span class="s1">nullcontext()</span>
+        <span class="s1">)</span>
+        <span class="s2">with </span><span class="s1">ctx_manager:</span>
+            <span class="s2">if not </span><span class="s1">self._first_record_emitted:</span>
+                <span class="s1">self.stream.write(</span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">&quot;</span><span class="s1">)</span>
+                <span class="s1">self._first_record_emitted = </span><span class="s2">True</span>
+            <span class="s2">elif </span><span class="s1">self._when </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;teardown&quot;</span><span class="s1">, </span><span class="s3">&quot;finish&quot;</span><span class="s1">):</span>
+                <span class="s2">if not </span><span class="s1">self._test_outcome_written:</span>
+                    <span class="s1">self._test_outcome_written = </span><span class="s2">True</span>
+                    <span class="s1">self.stream.write(</span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">&quot;</span><span class="s1">)</span>
+            <span class="s2">if not </span><span class="s1">self._section_name_shown </span><span class="s2">and </span><span class="s1">self._when:</span>
+                <span class="s1">self.stream.section(</span><span class="s3">&quot;live log &quot; </span><span class="s1">+ self._when, sep=</span><span class="s3">&quot;-&quot;</span><span class="s1">, bold=</span><span class="s2">True</span><span class="s1">)</span>
+                <span class="s1">self._section_name_shown = </span><span class="s2">True</span>
+            <span class="s1">super().emit(record)</span>
+
+    <span class="s2">def </span><span class="s1">handleError(self, record: logging.LogRecord) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0"># Handled by LogCaptureHandler.</span>
+        <span class="s2">pass</span>
+
+
+<span class="s2">class </span><span class="s1">_LiveLoggingNullHandler(logging.NullHandler):</span>
+    <span class="s0">&quot;&quot;&quot;A logging handler used when live logging is disabled.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">reset(self) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">set_when(self, when: str) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">handleError(self, record: logging.LogRecord) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0"># Handled by LogCaptureHandler.</span>
+        <span class="s2">pass</span>
+</pre>
+</body>
+</html>

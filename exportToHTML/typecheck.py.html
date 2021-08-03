@@ -1,0 +1,1977 @@
+<html>
+<head>
+<title>typecheck.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+.s5 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+typecheck.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2006-2014 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2009 James Lingard &lt;jchl@aristanetworks.com&gt;</span>
+<span class="s0"># Copyright (c) 2012-2014 Google, Inc.</span>
+<span class="s0"># Copyright (c) 2014-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 David Shea &lt;dshea@redhat.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Steven Myint &lt;hg@stevenmyint.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Holger Peters &lt;email@holger-peters.de&gt;</span>
+<span class="s0"># Copyright (c) 2014 Arun Persaud &lt;arun@nubati.net&gt;</span>
+<span class="s0"># Copyright (c) 2015 Anentropic &lt;ego@anentropic.com&gt;</span>
+<span class="s0"># Copyright (c) 2015 Dmitry Pribysh &lt;dmand@yandex.ru&gt;</span>
+<span class="s0"># Copyright (c) 2015 Rene Zhang &lt;rz99@cornell.edu&gt;</span>
+<span class="s0"># Copyright (c) 2015 Radu Ciorba &lt;radu@devrandom.ro&gt;</span>
+<span class="s0"># Copyright (c) 2015 Ionel Cristian Maries &lt;contact@ionelmc.ro&gt;</span>
+<span class="s0"># Copyright (c) 2016, 2019 Ashley Whetter &lt;ashley@awhetter.co.uk&gt;</span>
+<span class="s0"># Copyright (c) 2016 Alexander Todorov &lt;atodorov@otb.bg&gt;</span>
+<span class="s0"># Copyright (c) 2016 Jürgen Hermann &lt;jh@web.de&gt;</span>
+<span class="s0"># Copyright (c) 2016 Jakub Wilk &lt;jwilk@jwilk.net&gt;</span>
+<span class="s0"># Copyright (c) 2016 Filipe Brandenburger &lt;filbranden@google.com&gt;</span>
+<span class="s0"># Copyright (c) 2017-2018, 2020 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Łukasz Rogalski &lt;rogalski.91@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Derek Gustafson &lt;degustaf@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Ville Skyttä &lt;ville.skytta@iki.fi&gt;</span>
+<span class="s0"># Copyright (c) 2018-2019 Nick Drozd &lt;nicholasdrozd@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Pablo Galindo &lt;Pablogsal@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Jim Robertson &lt;jrobertson98atx@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Lucas Cimon &lt;lucas.cimon@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Mike Frysinger &lt;vapier@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Ben Green &lt;benhgreen@icloud.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Konstantin &lt;Github@pheanex.de&gt;</span>
+<span class="s0"># Copyright (c) 2018 Justin Li &lt;justinnhli@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Bryce Guinta &lt;bryce.paul.guinta@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019-2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Andy Palmer &lt;25123779+ninezerozeronine@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 mattlbeck &lt;17108752+mattlbeck@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Martin Vielsmaier &lt;martin.vielsmaier@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Santiago Castro &lt;bryant@montevideo.com.uy&gt;</span>
+<span class="s0"># Copyright (c) 2019 yory8 &lt;39745367+yory8@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Federico Bond &lt;federicobond@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Pascal Corpet &lt;pcorpet@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Peter Kolbus &lt;peter.kolbus@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Julien Palard &lt;julien@palard.fr&gt;</span>
+<span class="s0"># Copyright (c) 2020 Ram Rachum &lt;ram@rachum.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Anthony Sottile &lt;asottile@umich.edu&gt;</span>
+<span class="s0"># Copyright (c) 2020 Anubhav &lt;35621759+anubh-v@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Marc Mueller &lt;30130371+cdce8p@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Jens H. Nielsen &lt;Jens.Nielsen@microsoft.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Ikraduya Edian &lt;ikraduya@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;try to find more bugs in the code using astroid inference capabilities 
+&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">builtins</span>
+<span class="s2">import </span><span class="s1">fnmatch</span>
+<span class="s2">import </span><span class="s1">heapq</span>
+<span class="s2">import </span><span class="s1">itertools</span>
+<span class="s2">import </span><span class="s1">operator</span>
+<span class="s2">import </span><span class="s1">re</span>
+<span class="s2">import </span><span class="s1">shlex</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">types</span>
+<span class="s2">from </span><span class="s1">collections </span><span class="s2">import </span><span class="s1">deque</span>
+<span class="s2">from </span><span class="s1">collections.abc </span><span class="s2">import </span><span class="s1">Sequence</span>
+<span class="s2">from </span><span class="s1">functools </span><span class="s2">import </span><span class="s1">singledispatch</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Pattern, Tuple</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+
+<span class="s2">from </span><span class="s1">pylint.checkers </span><span class="s2">import </span><span class="s1">BaseChecker, utils</span>
+<span class="s2">from </span><span class="s1">pylint.checkers.utils </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">check_messages,</span>
+    <span class="s1">decorated_with,</span>
+    <span class="s1">decorated_with_property,</span>
+    <span class="s1">has_known_bases,</span>
+    <span class="s1">is_builtin_object,</span>
+    <span class="s1">is_classdef_type,</span>
+    <span class="s1">is_comprehension,</span>
+    <span class="s1">is_inside_abstract_class,</span>
+    <span class="s1">is_iterable,</span>
+    <span class="s1">is_mapping,</span>
+    <span class="s1">is_overload_stub,</span>
+    <span class="s1">is_postponed_evaluation_enabled,</span>
+    <span class="s1">is_super,</span>
+    <span class="s1">node_ignores_exception,</span>
+    <span class="s1">safe_infer,</span>
+    <span class="s1">supports_delitem,</span>
+    <span class="s1">supports_getitem,</span>
+    <span class="s1">supports_membership_test,</span>
+    <span class="s1">supports_setitem,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">pylint.constants </span><span class="s2">import </span><span class="s1">PY310_PLUS</span>
+<span class="s2">from </span><span class="s1">pylint.interfaces </span><span class="s2">import </span><span class="s1">INFERENCE, IAstroidChecker</span>
+<span class="s2">from </span><span class="s1">pylint.utils </span><span class="s2">import </span><span class="s1">get_global_option</span>
+
+<span class="s1">BUILTINS = builtins.__name__</span>
+<span class="s1">STR_FORMAT = {</span><span class="s3">&quot;%s.str.format&quot; </span><span class="s1">% BUILTINS}</span>
+<span class="s1">ASYNCIO_COROUTINE = </span><span class="s3">&quot;asyncio.coroutines.coroutine&quot;</span>
+<span class="s1">BUILTIN_TUPLE = </span><span class="s3">&quot;builtins.tuple&quot;</span>
+<span class="s1">TYPE_ANNOTATION_NODES_TYPES = (</span>
+    <span class="s1">astroid.AnnAssign,</span>
+    <span class="s1">astroid.Arguments,</span>
+    <span class="s1">astroid.FunctionDef,</span>
+<span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_unflatten(iterable):</span>
+    <span class="s2">for </span><span class="s1">index, elem </span><span class="s2">in </span><span class="s1">enumerate(iterable):</span>
+        <span class="s2">if </span><span class="s1">isinstance(elem, Sequence) </span><span class="s2">and not </span><span class="s1">isinstance(elem, str):</span>
+            <span class="s2">yield from </span><span class="s1">_unflatten(elem)</span>
+        <span class="s2">elif </span><span class="s1">elem </span><span class="s2">and not </span><span class="s1">index:</span>
+            <span class="s0"># We're interested only in the first element.</span>
+            <span class="s2">yield </span><span class="s1">elem</span>
+
+
+<span class="s2">def </span><span class="s1">_flatten_container(iterable):</span>
+    <span class="s0"># Flatten nested containers into a single iterable</span>
+    <span class="s2">for </span><span class="s1">item </span><span class="s2">in </span><span class="s1">iterable:</span>
+        <span class="s2">if </span><span class="s1">isinstance(item, (list, tuple, types.GeneratorType)):</span>
+            <span class="s2">yield from </span><span class="s1">_flatten_container(item)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">yield </span><span class="s1">item</span>
+
+
+<span class="s2">def </span><span class="s1">_is_owner_ignored(owner, attrname, ignored_classes, ignored_modules):</span>
+    <span class="s0">&quot;&quot;&quot;Check if the given owner should be ignored 
+ 
+    This will verify if the owner's module is in *ignored_modules* 
+    or the owner's module fully qualified name is in *ignored_modules* 
+    or if the *ignored_modules* contains a pattern which catches 
+    the fully qualified name of the module. 
+ 
+    Also, similar checks are done for the owner itself, if its name 
+    matches any name from the *ignored_classes* or if its qualified 
+    name can be found in *ignored_classes*. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">ignored_modules = set(ignored_modules)</span>
+    <span class="s1">module_name = owner.root().name</span>
+    <span class="s1">module_qname = owner.root().qname()</span>
+
+    <span class="s2">for </span><span class="s1">ignore </span><span class="s2">in </span><span class="s1">ignored_modules:</span>
+        <span class="s0"># Try to match the module name / fully qualified name directly</span>
+        <span class="s2">if </span><span class="s1">module_qname </span><span class="s2">in </span><span class="s1">ignored_modules </span><span class="s2">or </span><span class="s1">module_name </span><span class="s2">in </span><span class="s1">ignored_modules:</span>
+            <span class="s2">return True</span>
+
+        <span class="s0"># Try to see if the ignores pattern match against the module name.</span>
+        <span class="s2">if </span><span class="s1">fnmatch.fnmatch(module_qname, ignore):</span>
+            <span class="s2">return True</span>
+
+        <span class="s0"># Otherwise we might have a root module name being ignored,</span>
+        <span class="s0"># and the qualified owner has more levels of depth.</span>
+        <span class="s1">parts = deque(module_name.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">))</span>
+        <span class="s1">current_module = </span><span class="s3">&quot;&quot;</span>
+
+        <span class="s2">while </span><span class="s1">parts:</span>
+            <span class="s1">part = parts.popleft()</span>
+            <span class="s2">if not </span><span class="s1">current_module:</span>
+                <span class="s1">current_module = part</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">current_module += </span><span class="s3">f&quot;.</span><span class="s4">{</span><span class="s1">part</span><span class="s4">}</span><span class="s3">&quot;</span>
+            <span class="s2">if </span><span class="s1">current_module </span><span class="s2">in </span><span class="s1">ignored_modules:</span>
+                <span class="s2">return True</span>
+
+    <span class="s0"># Match against ignored classes.</span>
+    <span class="s1">ignored_classes = set(ignored_classes)</span>
+    <span class="s2">if </span><span class="s1">hasattr(owner, </span><span class="s3">&quot;qname&quot;</span><span class="s1">):</span>
+        <span class="s1">qname = owner.qname()</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">qname = </span><span class="s3">&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">any(ignore </span><span class="s2">in </span><span class="s1">(attrname, qname) </span><span class="s2">for </span><span class="s1">ignore </span><span class="s2">in </span><span class="s1">ignored_classes)</span>
+
+
+<span class="s1">@singledispatch</span>
+<span class="s2">def </span><span class="s1">_node_names(node):</span>
+    <span class="s2">if not </span><span class="s1">hasattr(node, </span><span class="s3">&quot;locals&quot;</span><span class="s1">):</span>
+        <span class="s2">return </span><span class="s1">[]</span>
+    <span class="s2">return </span><span class="s1">node.locals.keys()</span>
+
+
+<span class="s1">@_node_names.register(astroid.ClassDef)</span>
+<span class="s1">@_node_names.register(astroid.Instance)</span>
+<span class="s2">def </span><span class="s1">_(node):</span>
+    <span class="s1">values = itertools.chain(node.instance_attrs.keys(), node.locals.keys())</span>
+
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">mro = node.mro()[</span><span class="s5">1</span><span class="s1">:]</span>
+    <span class="s2">except </span><span class="s1">(NotImplementedError, TypeError):</span>
+        <span class="s1">mro = node.ancestors()</span>
+
+    <span class="s1">other_values = [value </span><span class="s2">for </span><span class="s1">cls </span><span class="s2">in </span><span class="s1">mro </span><span class="s2">for </span><span class="s1">value </span><span class="s2">in </span><span class="s1">_node_names(cls)]</span>
+    <span class="s2">return </span><span class="s1">itertools.chain(values, other_values)</span>
+
+
+<span class="s2">def </span><span class="s1">_string_distance(seq1, seq2):</span>
+    <span class="s1">seq2_length = len(seq2)</span>
+
+    <span class="s1">row = list(range(</span><span class="s5">1</span><span class="s1">, seq2_length + </span><span class="s5">1</span><span class="s1">)) + [</span><span class="s5">0</span><span class="s1">]</span>
+    <span class="s2">for </span><span class="s1">seq1_index, seq1_char </span><span class="s2">in </span><span class="s1">enumerate(seq1):</span>
+        <span class="s1">last_row = row</span>
+        <span class="s1">row = [</span><span class="s5">0</span><span class="s1">] * seq2_length + [seq1_index + </span><span class="s5">1</span><span class="s1">]</span>
+
+        <span class="s2">for </span><span class="s1">seq2_index, seq2_char </span><span class="s2">in </span><span class="s1">enumerate(seq2):</span>
+            <span class="s1">row[seq2_index] = min(</span>
+                <span class="s1">last_row[seq2_index] + </span><span class="s5">1</span><span class="s1">,</span>
+                <span class="s1">row[seq2_index - </span><span class="s5">1</span><span class="s1">] + </span><span class="s5">1</span><span class="s1">,</span>
+                <span class="s1">last_row[seq2_index - </span><span class="s5">1</span><span class="s1">] + (seq1_char != seq2_char),</span>
+            <span class="s1">)</span>
+
+    <span class="s2">return </span><span class="s1">row[seq2_length - </span><span class="s5">1</span><span class="s1">]</span>
+
+
+<span class="s2">def </span><span class="s1">_similar_names(owner, attrname, distance_threshold, max_choices):</span>
+    <span class="s0">&quot;&quot;&quot;Given an owner and a name, try to find similar names 
+ 
+    The similar names are searched given a distance metric and only 
+    a given number of choices will be returned. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">possible_names = []</span>
+    <span class="s1">names = _node_names(owner)</span>
+
+    <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">names:</span>
+        <span class="s2">if </span><span class="s1">name == attrname:</span>
+            <span class="s2">continue</span>
+
+        <span class="s1">distance = _string_distance(attrname, name)</span>
+        <span class="s2">if </span><span class="s1">distance &lt;= distance_threshold:</span>
+            <span class="s1">possible_names.append((name, distance))</span>
+
+    <span class="s0"># Now get back the values with a minimum, up to the given</span>
+    <span class="s0"># limit or choices.</span>
+    <span class="s1">picked = [</span>
+        <span class="s1">name</span>
+        <span class="s2">for </span><span class="s1">(name, _) </span><span class="s2">in </span><span class="s1">heapq.nsmallest(</span>
+            <span class="s1">max_choices, possible_names, key=operator.itemgetter(</span><span class="s5">1</span><span class="s1">)</span>
+        <span class="s1">)</span>
+    <span class="s1">]</span>
+    <span class="s2">return </span><span class="s1">sorted(picked)</span>
+
+
+<span class="s2">def </span><span class="s1">_missing_member_hint(owner, attrname, distance_threshold, max_choices):</span>
+    <span class="s1">names = _similar_names(owner, attrname, distance_threshold, max_choices)</span>
+    <span class="s2">if not </span><span class="s1">names:</span>
+        <span class="s0"># No similar name.</span>
+        <span class="s2">return </span><span class="s3">&quot;&quot;</span>
+
+    <span class="s1">names = [repr(name) </span><span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">names]</span>
+    <span class="s2">if </span><span class="s1">len(names) == </span><span class="s5">1</span><span class="s1">:</span>
+        <span class="s1">names = </span><span class="s3">&quot;, &quot;</span><span class="s1">.join(names)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">names = </span><span class="s3">&quot;one of {} or {}&quot;</span><span class="s1">.format(</span><span class="s3">&quot;, &quot;</span><span class="s1">.join(names[:-</span><span class="s5">1</span><span class="s1">]), names[-</span><span class="s5">1</span><span class="s1">])</span>
+
+    <span class="s2">return </span><span class="s3">f&quot;; maybe </span><span class="s4">{</span><span class="s1">names</span><span class="s4">}</span><span class="s3">?&quot;</span>
+
+
+<span class="s1">MSGS = {</span>
+    <span class="s3">&quot;E1101&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;%s %r has no %r member%s&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;no-member&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a variable is accessed for an unexistent member.&quot;</span><span class="s1">,</span>
+        <span class="s1">{</span><span class="s3">&quot;old_names&quot;</span><span class="s1">: [(</span><span class="s3">&quot;E1103&quot;</span><span class="s1">, </span><span class="s3">&quot;maybe-no-member&quot;</span><span class="s1">)]},</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;I1101&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;%s %r has no %r member%s, but source is unavailable. Consider &quot;</span>
+        <span class="s3">&quot;adding this module to extension-pkg-allow-list if you want &quot;</span>
+        <span class="s3">&quot;to perform analysis based on run-time introspection of living objects.&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;c-extension-no-member&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a variable is accessed for non-existent member of C &quot;</span>
+        <span class="s3">&quot;extension. Due to unavailability of source static analysis is impossible, &quot;</span>
+        <span class="s3">&quot;but it may be performed by introspecting living objects in run-time.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1102&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;%s is not callable&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;not-callable&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when an object being called has been inferred to a non &quot;</span>
+        <span class="s3">&quot;callable object.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1111&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Assigning result of a function call, where the function has no return&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;assignment-from-no-return&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when an assignment is done on a function call but the &quot;</span>
+        <span class="s3">&quot;inferred function doesn't return anything.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1120&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;No value for argument %s in %s call&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;no-value-for-parameter&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a function call passes too few arguments.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1121&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Too many positional arguments for %s call&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-function-args&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a function call passes too many positional arguments.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1123&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Unexpected keyword argument %r in %s call&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;unexpected-keyword-arg&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a function call passes a keyword argument that &quot;</span>
+        <span class="s3">&quot;doesn't correspond to one of the function's parameter names.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1124&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Argument %r passed by position and keyword in %s call&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;redundant-keyword-arg&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a function call would result in assigning multiple &quot;</span>
+        <span class="s3">&quot;values to a function parameter, one value from a positional &quot;</span>
+        <span class="s3">&quot;argument and one from a keyword argument.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1125&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Missing mandatory keyword argument %r in %s call&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;missing-kwoa&quot;</span><span class="s1">,</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;Used when a function call does not pass a mandatory&quot;</span>
+            <span class="s3">&quot; keyword-only argument.&quot;</span>
+        <span class="s1">),</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1126&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Sequence index is not an int, slice, or instance with __index__&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;invalid-sequence-index&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a sequence type is indexed with an invalid type. &quot;</span>
+        <span class="s3">&quot;Valid types are ints, slices, and objects with an __index__ &quot;</span>
+        <span class="s3">&quot;method.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1127&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Slice index is not an int, None, or instance with __index__&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;invalid-slice-index&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a slice index is not an integer, None, or an object &quot;</span>
+        <span class="s3">&quot;with an __index__ method.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1128&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Assigning result of a function call, where the function returns None&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;assignment-from-none&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when an assignment is done on a function call but the &quot;</span>
+        <span class="s3">&quot;inferred function returns nothing but None.&quot;</span><span class="s1">,</span>
+        <span class="s1">{</span><span class="s3">&quot;old_names&quot;</span><span class="s1">: [(</span><span class="s3">&quot;W1111&quot;</span><span class="s1">, </span><span class="s3">&quot;old-assignment-from-none&quot;</span><span class="s1">)]},</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1129&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Context manager '%s' doesn't implement __enter__ and __exit__.&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;not-context-manager&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when an instance in a with statement doesn't implement &quot;</span>
+        <span class="s3">&quot;the context manager protocol(__enter__/__exit__).&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1130&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;%s&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;invalid-unary-operand-type&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Emitted when a unary operand is used on an object which does not &quot;</span>
+        <span class="s3">&quot;support this type of operation.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1131&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;%s&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;unsupported-binary-operation&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Emitted when a binary arithmetic operation between two &quot;</span>
+        <span class="s3">&quot;operands is not supported.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1132&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Got multiple values for keyword argument %r in function call&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;repeated-keyword&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Emitted when a function call got multiple values for a keyword.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1135&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Value '%s' doesn't support membership test&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;unsupported-membership-test&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Emitted when an instance in membership test expression doesn't &quot;</span>
+        <span class="s3">&quot;implement membership protocol (__contains__/__iter__/__getitem__).&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1136&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Value '%s' is unsubscriptable&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;unsubscriptable-object&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Emitted when a subscripted value doesn't support subscription &quot;</span>
+        <span class="s3">&quot;(i.e. doesn't define __getitem__ method or __class_getitem__ for a class).&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1137&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;%r does not support item assignment&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;unsupported-assignment-operation&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Emitted when an object does not support item assignment &quot;</span>
+        <span class="s3">&quot;(i.e. doesn't define __setitem__ method).&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1138&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;%r does not support item deletion&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;unsupported-delete-operation&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Emitted when an object does not support item deletion &quot;</span>
+        <span class="s3">&quot;(i.e. doesn't define __delitem__ method).&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1139&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Invalid metaclass %r used&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;invalid-metaclass&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Emitted whenever we can detect that a class is using, &quot;</span>
+        <span class="s3">&quot;as a metaclass, something which might be invalid for using as &quot;</span>
+        <span class="s3">&quot;a metaclass.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1140&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Dict key is unhashable&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;unhashable-dict-key&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Emitted when a dict key is not hashable &quot;</span>
+        <span class="s3">&quot;(i.e. doesn't define __hash__ method).&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E1141&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Unpacking a dictionary in iteration without calling .items()&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;dict-iter-missing-items&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Emitted when trying to iterate through a dict without calling .items()&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;W1113&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Keyword argument before variable positional arguments list &quot;</span>
+        <span class="s3">&quot;in the definition of %s function&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;keyword-arg-before-vararg&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;When defining a keyword argument before variable positional arguments, one can &quot;</span>
+        <span class="s3">&quot;end up in having multiple values passed for the aforementioned parameter in &quot;</span>
+        <span class="s3">&quot;case the method is called with keyword arguments.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;W1114&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Positional arguments appear to be out of order&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;arguments-out-of-order&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Emitted  when the caller's argument names fully match the parameter &quot;</span>
+        <span class="s3">&quot;names in the function signature but do not have the same order.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;W1115&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Non-string value assigned to __name__&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;non-str-assignment-to-dunder-name&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Emitted when a non-string vaue is assigned to __name__&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;W1116&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Second argument of isinstance is not a type&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;isinstance-second-argument-not-valid-type&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Emitted when the second argument of an isinstance call is not a type.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+<span class="s1">}</span>
+
+<span class="s0"># builtin sequence types in Python 2 and 3.</span>
+<span class="s1">SEQUENCE_TYPES = {</span>
+    <span class="s3">&quot;str&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;unicode&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;list&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;tuple&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;bytearray&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;xrange&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;range&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;bytes&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;memoryview&quot;</span><span class="s1">,</span>
+<span class="s1">}</span>
+
+
+<span class="s2">def </span><span class="s1">_emit_no_member(node, owner, owner_name, ignored_mixins=</span><span class="s2">True</span><span class="s1">, ignored_none=</span><span class="s2">True</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Try to see if no-member should be emitted for the given owner. 
+ 
+    The following cases are ignored: 
+ 
+        * the owner is a function and it has decorators. 
+        * the owner is an instance and it has __getattr__, __getattribute__ implemented 
+        * the module is explicitly ignored from no-member checks 
+        * the owner is a class and the name can be found in its metaclass. 
+        * The access node is protected by an except handler, which handles 
+          AttributeError, Exception or bare except. 
+    &quot;&quot;&quot;</span>
+    <span class="s0"># pylint: disable=too-many-return-statements</span>
+    <span class="s2">if </span><span class="s1">node_ignores_exception(node, AttributeError):</span>
+        <span class="s2">return False</span>
+    <span class="s2">if </span><span class="s1">ignored_none </span><span class="s2">and </span><span class="s1">isinstance(owner, astroid.Const) </span><span class="s2">and </span><span class="s1">owner.value </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s2">return False</span>
+    <span class="s2">if </span><span class="s1">is_super(owner) </span><span class="s2">or </span><span class="s1">getattr(owner, </span><span class="s3">&quot;type&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">) == </span><span class="s3">&quot;metaclass&quot;</span><span class="s1">:</span>
+        <span class="s2">return False</span>
+    <span class="s2">if </span><span class="s1">owner_name </span><span class="s2">and </span><span class="s1">ignored_mixins </span><span class="s2">and </span><span class="s1">owner_name[-</span><span class="s5">5</span><span class="s1">:].lower() == </span><span class="s3">&quot;mixin&quot;</span><span class="s1">:</span>
+        <span class="s2">return False</span>
+    <span class="s2">if </span><span class="s1">isinstance(owner, astroid.FunctionDef) </span><span class="s2">and </span><span class="s1">owner.decorators:</span>
+        <span class="s2">return False</span>
+    <span class="s2">if </span><span class="s1">isinstance(owner, (astroid.Instance, astroid.ClassDef)):</span>
+        <span class="s2">if </span><span class="s1">owner.has_dynamic_getattr():</span>
+            <span class="s0"># Issue #2565: Don't ignore enums, as they have a `__getattr__` but it's not</span>
+            <span class="s0"># invoked at this point.</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">metaclass = owner.metaclass()</span>
+            <span class="s2">except </span><span class="s1">astroid.MroError:</span>
+                <span class="s2">return False</span>
+            <span class="s2">if </span><span class="s1">metaclass:</span>
+                <span class="s2">return </span><span class="s1">metaclass.qname() == </span><span class="s3">&quot;enum.EnumMeta&quot;</span>
+            <span class="s2">return False</span>
+        <span class="s2">if not </span><span class="s1">has_known_bases(owner):</span>
+            <span class="s2">return False</span>
+
+        <span class="s0"># Exclude typed annotations, since these might actually exist</span>
+        <span class="s0"># at some point during the runtime of the program.</span>
+        <span class="s2">if </span><span class="s1">utils.is_attribute_typed_annotation(owner, node.attrname):</span>
+            <span class="s2">return False</span>
+    <span class="s2">if </span><span class="s1">isinstance(owner, astroid.objects.Super):</span>
+        <span class="s0"># Verify if we are dealing with an invalid Super object.</span>
+        <span class="s0"># If it is invalid, then there's no point in checking that</span>
+        <span class="s0"># it has the required attribute. Also, don't fail if the</span>
+        <span class="s0"># MRO is invalid.</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">owner.super_mro()</span>
+        <span class="s2">except </span><span class="s1">(astroid.MroError, astroid.SuperError):</span>
+            <span class="s2">return False</span>
+        <span class="s2">if not </span><span class="s1">all(has_known_bases(base) </span><span class="s2">for </span><span class="s1">base </span><span class="s2">in </span><span class="s1">owner.type.mro()):</span>
+            <span class="s2">return False</span>
+    <span class="s2">if </span><span class="s1">isinstance(owner, astroid.Module):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">owner.getattr(</span><span class="s3">&quot;__getattr__&quot;</span><span class="s1">)</span>
+            <span class="s2">return False</span>
+        <span class="s2">except </span><span class="s1">astroid.NotFoundError:</span>
+            <span class="s2">pass</span>
+    <span class="s2">if </span><span class="s1">owner_name </span><span class="s2">and </span><span class="s1">node.attrname.startswith(</span><span class="s3">&quot;_&quot; </span><span class="s1">+ owner_name):</span>
+        <span class="s0"># Test if an attribute has been mangled ('private' attribute)</span>
+        <span class="s1">unmangled_name = node.attrname.split(</span><span class="s3">&quot;_&quot; </span><span class="s1">+ owner_name)[-</span><span class="s5">1</span><span class="s1">]</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">owner.getattr(unmangled_name, context=</span><span class="s2">None</span><span class="s1">) </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s2">return False</span>
+        <span class="s2">except </span><span class="s1">astroid.NotFoundError:</span>
+            <span class="s2">return True</span>
+    <span class="s2">if </span><span class="s1">(</span>
+        <span class="s1">owner.parent</span>
+        <span class="s2">and </span><span class="s1">isinstance(owner.parent, astroid.ClassDef)</span>
+        <span class="s2">and </span><span class="s1">owner.parent.name == </span><span class="s3">&quot;EnumMeta&quot;</span>
+        <span class="s2">and </span><span class="s1">owner_name == </span><span class="s3">&quot;__members__&quot;</span>
+        <span class="s2">and </span><span class="s1">node.attrname </span><span class="s2">in </span><span class="s1">[</span><span class="s3">&quot;items&quot;</span><span class="s1">, </span><span class="s3">&quot;values&quot;</span><span class="s1">, </span><span class="s3">&quot;keys&quot;</span><span class="s1">]</span>
+    <span class="s1">):</span>
+        <span class="s0"># Avoid false positive on Enum.__members__.{items(), values, keys}</span>
+        <span class="s0"># See https://github.com/PyCQA/pylint/issues/4123</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">return True</span>
+
+
+<span class="s2">def </span><span class="s1">_determine_callable(callable_obj):</span>
+    <span class="s0"># Ordering is important, since BoundMethod is a subclass of UnboundMethod,</span>
+    <span class="s0"># and Function inherits Lambda.</span>
+    <span class="s1">parameters = </span><span class="s5">0</span>
+    <span class="s2">if </span><span class="s1">hasattr(callable_obj, </span><span class="s3">&quot;implicit_parameters&quot;</span><span class="s1">):</span>
+        <span class="s1">parameters = callable_obj.implicit_parameters()</span>
+    <span class="s2">if </span><span class="s1">isinstance(callable_obj, astroid.BoundMethod):</span>
+        <span class="s0"># Bound methods have an extra implicit 'self' argument.</span>
+        <span class="s2">return </span><span class="s1">callable_obj, parameters, callable_obj.type</span>
+    <span class="s2">if </span><span class="s1">isinstance(callable_obj, astroid.UnboundMethod):</span>
+        <span class="s2">return </span><span class="s1">callable_obj, parameters, </span><span class="s3">&quot;unbound method&quot;</span>
+    <span class="s2">if </span><span class="s1">isinstance(callable_obj, astroid.FunctionDef):</span>
+        <span class="s2">return </span><span class="s1">callable_obj, parameters, callable_obj.type</span>
+    <span class="s2">if </span><span class="s1">isinstance(callable_obj, astroid.Lambda):</span>
+        <span class="s2">return </span><span class="s1">callable_obj, parameters, </span><span class="s3">&quot;lambda&quot;</span>
+    <span class="s2">if </span><span class="s1">isinstance(callable_obj, astroid.ClassDef):</span>
+        <span class="s0"># Class instantiation, lookup __new__ instead.</span>
+        <span class="s0"># If we only find object.__new__, we can safely check __init__</span>
+        <span class="s0"># instead. If __new__ belongs to builtins, then we look</span>
+        <span class="s0"># again for __init__ in the locals, since we won't have</span>
+        <span class="s0"># argument information for the builtin __new__ function.</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s0"># Use the last definition of __new__.</span>
+            <span class="s1">new = callable_obj.local_attr(</span><span class="s3">&quot;__new__&quot;</span><span class="s1">)[-</span><span class="s5">1</span><span class="s1">]</span>
+        <span class="s2">except </span><span class="s1">astroid.NotFoundError:</span>
+            <span class="s1">new = </span><span class="s2">None</span>
+
+        <span class="s1">from_object = new </span><span class="s2">and </span><span class="s1">new.parent.scope().name == </span><span class="s3">&quot;object&quot;</span>
+        <span class="s1">from_builtins = new </span><span class="s2">and </span><span class="s1">new.root().name </span><span class="s2">in </span><span class="s1">sys.builtin_module_names</span>
+
+        <span class="s2">if not </span><span class="s1">new </span><span class="s2">or </span><span class="s1">from_object </span><span class="s2">or </span><span class="s1">from_builtins:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s0"># Use the last definition of __init__.</span>
+                <span class="s1">callable_obj = callable_obj.local_attr(</span><span class="s3">&quot;__init__&quot;</span><span class="s1">)[-</span><span class="s5">1</span><span class="s1">]</span>
+            <span class="s2">except </span><span class="s1">astroid.NotFoundError </span><span class="s2">as </span><span class="s1">e:</span>
+                <span class="s0"># do nothing, covered by no-init.</span>
+                <span class="s2">raise </span><span class="s1">ValueError </span><span class="s2">from </span><span class="s1">e</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">callable_obj = new</span>
+
+        <span class="s2">if not </span><span class="s1">isinstance(callable_obj, astroid.FunctionDef):</span>
+            <span class="s2">raise </span><span class="s1">ValueError</span>
+        <span class="s0"># both have an extra implicit 'cls'/'self' argument.</span>
+        <span class="s2">return </span><span class="s1">callable_obj, parameters, </span><span class="s3">&quot;constructor&quot;</span>
+
+    <span class="s2">raise </span><span class="s1">ValueError</span>
+
+
+<span class="s2">def </span><span class="s1">_has_parent_of_type(node, node_type, statement):</span>
+    <span class="s0">&quot;&quot;&quot;Check if the given node has a parent of the given type.&quot;&quot;&quot;</span>
+    <span class="s1">parent = node.parent</span>
+    <span class="s2">while not </span><span class="s1">isinstance(parent, node_type) </span><span class="s2">and </span><span class="s1">statement.parent_of(parent):</span>
+        <span class="s1">parent = parent.parent</span>
+    <span class="s2">return </span><span class="s1">isinstance(parent, node_type)</span>
+
+
+<span class="s2">def </span><span class="s1">_no_context_variadic_keywords(node, scope):</span>
+    <span class="s1">statement = node.statement()</span>
+    <span class="s1">variadics = ()</span>
+
+    <span class="s2">if </span><span class="s1">isinstance(scope, astroid.Lambda) </span><span class="s2">and not </span><span class="s1">isinstance(scope, astroid.FunctionDef):</span>
+        <span class="s1">variadics = list(node.keywords </span><span class="s2">or </span><span class="s1">[]) + node.kwargs</span>
+    <span class="s2">elif </span><span class="s1">isinstance(</span>
+        <span class="s1">statement, (astroid.Return, astroid.Expr, astroid.Assign)</span>
+    <span class="s1">) </span><span class="s2">and </span><span class="s1">isinstance(statement.value, astroid.Call):</span>
+        <span class="s1">call = statement.value</span>
+        <span class="s1">variadics = list(call.keywords </span><span class="s2">or </span><span class="s1">[]) + call.kwargs</span>
+
+    <span class="s2">return </span><span class="s1">_no_context_variadic(node, scope.args.kwarg, astroid.Keyword, variadics)</span>
+
+
+<span class="s2">def </span><span class="s1">_no_context_variadic_positional(node, scope):</span>
+    <span class="s1">variadics = ()</span>
+    <span class="s2">if </span><span class="s1">isinstance(scope, astroid.Lambda) </span><span class="s2">and not </span><span class="s1">isinstance(scope, astroid.FunctionDef):</span>
+        <span class="s1">variadics = node.starargs + node.kwargs</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">statement = node.statement()</span>
+        <span class="s2">if </span><span class="s1">isinstance(</span>
+            <span class="s1">statement, (astroid.Expr, astroid.Return, astroid.Assign)</span>
+        <span class="s1">) </span><span class="s2">and </span><span class="s1">isinstance(statement.value, astroid.Call):</span>
+            <span class="s1">call = statement.value</span>
+            <span class="s1">variadics = call.starargs + call.kwargs</span>
+
+    <span class="s2">return </span><span class="s1">_no_context_variadic(node, scope.args.vararg, astroid.Starred, variadics)</span>
+
+
+<span class="s2">def </span><span class="s1">_no_context_variadic(node, variadic_name, variadic_type, variadics):</span>
+    <span class="s0">&quot;&quot;&quot;Verify if the given call node has variadic nodes without context 
+ 
+    This is a workaround for handling cases of nested call functions 
+    which don't have the specific call context at hand. 
+    Variadic arguments (variable positional arguments and variable 
+    keyword arguments) are inferred, inherently wrong, by astroid 
+    as a Tuple, respectively a Dict with empty elements. 
+    This can lead pylint to believe that a function call receives 
+    too few arguments. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">scope = node.scope()</span>
+    <span class="s1">is_in_lambda_scope = </span><span class="s2">not </span><span class="s1">isinstance(scope, astroid.FunctionDef) </span><span class="s2">and </span><span class="s1">isinstance(</span>
+        <span class="s1">scope, astroid.Lambda</span>
+    <span class="s1">)</span>
+    <span class="s1">statement = node.statement()</span>
+    <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">statement.nodes_of_class(astroid.Name):</span>
+        <span class="s2">if </span><span class="s1">name.name != variadic_name:</span>
+            <span class="s2">continue</span>
+
+        <span class="s1">inferred = safe_infer(name)</span>
+        <span class="s2">if </span><span class="s1">isinstance(inferred, (astroid.List, astroid.Tuple)):</span>
+            <span class="s1">length = len(inferred.elts)</span>
+        <span class="s2">elif </span><span class="s1">isinstance(inferred, astroid.Dict):</span>
+            <span class="s1">length = len(inferred.items)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">continue</span>
+
+        <span class="s2">if </span><span class="s1">is_in_lambda_scope </span><span class="s2">and </span><span class="s1">isinstance(inferred.parent, astroid.Arguments):</span>
+            <span class="s0"># The statement of the variadic will be the assignment itself,</span>
+            <span class="s0"># so we need to go the lambda instead</span>
+            <span class="s1">inferred_statement = inferred.parent.parent</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">inferred_statement = inferred.statement()</span>
+
+        <span class="s2">if not </span><span class="s1">length </span><span class="s2">and </span><span class="s1">isinstance(inferred_statement, astroid.Lambda):</span>
+            <span class="s1">is_in_starred_context = _has_parent_of_type(node, variadic_type, statement)</span>
+            <span class="s1">used_as_starred_argument = any(</span>
+                <span class="s1">variadic.value == name </span><span class="s2">or </span><span class="s1">variadic.value.parent_of(name)</span>
+                <span class="s2">for </span><span class="s1">variadic </span><span class="s2">in </span><span class="s1">variadics</span>
+            <span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">is_in_starred_context </span><span class="s2">or </span><span class="s1">used_as_starred_argument:</span>
+                <span class="s2">return True</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">_is_invalid_metaclass(metaclass):</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">mro = metaclass.mro()</span>
+    <span class="s2">except </span><span class="s1">NotImplementedError:</span>
+        <span class="s0"># Cannot have a metaclass which is not a newstyle class.</span>
+        <span class="s2">return True</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">if not </span><span class="s1">any(is_builtin_object(cls) </span><span class="s2">and </span><span class="s1">cls.name == </span><span class="s3">&quot;type&quot; </span><span class="s2">for </span><span class="s1">cls </span><span class="s2">in </span><span class="s1">mro):</span>
+            <span class="s2">return True</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">_infer_from_metaclass_constructor(cls, func):</span>
+    <span class="s0">&quot;&quot;&quot;Try to infer what the given *func* constructor is building 
+ 
+    :param astroid.FunctionDef func: 
+        A metaclass constructor. Metaclass definitions can be 
+        functions, which should accept three arguments, the name of 
+        the class, the bases of the class and the attributes. 
+        The function could return anything, but usually it should 
+        be a proper metaclass. 
+    :param astroid.ClassDef cls: 
+        The class for which the *func* parameter should generate 
+        a metaclass. 
+    :returns: 
+        The class generated by the function or None, 
+        if we couldn't infer it. 
+    :rtype: astroid.ClassDef 
+    &quot;&quot;&quot;</span>
+    <span class="s1">context = astroid.context.InferenceContext()</span>
+
+    <span class="s1">class_bases = astroid.List()</span>
+    <span class="s1">class_bases.postinit(elts=cls.bases)</span>
+
+    <span class="s1">attrs = astroid.Dict()</span>
+    <span class="s1">local_names = [(name, values[-</span><span class="s5">1</span><span class="s1">]) </span><span class="s2">for </span><span class="s1">name, values </span><span class="s2">in </span><span class="s1">cls.locals.items()]</span>
+    <span class="s1">attrs.postinit(local_names)</span>
+
+    <span class="s1">builder_args = astroid.Tuple()</span>
+    <span class="s1">builder_args.postinit([cls.name, class_bases, attrs])</span>
+
+    <span class="s1">context.callcontext = astroid.context.CallContext(builder_args)</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">inferred = next(func.infer_call_result(func, context), </span><span class="s2">None</span><span class="s1">)</span>
+    <span class="s2">except </span><span class="s1">astroid.InferenceError:</span>
+        <span class="s2">return None</span>
+    <span class="s2">return </span><span class="s1">inferred </span><span class="s2">or None</span>
+
+
+<span class="s2">def </span><span class="s1">_is_c_extension(module_node):</span>
+    <span class="s2">return </span><span class="s1">(</span>
+        <span class="s2">not </span><span class="s1">astroid.modutils.is_standard_module(module_node.name)</span>
+        <span class="s2">and not </span><span class="s1">module_node.fully_defined()</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_is_invalid_isinstance_type(arg):</span>
+    <span class="s0"># Return True if we are sure that arg is not a type</span>
+    <span class="s1">inferred = utils.safe_infer(arg)</span>
+    <span class="s2">if not </span><span class="s1">inferred:</span>
+        <span class="s0"># Cannot infer it so skip it.</span>
+        <span class="s2">return False</span>
+    <span class="s2">if </span><span class="s1">isinstance(inferred, astroid.Tuple):</span>
+        <span class="s2">return </span><span class="s1">any(_is_invalid_isinstance_type(elt) </span><span class="s2">for </span><span class="s1">elt </span><span class="s2">in </span><span class="s1">inferred.elts)</span>
+    <span class="s2">if </span><span class="s1">isinstance(inferred, astroid.ClassDef):</span>
+        <span class="s2">return False</span>
+    <span class="s2">if </span><span class="s1">isinstance(inferred, astroid.Instance) </span><span class="s2">and </span><span class="s1">inferred.qname() == BUILTIN_TUPLE:</span>
+        <span class="s2">return False</span>
+    <span class="s2">return True</span>
+
+
+<span class="s2">class </span><span class="s1">TypeChecker(BaseChecker):</span>
+    <span class="s0">&quot;&quot;&quot;try to find bugs in the code using type inference&quot;&quot;&quot;</span>
+
+    <span class="s1">__implements__ = (IAstroidChecker,)</span>
+
+    <span class="s0"># configuration section name</span>
+    <span class="s1">name = </span><span class="s3">&quot;typecheck&quot;</span>
+    <span class="s0"># messages</span>
+    <span class="s1">msgs = MSGS</span>
+    <span class="s1">priority = -</span><span class="s5">1</span>
+    <span class="s0"># configuration options</span>
+    <span class="s1">options = (</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;ignore-on-opaque-inference&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;yn&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;y_or_n&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;This flag controls whether pylint should warn about &quot;</span>
+                <span class="s3">&quot;no-member and similar checks whenever an opaque object &quot;</span>
+                <span class="s3">&quot;is returned when inferring. The inference can return &quot;</span>
+                <span class="s3">&quot;multiple potential results while evaluating a Python object, &quot;</span>
+                <span class="s3">&quot;but some branches might not be evaluated, which results in &quot;</span>
+                <span class="s3">&quot;partial inference. In that case, it might be useful to still emit &quot;</span>
+                <span class="s3">&quot;no-member and other checks for the rest of the inferred objects.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;ignore-mixin-members&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;yn&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;y_or_n&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">'Tells whether missing members accessed in mixin </span><span class="s4">\ 
+</span><span class="s3">class should be ignored. A mixin class is detected if its name ends with </span><span class="s4">\ 
+</span><span class="s3">&quot;mixin&quot; (case insensitive).'</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;ignore-none&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;yn&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;y_or_n&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Tells whether to warn about missing members when the owner &quot;</span>
+                <span class="s3">&quot;of the attribute is inferred to be None.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;ignored-modules&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: (),</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;csv&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;module names&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;List of module names for which member attributes &quot;</span>
+                <span class="s3">&quot;should not be checked (useful for modules/projects &quot;</span>
+                <span class="s3">&quot;where namespaces are manipulated during runtime and &quot;</span>
+                <span class="s3">&quot;thus existing member attributes cannot be &quot;</span>
+                <span class="s3">&quot;deduced by static analysis). It supports qualified &quot;</span>
+                <span class="s3">&quot;module names, as well as Unix pattern matching.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s0"># the defaults here are *stdlib* names that (almost) always</span>
+        <span class="s0"># lead to false positives, since their idiomatic use is</span>
+        <span class="s0"># 'too dynamic' for pylint to grok.</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;ignored-classes&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: (</span><span class="s3">&quot;optparse.Values&quot;</span><span class="s1">, </span><span class="s3">&quot;thread._local&quot;</span><span class="s1">, </span><span class="s3">&quot;_thread._local&quot;</span><span class="s1">),</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;csv&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;members names&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;List of class names for which member attributes &quot;</span>
+                <span class="s3">&quot;should not be checked (useful for classes with &quot;</span>
+                <span class="s3">&quot;dynamically set attributes). This supports &quot;</span>
+                <span class="s3">&quot;the use of qualified names.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;generated-members&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: (),</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;string&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;members names&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;List of members which are set dynamically and </span><span class="s4">\ 
+</span><span class="s3">missed by pylint inference system, and so shouldn't trigger E1101 when </span><span class="s4">\ 
+</span><span class="s3">accessed. Python regular expressions are accepted.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;contextmanager-decorators&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: [</span><span class="s3">&quot;contextlib.contextmanager&quot;</span><span class="s1">],</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;csv&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;decorator names&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;List of decorators that produce context managers, &quot;</span>
+                <span class="s3">&quot;such as contextlib.contextmanager. Add to this list &quot;</span>
+                <span class="s3">&quot;to register other decorators that produce valid &quot;</span>
+                <span class="s3">&quot;context managers.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;missing-member-hint-distance&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s5">1</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;member hint edit distance&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;The minimum edit distance a name should have in order &quot;</span>
+                <span class="s3">&quot;to be considered a similar match for a missing member name.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;missing-member-max-choices&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s5">1</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;member hint max choices&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;The total number of similar names that should be taken in &quot;</span>
+                <span class="s3">&quot;consideration when showing a hint for a missing member.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;missing-member-hint&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;yn&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;missing member hint&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Show a hint with possible names when a member name was not &quot;</span>
+                <span class="s3">&quot;found. The aspect of finding the hint is based on edit distance.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;signature-mutators&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: [],</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;csv&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;decorator names&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;List of decorators that change the signature of &quot;</span>
+                <span class="s3">&quot;a decorated function.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+
+    <span class="s1">@astroid.decorators.cachedproperty</span>
+    <span class="s2">def </span><span class="s1">_suggestion_mode(self):</span>
+        <span class="s2">return </span><span class="s1">get_global_option(self, </span><span class="s3">&quot;suggestion-mode&quot;</span><span class="s1">, default=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">@astroid.decorators.cachedproperty</span>
+    <span class="s2">def </span><span class="s1">_compiled_generated_members(self) -&gt; Tuple[Pattern, ...]:</span>
+        <span class="s0"># do this lazily since config not fully initialized in __init__</span>
+        <span class="s0"># generated_members may contain regular expressions</span>
+        <span class="s0"># (surrounded by quote `&quot;` and followed by a comma `,`)</span>
+        <span class="s0"># REQUEST,aq_parent,&quot;[a-zA-Z]+_set{1,2}&quot;' =&gt;</span>
+        <span class="s0"># ('REQUEST', 'aq_parent', '[a-zA-Z]+_set{1,2}')</span>
+        <span class="s1">generated_members = self.config.generated_members</span>
+        <span class="s2">if </span><span class="s1">isinstance(generated_members, str):</span>
+            <span class="s1">gen = shlex.shlex(generated_members)</span>
+            <span class="s1">gen.whitespace += </span><span class="s3">&quot;,&quot;</span>
+            <span class="s1">gen.wordchars += </span><span class="s3">r&quot;[]-+\.*?()|&quot;</span>
+            <span class="s1">generated_members = tuple(tok.strip(</span><span class="s3">'&quot;'</span><span class="s1">) </span><span class="s2">for </span><span class="s1">tok </span><span class="s2">in </span><span class="s1">gen)</span>
+        <span class="s2">return </span><span class="s1">tuple(re.compile(exp) </span><span class="s2">for </span><span class="s1">exp </span><span class="s2">in </span><span class="s1">generated_members)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;keyword-arg-before-vararg&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_functiondef(self, node):</span>
+        <span class="s0"># check for keyword arg before varargs</span>
+        <span class="s2">if </span><span class="s1">node.args.vararg </span><span class="s2">and </span><span class="s1">node.args.defaults:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;keyword-arg-before-vararg&quot;</span><span class="s1">, node=node, args=(node.name))</span>
+
+    <span class="s1">visit_asyncfunctiondef = visit_functiondef</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;invalid-metaclass&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_classdef(self, node):</span>
+        <span class="s2">def </span><span class="s1">_metaclass_name(metaclass):</span>
+            <span class="s2">if </span><span class="s1">isinstance(metaclass, (astroid.ClassDef, astroid.FunctionDef)):</span>
+                <span class="s2">return </span><span class="s1">metaclass.name</span>
+            <span class="s2">return </span><span class="s1">metaclass.as_string()</span>
+
+        <span class="s1">metaclass = node.declared_metaclass()</span>
+        <span class="s2">if not </span><span class="s1">metaclass:</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">isinstance(metaclass, astroid.FunctionDef):</span>
+            <span class="s0"># Try to infer the result.</span>
+            <span class="s1">metaclass = _infer_from_metaclass_constructor(node, metaclass)</span>
+            <span class="s2">if not </span><span class="s1">metaclass:</span>
+                <span class="s0"># Don't do anything if we cannot infer the result.</span>
+                <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">isinstance(metaclass, astroid.ClassDef):</span>
+            <span class="s2">if </span><span class="s1">_is_invalid_metaclass(metaclass):</span>
+                <span class="s1">self.add_message(</span>
+                    <span class="s3">&quot;invalid-metaclass&quot;</span><span class="s1">, node=node, args=(_metaclass_name(metaclass),)</span>
+                <span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;invalid-metaclass&quot;</span><span class="s1">, node=node, args=(_metaclass_name(metaclass),)</span>
+            <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">visit_assignattr(self, node):</span>
+        <span class="s2">if </span><span class="s1">isinstance(node.assign_type(), astroid.AugAssign):</span>
+            <span class="s1">self.visit_attribute(node)</span>
+
+    <span class="s2">def </span><span class="s1">visit_delattr(self, node):</span>
+        <span class="s1">self.visit_attribute(node)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;no-member&quot;</span><span class="s1">, </span><span class="s3">&quot;c-extension-no-member&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_attribute(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;check that the accessed attribute exists 
+ 
+        to avoid too much false positives for now, we'll consider the code as 
+        correct if a single of the inferred nodes has the accessed attribute. 
+ 
+        function/method, super call and metaclasses are ignored 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">any(</span>
+            <span class="s1">pattern.match(name)</span>
+            <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">(node.attrname, node.as_string())</span>
+            <span class="s2">for </span><span class="s1">pattern </span><span class="s2">in </span><span class="s1">self._compiled_generated_members</span>
+        <span class="s1">):</span>
+            <span class="s2">return</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">inferred = list(node.expr.infer())</span>
+        <span class="s2">except </span><span class="s1">astroid.InferenceError:</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># list of (node, nodename) which are missing the attribute</span>
+        <span class="s1">missingattr = set()</span>
+
+        <span class="s1">non_opaque_inference_results = [</span>
+            <span class="s1">owner</span>
+            <span class="s2">for </span><span class="s1">owner </span><span class="s2">in </span><span class="s1">inferred</span>
+            <span class="s2">if </span><span class="s1">owner </span><span class="s2">is not </span><span class="s1">astroid.Uninferable</span>
+            <span class="s2">and not </span><span class="s1">isinstance(owner, astroid.nodes.Unknown)</span>
+        <span class="s1">]</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">len(non_opaque_inference_results) != len(inferred)</span>
+            <span class="s2">and </span><span class="s1">self.config.ignore_on_opaque_inference</span>
+        <span class="s1">):</span>
+            <span class="s0"># There is an ambiguity in the inference. Since we can't</span>
+            <span class="s0"># make sure that we won't emit a false positive, we just stop</span>
+            <span class="s0"># whenever the inference returns an opaque inference object.</span>
+            <span class="s2">return</span>
+        <span class="s2">for </span><span class="s1">owner </span><span class="s2">in </span><span class="s1">non_opaque_inference_results:</span>
+            <span class="s1">name = getattr(owner, </span><span class="s3">&quot;name&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">_is_owner_ignored(</span>
+                <span class="s1">owner, name, self.config.ignored_classes, self.config.ignored_modules</span>
+            <span class="s1">):</span>
+                <span class="s2">continue</span>
+
+            <span class="s1">qualname = </span><span class="s3">f&quot;</span><span class="s4">{</span><span class="s1">owner.pytype()</span><span class="s4">}</span><span class="s3">.</span><span class="s4">{</span><span class="s1">node.attrname</span><span class="s4">}</span><span class="s3">&quot;</span>
+            <span class="s2">if </span><span class="s1">any(</span>
+                <span class="s1">pattern.match(qualname) </span><span class="s2">for </span><span class="s1">pattern </span><span class="s2">in </span><span class="s1">self._compiled_generated_members</span>
+            <span class="s1">):</span>
+                <span class="s2">return</span>
+
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s2">if not </span><span class="s1">[</span>
+                    <span class="s1">n</span>
+                    <span class="s2">for </span><span class="s1">n </span><span class="s2">in </span><span class="s1">owner.getattr(node.attrname)</span>
+                    <span class="s2">if not </span><span class="s1">isinstance(n.statement(), astroid.AugAssign)</span>
+                <span class="s1">]:</span>
+                    <span class="s1">missingattr.add((owner, name))</span>
+                    <span class="s2">continue</span>
+            <span class="s2">except </span><span class="s1">AttributeError:</span>
+                <span class="s2">continue</span>
+            <span class="s2">except </span><span class="s1">astroid.DuplicateBasesError:</span>
+                <span class="s2">continue</span>
+            <span class="s2">except </span><span class="s1">astroid.NotFoundError:</span>
+                <span class="s0"># This can't be moved before the actual .getattr call,</span>
+                <span class="s0"># because there can be more values inferred and we are</span>
+                <span class="s0"># stopping after the first one which has the attribute in question.</span>
+                <span class="s0"># The problem is that if the first one has the attribute,</span>
+                <span class="s0"># but we continue to the next values which doesn't have the</span>
+                <span class="s0"># attribute, then we'll have a false positive.</span>
+                <span class="s0"># So call this only after the call has been made.</span>
+                <span class="s2">if not </span><span class="s1">_emit_no_member(</span>
+                    <span class="s1">node,</span>
+                    <span class="s1">owner,</span>
+                    <span class="s1">name,</span>
+                    <span class="s1">ignored_mixins=self.config.ignore_mixin_members,</span>
+                    <span class="s1">ignored_none=self.config.ignore_none,</span>
+                <span class="s1">):</span>
+                    <span class="s2">continue</span>
+                <span class="s1">missingattr.add((owner, name))</span>
+                <span class="s2">continue</span>
+            <span class="s0"># stop on the first found</span>
+            <span class="s2">break</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s0"># we have not found any node with the attributes, display the</span>
+            <span class="s0"># message for inferred nodes</span>
+            <span class="s1">done = set()</span>
+            <span class="s2">for </span><span class="s1">owner, name </span><span class="s2">in </span><span class="s1">missingattr:</span>
+                <span class="s2">if </span><span class="s1">isinstance(owner, astroid.Instance):</span>
+                    <span class="s1">actual = owner._proxied</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">actual = owner</span>
+                <span class="s2">if </span><span class="s1">actual </span><span class="s2">in </span><span class="s1">done:</span>
+                    <span class="s2">continue</span>
+                <span class="s1">done.add(actual)</span>
+
+                <span class="s1">msg, hint = self._get_nomember_msgid_hint(node, owner)</span>
+                <span class="s1">self.add_message(</span>
+                    <span class="s1">msg,</span>
+                    <span class="s1">node=node,</span>
+                    <span class="s1">args=(owner.display_type(), name, node.attrname, hint),</span>
+                    <span class="s1">confidence=INFERENCE,</span>
+                <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_get_nomember_msgid_hint(self, node, owner):</span>
+        <span class="s1">suggestions_are_possible = self._suggestion_mode </span><span class="s2">and </span><span class="s1">isinstance(</span>
+            <span class="s1">owner, astroid.Module</span>
+        <span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">suggestions_are_possible </span><span class="s2">and </span><span class="s1">_is_c_extension(owner):</span>
+            <span class="s1">msg = </span><span class="s3">&quot;c-extension-no-member&quot;</span>
+            <span class="s1">hint = </span><span class="s3">&quot;&quot;</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">msg = </span><span class="s3">&quot;no-member&quot;</span>
+            <span class="s2">if </span><span class="s1">self.config.missing_member_hint:</span>
+                <span class="s1">hint = _missing_member_hint(</span>
+                    <span class="s1">owner,</span>
+                    <span class="s1">node.attrname,</span>
+                    <span class="s1">self.config.missing_member_hint_distance,</span>
+                    <span class="s1">self.config.missing_member_max_choices,</span>
+                <span class="s1">)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">hint = </span><span class="s3">&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">msg, hint</span>
+
+    <span class="s1">@check_messages(</span>
+        <span class="s3">&quot;assignment-from-no-return&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;assignment-from-none&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;non-str-assignment-to-dunder-name&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_assign(self, node):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Process assignments in the AST. 
+        &quot;&quot;&quot;</span>
+
+        <span class="s1">self._check_assignment_from_function_call(node)</span>
+        <span class="s1">self._check_dundername_is_string(node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_assignment_from_function_call(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;check that if assigning to a function call, the function is 
+        possibly returning something valuable 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">isinstance(node.value, astroid.Call):</span>
+            <span class="s2">return</span>
+
+        <span class="s1">function_node = safe_infer(node.value.func)</span>
+        <span class="s1">funcs = (astroid.FunctionDef, astroid.UnboundMethod, astroid.BoundMethod)</span>
+        <span class="s2">if not </span><span class="s1">isinstance(function_node, funcs):</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># Unwrap to get the actual function object</span>
+        <span class="s2">if </span><span class="s1">isinstance(function_node, astroid.BoundMethod) </span><span class="s2">and </span><span class="s1">isinstance(</span>
+            <span class="s1">function_node._proxied, astroid.UnboundMethod</span>
+        <span class="s1">):</span>
+            <span class="s1">function_node = function_node._proxied._proxied</span>
+
+        <span class="s0"># Make sure that it's a valid function that we can analyze.</span>
+        <span class="s0"># Ordered from less expensive to more expensive checks.</span>
+        <span class="s0"># pylint: disable=too-many-boolean-expressions</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s2">not </span><span class="s1">function_node.is_function</span>
+            <span class="s2">or </span><span class="s1">isinstance(function_node, astroid.AsyncFunctionDef)</span>
+            <span class="s2">or </span><span class="s1">function_node.decorators</span>
+            <span class="s2">or </span><span class="s1">function_node.is_generator()</span>
+            <span class="s2">or </span><span class="s1">function_node.is_abstract(pass_is_abstract=</span><span class="s2">False</span><span class="s1">)</span>
+            <span class="s2">or </span><span class="s1">utils.is_error(function_node)</span>
+            <span class="s2">or not </span><span class="s1">function_node.root().fully_defined()</span>
+        <span class="s1">):</span>
+            <span class="s2">return</span>
+
+        <span class="s1">returns = list(</span>
+            <span class="s1">function_node.nodes_of_class(astroid.Return, skip_klass=astroid.FunctionDef)</span>
+        <span class="s1">)</span>
+        <span class="s2">if not </span><span class="s1">returns:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;assignment-from-no-return&quot;</span><span class="s1">, node=node)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">for </span><span class="s1">rnode </span><span class="s2">in </span><span class="s1">returns:</span>
+                <span class="s2">if not </span><span class="s1">(</span>
+                    <span class="s1">isinstance(rnode.value, astroid.Const)</span>
+                    <span class="s2">and </span><span class="s1">rnode.value.value </span><span class="s2">is None</span>
+                    <span class="s2">or </span><span class="s1">rnode.value </span><span class="s2">is None</span>
+                <span class="s1">):</span>
+                    <span class="s2">break</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;assignment-from-none&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_dundername_is_string(self, node):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Check a string is assigned to self.__name__ 
+        &quot;&quot;&quot;</span>
+
+        <span class="s0"># Check the left hand side of the assignment is &lt;something&gt;.__name__</span>
+        <span class="s1">lhs = node.targets[</span><span class="s5">0</span><span class="s1">]</span>
+        <span class="s2">if not </span><span class="s1">isinstance(lhs, astroid.node_classes.AssignAttr):</span>
+            <span class="s2">return</span>
+        <span class="s2">if not </span><span class="s1">lhs.attrname == </span><span class="s3">&quot;__name__&quot;</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># If the right hand side is not a string</span>
+        <span class="s1">rhs = node.value</span>
+        <span class="s2">if </span><span class="s1">isinstance(rhs, astroid.Const) </span><span class="s2">and </span><span class="s1">isinstance(rhs.value, str):</span>
+            <span class="s2">return</span>
+        <span class="s1">inferred = utils.safe_infer(rhs)</span>
+        <span class="s2">if not </span><span class="s1">inferred:</span>
+            <span class="s2">return</span>
+        <span class="s2">if not </span><span class="s1">(</span>
+            <span class="s1">isinstance(inferred, astroid.Const) </span><span class="s2">and </span><span class="s1">isinstance(inferred.value, str)</span>
+        <span class="s1">):</span>
+            <span class="s0"># Add the message</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;non-str-assignment-to-dunder-name&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_uninferable_call(self, node):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Check that the given uninferable Call node does not 
+        call an actual function. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">isinstance(node.func, astroid.Attribute):</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># Look for properties. First, obtain</span>
+        <span class="s0"># the lhs of the Attribute node and search the attribute</span>
+        <span class="s0"># there. If that attribute is a property or a subclass of properties,</span>
+        <span class="s0"># then most likely it's not callable.</span>
+
+        <span class="s1">expr = node.func.expr</span>
+        <span class="s1">klass = safe_infer(expr)</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">klass </span><span class="s2">is None</span>
+            <span class="s2">or </span><span class="s1">klass </span><span class="s2">is </span><span class="s1">astroid.Uninferable</span>
+            <span class="s2">or not </span><span class="s1">isinstance(klass, astroid.Instance)</span>
+        <span class="s1">):</span>
+            <span class="s2">return</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">attrs = klass._proxied.getattr(node.func.attrname)</span>
+        <span class="s2">except </span><span class="s1">astroid.NotFoundError:</span>
+            <span class="s2">return</span>
+
+        <span class="s2">for </span><span class="s1">attr </span><span class="s2">in </span><span class="s1">attrs:</span>
+            <span class="s2">if </span><span class="s1">attr </span><span class="s2">is </span><span class="s1">astroid.Uninferable:</span>
+                <span class="s2">continue</span>
+            <span class="s2">if not </span><span class="s1">isinstance(attr, astroid.FunctionDef):</span>
+                <span class="s2">continue</span>
+
+            <span class="s0"># Decorated, see if it is decorated with a property.</span>
+            <span class="s0"># Also, check the returns and see if they are callable.</span>
+            <span class="s2">if </span><span class="s1">decorated_with_property(attr):</span>
+
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">all_returns_are_callable = all(</span>
+                        <span class="s1">return_node.callable() </span><span class="s2">or </span><span class="s1">return_node </span><span class="s2">is </span><span class="s1">astroid.Uninferable</span>
+                        <span class="s2">for </span><span class="s1">return_node </span><span class="s2">in </span><span class="s1">attr.infer_call_result(node)</span>
+                    <span class="s1">)</span>
+                <span class="s2">except </span><span class="s1">astroid.InferenceError:</span>
+                    <span class="s2">continue</span>
+
+                <span class="s2">if not </span><span class="s1">all_returns_are_callable:</span>
+                    <span class="s1">self.add_message(</span>
+                        <span class="s3">&quot;not-callable&quot;</span><span class="s1">, node=node, args=node.func.as_string()</span>
+                    <span class="s1">)</span>
+                    <span class="s2">break</span>
+
+    <span class="s2">def </span><span class="s1">_check_argument_order(self, node, call_site, called, called_param_names):</span>
+        <span class="s0">&quot;&quot;&quot;Match the supplied argument names against the function parameters. 
+        Warn if some argument names are not in the same order as they are in 
+        the function signature. 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># Check for called function being an object instance function</span>
+        <span class="s0"># If so, ignore the initial 'self' argument in the signature</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">is_classdef = isinstance(called.parent, astroid.scoped_nodes.ClassDef)</span>
+            <span class="s2">if </span><span class="s1">is_classdef </span><span class="s2">and </span><span class="s1">called_param_names[</span><span class="s5">0</span><span class="s1">] == </span><span class="s3">&quot;self&quot;</span><span class="s1">:</span>
+                <span class="s1">called_param_names = called_param_names[</span><span class="s5">1</span><span class="s1">:]</span>
+        <span class="s2">except </span><span class="s1">IndexError:</span>
+            <span class="s2">return</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s0"># extract argument names, if they have names</span>
+            <span class="s1">calling_parg_names = [p.name </span><span class="s2">for </span><span class="s1">p </span><span class="s2">in </span><span class="s1">call_site.positional_arguments]</span>
+
+            <span class="s0"># Additionally get names of keyword arguments to use in a full match</span>
+            <span class="s0"># against parameters</span>
+            <span class="s1">calling_kwarg_names = [</span>
+                <span class="s1">arg.name </span><span class="s2">for </span><span class="s1">arg </span><span class="s2">in </span><span class="s1">call_site.keyword_arguments.values()</span>
+            <span class="s1">]</span>
+        <span class="s2">except </span><span class="s1">AttributeError:</span>
+            <span class="s0"># the type of arg does not provide a `.name`. In this case we</span>
+            <span class="s0"># stop checking for out-of-order arguments because it is only relevant</span>
+            <span class="s0"># for named variables.</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># Don't check for ordering if there is an unmatched arg or param</span>
+        <span class="s1">arg_set = set(calling_parg_names) | set(calling_kwarg_names)</span>
+        <span class="s1">param_set = set(called_param_names)</span>
+        <span class="s2">if </span><span class="s1">arg_set != param_set:</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># Warn based on the equality of argument ordering</span>
+        <span class="s2">if </span><span class="s1">calling_parg_names != called_param_names[: len(calling_parg_names)]:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;arguments-out-of-order&quot;</span><span class="s1">, node=node, args=())</span>
+
+    <span class="s2">def </span><span class="s1">_check_isinstance_args(self, node):</span>
+        <span class="s2">if </span><span class="s1">len(node.args) != </span><span class="s5">2</span><span class="s1">:</span>
+            <span class="s0"># isinstance called with wrong number of args</span>
+            <span class="s2">return</span>
+
+        <span class="s1">second_arg = node.args[</span><span class="s5">1</span><span class="s1">]</span>
+        <span class="s2">if </span><span class="s1">_is_invalid_isinstance_type(second_arg):</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;isinstance-second-argument-not-valid-type&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s0"># pylint: disable=too-many-branches,too-many-locals</span>
+    <span class="s1">@check_messages(*(list(MSGS.keys())))</span>
+    <span class="s2">def </span><span class="s1">visit_call(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;check that called functions/methods are inferred to callable objects, 
+        and that the arguments passed to the function match the parameters in 
+        the inferred function's definition 
+        &quot;&quot;&quot;</span>
+        <span class="s1">called = safe_infer(node.func)</span>
+        <span class="s0"># only function, generator and object defining __call__ are allowed</span>
+        <span class="s0"># Ignore instances of descriptors since astroid cannot properly handle them</span>
+        <span class="s0"># yet</span>
+        <span class="s2">if </span><span class="s1">called </span><span class="s2">and not </span><span class="s1">called.callable():</span>
+            <span class="s2">if </span><span class="s1">isinstance(called, astroid.Instance) </span><span class="s2">and </span><span class="s1">(</span>
+                <span class="s2">not </span><span class="s1">has_known_bases(called)</span>
+                <span class="s2">or </span><span class="s1">(</span>
+                    <span class="s1">called.parent </span><span class="s2">is not None</span>
+                    <span class="s2">and </span><span class="s1">isinstance(called.scope(), astroid.ClassDef)</span>
+                    <span class="s2">and </span><span class="s3">&quot;__get__&quot; </span><span class="s2">in </span><span class="s1">called.locals</span>
+                <span class="s1">)</span>
+            <span class="s1">):</span>
+                <span class="s0"># Don't emit if we can't make sure this object is callable.</span>
+                <span class="s2">pass</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;not-callable&quot;</span><span class="s1">, node=node, args=node.func.as_string())</span>
+
+        <span class="s1">self._check_uninferable_call(node)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">called, implicit_args, callable_name = _determine_callable(called)</span>
+        <span class="s2">except </span><span class="s1">ValueError:</span>
+            <span class="s0"># Any error occurred during determining the function type, most of</span>
+            <span class="s0"># those errors are handled by different warnings.</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">called.args.args </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">called.name == </span><span class="s3">&quot;isinstance&quot;</span><span class="s1">:</span>
+                <span class="s0"># Verify whether second argument of isinstance is a valid type</span>
+                <span class="s1">self._check_isinstance_args(node)</span>
+            <span class="s0"># Built-in functions have no argument information.</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">len(called.argnames()) != len(set(called.argnames())):</span>
+            <span class="s0"># Duplicate parameter name (see duplicate-argument).  We can't really</span>
+            <span class="s0"># make sense of the function call in this case, so just return.</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># Build the set of keyword arguments, checking for duplicate keywords,</span>
+        <span class="s0"># and count the positional arguments.</span>
+        <span class="s1">call_site = astroid.arguments.CallSite.from_call(node)</span>
+
+        <span class="s0"># Warn about duplicated keyword arguments, such as `f=24, **{'f': 24}`</span>
+        <span class="s2">for </span><span class="s1">keyword </span><span class="s2">in </span><span class="s1">call_site.duplicated_keywords:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;repeated-keyword&quot;</span><span class="s1">, node=node, args=(keyword,))</span>
+
+        <span class="s2">if </span><span class="s1">call_site.has_invalid_arguments() </span><span class="s2">or </span><span class="s1">call_site.has_invalid_keywords():</span>
+            <span class="s0"># Can't make sense of this.</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># Has the function signature changed in ways we cannot reliably detect?</span>
+        <span class="s2">if </span><span class="s1">hasattr(called, </span><span class="s3">&quot;decorators&quot;</span><span class="s1">) </span><span class="s2">and </span><span class="s1">decorated_with(</span>
+            <span class="s1">called, self.config.signature_mutators</span>
+        <span class="s1">):</span>
+            <span class="s2">return</span>
+
+        <span class="s1">num_positional_args = len(call_site.positional_arguments)</span>
+        <span class="s1">keyword_args = list(call_site.keyword_arguments.keys())</span>
+        <span class="s1">overload_function = is_overload_stub(called)</span>
+
+        <span class="s0"># Determine if we don't have a context for our call and we use variadics.</span>
+        <span class="s1">node_scope = node.scope()</span>
+        <span class="s2">if </span><span class="s1">isinstance(node_scope, (astroid.Lambda, astroid.FunctionDef)):</span>
+            <span class="s1">has_no_context_positional_variadic = _no_context_variadic_positional(</span>
+                <span class="s1">node, node_scope</span>
+            <span class="s1">)</span>
+            <span class="s1">has_no_context_keywords_variadic = _no_context_variadic_keywords(</span>
+                <span class="s1">node, node_scope</span>
+            <span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">has_no_context_positional_variadic = (</span>
+                <span class="s1">has_no_context_keywords_variadic</span>
+            <span class="s1">) = </span><span class="s2">False</span>
+
+        <span class="s0"># These are coming from the functools.partial implementation in astroid</span>
+        <span class="s1">already_filled_positionals = getattr(called, </span><span class="s3">&quot;filled_positionals&quot;</span><span class="s1">, </span><span class="s5">0</span><span class="s1">)</span>
+        <span class="s1">already_filled_keywords = getattr(called, </span><span class="s3">&quot;filled_keywords&quot;</span><span class="s1">, {})</span>
+
+        <span class="s1">keyword_args += list(already_filled_keywords)</span>
+        <span class="s1">num_positional_args += implicit_args + already_filled_positionals</span>
+
+        <span class="s0"># Analyze the list of formal parameters.</span>
+        <span class="s1">args = list(itertools.chain(called.args.posonlyargs </span><span class="s2">or </span><span class="s1">(), called.args.args))</span>
+        <span class="s1">num_mandatory_parameters = len(args) - len(called.args.defaults)</span>
+        <span class="s1">parameters = []</span>
+        <span class="s1">parameter_name_to_index = {}</span>
+        <span class="s2">for </span><span class="s1">i, arg </span><span class="s2">in </span><span class="s1">enumerate(args):</span>
+            <span class="s2">if </span><span class="s1">isinstance(arg, astroid.Tuple):</span>
+                <span class="s1">name = </span><span class="s2">None</span>
+                <span class="s0"># Don't store any parameter names within the tuple, since those</span>
+                <span class="s0"># are not assignable from keyword arguments.</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">assert </span><span class="s1">isinstance(arg, astroid.AssignName)</span>
+                <span class="s0"># This occurs with:</span>
+                <span class="s0">#    def f( (a), (b) ): pass</span>
+                <span class="s1">name = arg.name</span>
+                <span class="s1">parameter_name_to_index[name] = i</span>
+            <span class="s2">if </span><span class="s1">i &gt;= num_mandatory_parameters:</span>
+                <span class="s1">defval = called.args.defaults[i - num_mandatory_parameters]</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">defval = </span><span class="s2">None</span>
+            <span class="s1">parameters.append([(name, defval), </span><span class="s2">False</span><span class="s1">])</span>
+
+        <span class="s1">kwparams = {}</span>
+        <span class="s2">for </span><span class="s1">i, arg </span><span class="s2">in </span><span class="s1">enumerate(called.args.kwonlyargs):</span>
+            <span class="s2">if </span><span class="s1">isinstance(arg, astroid.Keyword):</span>
+                <span class="s1">name = arg.arg</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">assert </span><span class="s1">isinstance(arg, astroid.AssignName)</span>
+                <span class="s1">name = arg.name</span>
+            <span class="s1">kwparams[name] = [called.args.kw_defaults[i], </span><span class="s2">False</span><span class="s1">]</span>
+
+        <span class="s1">self._check_argument_order(</span>
+            <span class="s1">node, call_site, called, [p[</span><span class="s5">0</span><span class="s1">][</span><span class="s5">0</span><span class="s1">] </span><span class="s2">for </span><span class="s1">p </span><span class="s2">in </span><span class="s1">parameters]</span>
+        <span class="s1">)</span>
+
+        <span class="s0"># 1. Match the positional arguments.</span>
+        <span class="s2">for </span><span class="s1">i </span><span class="s2">in </span><span class="s1">range(num_positional_args):</span>
+            <span class="s2">if </span><span class="s1">i &lt; len(parameters):</span>
+                <span class="s1">parameters[i][</span><span class="s5">1</span><span class="s1">] = </span><span class="s2">True</span>
+            <span class="s2">elif </span><span class="s1">called.args.vararg </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s0"># The remaining positional arguments get assigned to the *args</span>
+                <span class="s0"># parameter.</span>
+                <span class="s2">break</span>
+            <span class="s2">elif not </span><span class="s1">overload_function:</span>
+                <span class="s0"># Too many positional arguments.</span>
+                <span class="s1">self.add_message(</span>
+                    <span class="s3">&quot;too-many-function-args&quot;</span><span class="s1">, node=node, args=(callable_name,)</span>
+                <span class="s1">)</span>
+                <span class="s2">break</span>
+
+        <span class="s0"># 2. Match the keyword arguments.</span>
+        <span class="s2">for </span><span class="s1">keyword </span><span class="s2">in </span><span class="s1">keyword_args:</span>
+            <span class="s2">if </span><span class="s1">keyword </span><span class="s2">in </span><span class="s1">parameter_name_to_index:</span>
+                <span class="s1">i = parameter_name_to_index[keyword]</span>
+                <span class="s2">if </span><span class="s1">parameters[i][</span><span class="s5">1</span><span class="s1">]:</span>
+                    <span class="s0"># Duplicate definition of function parameter.</span>
+
+                    <span class="s0"># Might be too hardcoded, but this can actually</span>
+                    <span class="s0"># happen when using str.format and `self` is passed</span>
+                    <span class="s0"># by keyword argument, as in `.format(self=self)`.</span>
+                    <span class="s0"># It's perfectly valid to so, so we're just skipping</span>
+                    <span class="s0"># it if that's the case.</span>
+                    <span class="s2">if not </span><span class="s1">(keyword == </span><span class="s3">&quot;self&quot; </span><span class="s2">and </span><span class="s1">called.qname() </span><span class="s2">in </span><span class="s1">STR_FORMAT):</span>
+                        <span class="s1">self.add_message(</span>
+                            <span class="s3">&quot;redundant-keyword-arg&quot;</span><span class="s1">,</span>
+                            <span class="s1">node=node,</span>
+                            <span class="s1">args=(keyword, callable_name),</span>
+                        <span class="s1">)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">parameters[i][</span><span class="s5">1</span><span class="s1">] = </span><span class="s2">True</span>
+            <span class="s2">elif </span><span class="s1">keyword </span><span class="s2">in </span><span class="s1">kwparams:</span>
+                <span class="s2">if </span><span class="s1">kwparams[keyword][</span><span class="s5">1</span><span class="s1">]:</span>
+                    <span class="s0"># Duplicate definition of function parameter.</span>
+                    <span class="s1">self.add_message(</span>
+                        <span class="s3">&quot;redundant-keyword-arg&quot;</span><span class="s1">,</span>
+                        <span class="s1">node=node,</span>
+                        <span class="s1">args=(keyword, callable_name),</span>
+                    <span class="s1">)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">kwparams[keyword][</span><span class="s5">1</span><span class="s1">] = </span><span class="s2">True</span>
+            <span class="s2">elif </span><span class="s1">called.args.kwarg </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s0"># The keyword argument gets assigned to the **kwargs parameter.</span>
+                <span class="s2">pass</span>
+            <span class="s2">elif not </span><span class="s1">overload_function:</span>
+                <span class="s0"># Unexpected keyword argument.</span>
+                <span class="s1">self.add_message(</span>
+                    <span class="s3">&quot;unexpected-keyword-arg&quot;</span><span class="s1">, node=node, args=(keyword, callable_name)</span>
+                <span class="s1">)</span>
+
+        <span class="s0"># 3. Match the **kwargs, if any.</span>
+        <span class="s2">if </span><span class="s1">node.kwargs:</span>
+            <span class="s2">for </span><span class="s1">i, [(name, defval), assigned] </span><span class="s2">in </span><span class="s1">enumerate(parameters):</span>
+                <span class="s0"># Assume that *kwargs provides values for all remaining</span>
+                <span class="s0"># unassigned named parameters.</span>
+                <span class="s2">if </span><span class="s1">name </span><span class="s2">is not None</span><span class="s1">:</span>
+                    <span class="s1">parameters[i][</span><span class="s5">1</span><span class="s1">] = </span><span class="s2">True</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s0"># **kwargs can't assign to tuples.</span>
+                    <span class="s2">pass</span>
+
+        <span class="s0"># Check that any parameters without a default have been assigned</span>
+        <span class="s0"># values.</span>
+        <span class="s2">for </span><span class="s1">[(name, defval), assigned] </span><span class="s2">in </span><span class="s1">parameters:</span>
+            <span class="s2">if </span><span class="s1">(defval </span><span class="s2">is None</span><span class="s1">) </span><span class="s2">and not </span><span class="s1">assigned:</span>
+                <span class="s2">if </span><span class="s1">name </span><span class="s2">is None</span><span class="s1">:</span>
+                    <span class="s1">display_name = </span><span class="s3">&quot;&lt;tuple&gt;&quot;</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">display_name = repr(name)</span>
+                <span class="s2">if not </span><span class="s1">has_no_context_positional_variadic </span><span class="s2">and not </span><span class="s1">overload_function:</span>
+                    <span class="s1">self.add_message(</span>
+                        <span class="s3">&quot;no-value-for-parameter&quot;</span><span class="s1">,</span>
+                        <span class="s1">node=node,</span>
+                        <span class="s1">args=(display_name, callable_name),</span>
+                    <span class="s1">)</span>
+
+        <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">kwparams:</span>
+            <span class="s1">defval, assigned = kwparams[name]</span>
+            <span class="s2">if </span><span class="s1">(</span>
+                <span class="s1">defval </span><span class="s2">is None</span>
+                <span class="s2">and not </span><span class="s1">assigned</span>
+                <span class="s2">and not </span><span class="s1">has_no_context_keywords_variadic</span>
+                <span class="s2">and not </span><span class="s1">overload_function</span>
+            <span class="s1">):</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;missing-kwoa&quot;</span><span class="s1">, node=node, args=(name, callable_name))</span>
+
+    <span class="s2">def </span><span class="s1">_check_invalid_sequence_index(self, subscript: astroid.Subscript):</span>
+        <span class="s0"># Look for index operations where the parent is a sequence type.</span>
+        <span class="s0"># If the types can be determined, only allow indices to be int,</span>
+        <span class="s0"># slice or instances with __index__.</span>
+        <span class="s1">parent_type = safe_infer(subscript.value)</span>
+        <span class="s2">if not </span><span class="s1">isinstance(</span>
+            <span class="s1">parent_type, (astroid.ClassDef, astroid.Instance)</span>
+        <span class="s1">) </span><span class="s2">or not </span><span class="s1">has_known_bases(parent_type):</span>
+            <span class="s2">return None</span>
+
+        <span class="s0"># Determine what method on the parent this index will use</span>
+        <span class="s0"># The parent of this node will be a Subscript, and the parent of that</span>
+        <span class="s0"># node determines if the Subscript is a get, set, or delete operation.</span>
+        <span class="s2">if </span><span class="s1">subscript.ctx </span><span class="s2">is </span><span class="s1">astroid.Store:</span>
+            <span class="s1">methodname = </span><span class="s3">&quot;__setitem__&quot;</span>
+        <span class="s2">elif </span><span class="s1">subscript.ctx </span><span class="s2">is </span><span class="s1">astroid.Del:</span>
+            <span class="s1">methodname = </span><span class="s3">&quot;__delitem__&quot;</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">methodname = </span><span class="s3">&quot;__getitem__&quot;</span>
+
+        <span class="s0"># Check if this instance's __getitem__, __setitem__, or __delitem__, as</span>
+        <span class="s0"># appropriate to the statement, is implemented in a builtin sequence</span>
+        <span class="s0"># type. This way we catch subclasses of sequence types but skip classes</span>
+        <span class="s0"># that override __getitem__ and which may allow non-integer indices.</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">methods = astroid.interpreter.dunder_lookup.lookup(parent_type, methodname)</span>
+            <span class="s2">if </span><span class="s1">methods </span><span class="s2">is </span><span class="s1">astroid.Uninferable:</span>
+                <span class="s2">return None</span>
+            <span class="s1">itemmethod = methods[</span><span class="s5">0</span><span class="s1">]</span>
+        <span class="s2">except </span><span class="s1">(</span>
+            <span class="s1">astroid.NotFoundError,</span>
+            <span class="s1">astroid.AttributeInferenceError,</span>
+            <span class="s1">IndexError,</span>
+        <span class="s1">):</span>
+            <span class="s2">return None</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s2">not </span><span class="s1">isinstance(itemmethod, astroid.FunctionDef)</span>
+            <span class="s2">or </span><span class="s1">itemmethod.root().name != BUILTINS</span>
+            <span class="s2">or not </span><span class="s1">itemmethod.parent</span>
+            <span class="s2">or </span><span class="s1">itemmethod.parent.name </span><span class="s2">not in </span><span class="s1">SEQUENCE_TYPES</span>
+        <span class="s1">):</span>
+            <span class="s2">return None</span>
+
+        <span class="s0"># For ExtSlice objects coming from visit_extslice, no further</span>
+        <span class="s0"># inference is necessary, since if we got this far the ExtSlice</span>
+        <span class="s0"># is an error.</span>
+        <span class="s2">if </span><span class="s1">isinstance(subscript.value, astroid.ExtSlice):</span>
+            <span class="s1">index_type = subscript.value</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">index_type = safe_infer(subscript.slice)</span>
+        <span class="s2">if </span><span class="s1">index_type </span><span class="s2">is None or </span><span class="s1">index_type </span><span class="s2">is </span><span class="s1">astroid.Uninferable:</span>
+            <span class="s2">return None</span>
+        <span class="s0"># Constants must be of type int</span>
+        <span class="s2">if </span><span class="s1">isinstance(index_type, astroid.Const):</span>
+            <span class="s2">if </span><span class="s1">isinstance(index_type.value, int):</span>
+                <span class="s2">return None</span>
+        <span class="s0"># Instance values must be int, slice, or have an __index__ method</span>
+        <span class="s2">elif </span><span class="s1">isinstance(index_type, astroid.Instance):</span>
+            <span class="s2">if </span><span class="s1">index_type.pytype() </span><span class="s2">in </span><span class="s1">(BUILTINS + </span><span class="s3">&quot;.int&quot;</span><span class="s1">, BUILTINS + </span><span class="s3">&quot;.slice&quot;</span><span class="s1">):</span>
+                <span class="s2">return None</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">index_type.getattr(</span><span class="s3">&quot;__index__&quot;</span><span class="s1">)</span>
+                <span class="s2">return None</span>
+            <span class="s2">except </span><span class="s1">astroid.NotFoundError:</span>
+                <span class="s2">pass</span>
+        <span class="s2">elif </span><span class="s1">isinstance(index_type, astroid.Slice):</span>
+            <span class="s0"># A slice can be present</span>
+            <span class="s0"># here after inferring the index node, which could</span>
+            <span class="s0"># be a `slice(...)` call for instance.</span>
+            <span class="s2">return </span><span class="s1">self._check_invalid_slice_index(index_type)</span>
+
+        <span class="s0"># Anything else is an error</span>
+        <span class="s1">self.add_message(</span><span class="s3">&quot;invalid-sequence-index&quot;</span><span class="s1">, node=subscript)</span>
+        <span class="s2">return None</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;invalid-sequence-index&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_extslice(self, node):</span>
+        <span class="s2">if not </span><span class="s1">node.parent </span><span class="s2">or not </span><span class="s1">hasattr(node.parent, </span><span class="s3">&quot;value&quot;</span><span class="s1">):</span>
+            <span class="s2">return None</span>
+        <span class="s0"># Check extended slice objects as if they were used as a sequence</span>
+        <span class="s0"># index to check if the object being sliced can support them</span>
+        <span class="s2">return </span><span class="s1">self._check_invalid_sequence_index(node.parent)</span>
+
+    <span class="s2">def </span><span class="s1">_check_invalid_slice_index(self, node):</span>
+        <span class="s0"># Check the type of each part of the slice</span>
+        <span class="s1">invalid_slices = </span><span class="s5">0</span>
+        <span class="s2">for </span><span class="s1">index </span><span class="s2">in </span><span class="s1">(node.lower, node.upper, node.step):</span>
+            <span class="s2">if </span><span class="s1">index </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s2">continue</span>
+
+            <span class="s1">index_type = safe_infer(index)</span>
+            <span class="s2">if </span><span class="s1">index_type </span><span class="s2">is None or </span><span class="s1">index_type </span><span class="s2">is </span><span class="s1">astroid.Uninferable:</span>
+                <span class="s2">continue</span>
+
+            <span class="s0"># Constants must of type int or None</span>
+            <span class="s2">if </span><span class="s1">isinstance(index_type, astroid.Const):</span>
+                <span class="s2">if </span><span class="s1">isinstance(index_type.value, (int, type(</span><span class="s2">None</span><span class="s1">))):</span>
+                    <span class="s2">continue</span>
+            <span class="s0"># Instance values must be of type int, None or an object</span>
+            <span class="s0"># with __index__</span>
+            <span class="s2">elif </span><span class="s1">isinstance(index_type, astroid.Instance):</span>
+                <span class="s2">if </span><span class="s1">index_type.pytype() </span><span class="s2">in </span><span class="s1">(BUILTINS + </span><span class="s3">&quot;.int&quot;</span><span class="s1">, BUILTINS + </span><span class="s3">&quot;.NoneType&quot;</span><span class="s1">):</span>
+                    <span class="s2">continue</span>
+
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">index_type.getattr(</span><span class="s3">&quot;__index__&quot;</span><span class="s1">)</span>
+                    <span class="s2">return</span>
+                <span class="s2">except </span><span class="s1">astroid.NotFoundError:</span>
+                    <span class="s2">pass</span>
+            <span class="s1">invalid_slices += </span><span class="s5">1</span>
+
+        <span class="s2">if not </span><span class="s1">invalid_slices:</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># Anything else is an error, unless the object that is indexed</span>
+        <span class="s0"># is a custom object, which knows how to handle this kind of slices</span>
+        <span class="s1">parent = node.parent</span>
+        <span class="s2">if </span><span class="s1">isinstance(parent, astroid.ExtSlice):</span>
+            <span class="s1">parent = parent.parent</span>
+        <span class="s2">if </span><span class="s1">isinstance(parent, astroid.Subscript):</span>
+            <span class="s1">inferred = safe_infer(parent.value)</span>
+            <span class="s2">if </span><span class="s1">inferred </span><span class="s2">is None or </span><span class="s1">inferred </span><span class="s2">is </span><span class="s1">astroid.Uninferable:</span>
+                <span class="s0"># Don't know what this is</span>
+                <span class="s2">return</span>
+            <span class="s1">known_objects = (</span>
+                <span class="s1">astroid.List,</span>
+                <span class="s1">astroid.Dict,</span>
+                <span class="s1">astroid.Tuple,</span>
+                <span class="s1">astroid.objects.FrozenSet,</span>
+                <span class="s1">astroid.Set,</span>
+            <span class="s1">)</span>
+            <span class="s2">if not </span><span class="s1">isinstance(inferred, known_objects):</span>
+                <span class="s0"># Might be an instance that knows how to handle this slice object</span>
+                <span class="s2">return</span>
+        <span class="s2">for </span><span class="s1">_ </span><span class="s2">in </span><span class="s1">range(invalid_slices):</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;invalid-slice-index&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;not-context-manager&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_with(self, node):</span>
+        <span class="s2">for </span><span class="s1">ctx_mgr, _ </span><span class="s2">in </span><span class="s1">node.items:</span>
+            <span class="s1">context = astroid.context.InferenceContext()</span>
+            <span class="s1">inferred = safe_infer(ctx_mgr, context=context)</span>
+            <span class="s2">if </span><span class="s1">inferred </span><span class="s2">is None or </span><span class="s1">inferred </span><span class="s2">is </span><span class="s1">astroid.Uninferable:</span>
+                <span class="s2">continue</span>
+
+            <span class="s2">if </span><span class="s1">isinstance(inferred, astroid.bases.Generator):</span>
+                <span class="s0"># Check if we are dealing with a function decorated</span>
+                <span class="s0"># with contextlib.contextmanager.</span>
+                <span class="s2">if </span><span class="s1">decorated_with(</span>
+                    <span class="s1">inferred.parent, self.config.contextmanager_decorators</span>
+                <span class="s1">):</span>
+                    <span class="s2">continue</span>
+                <span class="s0"># If the parent of the generator is not the context manager itself,</span>
+                <span class="s0"># that means that it could have been returned from another</span>
+                <span class="s0"># function which was the real context manager.</span>
+                <span class="s0"># The following approach is more of a hack rather than a real</span>
+                <span class="s0"># solution: walk all the inferred statements for the</span>
+                <span class="s0"># given *ctx_mgr* and if you find one function scope</span>
+                <span class="s0"># which is decorated, consider it to be the real</span>
+                <span class="s0"># manager and give up, otherwise emit not-context-manager.</span>
+                <span class="s0"># See the test file for not_context_manager for a couple</span>
+                <span class="s0"># of self explaining tests.</span>
+
+                <span class="s0"># Retrieve node from all previusly visited nodes in the the inference history</span>
+                <span class="s1">context_path_names = filter(</span><span class="s2">None</span><span class="s1">, _unflatten(context.path))</span>
+                <span class="s1">inferred_paths = _flatten_container(</span>
+                    <span class="s1">safe_infer(path) </span><span class="s2">for </span><span class="s1">path </span><span class="s2">in </span><span class="s1">context_path_names</span>
+                <span class="s1">)</span>
+                <span class="s2">for </span><span class="s1">inferred_path </span><span class="s2">in </span><span class="s1">inferred_paths:</span>
+                    <span class="s2">if not </span><span class="s1">inferred_path:</span>
+                        <span class="s2">continue</span>
+                    <span class="s1">scope = inferred_path.scope()</span>
+                    <span class="s2">if not </span><span class="s1">isinstance(scope, astroid.FunctionDef):</span>
+                        <span class="s2">continue</span>
+                    <span class="s2">if </span><span class="s1">decorated_with(scope, self.config.contextmanager_decorators):</span>
+                        <span class="s2">break</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">self.add_message(</span>
+                        <span class="s3">&quot;not-context-manager&quot;</span><span class="s1">, node=node, args=(inferred.name,)</span>
+                    <span class="s1">)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">inferred.getattr(</span><span class="s3">&quot;__enter__&quot;</span><span class="s1">)</span>
+                    <span class="s1">inferred.getattr(</span><span class="s3">&quot;__exit__&quot;</span><span class="s1">)</span>
+                <span class="s2">except </span><span class="s1">astroid.NotFoundError:</span>
+                    <span class="s2">if </span><span class="s1">isinstance(inferred, astroid.Instance):</span>
+                        <span class="s0"># If we do not know the bases of this class,</span>
+                        <span class="s0"># just skip it.</span>
+                        <span class="s2">if not </span><span class="s1">has_known_bases(inferred):</span>
+                            <span class="s2">continue</span>
+                        <span class="s0"># Just ignore mixin classes.</span>
+                        <span class="s2">if </span><span class="s1">self.config.ignore_mixin_members:</span>
+                            <span class="s2">if </span><span class="s1">inferred.name[-</span><span class="s5">5</span><span class="s1">:].lower() == </span><span class="s3">&quot;mixin&quot;</span><span class="s1">:</span>
+                                <span class="s2">continue</span>
+
+                    <span class="s1">self.add_message(</span>
+                        <span class="s3">&quot;not-context-manager&quot;</span><span class="s1">, node=node, args=(inferred.name,)</span>
+                    <span class="s1">)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;invalid-unary-operand-type&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_unaryop(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Detect TypeErrors for unary operands.&quot;&quot;&quot;</span>
+
+        <span class="s2">for </span><span class="s1">error </span><span class="s2">in </span><span class="s1">node.type_errors():</span>
+            <span class="s0"># Let the error customize its output.</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;invalid-unary-operand-type&quot;</span><span class="s1">, args=str(error), node=node)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;unsupported-binary-operation&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_binop(self, node: astroid.BinOp):</span>
+        <span class="s2">if </span><span class="s1">node.op == </span><span class="s3">&quot;|&quot;</span><span class="s1">:</span>
+            <span class="s1">self._detect_unsupported_alternative_union_syntax(node)</span>
+
+    <span class="s2">def </span><span class="s1">_detect_unsupported_alternative_union_syntax(self, node: astroid.BinOp) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot;Detect if unsupported alternative Union syntax (PEP 604) was used.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">PY310_PLUS:  </span><span class="s0"># 310+ supports the new syntax</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">isinstance(</span>
+            <span class="s1">node.parent, TYPE_ANNOTATION_NODES_TYPES</span>
+        <span class="s1">) </span><span class="s2">and not </span><span class="s1">is_postponed_evaluation_enabled(node):</span>
+            <span class="s0"># Use in type annotations only allowed if</span>
+            <span class="s0"># postponed evaluation is enabled.</span>
+            <span class="s1">self._check_unsupported_alternative_union_syntax(node)</span>
+
+        <span class="s2">if </span><span class="s1">isinstance(</span>
+            <span class="s1">node.parent,</span>
+            <span class="s1">(</span>
+                <span class="s1">astroid.Assign,</span>
+                <span class="s1">astroid.Call,</span>
+                <span class="s1">astroid.Keyword,</span>
+                <span class="s1">astroid.Dict,</span>
+                <span class="s1">astroid.Tuple,</span>
+                <span class="s1">astroid.Set,</span>
+                <span class="s1">astroid.List,</span>
+                <span class="s1">astroid.BinOp,</span>
+            <span class="s1">),</span>
+        <span class="s1">):</span>
+            <span class="s0"># Check other contexts the syntax might appear, but are invalid.</span>
+            <span class="s0"># Make sure to filter context if postponed evaluation is enabled</span>
+            <span class="s0"># and parent is allowed node type.</span>
+            <span class="s1">allowed_nested_syntax = </span><span class="s2">False</span>
+            <span class="s2">if </span><span class="s1">is_postponed_evaluation_enabled(node):</span>
+                <span class="s1">parent_node = node.parent</span>
+                <span class="s2">while True</span><span class="s1">:</span>
+                    <span class="s2">if </span><span class="s1">isinstance(parent_node, TYPE_ANNOTATION_NODES_TYPES):</span>
+                        <span class="s1">allowed_nested_syntax = </span><span class="s2">True</span>
+                        <span class="s2">break</span>
+                    <span class="s1">parent_node = parent_node.parent</span>
+                    <span class="s2">if </span><span class="s1">isinstance(parent_node, astroid.Module):</span>
+                        <span class="s2">break</span>
+            <span class="s2">if not </span><span class="s1">allowed_nested_syntax:</span>
+                <span class="s1">self._check_unsupported_alternative_union_syntax(node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_unsupported_alternative_union_syntax(self, node: astroid.BinOp) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot;Check if left or right node is of type `type`.&quot;&quot;&quot;</span>
+        <span class="s1">msg = </span><span class="s3">&quot;unsupported operand type(s) for |&quot;</span>
+        <span class="s2">for </span><span class="s1">n </span><span class="s2">in </span><span class="s1">(node.left, node.right):</span>
+            <span class="s1">n = astroid.helpers.object_type(n)</span>
+            <span class="s2">if </span><span class="s1">isinstance(n, astroid.ClassDef) </span><span class="s2">and </span><span class="s1">is_classdef_type(n):</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;unsupported-binary-operation&quot;</span><span class="s1">, args=msg, node=node)</span>
+                <span class="s2">break</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;unsupported-binary-operation&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">_visit_binop(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Detect TypeErrors for binary arithmetic operands.&quot;&quot;&quot;</span>
+        <span class="s1">self._check_binop_errors(node)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;unsupported-binary-operation&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">_visit_augassign(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Detect TypeErrors for augmented binary arithmetic operands.&quot;&quot;&quot;</span>
+        <span class="s1">self._check_binop_errors(node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_binop_errors(self, node):</span>
+        <span class="s2">for </span><span class="s1">error </span><span class="s2">in </span><span class="s1">node.type_errors():</span>
+            <span class="s0"># Let the error customize its output.</span>
+            <span class="s2">if </span><span class="s1">any(</span>
+                <span class="s1">isinstance(obj, astroid.ClassDef) </span><span class="s2">and not </span><span class="s1">has_known_bases(obj)</span>
+                <span class="s2">for </span><span class="s1">obj </span><span class="s2">in </span><span class="s1">(error.left_type, error.right_type)</span>
+            <span class="s1">):</span>
+                <span class="s2">continue</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;unsupported-binary-operation&quot;</span><span class="s1">, args=str(error), node=node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_membership_test(self, node):</span>
+        <span class="s2">if </span><span class="s1">is_inside_abstract_class(node):</span>
+            <span class="s2">return</span>
+        <span class="s2">if </span><span class="s1">is_comprehension(node):</span>
+            <span class="s2">return</span>
+        <span class="s1">inferred = safe_infer(node)</span>
+        <span class="s2">if </span><span class="s1">inferred </span><span class="s2">is None or </span><span class="s1">inferred </span><span class="s2">is </span><span class="s1">astroid.Uninferable:</span>
+            <span class="s2">return</span>
+        <span class="s2">if not </span><span class="s1">supports_membership_test(inferred):</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;unsupported-membership-test&quot;</span><span class="s1">, args=node.as_string(), node=node</span>
+            <span class="s1">)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;unsupported-membership-test&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_compare(self, node):</span>
+        <span class="s2">if </span><span class="s1">len(node.ops) != </span><span class="s5">1</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s1">op, right = node.ops[</span><span class="s5">0</span><span class="s1">]</span>
+        <span class="s2">if </span><span class="s1">op </span><span class="s2">in </span><span class="s1">[</span><span class="s3">&quot;in&quot;</span><span class="s1">, </span><span class="s3">&quot;not in&quot;</span><span class="s1">]:</span>
+            <span class="s1">self._check_membership_test(right)</span>
+
+    <span class="s1">@check_messages(</span>
+        <span class="s3">&quot;unsubscriptable-object&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;unsupported-assignment-operation&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;unsupported-delete-operation&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;unhashable-dict-key&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;invalid-sequence-index&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;invalid-slice-index&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_subscript(self, node):</span>
+        <span class="s1">self._check_invalid_sequence_index(node)</span>
+
+        <span class="s1">supported_protocol = </span><span class="s2">None</span>
+        <span class="s2">if </span><span class="s1">isinstance(node.value, (astroid.ListComp, astroid.DictComp)):</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">isinstance(node.value, astroid.Dict):</span>
+            <span class="s0"># Assert dict key is hashable</span>
+            <span class="s2">if </span><span class="s1">isinstance(node.slice, (astroid.Index, astroid.Slice)):</span>
+                <span class="s0"># In Python 3.9 the Index, Slice and ExtSlice nodes are no longer in use</span>
+                <span class="s1">inferred = safe_infer(node.slice.value)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">inferred = safe_infer(node.slice)</span>
+            <span class="s2">if </span><span class="s1">inferred </span><span class="s2">not in </span><span class="s1">(</span><span class="s2">None</span><span class="s1">, astroid.Uninferable):</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">hash_fn = next(inferred.igetattr(</span><span class="s3">&quot;__hash__&quot;</span><span class="s1">))</span>
+                <span class="s2">except </span><span class="s1">astroid.InferenceError:</span>
+                    <span class="s2">pass</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s2">if </span><span class="s1">getattr(hash_fn, </span><span class="s3">&quot;value&quot;</span><span class="s1">, </span><span class="s2">True</span><span class="s1">) </span><span class="s2">is None</span><span class="s1">:</span>
+                        <span class="s1">self.add_message(</span><span class="s3">&quot;unhashable-dict-key&quot;</span><span class="s1">, node=node.value)</span>
+
+        <span class="s2">if </span><span class="s1">node.ctx == astroid.Load:</span>
+            <span class="s1">supported_protocol = supports_getitem</span>
+            <span class="s1">msg = </span><span class="s3">&quot;unsubscriptable-object&quot;</span>
+        <span class="s2">elif </span><span class="s1">node.ctx == astroid.Store:</span>
+            <span class="s1">supported_protocol = supports_setitem</span>
+            <span class="s1">msg = </span><span class="s3">&quot;unsupported-assignment-operation&quot;</span>
+        <span class="s2">elif </span><span class="s1">node.ctx == astroid.Del:</span>
+            <span class="s1">supported_protocol = supports_delitem</span>
+            <span class="s1">msg = </span><span class="s3">&quot;unsupported-delete-operation&quot;</span>
+
+        <span class="s2">if </span><span class="s1">isinstance(node.value, astroid.SetComp):</span>
+            <span class="s1">self.add_message(msg, args=node.value.as_string(), node=node.value)</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">is_inside_abstract_class(node):</span>
+            <span class="s2">return</span>
+
+        <span class="s1">inferred = safe_infer(node.value)</span>
+
+        <span class="s2">if </span><span class="s1">inferred </span><span class="s2">is None or </span><span class="s1">inferred </span><span class="s2">is </span><span class="s1">astroid.Uninferable:</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">getattr(inferred, </span><span class="s3">&quot;decorators&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">):</span>
+            <span class="s1">first_decorator = astroid.helpers.safe_infer(inferred.decorators.nodes[</span><span class="s5">0</span><span class="s1">])</span>
+            <span class="s2">if </span><span class="s1">isinstance(first_decorator, astroid.ClassDef):</span>
+                <span class="s1">inferred = first_decorator.instantiate_class()</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">return  </span><span class="s0"># It would be better to handle function</span>
+                <span class="s0"># decorators, but let's start slow.</span>
+
+        <span class="s2">if not </span><span class="s1">supported_protocol(inferred, node):</span>
+            <span class="s1">self.add_message(msg, args=node.value.as_string(), node=node.value)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;dict-items-missing-iter&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_for(self, node):</span>
+        <span class="s2">if not </span><span class="s1">isinstance(node.target, astroid.node_classes.Tuple):</span>
+            <span class="s0"># target is not a tuple</span>
+            <span class="s2">return</span>
+        <span class="s2">if not </span><span class="s1">len(node.target.elts) == </span><span class="s5">2</span><span class="s1">:</span>
+            <span class="s0"># target is not a tuple of two elements</span>
+            <span class="s2">return</span>
+
+        <span class="s1">iterable = node.iter</span>
+        <span class="s2">if not </span><span class="s1">isinstance(iterable, astroid.node_classes.Name):</span>
+            <span class="s0"># it's not a bare variable</span>
+            <span class="s2">return</span>
+
+        <span class="s1">inferred = safe_infer(iterable)</span>
+        <span class="s2">if not </span><span class="s1">inferred:</span>
+            <span class="s2">return</span>
+        <span class="s2">if not </span><span class="s1">isinstance(inferred, astroid.node_classes.Dict):</span>
+            <span class="s0"># the iterable is not a dict</span>
+            <span class="s2">return</span>
+
+        <span class="s1">self.add_message(</span><span class="s3">&quot;dict-iter-missing-items&quot;</span><span class="s1">, node=node)</span>
+
+
+<span class="s2">class </span><span class="s1">IterableChecker(BaseChecker):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Checks for non-iterables used in an iterable context. 
+    Contexts include: 
+    - for-statement 
+    - starargs in function call 
+    - `yield from`-statement 
+    - list, dict and set comprehensions 
+    - generator expressions 
+    Also checks for non-mappings in function call kwargs. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__implements__ = (IAstroidChecker,)</span>
+    <span class="s1">name = </span><span class="s3">&quot;typecheck&quot;</span>
+
+    <span class="s1">msgs = {</span>
+        <span class="s3">&quot;E1133&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Non-iterable value %s is used in an iterating context&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;not-an-iterable&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a non-iterable value is used in place where &quot;</span>
+            <span class="s3">&quot;iterable is expected&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;E1134&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Non-mapping value %s is used in a mapping context&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;not-a-mapping&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a non-mapping value is used in place where &quot;</span>
+            <span class="s3">&quot;mapping is expected&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+    <span class="s1">}</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_is_asyncio_coroutine(node):</span>
+        <span class="s2">if not </span><span class="s1">isinstance(node, astroid.Call):</span>
+            <span class="s2">return False</span>
+
+        <span class="s1">inferred_func = safe_infer(node.func)</span>
+        <span class="s2">if not </span><span class="s1">isinstance(inferred_func, astroid.FunctionDef):</span>
+            <span class="s2">return False</span>
+        <span class="s2">if not </span><span class="s1">inferred_func.decorators:</span>
+            <span class="s2">return False</span>
+        <span class="s2">for </span><span class="s1">decorator </span><span class="s2">in </span><span class="s1">inferred_func.decorators.nodes:</span>
+            <span class="s1">inferred_decorator = safe_infer(decorator)</span>
+            <span class="s2">if not </span><span class="s1">isinstance(inferred_decorator, astroid.FunctionDef):</span>
+                <span class="s2">continue</span>
+            <span class="s2">if </span><span class="s1">inferred_decorator.qname() != ASYNCIO_COROUTINE:</span>
+                <span class="s2">continue</span>
+            <span class="s2">return True</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">_check_iterable(self, node, check_async=</span><span class="s2">False</span><span class="s1">):</span>
+        <span class="s2">if </span><span class="s1">is_inside_abstract_class(node) </span><span class="s2">or </span><span class="s1">is_comprehension(node):</span>
+            <span class="s2">return</span>
+        <span class="s1">inferred = safe_infer(node)</span>
+        <span class="s2">if not </span><span class="s1">inferred:</span>
+            <span class="s2">return</span>
+        <span class="s2">if not </span><span class="s1">is_iterable(inferred, check_async=check_async):</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;not-an-iterable&quot;</span><span class="s1">, args=node.as_string(), node=node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_mapping(self, node):</span>
+        <span class="s2">if </span><span class="s1">is_inside_abstract_class(node):</span>
+            <span class="s2">return</span>
+        <span class="s2">if </span><span class="s1">isinstance(node, astroid.DictComp):</span>
+            <span class="s2">return</span>
+        <span class="s1">inferred = safe_infer(node)</span>
+        <span class="s2">if </span><span class="s1">inferred </span><span class="s2">is None or </span><span class="s1">inferred </span><span class="s2">is </span><span class="s1">astroid.Uninferable:</span>
+            <span class="s2">return</span>
+        <span class="s2">if not </span><span class="s1">is_mapping(inferred):</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;not-a-mapping&quot;</span><span class="s1">, args=node.as_string(), node=node)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;not-an-iterable&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_for(self, node):</span>
+        <span class="s1">self._check_iterable(node.iter)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;not-an-iterable&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_asyncfor(self, node):</span>
+        <span class="s1">self._check_iterable(node.iter, check_async=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;not-an-iterable&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_yieldfrom(self, node):</span>
+        <span class="s2">if </span><span class="s1">self._is_asyncio_coroutine(node.value):</span>
+            <span class="s2">return</span>
+        <span class="s1">self._check_iterable(node.value)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;not-an-iterable&quot;</span><span class="s1">, </span><span class="s3">&quot;not-a-mapping&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_call(self, node):</span>
+        <span class="s2">for </span><span class="s1">stararg </span><span class="s2">in </span><span class="s1">node.starargs:</span>
+            <span class="s1">self._check_iterable(stararg.value)</span>
+        <span class="s2">for </span><span class="s1">kwarg </span><span class="s2">in </span><span class="s1">node.kwargs:</span>
+            <span class="s1">self._check_mapping(kwarg.value)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;not-an-iterable&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_listcomp(self, node):</span>
+        <span class="s2">for </span><span class="s1">gen </span><span class="s2">in </span><span class="s1">node.generators:</span>
+            <span class="s1">self._check_iterable(gen.iter, check_async=gen.is_async)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;not-an-iterable&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_dictcomp(self, node):</span>
+        <span class="s2">for </span><span class="s1">gen </span><span class="s2">in </span><span class="s1">node.generators:</span>
+            <span class="s1">self._check_iterable(gen.iter, check_async=gen.is_async)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;not-an-iterable&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_setcomp(self, node):</span>
+        <span class="s2">for </span><span class="s1">gen </span><span class="s2">in </span><span class="s1">node.generators:</span>
+            <span class="s1">self._check_iterable(gen.iter, check_async=gen.is_async)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;not-an-iterable&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_generatorexp(self, node):</span>
+        <span class="s2">for </span><span class="s1">gen </span><span class="s2">in </span><span class="s1">node.generators:</span>
+            <span class="s1">self._check_iterable(gen.iter, check_async=gen.is_async)</span>
+
+
+<span class="s2">def </span><span class="s1">register(linter):</span>
+    <span class="s0">&quot;&quot;&quot;required method to auto register this checker&quot;&quot;&quot;</span>
+    <span class="s1">linter.register_checker(TypeChecker(linter))</span>
+    <span class="s1">linter.register_checker(IterableChecker(linter))</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,345 @@
+<html>
+<head>
+<title>wrap_modes.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+wrap_modes.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot;Defines all wrap modes that can be used when outputting formatted imports&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">enum</span>
+<span class="s2">from </span><span class="s1">inspect </span><span class="s2">import </span><span class="s1">signature</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Any, Callable, Dict, List</span>
+
+<span class="s2">import </span><span class="s1">isort.comments</span>
+
+<span class="s1">_wrap_modes: Dict[str, Callable[[Any], str]] = {}</span>
+
+
+<span class="s2">def </span><span class="s1">from_string(value: str) -&gt; </span><span class="s3">&quot;WrapModes&quot;</span><span class="s1">:</span>
+    <span class="s2">return </span><span class="s1">getattr(WrapModes, str(value), </span><span class="s2">None</span><span class="s1">) </span><span class="s2">or </span><span class="s1">WrapModes(int(value))</span>
+
+
+<span class="s2">def </span><span class="s1">formatter_from_string(name: str):</span>
+    <span class="s2">return </span><span class="s1">_wrap_modes.get(name.upper(), grid)</span>
+
+
+<span class="s2">def </span><span class="s1">_wrap_mode_interface(</span>
+    <span class="s1">statement: str,</span>
+    <span class="s1">imports: List[str],</span>
+    <span class="s1">white_space: str,</span>
+    <span class="s1">indent: str,</span>
+    <span class="s1">line_length: int,</span>
+    <span class="s1">comments: List[str],</span>
+    <span class="s1">line_separator: str,</span>
+    <span class="s1">comment_prefix: str,</span>
+    <span class="s1">include_trailing_comma: bool,</span>
+    <span class="s1">remove_comments: bool,</span>
+<span class="s1">) -&gt; str:</span>
+    <span class="s0">&quot;&quot;&quot;Defines the common interface used by all wrap mode functions&quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s3">&quot;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">_wrap_mode(function):</span>
+    <span class="s0">&quot;&quot;&quot;Registers an individual wrap mode. Function name and order are significant and used for 
+    creating enum. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">_wrap_modes[function.__name__.upper()] = function</span>
+    <span class="s1">function.__signature__ = signature(_wrap_mode_interface)</span>
+    <span class="s1">function.__annotations__ = _wrap_mode_interface.__annotations__</span>
+    <span class="s2">return </span><span class="s1">function</span>
+
+
+<span class="s1">@_wrap_mode</span>
+<span class="s2">def </span><span class="s1">grid(**interface):</span>
+    <span class="s2">if not </span><span class="s1">interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">]:</span>
+        <span class="s2">return </span><span class="s3">&quot;&quot;</span>
+
+    <span class="s1">interface[</span><span class="s3">&quot;statement&quot;</span><span class="s1">] += </span><span class="s3">&quot;(&quot; </span><span class="s1">+ interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">].pop(</span><span class="s4">0</span><span class="s1">)</span>
+    <span class="s2">while </span><span class="s1">interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">]:</span>
+        <span class="s1">next_import = interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">].pop(</span><span class="s4">0</span><span class="s1">)</span>
+        <span class="s1">next_statement = isort.comments.add_to_line(</span>
+            <span class="s1">interface[</span><span class="s3">&quot;comments&quot;</span><span class="s1">],</span>
+            <span class="s1">interface[</span><span class="s3">&quot;statement&quot;</span><span class="s1">] + </span><span class="s3">&quot;, &quot; </span><span class="s1">+ next_import,</span>
+            <span class="s1">removed=interface[</span><span class="s3">&quot;remove_comments&quot;</span><span class="s1">],</span>
+            <span class="s1">comment_prefix=interface[</span><span class="s3">&quot;comment_prefix&quot;</span><span class="s1">],</span>
+        <span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">len(next_statement.split(interface[</span><span class="s3">&quot;line_separator&quot;</span><span class="s1">])[-</span><span class="s4">1</span><span class="s1">]) + </span><span class="s4">1</span>
+            <span class="s1">&gt; interface[</span><span class="s3">&quot;line_length&quot;</span><span class="s1">]</span>
+        <span class="s1">):</span>
+            <span class="s1">lines = [</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">interface[</span><span class="s3">'white_space'</span><span class="s1">]</span><span class="s5">}{</span><span class="s1">next_import.split(</span><span class="s3">' '</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">]</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">]</span>
+            <span class="s2">for </span><span class="s1">part </span><span class="s2">in </span><span class="s1">next_import.split(</span><span class="s3">&quot; &quot;</span><span class="s1">)[</span><span class="s4">1</span><span class="s1">:]:</span>
+                <span class="s1">new_line = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">lines[-</span><span class="s4">1</span><span class="s1">]</span><span class="s5">} {</span><span class="s1">part</span><span class="s5">}</span><span class="s3">&quot;</span>
+                <span class="s2">if </span><span class="s1">len(new_line) + </span><span class="s4">1 </span><span class="s1">&gt; interface[</span><span class="s3">&quot;line_length&quot;</span><span class="s1">]:</span>
+                    <span class="s1">lines.append(</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">interface[</span><span class="s3">'white_space'</span><span class="s1">]</span><span class="s5">}{</span><span class="s1">part</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">lines[-</span><span class="s4">1</span><span class="s1">] = new_line</span>
+            <span class="s1">next_import = interface[</span><span class="s3">&quot;line_separator&quot;</span><span class="s1">].join(lines)</span>
+            <span class="s1">interface[</span><span class="s3">&quot;statement&quot;</span><span class="s1">] = (</span>
+                <span class="s1">isort.comments.add_to_line(</span>
+                    <span class="s1">interface[</span><span class="s3">&quot;comments&quot;</span><span class="s1">],</span>
+                    <span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">interface[</span><span class="s3">'statement'</span><span class="s1">]</span><span class="s5">}</span><span class="s3">,&quot;</span><span class="s1">,</span>
+                    <span class="s1">removed=interface[</span><span class="s3">&quot;remove_comments&quot;</span><span class="s1">],</span>
+                    <span class="s1">comment_prefix=interface[</span><span class="s3">&quot;comment_prefix&quot;</span><span class="s1">],</span>
+                <span class="s1">)</span>
+                <span class="s1">+ </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">interface[</span><span class="s3">'line_separator'</span><span class="s1">]</span><span class="s5">}{</span><span class="s1">next_import</span><span class="s5">}</span><span class="s3">&quot;</span>
+            <span class="s1">)</span>
+            <span class="s1">interface[</span><span class="s3">&quot;comments&quot;</span><span class="s1">] = []</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">interface[</span><span class="s3">&quot;statement&quot;</span><span class="s1">] += </span><span class="s3">&quot;, &quot; </span><span class="s1">+ next_import</span>
+    <span class="s2">return </span><span class="s1">interface[</span><span class="s3">&quot;statement&quot;</span><span class="s1">] + (</span><span class="s3">&quot;,&quot; </span><span class="s2">if </span><span class="s1">interface[</span><span class="s3">&quot;include_trailing_comma&quot;</span><span class="s1">] </span><span class="s2">else </span><span class="s3">&quot;&quot;</span><span class="s1">) + </span><span class="s3">&quot;)&quot;</span>
+
+
+<span class="s1">@_wrap_mode</span>
+<span class="s2">def </span><span class="s1">vertical(**interface):</span>
+    <span class="s2">if not </span><span class="s1">interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">]:</span>
+        <span class="s2">return </span><span class="s3">&quot;&quot;</span>
+
+    <span class="s1">first_import = (</span>
+        <span class="s1">isort.comments.add_to_line(</span>
+            <span class="s1">interface[</span><span class="s3">&quot;comments&quot;</span><span class="s1">],</span>
+            <span class="s1">interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">].pop(</span><span class="s4">0</span><span class="s1">) + </span><span class="s3">&quot;,&quot;</span><span class="s1">,</span>
+            <span class="s1">removed=interface[</span><span class="s3">&quot;remove_comments&quot;</span><span class="s1">],</span>
+            <span class="s1">comment_prefix=interface[</span><span class="s3">&quot;comment_prefix&quot;</span><span class="s1">],</span>
+        <span class="s1">)</span>
+        <span class="s1">+ interface[</span><span class="s3">&quot;line_separator&quot;</span><span class="s1">]</span>
+        <span class="s1">+ interface[</span><span class="s3">&quot;white_space&quot;</span><span class="s1">]</span>
+    <span class="s1">)</span>
+
+    <span class="s1">_imports = (</span><span class="s3">&quot;,&quot; </span><span class="s1">+ interface[</span><span class="s3">&quot;line_separator&quot;</span><span class="s1">] + interface[</span><span class="s3">&quot;white_space&quot;</span><span class="s1">]).join(</span>
+        <span class="s1">interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">]</span>
+    <span class="s1">)</span>
+    <span class="s1">_comma_maybe = </span><span class="s3">&quot;,&quot; </span><span class="s2">if </span><span class="s1">interface[</span><span class="s3">&quot;include_trailing_comma&quot;</span><span class="s1">] </span><span class="s2">else </span><span class="s3">&quot;&quot;</span>
+    <span class="s2">return </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">interface[</span><span class="s3">'statement'</span><span class="s1">]</span><span class="s5">}</span><span class="s3">(</span><span class="s5">{</span><span class="s1">first_import</span><span class="s5">}{</span><span class="s1">_imports</span><span class="s5">}{</span><span class="s1">_comma_maybe</span><span class="s5">}</span><span class="s3">)&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">_hanging_indent_common(use_parentheses=</span><span class="s2">False</span><span class="s1">, **interface):</span>
+    <span class="s2">if not </span><span class="s1">interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">]:</span>
+        <span class="s2">return </span><span class="s3">&quot;&quot;</span>
+    <span class="s1">line_length_limit = interface[</span><span class="s3">&quot;line_length&quot;</span><span class="s1">] - (</span><span class="s4">1 </span><span class="s2">if </span><span class="s1">use_parentheses </span><span class="s2">else </span><span class="s4">3</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">end_line(line):</span>
+        <span class="s2">if </span><span class="s1">use_parentheses:</span>
+            <span class="s2">return </span><span class="s1">line</span>
+        <span class="s2">if not </span><span class="s1">line.endswith(</span><span class="s3">&quot; &quot;</span><span class="s1">):</span>
+            <span class="s1">line += </span><span class="s3">&quot; &quot;</span>
+        <span class="s2">return </span><span class="s1">line + </span><span class="s3">&quot;</span><span class="s5">\\</span><span class="s3">&quot;</span>
+
+    <span class="s2">if </span><span class="s1">use_parentheses:</span>
+        <span class="s1">interface[</span><span class="s3">&quot;statement&quot;</span><span class="s1">] += </span><span class="s3">&quot;(&quot;</span>
+    <span class="s1">next_import = interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">].pop(</span><span class="s4">0</span><span class="s1">)</span>
+    <span class="s1">next_statement = interface[</span><span class="s3">&quot;statement&quot;</span><span class="s1">] + next_import</span>
+    <span class="s0"># Check for first import</span>
+    <span class="s2">if </span><span class="s1">len(next_statement) &gt; line_length_limit:</span>
+        <span class="s1">next_statement = (</span>
+            <span class="s1">isort.comments.add_to_line(</span>
+                <span class="s1">interface[</span><span class="s3">&quot;comments&quot;</span><span class="s1">],</span>
+                <span class="s1">end_line(interface[</span><span class="s3">&quot;statement&quot;</span><span class="s1">]),</span>
+                <span class="s1">removed=interface[</span><span class="s3">&quot;remove_comments&quot;</span><span class="s1">],</span>
+                <span class="s1">comment_prefix=interface[</span><span class="s3">&quot;comment_prefix&quot;</span><span class="s1">],</span>
+            <span class="s1">)</span>
+            <span class="s1">+ </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">interface[</span><span class="s3">'line_separator'</span><span class="s1">]</span><span class="s5">}{</span><span class="s1">interface[</span><span class="s3">'indent'</span><span class="s1">]</span><span class="s5">}{</span><span class="s1">next_import</span><span class="s5">}</span><span class="s3">&quot;</span>
+        <span class="s1">)</span>
+        <span class="s1">interface[</span><span class="s3">&quot;comments&quot;</span><span class="s1">] = []</span>
+    <span class="s1">interface[</span><span class="s3">&quot;statement&quot;</span><span class="s1">] = next_statement</span>
+    <span class="s2">while </span><span class="s1">interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">]:</span>
+        <span class="s1">next_import = interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">].pop(</span><span class="s4">0</span><span class="s1">)</span>
+        <span class="s1">next_statement = isort.comments.add_to_line(</span>
+            <span class="s1">interface[</span><span class="s3">&quot;comments&quot;</span><span class="s1">],</span>
+            <span class="s1">interface[</span><span class="s3">&quot;statement&quot;</span><span class="s1">] + </span><span class="s3">&quot;, &quot; </span><span class="s1">+ next_import,</span>
+            <span class="s1">removed=interface[</span><span class="s3">&quot;remove_comments&quot;</span><span class="s1">],</span>
+            <span class="s1">comment_prefix=interface[</span><span class="s3">&quot;comment_prefix&quot;</span><span class="s1">],</span>
+        <span class="s1">)</span>
+        <span class="s1">current_line = next_statement.split(interface[</span><span class="s3">&quot;line_separator&quot;</span><span class="s1">])[-</span><span class="s4">1</span><span class="s1">]</span>
+        <span class="s2">if </span><span class="s1">len(current_line) &gt; line_length_limit:</span>
+            <span class="s1">next_statement = (</span>
+                <span class="s1">isort.comments.add_to_line(</span>
+                    <span class="s1">interface[</span><span class="s3">&quot;comments&quot;</span><span class="s1">],</span>
+                    <span class="s1">end_line(interface[</span><span class="s3">&quot;statement&quot;</span><span class="s1">] + </span><span class="s3">&quot;,&quot;</span><span class="s1">),</span>
+                    <span class="s1">removed=interface[</span><span class="s3">&quot;remove_comments&quot;</span><span class="s1">],</span>
+                    <span class="s1">comment_prefix=interface[</span><span class="s3">&quot;comment_prefix&quot;</span><span class="s1">],</span>
+                <span class="s1">)</span>
+                <span class="s1">+ </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">interface[</span><span class="s3">'line_separator'</span><span class="s1">]</span><span class="s5">}{</span><span class="s1">interface[</span><span class="s3">'indent'</span><span class="s1">]</span><span class="s5">}{</span><span class="s1">next_import</span><span class="s5">}</span><span class="s3">&quot;</span>
+            <span class="s1">)</span>
+            <span class="s1">interface[</span><span class="s3">&quot;comments&quot;</span><span class="s1">] = []</span>
+        <span class="s1">interface[</span><span class="s3">&quot;statement&quot;</span><span class="s1">] = next_statement</span>
+    <span class="s1">_comma_maybe = </span><span class="s3">&quot;,&quot; </span><span class="s2">if </span><span class="s1">interface[</span><span class="s3">&quot;include_trailing_comma&quot;</span><span class="s1">] </span><span class="s2">else </span><span class="s3">&quot;&quot;</span>
+    <span class="s1">_close_parentheses_maybe = </span><span class="s3">&quot;)&quot; </span><span class="s2">if </span><span class="s1">use_parentheses </span><span class="s2">else </span><span class="s3">&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">interface[</span><span class="s3">&quot;statement&quot;</span><span class="s1">] + _comma_maybe + _close_parentheses_maybe</span>
+
+
+<span class="s1">@_wrap_mode</span>
+<span class="s2">def </span><span class="s1">hanging_indent(**interface):</span>
+    <span class="s2">return </span><span class="s1">_hanging_indent_common(use_parentheses=</span><span class="s2">False</span><span class="s1">, **interface)</span>
+
+
+<span class="s1">@_wrap_mode</span>
+<span class="s2">def </span><span class="s1">vertical_hanging_indent(**interface):</span>
+    <span class="s1">_line_with_comments = isort.comments.add_to_line(</span>
+        <span class="s1">interface[</span><span class="s3">&quot;comments&quot;</span><span class="s1">],</span>
+        <span class="s3">&quot;&quot;</span><span class="s1">,</span>
+        <span class="s1">removed=interface[</span><span class="s3">&quot;remove_comments&quot;</span><span class="s1">],</span>
+        <span class="s1">comment_prefix=interface[</span><span class="s3">&quot;comment_prefix&quot;</span><span class="s1">],</span>
+    <span class="s1">)</span>
+    <span class="s1">_imports = (</span><span class="s3">&quot;,&quot; </span><span class="s1">+ interface[</span><span class="s3">&quot;line_separator&quot;</span><span class="s1">] + interface[</span><span class="s3">&quot;indent&quot;</span><span class="s1">]).join(interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">])</span>
+    <span class="s1">_comma_maybe = </span><span class="s3">&quot;,&quot; </span><span class="s2">if </span><span class="s1">interface[</span><span class="s3">&quot;include_trailing_comma&quot;</span><span class="s1">] </span><span class="s2">else </span><span class="s3">&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">(</span>
+        <span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">interface[</span><span class="s3">'statement'</span><span class="s1">]</span><span class="s5">}</span><span class="s3">(</span><span class="s5">{</span><span class="s1">_line_with_comments</span><span class="s5">}{</span><span class="s1">interface[</span><span class="s3">'line_separator'</span><span class="s1">]</span><span class="s5">}</span><span class="s3">&quot;</span>
+        <span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">interface[</span><span class="s3">'indent'</span><span class="s1">]</span><span class="s5">}{</span><span class="s1">_imports</span><span class="s5">}{</span><span class="s1">_comma_maybe</span><span class="s5">}{</span><span class="s1">interface[</span><span class="s3">'line_separator'</span><span class="s1">]</span><span class="s5">}</span><span class="s3">)&quot;</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_vertical_grid_common(need_trailing_char: bool, **interface):</span>
+    <span class="s2">if not </span><span class="s1">interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">]:</span>
+        <span class="s2">return </span><span class="s3">&quot;&quot;</span>
+
+    <span class="s1">interface[</span><span class="s3">&quot;statement&quot;</span><span class="s1">] += (</span>
+        <span class="s1">isort.comments.add_to_line(</span>
+            <span class="s1">interface[</span><span class="s3">&quot;comments&quot;</span><span class="s1">],</span>
+            <span class="s3">&quot;(&quot;</span><span class="s1">,</span>
+            <span class="s1">removed=interface[</span><span class="s3">&quot;remove_comments&quot;</span><span class="s1">],</span>
+            <span class="s1">comment_prefix=interface[</span><span class="s3">&quot;comment_prefix&quot;</span><span class="s1">],</span>
+        <span class="s1">)</span>
+        <span class="s1">+ interface[</span><span class="s3">&quot;line_separator&quot;</span><span class="s1">]</span>
+        <span class="s1">+ interface[</span><span class="s3">&quot;indent&quot;</span><span class="s1">]</span>
+        <span class="s1">+ interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">].pop(</span><span class="s4">0</span><span class="s1">)</span>
+    <span class="s1">)</span>
+    <span class="s2">while </span><span class="s1">interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">]:</span>
+        <span class="s1">next_import = interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">].pop(</span><span class="s4">0</span><span class="s1">)</span>
+        <span class="s1">next_statement = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">interface[</span><span class="s3">'statement'</span><span class="s1">]</span><span class="s5">}</span><span class="s3">, </span><span class="s5">{</span><span class="s1">next_import</span><span class="s5">}</span><span class="s3">&quot;</span>
+        <span class="s1">current_line_length = len(next_statement.split(interface[</span><span class="s3">&quot;line_separator&quot;</span><span class="s1">])[-</span><span class="s4">1</span><span class="s1">])</span>
+        <span class="s2">if </span><span class="s1">interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">] </span><span class="s2">or </span><span class="s1">interface[</span><span class="s3">&quot;include_trailing_comma&quot;</span><span class="s1">]:</span>
+            <span class="s0"># We need to account for a comma after this import.</span>
+            <span class="s1">current_line_length += </span><span class="s4">1</span>
+        <span class="s2">if not </span><span class="s1">interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">] </span><span class="s2">and </span><span class="s1">need_trailing_char:</span>
+            <span class="s0"># We need to account for a closing ) we're going to add.</span>
+            <span class="s1">current_line_length += </span><span class="s4">1</span>
+        <span class="s2">if </span><span class="s1">current_line_length &gt; interface[</span><span class="s3">&quot;line_length&quot;</span><span class="s1">]:</span>
+            <span class="s1">next_statement = (</span>
+                <span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">interface[</span><span class="s3">'statement'</span><span class="s1">]</span><span class="s5">}</span><span class="s3">,</span><span class="s5">{</span><span class="s1">interface[</span><span class="s3">'line_separator'</span><span class="s1">]</span><span class="s5">}</span><span class="s3">&quot;</span>
+                <span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">interface[</span><span class="s3">'indent'</span><span class="s1">]</span><span class="s5">}{</span><span class="s1">next_import</span><span class="s5">}</span><span class="s3">&quot;</span>
+            <span class="s1">)</span>
+        <span class="s1">interface[</span><span class="s3">&quot;statement&quot;</span><span class="s1">] = next_statement</span>
+    <span class="s2">if </span><span class="s1">interface[</span><span class="s3">&quot;include_trailing_comma&quot;</span><span class="s1">]:</span>
+        <span class="s1">interface[</span><span class="s3">&quot;statement&quot;</span><span class="s1">] += </span><span class="s3">&quot;,&quot;</span>
+    <span class="s2">return </span><span class="s1">interface[</span><span class="s3">&quot;statement&quot;</span><span class="s1">]</span>
+
+
+<span class="s1">@_wrap_mode</span>
+<span class="s2">def </span><span class="s1">vertical_grid(**interface) -&gt; str:</span>
+    <span class="s2">return </span><span class="s1">_vertical_grid_common(need_trailing_char=</span><span class="s2">True</span><span class="s1">, **interface) + </span><span class="s3">&quot;)&quot;</span>
+
+
+<span class="s1">@_wrap_mode</span>
+<span class="s2">def </span><span class="s1">vertical_grid_grouped(**interface):</span>
+    <span class="s2">return </span><span class="s1">(</span>
+        <span class="s1">_vertical_grid_common(need_trailing_char=</span><span class="s2">False</span><span class="s1">, **interface)</span>
+        <span class="s1">+ interface[</span><span class="s3">&quot;line_separator&quot;</span><span class="s1">]</span>
+        <span class="s1">+ </span><span class="s3">&quot;)&quot;</span>
+    <span class="s1">)</span>
+
+
+<span class="s1">@_wrap_mode</span>
+<span class="s2">def </span><span class="s1">vertical_grid_grouped_no_comma(**interface):</span>
+    <span class="s0"># This is a deprecated alias for vertical_grid_grouped above. This function</span>
+    <span class="s0"># needs to exist for backwards compatibility but should never get called.</span>
+    <span class="s2">raise </span><span class="s1">NotImplementedError</span>
+
+
+<span class="s1">@_wrap_mode</span>
+<span class="s2">def </span><span class="s1">noqa(**interface):</span>
+    <span class="s1">_imports = </span><span class="s3">&quot;, &quot;</span><span class="s1">.join(interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">])</span>
+    <span class="s1">retval = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">interface[</span><span class="s3">'statement'</span><span class="s1">]</span><span class="s5">}{</span><span class="s1">_imports</span><span class="s5">}</span><span class="s3">&quot;</span>
+    <span class="s1">comment_str = </span><span class="s3">&quot; &quot;</span><span class="s1">.join(interface[</span><span class="s3">&quot;comments&quot;</span><span class="s1">])</span>
+    <span class="s2">if </span><span class="s1">interface[</span><span class="s3">&quot;comments&quot;</span><span class="s1">]:</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">len(retval) + len(interface[</span><span class="s3">&quot;comment_prefix&quot;</span><span class="s1">]) + </span><span class="s4">1 </span><span class="s1">+ len(comment_str)</span>
+            <span class="s1">&lt;= interface[</span><span class="s3">&quot;line_length&quot;</span><span class="s1">]</span>
+        <span class="s1">):</span>
+            <span class="s2">return </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">retval</span><span class="s5">}{</span><span class="s1">interface[</span><span class="s3">'comment_prefix'</span><span class="s1">]</span><span class="s5">} {</span><span class="s1">comment_str</span><span class="s5">}</span><span class="s3">&quot;</span>
+        <span class="s2">if </span><span class="s3">&quot;NOQA&quot; </span><span class="s2">in </span><span class="s1">interface[</span><span class="s3">&quot;comments&quot;</span><span class="s1">]:</span>
+            <span class="s2">return </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">retval</span><span class="s5">}{</span><span class="s1">interface[</span><span class="s3">'comment_prefix'</span><span class="s1">]</span><span class="s5">} {</span><span class="s1">comment_str</span><span class="s5">}</span><span class="s3">&quot;</span>
+        <span class="s2">return </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">retval</span><span class="s5">}{</span><span class="s1">interface[</span><span class="s3">'comment_prefix'</span><span class="s1">]</span><span class="s5">} </span><span class="s3">NOQA </span><span class="s5">{</span><span class="s1">comment_str</span><span class="s5">}</span><span class="s3">&quot;</span>
+
+    <span class="s2">if </span><span class="s1">len(retval) &lt;= interface[</span><span class="s3">&quot;line_length&quot;</span><span class="s1">]:</span>
+        <span class="s2">return </span><span class="s1">retval</span>
+    <span class="s2">return </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">retval</span><span class="s5">}{</span><span class="s1">interface[</span><span class="s3">'comment_prefix'</span><span class="s1">]</span><span class="s5">} </span><span class="s3">NOQA&quot;</span>
+
+
+<span class="s1">@_wrap_mode</span>
+<span class="s2">def </span><span class="s1">vertical_hanging_indent_bracket(**interface):</span>
+    <span class="s2">if not </span><span class="s1">interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">]:</span>
+        <span class="s2">return </span><span class="s3">&quot;&quot;</span>
+    <span class="s1">statement = vertical_hanging_indent(**interface)</span>
+    <span class="s2">return </span><span class="s3">f'</span><span class="s5">{</span><span class="s1">statement[:-</span><span class="s4">1</span><span class="s1">]</span><span class="s5">}{</span><span class="s1">interface[</span><span class="s3">&quot;indent&quot;</span><span class="s1">]</span><span class="s5">}</span><span class="s3">)'</span>
+
+
+<span class="s1">@_wrap_mode</span>
+<span class="s2">def </span><span class="s1">vertical_prefix_from_module_import(**interface):</span>
+    <span class="s2">if not </span><span class="s1">interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">]:</span>
+        <span class="s2">return </span><span class="s3">&quot;&quot;</span>
+
+    <span class="s1">prefix_statement = interface[</span><span class="s3">&quot;statement&quot;</span><span class="s1">]</span>
+    <span class="s1">output_statement = prefix_statement + interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">].pop(</span><span class="s4">0</span><span class="s1">)</span>
+    <span class="s1">comments = interface[</span><span class="s3">&quot;comments&quot;</span><span class="s1">]</span>
+
+    <span class="s1">statement = output_statement</span>
+    <span class="s1">statement_with_comments = </span><span class="s3">&quot;&quot;</span>
+    <span class="s2">for </span><span class="s1">next_import </span><span class="s2">in </span><span class="s1">interface[</span><span class="s3">&quot;imports&quot;</span><span class="s1">]:</span>
+        <span class="s1">statement = statement + </span><span class="s3">&quot;, &quot; </span><span class="s1">+ next_import</span>
+        <span class="s1">statement_with_comments = isort.comments.add_to_line(</span>
+            <span class="s1">comments,</span>
+            <span class="s1">statement,</span>
+            <span class="s1">removed=interface[</span><span class="s3">&quot;remove_comments&quot;</span><span class="s1">],</span>
+            <span class="s1">comment_prefix=interface[</span><span class="s3">&quot;comment_prefix&quot;</span><span class="s1">],</span>
+        <span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">len(statement_with_comments.split(interface[</span><span class="s3">&quot;line_separator&quot;</span><span class="s1">])[-</span><span class="s4">1</span><span class="s1">]) + </span><span class="s4">1</span>
+            <span class="s1">&gt; interface[</span><span class="s3">&quot;line_length&quot;</span><span class="s1">]</span>
+        <span class="s1">):</span>
+            <span class="s1">statement = (</span>
+                <span class="s1">isort.comments.add_to_line(</span>
+                    <span class="s1">comments,</span>
+                    <span class="s1">output_statement,</span>
+                    <span class="s1">removed=interface[</span><span class="s3">&quot;remove_comments&quot;</span><span class="s1">],</span>
+                    <span class="s1">comment_prefix=interface[</span><span class="s3">&quot;comment_prefix&quot;</span><span class="s1">],</span>
+                <span class="s1">)</span>
+                <span class="s1">+ </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">interface[</span><span class="s3">'line_separator'</span><span class="s1">]</span><span class="s5">}{</span><span class="s1">prefix_statement</span><span class="s5">}{</span><span class="s1">next_import</span><span class="s5">}</span><span class="s3">&quot;</span>
+            <span class="s1">)</span>
+            <span class="s1">comments = []</span>
+        <span class="s1">output_statement = statement</span>
+
+    <span class="s2">if </span><span class="s1">comments </span><span class="s2">and </span><span class="s1">statement_with_comments:</span>
+        <span class="s1">output_statement = statement_with_comments</span>
+    <span class="s2">return </span><span class="s1">output_statement</span>
+
+
+<span class="s1">@_wrap_mode</span>
+<span class="s2">def </span><span class="s1">hanging_indent_with_parentheses(**interface):</span>
+    <span class="s2">return </span><span class="s1">_hanging_indent_common(use_parentheses=</span><span class="s2">True</span><span class="s1">, **interface)</span>
+
+
+<span class="s1">@_wrap_mode</span>
+<span class="s2">def </span><span class="s1">backslash_grid(**interface):</span>
+    <span class="s1">interface[</span><span class="s3">&quot;indent&quot;</span><span class="s1">] = interface[</span><span class="s3">&quot;white_space&quot;</span><span class="s1">][:-</span><span class="s4">1</span><span class="s1">]</span>
+    <span class="s2">return </span><span class="s1">_hanging_indent_common(use_parentheses=</span><span class="s2">False</span><span class="s1">, **interface)</span>
+
+
+<span class="s1">WrapModes = enum.Enum(  </span><span class="s0"># type: ignore</span>
+    <span class="s3">&quot;WrapModes&quot;</span><span class="s1">, {wrap_mode: index </span><span class="s2">for </span><span class="s1">index, wrap_mode </span><span class="s2">in </span><span class="s1">enumerate(_wrap_modes.keys())}</span>
+<span class="s1">)</span>
+</pre>
+</body>
+</html>

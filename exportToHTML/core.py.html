@@ -1,0 +1,138 @@
+<html>
+<head>
+<title>core.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+core.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">import </span><span class="s1">datetime</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">safe_string, unicode</span>
+<span class="s0">from </span><span class="s1">openpyexcel.utils.datetime </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">CALENDAR_WINDOWS_1900,</span>
+    <span class="s1">to_ISO8601,</span>
+    <span class="s1">from_ISO8601,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">String,</span>
+    <span class="s1">DateTime,</span>
+    <span class="s1">Alias,</span>
+    <span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">NestedText</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s0">import </span><span class="s1">(Element, tostring)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">COREPROPS_NS,</span>
+    <span class="s1">DCORE_NS,</span>
+    <span class="s1">XSI_NS,</span>
+    <span class="s1">DCTERMS_NS,</span>
+    <span class="s1">DCTERMS_PREFIX</span>
+<span class="s1">)</span>
+
+<span class="s0">class </span><span class="s1">NestedDateTime(DateTime, NestedText):</span>
+
+    <span class="s1">expected_type = datetime.datetime</span>
+
+    <span class="s0">def </span><span class="s1">to_tree(self, tagname=</span><span class="s0">None</span><span class="s1">, value=</span><span class="s0">None</span><span class="s1">, namespace=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">namespace = getattr(self, </span><span class="s3">&quot;namespace&quot;</span><span class="s1">, namespace)</span>
+        <span class="s0">if </span><span class="s1">namespace </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">tagname = </span><span class="s3">&quot;{%s}%s&quot; </span><span class="s1">% (namespace, tagname)</span>
+        <span class="s1">el = Element(tagname)</span>
+        <span class="s0">if </span><span class="s1">value </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">el.text = to_ISO8601(value)</span>
+            <span class="s0">return </span><span class="s1">el</span>
+
+
+<span class="s0">class </span><span class="s1">QualifiedDateTime(NestedDateTime):</span>
+
+    <span class="s2">&quot;&quot;&quot;In certain situations Excel will complain if the additional type 
+    attribute isn't set&quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">to_tree(self, tagname=</span><span class="s0">None</span><span class="s1">, value=</span><span class="s0">None</span><span class="s1">, namespace=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">el = super(QualifiedDateTime, self).to_tree(tagname, value, namespace)</span>
+        <span class="s1">el.set(</span><span class="s3">&quot;{%s}type&quot; </span><span class="s1">% XSI_NS, </span><span class="s3">&quot;dcterms:W3CDTF&quot;</span><span class="s1">)</span>
+        <span class="s0">return </span><span class="s1">el</span>
+
+
+<span class="s0">class </span><span class="s1">DocumentProperties(Serialisable):</span>
+    <span class="s2">&quot;&quot;&quot;High-level properties of the document. 
+    Defined in ECMA-376 Par2 Annex D 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;coreProperties&quot;</span>
+    <span class="s1">namespace = COREPROPS_NS</span>
+
+    <span class="s1">category = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">contentStatus = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">keywords = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lastModifiedBy = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lastPrinted = NestedDateTime(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">revision = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">version = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">last_modified_by = Alias(</span><span class="s3">&quot;lastModifiedBy&quot;</span><span class="s1">)</span>
+
+    <span class="s2"># Dublin Core Properties</span>
+    <span class="s1">subject = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">, namespace=DCORE_NS)</span>
+    <span class="s1">title = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">, namespace=DCORE_NS)</span>
+    <span class="s1">creator = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">, namespace=DCORE_NS)</span>
+    <span class="s1">description = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">, namespace=DCORE_NS)</span>
+    <span class="s1">identifier = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">, namespace=DCORE_NS)</span>
+    <span class="s1">language = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">, namespace=DCORE_NS)</span>
+    <span class="s2"># Dublin Core Terms</span>
+    <span class="s1">created = QualifiedDateTime(allow_none=</span><span class="s0">True</span><span class="s1">, namespace=DCTERMS_NS)</span>
+    <span class="s1">modified = QualifiedDateTime(allow_none=</span><span class="s0">True</span><span class="s1">, namespace=DCTERMS_NS)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">&quot;creator&quot;</span><span class="s1">, </span><span class="s3">&quot;title&quot;</span><span class="s1">, </span><span class="s3">&quot;description&quot;</span><span class="s1">, </span><span class="s3">&quot;subject&quot;</span><span class="s1">,</span><span class="s3">&quot;identifier&quot;</span><span class="s1">,</span>
+                  <span class="s3">&quot;language&quot;</span><span class="s1">, </span><span class="s3">&quot;created&quot;</span><span class="s1">, </span><span class="s3">&quot;modified&quot;</span><span class="s1">, </span><span class="s3">&quot;lastModifiedBy&quot;</span><span class="s1">, </span><span class="s3">&quot;category&quot;</span><span class="s1">,</span>
+                  <span class="s3">&quot;contentStatus&quot;</span><span class="s1">, </span><span class="s3">&quot;version&quot;</span><span class="s1">, </span><span class="s3">&quot;revision&quot;</span><span class="s1">, </span><span class="s3">&quot;keywords&quot;</span><span class="s1">, </span><span class="s3">&quot;lastPrinted&quot;</span><span class="s1">,</span>
+                  <span class="s1">)</span>
+
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">category=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">contentStatus=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">keywords=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lastModifiedBy=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lastPrinted=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">revision=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">version=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">created=datetime.datetime.now(),</span>
+                 <span class="s1">creator=</span><span class="s3">&quot;openpyexcel&quot;</span><span class="s1">,</span>
+                 <span class="s1">description=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">identifier=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">language=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">modified=datetime.datetime.now(),</span>
+                 <span class="s1">subject=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">title=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.contentStatus = contentStatus</span>
+        <span class="s1">self.lastPrinted = lastPrinted</span>
+        <span class="s1">self.revision = revision</span>
+        <span class="s1">self.version = version</span>
+        <span class="s1">self.creator = creator</span>
+        <span class="s1">self.lastModifiedBy = lastModifiedBy</span>
+        <span class="s1">self.modified = modified</span>
+        <span class="s1">self.created = created</span>
+        <span class="s1">self.title = title</span>
+        <span class="s1">self.subject = subject</span>
+        <span class="s1">self.description = description</span>
+        <span class="s1">self.identifier = identifier</span>
+        <span class="s1">self.language = language</span>
+        <span class="s1">self.keywords = keywords</span>
+        <span class="s1">self.category = category</span>
+</pre>
+</body>
+</html>

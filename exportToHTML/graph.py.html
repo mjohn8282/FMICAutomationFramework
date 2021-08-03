@@ -1,0 +1,229 @@
+<html>
+<head>
+<title>graph.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+graph.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2015-2018, 2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015 Florian Bruhin &lt;me@the-compiler.org&gt;</span>
+<span class="s0"># Copyright (c) 2016 Ashley Whetter &lt;ashley@awhetter.co.uk&gt;</span>
+<span class="s0"># Copyright (c) 2018 ssolanki &lt;sushobhitsolanki@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019, 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Nick Drozd &lt;nicholasdrozd@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Damien Baty &lt;damien.baty@polyconseil.fr&gt;</span>
+<span class="s0"># Copyright (c) 2020 谭九鼎 &lt;109224573@qq.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Benjamin Graham &lt;benwilliamgraham@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Andreas Finkler &lt;andi.finkler@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Andrew Howe &lt;howeaj@users.noreply.github.com&gt;</span>
+
+<span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;Graph manipulation utilities. 
+ 
+(dot generation adapted from pypy/translator/tool/make_dot.py) 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">codecs</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">shutil</span>
+<span class="s2">import </span><span class="s1">subprocess</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">tempfile</span>
+
+
+<span class="s2">def </span><span class="s1">target_info_from_filename(filename):</span>
+    <span class="s0">&quot;&quot;&quot;Transforms /some/path/foo.png into ('/some/path', 'foo.png', 'png').&quot;&quot;&quot;</span>
+    <span class="s1">basename = os.path.basename(filename)</span>
+    <span class="s1">storedir = os.path.dirname(os.path.abspath(filename))</span>
+    <span class="s1">target = os.path.splitext(filename)[-</span><span class="s3">1</span><span class="s1">][</span><span class="s3">1</span><span class="s1">:]</span>
+    <span class="s2">return </span><span class="s1">storedir, basename, target</span>
+
+
+<span class="s2">class </span><span class="s1">DotBackend:</span>
+    <span class="s0">&quot;&quot;&quot;Dot File backend.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(</span>
+        <span class="s1">self,</span>
+        <span class="s1">graphname,</span>
+        <span class="s1">rankdir=</span><span class="s2">None</span><span class="s1">,</span>
+        <span class="s1">size=</span><span class="s2">None</span><span class="s1">,</span>
+        <span class="s1">ratio=</span><span class="s2">None</span><span class="s1">,</span>
+        <span class="s1">charset=</span><span class="s4">&quot;utf-8&quot;</span><span class="s1">,</span>
+        <span class="s1">renderer=</span><span class="s4">&quot;dot&quot;</span><span class="s1">,</span>
+        <span class="s1">additional_param=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">):</span>
+        <span class="s2">if </span><span class="s1">additional_param </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">additional_param = {}</span>
+        <span class="s1">self.graphname = graphname</span>
+        <span class="s1">self.renderer = renderer</span>
+        <span class="s1">self.lines = []</span>
+        <span class="s1">self._source = </span><span class="s2">None</span>
+        <span class="s1">self.emit(</span><span class="s4">&quot;digraph %s {&quot; </span><span class="s1">% normalize_node_id(graphname))</span>
+        <span class="s2">if </span><span class="s1">rankdir:</span>
+            <span class="s1">self.emit(</span><span class="s4">&quot;rankdir=%s&quot; </span><span class="s1">% rankdir)</span>
+        <span class="s2">if </span><span class="s1">ratio:</span>
+            <span class="s1">self.emit(</span><span class="s4">&quot;ratio=%s&quot; </span><span class="s1">% ratio)</span>
+        <span class="s2">if </span><span class="s1">size:</span>
+            <span class="s1">self.emit(</span><span class="s4">'size=&quot;%s&quot;' </span><span class="s1">% size)</span>
+        <span class="s2">if </span><span class="s1">charset:</span>
+            <span class="s2">assert </span><span class="s1">charset.lower() </span><span class="s2">in </span><span class="s1">(</span><span class="s4">&quot;utf-8&quot;</span><span class="s1">, </span><span class="s4">&quot;iso-8859-1&quot;</span><span class="s1">, </span><span class="s4">&quot;latin1&quot;</span><span class="s1">), (</span>
+                <span class="s4">&quot;unsupported charset %s&quot; </span><span class="s1">% charset</span>
+            <span class="s1">)</span>
+            <span class="s1">self.emit(</span><span class="s4">'charset=&quot;%s&quot;' </span><span class="s1">% charset)</span>
+        <span class="s2">for </span><span class="s1">param </span><span class="s2">in </span><span class="s1">additional_param.items():</span>
+            <span class="s1">self.emit(</span><span class="s4">&quot;=&quot;</span><span class="s1">.join(param))</span>
+
+    <span class="s2">def </span><span class="s1">get_source(self):</span>
+        <span class="s0">&quot;&quot;&quot;returns self._source&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self._source </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">self.emit(</span><span class="s4">&quot;}</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">)</span>
+            <span class="s1">self._source = </span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">.join(self.lines)</span>
+            <span class="s2">del </span><span class="s1">self.lines</span>
+        <span class="s2">return </span><span class="s1">self._source</span>
+
+    <span class="s1">source = property(get_source)</span>
+
+    <span class="s2">def </span><span class="s1">generate(self, outputfile: str = </span><span class="s2">None</span><span class="s1">, mapfile: str = </span><span class="s2">None</span><span class="s1">) -&gt; str:</span>
+        <span class="s0">&quot;&quot;&quot;Generates a graph file. 
+ 
+        :param str outputfile: filename and path [defaults to graphname.png] 
+        :param str mapfile: filename and path 
+ 
+        :rtype: str 
+        :return: a path to the generated file 
+        :raises RuntimeError: if the executable for rendering was not found 
+        &quot;&quot;&quot;</span>
+        <span class="s1">graphviz_extensions = (</span><span class="s4">&quot;dot&quot;</span><span class="s1">, </span><span class="s4">&quot;gv&quot;</span><span class="s1">)</span>
+        <span class="s1">name = self.graphname</span>
+        <span class="s2">if </span><span class="s1">outputfile </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">target = </span><span class="s4">&quot;png&quot;</span>
+            <span class="s1">pdot, dot_sourcepath = tempfile.mkstemp(</span><span class="s4">&quot;.gv&quot;</span><span class="s1">, name)</span>
+            <span class="s1">ppng, outputfile = tempfile.mkstemp(</span><span class="s4">&quot;.png&quot;</span><span class="s1">, name)</span>
+            <span class="s1">os.close(pdot)</span>
+            <span class="s1">os.close(ppng)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">_, _, target = target_info_from_filename(outputfile)</span>
+            <span class="s2">if not </span><span class="s1">target:</span>
+                <span class="s1">target = </span><span class="s4">&quot;png&quot;</span>
+                <span class="s1">outputfile = outputfile + </span><span class="s4">&quot;.&quot; </span><span class="s1">+ target</span>
+            <span class="s2">if </span><span class="s1">target </span><span class="s2">not in </span><span class="s1">graphviz_extensions:</span>
+                <span class="s1">pdot, dot_sourcepath = tempfile.mkstemp(</span><span class="s4">&quot;.gv&quot;</span><span class="s1">, name)</span>
+                <span class="s1">os.close(pdot)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">dot_sourcepath = outputfile</span>
+        <span class="s2">with </span><span class="s1">codecs.open(dot_sourcepath, </span><span class="s4">&quot;w&quot;</span><span class="s1">, encoding=</span><span class="s4">&quot;utf8&quot;</span><span class="s1">) </span><span class="s2">as </span><span class="s1">pdot:  </span><span class="s0"># type: ignore</span>
+            <span class="s1">pdot.write(self.source)  </span><span class="s0"># type: ignore</span>
+        <span class="s2">if </span><span class="s1">target </span><span class="s2">not in </span><span class="s1">graphviz_extensions:</span>
+            <span class="s2">if </span><span class="s1">shutil.which(self.renderer) </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s2">raise </span><span class="s1">RuntimeError(</span>
+                    <span class="s4">f&quot;Cannot generate `</span><span class="s5">{</span><span class="s1">outputfile</span><span class="s5">}</span><span class="s4">` because '</span><span class="s5">{</span><span class="s1">self.renderer</span><span class="s5">}</span><span class="s4">' &quot;</span>
+                    <span class="s4">&quot;executable not found. Install graphviz, or specify a `.gv` &quot;</span>
+                    <span class="s4">&quot;outputfile to produce the DOT source code.&quot;</span>
+                <span class="s1">)</span>
+            <span class="s1">use_shell = sys.platform == </span><span class="s4">&quot;win32&quot;</span>
+            <span class="s2">if </span><span class="s1">mapfile:</span>
+                <span class="s1">subprocess.call(</span>
+                    <span class="s1">[</span>
+                        <span class="s1">self.renderer,</span>
+                        <span class="s4">&quot;-Tcmapx&quot;</span><span class="s1">,</span>
+                        <span class="s4">&quot;-o&quot;</span><span class="s1">,</span>
+                        <span class="s1">mapfile,</span>
+                        <span class="s4">&quot;-T&quot;</span><span class="s1">,</span>
+                        <span class="s1">target,</span>
+                        <span class="s1">dot_sourcepath,</span>
+                        <span class="s4">&quot;-o&quot;</span><span class="s1">,</span>
+                        <span class="s1">outputfile,</span>
+                    <span class="s1">],</span>
+                    <span class="s1">shell=use_shell,</span>
+                <span class="s1">)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">subprocess.call(</span>
+                    <span class="s1">[self.renderer, </span><span class="s4">&quot;-T&quot;</span><span class="s1">, target, dot_sourcepath, </span><span class="s4">&quot;-o&quot;</span><span class="s1">, outputfile],</span>
+                    <span class="s1">shell=use_shell,</span>
+                <span class="s1">)</span>
+            <span class="s1">os.unlink(dot_sourcepath)</span>
+        <span class="s2">return </span><span class="s1">outputfile</span>
+
+    <span class="s2">def </span><span class="s1">emit(self, line):</span>
+        <span class="s0">&quot;&quot;&quot;Adds &lt;line&gt; to final output.&quot;&quot;&quot;</span>
+        <span class="s1">self.lines.append(line)</span>
+
+    <span class="s2">def </span><span class="s1">emit_edge(self, name1, name2, **props):</span>
+        <span class="s0">&quot;&quot;&quot;emit an edge from &lt;name1&gt; to &lt;name2&gt;. 
+        edge properties: see https://www.graphviz.org/doc/info/attrs.html 
+        &quot;&quot;&quot;</span>
+        <span class="s1">attrs = [</span><span class="s4">f'</span><span class="s5">{</span><span class="s1">prop</span><span class="s5">}</span><span class="s4">=&quot;</span><span class="s5">{</span><span class="s1">value</span><span class="s5">}</span><span class="s4">&quot;' </span><span class="s2">for </span><span class="s1">prop, value </span><span class="s2">in </span><span class="s1">props.items()]</span>
+        <span class="s1">n_from, n_to = normalize_node_id(name1), normalize_node_id(name2)</span>
+        <span class="s1">self.emit(</span><span class="s4">&quot;{} -&gt; {} [{}];&quot;</span><span class="s1">.format(n_from, n_to, </span><span class="s4">&quot;, &quot;</span><span class="s1">.join(sorted(attrs))))</span>
+
+    <span class="s2">def </span><span class="s1">emit_node(self, name, **props):</span>
+        <span class="s0">&quot;&quot;&quot;emit a node with given properties. 
+        node properties: see https://www.graphviz.org/doc/info/attrs.html 
+        &quot;&quot;&quot;</span>
+        <span class="s1">attrs = [</span><span class="s4">f'</span><span class="s5">{</span><span class="s1">prop</span><span class="s5">}</span><span class="s4">=&quot;</span><span class="s5">{</span><span class="s1">value</span><span class="s5">}</span><span class="s4">&quot;' </span><span class="s2">for </span><span class="s1">prop, value </span><span class="s2">in </span><span class="s1">props.items()]</span>
+        <span class="s1">self.emit(</span><span class="s4">&quot;{} [{}];&quot;</span><span class="s1">.format(normalize_node_id(name), </span><span class="s4">&quot;, &quot;</span><span class="s1">.join(sorted(attrs))))</span>
+
+
+<span class="s2">def </span><span class="s1">normalize_node_id(nid):</span>
+    <span class="s0">&quot;&quot;&quot;Returns a suitable DOT node id for `nid`.&quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s4">'&quot;%s&quot;' </span><span class="s1">% nid</span>
+
+
+<span class="s2">def </span><span class="s1">get_cycles(graph_dict, vertices=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;given a dictionary representing an ordered graph (i.e. key are vertices 
+    and values is a list of destination vertices representing edges), return a 
+    list of detected cycles 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if not </span><span class="s1">graph_dict:</span>
+        <span class="s2">return </span><span class="s1">()</span>
+    <span class="s1">result = []</span>
+    <span class="s2">if </span><span class="s1">vertices </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s1">vertices = graph_dict.keys()</span>
+    <span class="s2">for </span><span class="s1">vertice </span><span class="s2">in </span><span class="s1">vertices:</span>
+        <span class="s1">_get_cycles(graph_dict, [], set(), result, vertice)</span>
+    <span class="s2">return </span><span class="s1">result</span>
+
+
+<span class="s2">def </span><span class="s1">_get_cycles(graph_dict, path, visited, result, vertice):</span>
+    <span class="s0">&quot;&quot;&quot;recursive function doing the real work for get_cycles&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">vertice </span><span class="s2">in </span><span class="s1">path:</span>
+        <span class="s1">cycle = [vertice]</span>
+        <span class="s2">for </span><span class="s1">node </span><span class="s2">in </span><span class="s1">path[::-</span><span class="s3">1</span><span class="s1">]:</span>
+            <span class="s2">if </span><span class="s1">node == vertice:</span>
+                <span class="s2">break</span>
+            <span class="s1">cycle.insert(</span><span class="s3">0</span><span class="s1">, node)</span>
+        <span class="s0"># make a canonical representation</span>
+        <span class="s1">start_from = min(cycle)</span>
+        <span class="s1">index = cycle.index(start_from)</span>
+        <span class="s1">cycle = cycle[index:] + cycle[</span><span class="s3">0</span><span class="s1">:index]</span>
+        <span class="s0"># append it to result if not already in</span>
+        <span class="s2">if </span><span class="s1">cycle </span><span class="s2">not in </span><span class="s1">result:</span>
+            <span class="s1">result.append(cycle)</span>
+        <span class="s2">return</span>
+    <span class="s1">path.append(vertice)</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">for </span><span class="s1">node </span><span class="s2">in </span><span class="s1">graph_dict[vertice]:</span>
+            <span class="s0"># don't check already visited nodes again</span>
+            <span class="s2">if </span><span class="s1">node </span><span class="s2">not in </span><span class="s1">visited:</span>
+                <span class="s1">_get_cycles(graph_dict, path, visited, result, node)</span>
+                <span class="s1">visited.add(node)</span>
+    <span class="s2">except </span><span class="s1">KeyError:</span>
+        <span class="s2">pass</span>
+    <span class="s1">path.pop()</span>
+</pre>
+</body>
+</html>

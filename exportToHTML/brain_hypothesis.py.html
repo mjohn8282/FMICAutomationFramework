@@ -1,0 +1,74 @@
+<html>
+<head>
+<title>brain_hypothesis.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_hypothesis.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+<span class="s0">&quot;&quot;&quot; 
+Astroid hook for the Hypothesis library. 
+ 
+Without this hook pylint reports no-value-for-parameter for use of strategies 
+defined using the `@hypothesis.strategies.composite` decorator.  For example: 
+ 
+    from hypothesis import strategies as st 
+ 
+    @st.composite 
+    def a_strategy(draw): 
+        return draw(st.integers()) 
+ 
+    a_strategy() 
+ 
+&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+
+<span class="s1">COMPOSITE_NAMES = (</span>
+    <span class="s3">&quot;composite&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;st.composite&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;strategies.composite&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;hypothesis.strategies.composite&quot;</span><span class="s1">,</span>
+<span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">is_decorated_with_st_composite(node):</span>
+    <span class="s0">&quot;&quot;&quot;Return True if a decorated node has @st.composite applied.&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">node.decorators </span><span class="s2">and </span><span class="s1">node.args.args </span><span class="s2">and </span><span class="s1">node.args.args[</span><span class="s4">0</span><span class="s1">].name == </span><span class="s3">&quot;draw&quot;</span><span class="s1">:</span>
+        <span class="s2">for </span><span class="s1">decorator_attribute </span><span class="s2">in </span><span class="s1">node.decorators.nodes:</span>
+            <span class="s2">if </span><span class="s1">decorator_attribute.as_string() </span><span class="s2">in </span><span class="s1">COMPOSITE_NAMES:</span>
+                <span class="s2">return True</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">remove_draw_parameter_from_composite_strategy(node):</span>
+    <span class="s0">&quot;&quot;&quot;Given that the FunctionDef is decorated with @st.composite, remove the 
+    first argument (`draw`) - it's always supplied by Hypothesis so we don't 
+    need to emit the no-value-for-parameter lint. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">del </span><span class="s1">node.args.args[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s2">del </span><span class="s1">node.args.annotations[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s2">del </span><span class="s1">node.args.type_comment_args[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s2">return </span><span class="s1">node</span>
+
+
+<span class="s1">astroid.MANAGER.register_transform(</span>
+    <span class="s1">node_class=astroid.FunctionDef,</span>
+    <span class="s1">transform=remove_draw_parameter_from_composite_strategy,</span>
+    <span class="s1">predicate=is_decorated_with_st_composite,</span>
+<span class="s1">)</span>
+</pre>
+</body>
+</html>

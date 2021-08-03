@@ -1,0 +1,92 @@
+<html>
+<head>
+<title>brain_pkg_resources.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_pkg_resources.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2016, 2018 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Ceridwen &lt;ceridwenv@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">MANAGER, parse, register_module_extender</span>
+
+
+<span class="s2">def </span><span class="s1">pkg_resources_transform():</span>
+    <span class="s2">return </span><span class="s1">parse(</span>
+        <span class="s3">&quot;&quot;&quot; 
+def require(*requirements): 
+    return pkg_resources.working_set.require(*requirements) 
+ 
+def run_script(requires, script_name): 
+    return pkg_resources.working_set.run_script(requires, script_name) 
+ 
+def iter_entry_points(group, name=None): 
+    return pkg_resources.working_set.iter_entry_points(group, name) 
+ 
+def resource_exists(package_or_requirement, resource_name): 
+    return get_provider(package_or_requirement).has_resource(resource_name) 
+ 
+def resource_isdir(package_or_requirement, resource_name): 
+    return get_provider(package_or_requirement).resource_isdir( 
+        resource_name) 
+ 
+def resource_filename(package_or_requirement, resource_name): 
+    return get_provider(package_or_requirement).get_resource_filename( 
+        self, resource_name) 
+ 
+def resource_stream(package_or_requirement, resource_name): 
+    return get_provider(package_or_requirement).get_resource_stream( 
+        self, resource_name) 
+ 
+def resource_string(package_or_requirement, resource_name): 
+    return get_provider(package_or_requirement).get_resource_string( 
+        self, resource_name) 
+ 
+def resource_listdir(package_or_requirement, resource_name): 
+    return get_provider(package_or_requirement).resource_listdir( 
+        resource_name) 
+ 
+def extraction_error(): 
+    pass 
+ 
+def get_cache_path(archive_name, names=()): 
+    extract_path = self.extraction_path or get_default_cache() 
+    target_path = os.path.join(extract_path, archive_name+'-tmp', *names) 
+    return target_path 
+ 
+def postprocess(tempname, filename): 
+    pass 
+ 
+def set_extraction_path(path): 
+    pass 
+ 
+def cleanup_resources(force=False): 
+    pass 
+ 
+def get_distribution(dist): 
+    return Distribution(dist) 
+ 
+_namespace_packages = {} 
+&quot;&quot;&quot;</span>
+    <span class="s1">)</span>
+
+
+<span class="s1">register_module_extender(MANAGER, </span><span class="s3">&quot;pkg_resources&quot;</span><span class="s1">, pkg_resources_transform)</span>
+</pre>
+</body>
+</html>

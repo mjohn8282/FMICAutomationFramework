@@ -1,0 +1,40 @@
+<html>
+<head>
+<title>Adminpages.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+Adminpages.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import  </span><span class="s1">requests</span>
+<span class="s0">from </span><span class="s1">Utilities.CustomLogger </span><span class="s0">import </span><span class="s1">logs</span>
+
+<span class="s0">class </span><span class="s1">Adminpages:</span>
+
+    <span class="s1">Adminpages_xpath=</span><span class="s2">&quot;//div[@id='divHomeMenu']/div[4]/ul/li[4]&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,driver):</span>
+        <span class="s1">self.driver=driver</span>
+
+    <span class="s0">def </span><span class="s1">test_checklinks_adminpages(self):</span>
+        <span class="s1">self.driver.find_element_by_xpath(Adminpages.Adminpages_xpath).click()</span>
+        <span class="s1">links = self.driver.find_elements_by_xpath(</span><span class="s2">&quot;.//a&quot;</span><span class="s1">)</span>
+        <span class="s0">for </span><span class="s1">i </span><span class="s0">in </span><span class="s1">links:</span>
+            <span class="s1">href = str(i.get_attribute(</span><span class="s2">'href'</span><span class="s1">))</span>
+            <span class="s0">if </span><span class="s1">href.__contains__(</span><span class="s2">'Logoff.aspx'</span><span class="s1">) </span><span class="s0">or </span><span class="s1">href.__contains__(str(</span><span class="s0">None</span><span class="s1">)):</span>
+                <span class="s0">continue</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">status = requests.get(href).status_code</span>
+                <span class="s1">logs.loggen().info(href + </span><span class="s2">&quot; Status code &quot; </span><span class="s1">+ str(status))</span>
+
+</pre>
+</body>
+</html>

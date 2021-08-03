@@ -1,0 +1,138 @@
+<html>
+<head>
+<title>shape_writer.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+shape_writer.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Element,</span>
+    <span class="s1">SubElement,</span>
+    <span class="s1">tostring,</span>
+    <span class="s1">fromstring,</span>
+<span class="s1">)</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.utils </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">column_index_from_string,</span>
+    <span class="s1">coordinate_from_string,</span>
+<span class="s1">)</span>
+
+<span class="s1">vmlns = </span><span class="s3">&quot;urn:schemas-microsoft-com:vml&quot;</span>
+<span class="s1">officens = </span><span class="s3">&quot;urn:schemas-microsoft-com:office:office&quot;</span>
+<span class="s1">excelns = </span><span class="s3">&quot;urn:schemas-microsoft-com:office:excel&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">ShapeWriter(object):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Create VML for comments 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">vml = </span><span class="s0">None</span>
+    <span class="s1">vml_path = </span><span class="s0">None</span>
+
+
+    <span class="s0">def </span><span class="s1">__init__(self, comments):</span>
+        <span class="s1">self.comments = comments</span>
+
+
+    <span class="s0">def </span><span class="s1">add_comment_shapetype(self, root):</span>
+        <span class="s1">shape_layout = SubElement(root, </span><span class="s3">&quot;{%s}shapelayout&quot; </span><span class="s1">% officens,</span>
+                                  <span class="s1">{</span><span class="s3">&quot;{%s}ext&quot; </span><span class="s1">% vmlns: </span><span class="s3">&quot;edit&quot;</span><span class="s1">})</span>
+        <span class="s1">SubElement(shape_layout,</span>
+                   <span class="s3">&quot;{%s}idmap&quot; </span><span class="s1">% officens,</span>
+                   <span class="s1">{</span><span class="s3">&quot;{%s}ext&quot; </span><span class="s1">% vmlns: </span><span class="s3">&quot;edit&quot;</span><span class="s1">, </span><span class="s3">&quot;data&quot;</span><span class="s1">: </span><span class="s3">&quot;1&quot;</span><span class="s1">})</span>
+        <span class="s1">shape_type = SubElement(root,</span>
+                                <span class="s3">&quot;{%s}shapetype&quot; </span><span class="s1">% vmlns,</span>
+                                <span class="s1">{</span><span class="s3">&quot;id&quot;</span><span class="s1">: </span><span class="s3">&quot;_x0000_t202&quot;</span><span class="s1">,</span>
+                                 <span class="s3">&quot;coordsize&quot;</span><span class="s1">: </span><span class="s3">&quot;21600,21600&quot;</span><span class="s1">,</span>
+                                 <span class="s3">&quot;{%s}spt&quot; </span><span class="s1">% officens: </span><span class="s3">&quot;202&quot;</span><span class="s1">,</span>
+                                 <span class="s3">&quot;path&quot;</span><span class="s1">: </span><span class="s3">&quot;m,l,21600r21600,l21600,xe&quot;</span><span class="s1">})</span>
+        <span class="s1">SubElement(shape_type, </span><span class="s3">&quot;{%s}stroke&quot; </span><span class="s1">% vmlns, {</span><span class="s3">&quot;joinstyle&quot;</span><span class="s1">: </span><span class="s3">&quot;miter&quot;</span><span class="s1">})</span>
+        <span class="s1">SubElement(shape_type,</span>
+                   <span class="s3">&quot;{%s}path&quot; </span><span class="s1">% vmlns,</span>
+                   <span class="s1">{</span><span class="s3">&quot;gradientshapeok&quot;</span><span class="s1">: </span><span class="s3">&quot;t&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;{%s}connecttype&quot; </span><span class="s1">% officens: </span><span class="s3">&quot;rect&quot;</span><span class="s1">})</span>
+
+
+    <span class="s0">def </span><span class="s1">add_comment_shape(self, root, idx, coord, height, width):</span>
+        <span class="s1">col, row = coordinate_from_string(coord)</span>
+        <span class="s1">row -= </span><span class="s4">1</span>
+        <span class="s1">column = column_index_from_string(col) - </span><span class="s4">1</span>
+        <span class="s1">shape = _shape_factory(row, column, height, width)</span>
+
+        <span class="s1">shape.set(</span><span class="s3">'id'</span><span class="s1">, </span><span class="s3">&quot;_x0000_s%04d&quot; </span><span class="s1">% idx)</span>
+        <span class="s1">root.append(shape)</span>
+
+
+    <span class="s0">def </span><span class="s1">write(self, root):</span>
+
+        <span class="s0">if not </span><span class="s1">hasattr(root, </span><span class="s3">&quot;findall&quot;</span><span class="s1">):</span>
+            <span class="s1">root = Element(</span><span class="s3">&quot;xml&quot;</span><span class="s1">)</span>
+
+        <span class="s2"># Remove any existing comment shapes</span>
+        <span class="s1">comments = root.findall(</span><span class="s3">&quot;{%s}shape[@type='#_x0000_t202']&quot; </span><span class="s1">% vmlns)</span>
+        <span class="s0">for </span><span class="s1">c </span><span class="s0">in </span><span class="s1">comments:</span>
+            <span class="s1">root.remove(c)</span>
+
+        <span class="s2"># check whether comments shape type already exists</span>
+        <span class="s1">shape_types = root.find(</span><span class="s3">&quot;{%s}shapetype[@id='_x0000_t202']&quot; </span><span class="s1">% vmlns)</span>
+        <span class="s0">if not </span><span class="s1">shape_types:</span>
+            <span class="s1">self.add_comment_shapetype(root)</span>
+
+        <span class="s0">for </span><span class="s1">idx, (coord, comment) </span><span class="s0">in </span><span class="s1">enumerate(self.comments, </span><span class="s4">1026</span><span class="s1">):</span>
+            <span class="s1">self.add_comment_shape(root, idx, coord, comment.height, comment.width)</span>
+
+        <span class="s0">return </span><span class="s1">tostring(root)</span>
+
+
+<span class="s0">def </span><span class="s1">_shape_factory(row, column, height, width):</span>
+    <span class="s1">style = (</span><span class="s3">&quot;position:absolute; &quot;</span>
+             <span class="s3">&quot;margin-left:59.25pt;&quot;</span>
+             <span class="s3">&quot;margin-top:1.5pt;&quot;</span>
+             <span class="s3">&quot;width:{width}px;&quot;</span>
+             <span class="s3">&quot;height:{height}px;&quot;</span>
+             <span class="s3">&quot;z-index:1;&quot;</span>
+             <span class="s3">&quot;visibility:hidden&quot;</span><span class="s1">).format(height=height,</span>
+                                         <span class="s1">width=width)</span>
+    <span class="s1">attrs = {</span>
+        <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;#_x0000_t202&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;style&quot;</span><span class="s1">: style,</span>
+        <span class="s3">&quot;fillcolor&quot;</span><span class="s1">: </span><span class="s3">&quot;#ffffe1&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;{%s}insetmode&quot; </span><span class="s1">% officens: </span><span class="s3">&quot;auto&quot;</span>
+    <span class="s1">}</span>
+    <span class="s1">shape = Element(</span><span class="s3">&quot;{%s}shape&quot; </span><span class="s1">% vmlns, attrs)</span>
+
+    <span class="s1">SubElement(shape, </span><span class="s3">&quot;{%s}fill&quot; </span><span class="s1">% vmlns,</span>
+               <span class="s1">{</span><span class="s3">&quot;color2&quot;</span><span class="s1">: </span><span class="s3">&quot;#ffffe1&quot;</span><span class="s1">})</span>
+    <span class="s1">SubElement(shape, </span><span class="s3">&quot;{%s}shadow&quot; </span><span class="s1">% vmlns,</span>
+               <span class="s1">{</span><span class="s3">&quot;color&quot;</span><span class="s1">: </span><span class="s3">&quot;black&quot;</span><span class="s1">, </span><span class="s3">&quot;obscured&quot;</span><span class="s1">: </span><span class="s3">&quot;t&quot;</span><span class="s1">})</span>
+    <span class="s1">SubElement(shape, </span><span class="s3">&quot;{%s}path&quot; </span><span class="s1">% vmlns,</span>
+               <span class="s1">{</span><span class="s3">&quot;{%s}connecttype&quot; </span><span class="s1">% officens: </span><span class="s3">&quot;none&quot;</span><span class="s1">})</span>
+    <span class="s1">textbox = SubElement(shape, </span><span class="s3">&quot;{%s}textbox&quot; </span><span class="s1">% vmlns,</span>
+                         <span class="s1">{</span><span class="s3">&quot;style&quot;</span><span class="s1">: </span><span class="s3">&quot;mso-direction-alt:auto&quot;</span><span class="s1">})</span>
+    <span class="s1">SubElement(textbox, </span><span class="s3">&quot;div&quot;</span><span class="s1">, {</span><span class="s3">&quot;style&quot;</span><span class="s1">: </span><span class="s3">&quot;text-align:left&quot;</span><span class="s1">})</span>
+    <span class="s1">client_data = SubElement(shape, </span><span class="s3">&quot;{%s}ClientData&quot; </span><span class="s1">% excelns,</span>
+                             <span class="s1">{</span><span class="s3">&quot;ObjectType&quot;</span><span class="s1">: </span><span class="s3">&quot;Note&quot;</span><span class="s1">})</span>
+    <span class="s1">SubElement(client_data, </span><span class="s3">&quot;{%s}MoveWithCells&quot; </span><span class="s1">% excelns)</span>
+    <span class="s1">SubElement(client_data, </span><span class="s3">&quot;{%s}SizeWithCells&quot; </span><span class="s1">% excelns)</span>
+    <span class="s1">SubElement(client_data, </span><span class="s3">&quot;{%s}AutoFill&quot; </span><span class="s1">% excelns).text = </span><span class="s3">&quot;False&quot;</span>
+    <span class="s1">SubElement(client_data, </span><span class="s3">&quot;{%s}Row&quot; </span><span class="s1">% excelns).text = str(row)</span>
+    <span class="s1">SubElement(client_data, </span><span class="s3">&quot;{%s}Column&quot; </span><span class="s1">% excelns).text = str(column)</span>
+    <span class="s0">return </span><span class="s1">shape</span>
+</pre>
+</body>
+</html>

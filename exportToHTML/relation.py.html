@@ -1,0 +1,118 @@
+<html>
+<head>
+<title>relation.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+relation.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Alias</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">Relation</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+
+
+<span class="s0">class </span><span class="s1">SheetBackgroundPicture(Serialisable):</span>
+    <span class="s1">tagname = </span><span class="s3">&quot;picture&quot;</span>
+    <span class="s1">id = Relation()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, id):</span>
+        <span class="s1">self.id = id</span>
+
+
+<span class="s0">class </span><span class="s1">DrawingHF(Serialisable):</span>
+    <span class="s1">id = Relation()</span>
+    <span class="s1">lho = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">leftHeaderOddPages = Alias(</span><span class="s3">'lho'</span><span class="s1">)</span>
+    <span class="s1">lhe = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">leftHeaderEvenPages = Alias(</span><span class="s3">'lhe'</span><span class="s1">)</span>
+    <span class="s1">lhf = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">leftHeaderFirstPage = Alias(</span><span class="s3">'lhf'</span><span class="s1">)</span>
+    <span class="s1">cho = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">centerHeaderOddPages = Alias(</span><span class="s3">'cho'</span><span class="s1">)</span>
+    <span class="s1">che = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">centerHeaderEvenPages = Alias(</span><span class="s3">'che'</span><span class="s1">)</span>
+    <span class="s1">chf = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">centerHeaderFirstPage = Alias(</span><span class="s3">'chf'</span><span class="s1">)</span>
+    <span class="s1">rho = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">rightHeaderOddPages = Alias(</span><span class="s3">'rho'</span><span class="s1">)</span>
+    <span class="s1">rhe = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">rightHeaderEvenPages = Alias(</span><span class="s3">'rhe'</span><span class="s1">)</span>
+    <span class="s1">rhf = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">rightHeaderFirstPage = Alias(</span><span class="s3">'rhf'</span><span class="s1">)</span>
+    <span class="s1">lfo = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">leftFooterOddPages = Alias(</span><span class="s3">'lfo'</span><span class="s1">)</span>
+    <span class="s1">lfe = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">leftFooterEvenPages = Alias(</span><span class="s3">'lfe'</span><span class="s1">)</span>
+    <span class="s1">lff = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">leftFooterFirstPage = Alias(</span><span class="s3">'lff'</span><span class="s1">)</span>
+    <span class="s1">cfo = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">centerFooterOddPages = Alias(</span><span class="s3">'cfo'</span><span class="s1">)</span>
+    <span class="s1">cfe = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">centerFooterEvenPages = Alias(</span><span class="s3">'cfe'</span><span class="s1">)</span>
+    <span class="s1">cff = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">centerFooterFirstPage = Alias(</span><span class="s3">'cff'</span><span class="s1">)</span>
+    <span class="s1">rfo = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">rightFooterOddPages = Alias(</span><span class="s3">'rfo'</span><span class="s1">)</span>
+    <span class="s1">rfe = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">rightFooterEvenPages = Alias(</span><span class="s3">'rfe'</span><span class="s1">)</span>
+    <span class="s1">rff = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">rightFooterFirstPage = Alias(</span><span class="s3">'rff'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">id=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lho=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lhe=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lhf=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">cho=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">che=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">chf=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rho=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rhe=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rhf=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lfo=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lfe=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">cfo=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">cfe=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">cff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rfo=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rfe=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rff=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.id = id</span>
+        <span class="s1">self.lho = lho</span>
+        <span class="s1">self.lhe = lhe</span>
+        <span class="s1">self.lhf = lhf</span>
+        <span class="s1">self.cho = cho</span>
+        <span class="s1">self.che = che</span>
+        <span class="s1">self.chf = chf</span>
+        <span class="s1">self.rho = rho</span>
+        <span class="s1">self.rhe = rhe</span>
+        <span class="s1">self.rhf = rhf</span>
+        <span class="s1">self.lfo = lfo</span>
+        <span class="s1">self.lfe = lfe</span>
+        <span class="s1">self.lff = lff</span>
+        <span class="s1">self.cfo = cfo</span>
+        <span class="s1">self.cfe = cfe</span>
+        <span class="s1">self.cff = cff</span>
+        <span class="s1">self.rfo = rfo</span>
+        <span class="s1">self.rfe = rfe</span>
+        <span class="s1">self.rff = rff</span>
+</pre>
+</body>
+</html>

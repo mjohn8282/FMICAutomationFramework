@@ -1,0 +1,73 @@
+<html>
+<head>
+<title>loadfile.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+loadfile.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">.loadscope </span><span class="s0">import </span><span class="s1">LoadScopeScheduling</span>
+<span class="s0">from </span><span class="s1">py.log </span><span class="s0">import </span><span class="s1">Producer</span>
+
+
+<span class="s0">class </span><span class="s1">LoadFileScheduling(LoadScopeScheduling):</span>
+    <span class="s2">&quot;&quot;&quot;Implement load scheduling across nodes, but grouping test test file. 
+ 
+    This distributes the tests collected across all nodes so each test is run 
+    just once.  All nodes collect and submit the list of tests and when all 
+    collections are received it is verified they are identical collections. 
+    Then the collection gets divided up in work units, grouped by test file, 
+    and those work units get submitted to nodes.  Whenever a node finishes an 
+    item, it calls ``.mark_test_complete()`` which will trigger the scheduler 
+    to assign more work units if the number of pending tests for the node falls 
+    below a low-watermark. 
+ 
+    When created, ``numnodes`` defines how many nodes are expected to submit a 
+    collection. This is used to know when all nodes have finished collection. 
+ 
+    This class behaves very much like LoadScopeScheduling, but with a file-level scope. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, config, log=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">super().__init__(config, log)</span>
+        <span class="s0">if </span><span class="s1">log </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">self.log = Producer(</span><span class="s3">&quot;loadfilesched&quot;</span><span class="s1">)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">self.log = log.loadfilesched</span>
+
+    <span class="s0">def </span><span class="s1">_split_scope(self, nodeid):</span>
+        <span class="s2">&quot;&quot;&quot;Determine the scope (grouping) of a nodeid. 
+ 
+        There are usually 3 cases for a nodeid:: 
+ 
+            example/loadsuite/test/test_beta.py::test_beta0 
+            example/loadsuite/test/test_delta.py::Delta1::test_delta0 
+            example/loadsuite/epsilon/__init__.py::epsilon.epsilon 
+ 
+        #. Function in a test module. 
+        #. Method of a class in a test module. 
+        #. Doctest in a function in a package. 
+ 
+        This function will group tests with the scope determined by splitting 
+        the first ``::`` from the left. That is, test will be grouped in a 
+        single work unit when they reside in the same file. 
+         In the above example, scopes will be:: 
+ 
+            example/loadsuite/test/test_beta.py 
+            example/loadsuite/test/test_delta.py 
+            example/loadsuite/epsilon/__init__.py 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">nodeid.split(</span><span class="s3">&quot;::&quot;</span><span class="s1">, </span><span class="s4">1</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">]</span>
+</pre>
+</body>
+</html>

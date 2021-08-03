@@ -1,0 +1,63 @@
+<html>
+<head>
+<title>__pkginfo__.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+__pkginfo__.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2006-2014 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2014-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Google, Inc.</span>
+<span class="s0"># Copyright (c) 2015-2017 Ceridwen &lt;ceridwenv@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015 Florian Bruhin &lt;me@the-compiler.org&gt;</span>
+<span class="s0"># Copyright (c) 2015 Radosław Ganczarek &lt;radoslaw@ganczarek.in&gt;</span>
+<span class="s0"># Copyright (c) 2016 Moises Lopez &lt;moylop260@vauxoo.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Hugo &lt;hugovk@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Łukasz Rogalski &lt;rogalski.91@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Calen Pennington &lt;cale@edx.org&gt;</span>
+<span class="s0"># Copyright (c) 2018 Ville Skyttä &lt;ville.skytta@iki.fi&gt;</span>
+<span class="s0"># Copyright (c) 2018 Ashley Whetter &lt;ashley@awhetter.co.uk&gt;</span>
+<span class="s0"># Copyright (c) 2018 Bryce Guinta &lt;bryce.paul.guinta@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Uilian Ries &lt;uilianries@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Thomas Hisch &lt;t.hisch@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020-2021 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 David Gilman &lt;davidgilman1@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Konrad Weihmann &lt;kweihmann@outlook.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Felix Mölder &lt;felix.moelder@uni-due.de&gt;</span>
+<span class="s0"># Copyright (c) 2020 Michael &lt;michael-k@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Marc Mueller &lt;30130371+cdce8p@users.noreply.github.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;astroid packaging information&quot;&quot;&quot;</span>
+
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Optional</span>
+
+<span class="s1">__version__ = </span><span class="s3">&quot;2.5.6&quot;</span>
+<span class="s0"># For an official release, use 'alpha_version = False' and 'dev_version = None'</span>
+<span class="s1">alpha_version: bool = </span><span class="s2">False  </span><span class="s0"># Release will be an alpha version if True (ex: '1.2.3a6')</span>
+<span class="s1">dev_version: Optional[int] = </span><span class="s2">None</span>
+
+<span class="s2">if </span><span class="s1">dev_version </span><span class="s2">is not None</span><span class="s1">:</span>
+    <span class="s2">if </span><span class="s1">alpha_version:</span>
+        <span class="s1">__version__ += </span><span class="s3">f&quot;a</span><span class="s4">{</span><span class="s1">dev_version</span><span class="s4">}</span><span class="s3">&quot;</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">__version__ += </span><span class="s3">f&quot;.dev</span><span class="s4">{</span><span class="s1">dev_version</span><span class="s4">}</span><span class="s3">&quot;</span>
+
+<span class="s1">version = __version__</span>
+</pre>
+</body>
+</html>

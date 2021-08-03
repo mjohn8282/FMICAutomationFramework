@@ -1,0 +1,112 @@
+<html>
+<head>
+<title>marker.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+marker.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Alias,</span>
+<span class="s1">)</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import</span><span class="s1">(</span>
+    <span class="s1">ExtensionList,</span>
+    <span class="s1">_explicit_none,</span>
+<span class="s1">)</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">NestedBool,</span>
+    <span class="s1">NestedInteger,</span>
+    <span class="s1">NestedMinMax,</span>
+    <span class="s1">NestedNoneSet,</span>
+<span class="s1">)</span>
+
+<span class="s0">from </span><span class="s1">.layout </span><span class="s0">import </span><span class="s1">Layout</span>
+<span class="s0">from </span><span class="s1">.picture </span><span class="s0">import </span><span class="s1">PictureOptions</span>
+<span class="s0">from </span><span class="s1">.shapes </span><span class="s0">import </span><span class="s1">*</span>
+<span class="s0">from </span><span class="s1">.text </span><span class="s0">import </span><span class="s1">*</span>
+<span class="s0">from </span><span class="s1">.error_bar </span><span class="s0">import </span><span class="s1">*</span>
+
+
+<span class="s0">class </span><span class="s1">Marker(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;marker&quot;</span>
+
+    <span class="s1">symbol = NestedNoneSet(values=([</span><span class="s3">'circle'</span><span class="s1">, </span><span class="s3">'dash'</span><span class="s1">, </span><span class="s3">'diamond'</span><span class="s1">, </span><span class="s3">'dot'</span><span class="s1">, </span><span class="s3">'picture'</span><span class="s1">,</span>
+                              <span class="s3">'plus'</span><span class="s1">, </span><span class="s3">'square'</span><span class="s1">, </span><span class="s3">'star'</span><span class="s1">, </span><span class="s3">'triangle'</span><span class="s1">, </span><span class="s3">'x'</span><span class="s1">, </span><span class="s3">'auto'</span><span class="s1">]),</span>
+                           <span class="s1">to_tree=_explicit_none)</span>
+    <span class="s1">size = NestedMinMax(min=</span><span class="s4">2</span><span class="s1">, max=</span><span class="s4">72</span><span class="s1">, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">spPr = Typed(expected_type=GraphicalProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">graphicalProperties = Alias(</span><span class="s3">'spPr'</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'symbol'</span><span class="s1">, </span><span class="s3">'size'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">symbol=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">size=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.symbol = symbol</span>
+        <span class="s1">self.size = size</span>
+        <span class="s0">if </span><span class="s1">spPr </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">spPr = GraphicalProperties()</span>
+        <span class="s1">self.spPr = spPr</span>
+
+
+<span class="s0">class </span><span class="s1">DataPoint(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;dPt&quot;</span>
+
+    <span class="s1">idx = NestedInteger()</span>
+    <span class="s1">invertIfNegative = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">marker = Typed(expected_type=Marker, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">bubble3D = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">explosion = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">spPr = Typed(expected_type=GraphicalProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">graphicalProperties = Alias(</span><span class="s3">'spPr'</span><span class="s1">)</span>
+    <span class="s1">pictureOptions = Typed(expected_type=PictureOptions, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'idx'</span><span class="s1">, </span><span class="s3">'invertIfNegative'</span><span class="s1">, </span><span class="s3">'marker'</span><span class="s1">, </span><span class="s3">'bubble3D'</span><span class="s1">,</span>
+                    <span class="s3">'explosion'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">, </span><span class="s3">'pictureOptions'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">idx=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">invertIfNegative=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">marker=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">bubble3D=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">explosion=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pictureOptions=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.idx = idx</span>
+        <span class="s1">self.invertIfNegative = invertIfNegative</span>
+        <span class="s1">self.marker = marker</span>
+        <span class="s1">self.bubble3D = bubble3D</span>
+        <span class="s1">self.explosion = explosion</span>
+        <span class="s0">if </span><span class="s1">spPr </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">spPr = GraphicalProperties()</span>
+        <span class="s1">self.spPr = spPr</span>
+        <span class="s1">self.pictureOptions = pictureOptions</span>
+</pre>
+</body>
+</html>

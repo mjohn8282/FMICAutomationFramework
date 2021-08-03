@@ -1,0 +1,451 @@
+<html>
+<head>
+<title>workermanage.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+.s3 { color: #d19a66;}
+.s4 { color: #5c6370;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+workermanage.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">fnmatch</span>
+<span class="s0">import </span><span class="s1">os</span>
+<span class="s0">import </span><span class="s1">re</span>
+<span class="s0">import </span><span class="s1">sys</span>
+<span class="s0">import </span><span class="s1">uuid</span>
+
+<span class="s0">import </span><span class="s1">py</span>
+<span class="s0">import </span><span class="s1">pytest</span>
+<span class="s0">import </span><span class="s1">execnet</span>
+
+<span class="s0">import </span><span class="s1">xdist.remote</span>
+
+
+<span class="s0">def </span><span class="s1">parse_spec_config(config):</span>
+    <span class="s1">xspeclist = []</span>
+    <span class="s0">for </span><span class="s1">xspec </span><span class="s0">in </span><span class="s1">config.getvalue(</span><span class="s2">&quot;tx&quot;</span><span class="s1">):</span>
+        <span class="s1">i = xspec.find(</span><span class="s2">&quot;*&quot;</span><span class="s1">)</span>
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s1">num = int(xspec[:i])</span>
+        <span class="s0">except </span><span class="s1">ValueError:</span>
+            <span class="s1">xspeclist.append(xspec)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">xspeclist.extend([xspec[i + </span><span class="s3">1 </span><span class="s1">:]] * num)</span>
+    <span class="s0">if not </span><span class="s1">xspeclist:</span>
+        <span class="s0">raise </span><span class="s1">pytest.UsageError(</span>
+            <span class="s2">&quot;MISSING test execution (tx) nodes: please specify --tx&quot;</span>
+        <span class="s1">)</span>
+    <span class="s0">return </span><span class="s1">xspeclist</span>
+
+
+<span class="s0">class </span><span class="s1">NodeManager:</span>
+    <span class="s1">EXIT_TIMEOUT = </span><span class="s3">10</span>
+    <span class="s1">DEFAULT_IGNORES = [</span><span class="s2">&quot;.*&quot;</span><span class="s1">, </span><span class="s2">&quot;*.pyc&quot;</span><span class="s1">, </span><span class="s2">&quot;*.pyo&quot;</span><span class="s1">, </span><span class="s2">&quot;*~&quot;</span><span class="s1">]</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, config, specs=</span><span class="s0">None</span><span class="s1">, defaultchdir=</span><span class="s2">&quot;pyexecnetcache&quot;</span><span class="s1">):</span>
+        <span class="s1">self.config = config</span>
+        <span class="s1">self.trace = self.config.trace.get(</span><span class="s2">&quot;nodemanager&quot;</span><span class="s1">)</span>
+        <span class="s1">self.testrunuid = self.config.getoption(</span><span class="s2">&quot;testrunuid&quot;</span><span class="s1">)</span>
+        <span class="s0">if </span><span class="s1">self.testrunuid </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">self.testrunuid = uuid.uuid4().hex</span>
+        <span class="s1">self.group = execnet.Group()</span>
+        <span class="s0">if </span><span class="s1">specs </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">specs = self._getxspecs()</span>
+        <span class="s1">self.specs = []</span>
+        <span class="s0">for </span><span class="s1">spec </span><span class="s0">in </span><span class="s1">specs:</span>
+            <span class="s0">if not </span><span class="s1">isinstance(spec, execnet.XSpec):</span>
+                <span class="s1">spec = execnet.XSpec(spec)</span>
+            <span class="s0">if not </span><span class="s1">spec.chdir </span><span class="s0">and not </span><span class="s1">spec.popen:</span>
+                <span class="s1">spec.chdir = defaultchdir</span>
+            <span class="s1">self.group.allocate_id(spec)</span>
+            <span class="s1">self.specs.append(spec)</span>
+        <span class="s1">self.roots = self._getrsyncdirs()</span>
+        <span class="s1">self.rsyncoptions = self._getrsyncoptions()</span>
+        <span class="s1">self._rsynced_specs = set()</span>
+
+    <span class="s0">def </span><span class="s1">rsync_roots(self, gateway):</span>
+        <span class="s4">&quot;&quot;&quot;Rsync the set of roots to the node's gateway cwd.&quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">self.roots:</span>
+            <span class="s0">for </span><span class="s1">root </span><span class="s0">in </span><span class="s1">self.roots:</span>
+                <span class="s1">self.rsync(gateway, root, **self.rsyncoptions)</span>
+
+    <span class="s0">def </span><span class="s1">setup_nodes(self, putevent):</span>
+        <span class="s1">self.config.hook.pytest_xdist_setupnodes(config=self.config, specs=self.specs)</span>
+        <span class="s1">self.trace(</span><span class="s2">&quot;setting up nodes&quot;</span><span class="s1">)</span>
+        <span class="s0">return </span><span class="s1">[self.setup_node(spec, putevent) </span><span class="s0">for </span><span class="s1">spec </span><span class="s0">in </span><span class="s1">self.specs]</span>
+
+    <span class="s0">def </span><span class="s1">setup_node(self, spec, putevent):</span>
+        <span class="s1">gw = self.group.makegateway(spec)</span>
+        <span class="s1">self.config.hook.pytest_xdist_newgateway(gateway=gw)</span>
+        <span class="s1">self.rsync_roots(gw)</span>
+        <span class="s1">node = WorkerController(self, gw, self.config, putevent)</span>
+        <span class="s1">gw.node = node  </span><span class="s4"># keep the node alive</span>
+        <span class="s1">node.setup()</span>
+        <span class="s1">self.trace(</span><span class="s2">&quot;started node %r&quot; </span><span class="s1">% node)</span>
+        <span class="s0">return </span><span class="s1">node</span>
+
+    <span class="s0">def </span><span class="s1">teardown_nodes(self):</span>
+        <span class="s1">self.group.terminate(self.EXIT_TIMEOUT)</span>
+
+    <span class="s0">def </span><span class="s1">_getxspecs(self):</span>
+        <span class="s0">return </span><span class="s1">[execnet.XSpec(x) </span><span class="s0">for </span><span class="s1">x </span><span class="s0">in </span><span class="s1">parse_spec_config(self.config)]</span>
+
+    <span class="s0">def </span><span class="s1">_getrsyncdirs(self):</span>
+        <span class="s0">for </span><span class="s1">spec </span><span class="s0">in </span><span class="s1">self.specs:</span>
+            <span class="s0">if not </span><span class="s1">spec.popen </span><span class="s0">or </span><span class="s1">spec.chdir:</span>
+                <span class="s0">break</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">[]</span>
+        <span class="s0">import </span><span class="s1">pytest</span>
+        <span class="s0">import </span><span class="s1">_pytest</span>
+
+        <span class="s0">def </span><span class="s1">get_dir(p):</span>
+            <span class="s4">&quot;&quot;&quot;Return the directory path if p is a package or the path to the .py file otherwise.&quot;&quot;&quot;</span>
+            <span class="s1">stripped = p.rstrip(</span><span class="s2">&quot;co&quot;</span><span class="s1">)</span>
+            <span class="s0">if </span><span class="s1">os.path.basename(stripped) == </span><span class="s2">&quot;__init__.py&quot;</span><span class="s1">:</span>
+                <span class="s0">return </span><span class="s1">os.path.dirname(p)</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s0">return </span><span class="s1">stripped</span>
+
+        <span class="s1">pytestpath = get_dir(pytest.__file__)</span>
+        <span class="s1">pytestdir = get_dir(_pytest.__file__)</span>
+        <span class="s1">config = self.config</span>
+        <span class="s1">candidates = [py._pydir, pytestpath, pytestdir]</span>
+        <span class="s1">candidates += config.option.rsyncdir</span>
+        <span class="s1">rsyncroots = config.getini(</span><span class="s2">&quot;rsyncdirs&quot;</span><span class="s1">)</span>
+        <span class="s0">if </span><span class="s1">rsyncroots:</span>
+            <span class="s1">candidates.extend(rsyncroots)</span>
+        <span class="s1">roots = []</span>
+        <span class="s0">for </span><span class="s1">root </span><span class="s0">in </span><span class="s1">candidates:</span>
+            <span class="s1">root = py.path.local(root).realpath()</span>
+            <span class="s0">if not </span><span class="s1">root.check():</span>
+                <span class="s0">raise </span><span class="s1">pytest.UsageError(</span><span class="s2">&quot;rsyncdir doesn't exist: {!r}&quot;</span><span class="s1">.format(root))</span>
+            <span class="s0">if </span><span class="s1">root </span><span class="s0">not in </span><span class="s1">roots:</span>
+                <span class="s1">roots.append(root)</span>
+        <span class="s0">return </span><span class="s1">roots</span>
+
+    <span class="s0">def </span><span class="s1">_getrsyncoptions(self):</span>
+        <span class="s4">&quot;&quot;&quot;Get options to be passed for rsync.&quot;&quot;&quot;</span>
+        <span class="s1">ignores = list(self.DEFAULT_IGNORES)</span>
+        <span class="s1">ignores += self.config.option.rsyncignore</span>
+        <span class="s1">ignores += self.config.getini(</span><span class="s2">&quot;rsyncignore&quot;</span><span class="s1">)</span>
+
+        <span class="s0">return </span><span class="s1">{</span>
+            <span class="s2">&quot;ignores&quot;</span><span class="s1">: ignores,</span>
+            <span class="s2">&quot;verbose&quot;</span><span class="s1">: getattr(self.config.option, </span><span class="s2">&quot;verbose&quot;</span><span class="s1">, </span><span class="s3">0</span><span class="s1">),</span>
+        <span class="s1">}</span>
+
+    <span class="s0">def </span><span class="s1">rsync(self, gateway, source, notify=</span><span class="s0">None</span><span class="s1">, verbose=</span><span class="s0">False</span><span class="s1">, ignores=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s4">&quot;&quot;&quot;Perform rsync to remote hosts for node.&quot;&quot;&quot;</span>
+        <span class="s4"># XXX This changes the calling behaviour of</span>
+        <span class="s4">#     pytest_xdist_rsyncstart and pytest_xdist_rsyncfinish to</span>
+        <span class="s4">#     be called once per rsync target.</span>
+        <span class="s1">rsync = HostRSync(source, verbose=verbose, ignores=ignores)</span>
+        <span class="s1">spec = gateway.spec</span>
+        <span class="s0">if </span><span class="s1">spec.popen </span><span class="s0">and not </span><span class="s1">spec.chdir:</span>
+            <span class="s4"># XXX This assumes that sources are python-packages</span>
+            <span class="s4">#     and that adding the basedir does not hurt.</span>
+            <span class="s1">gateway.remote_exec(</span>
+                <span class="s2">&quot;&quot;&quot; 
+                import sys ; sys.path.insert(0, %r) 
+            &quot;&quot;&quot;</span>
+                <span class="s1">% os.path.dirname(str(source))</span>
+            <span class="s1">).waitclose()</span>
+            <span class="s0">return</span>
+        <span class="s0">if </span><span class="s1">(spec, source) </span><span class="s0">in </span><span class="s1">self._rsynced_specs:</span>
+            <span class="s0">return</span>
+
+        <span class="s0">def </span><span class="s1">finished():</span>
+            <span class="s0">if </span><span class="s1">notify:</span>
+                <span class="s1">notify(</span><span class="s2">&quot;rsyncrootready&quot;</span><span class="s1">, spec, source)</span>
+
+        <span class="s1">rsync.add_target_host(gateway, finished=finished)</span>
+        <span class="s1">self._rsynced_specs.add((spec, source))</span>
+        <span class="s1">self.config.hook.pytest_xdist_rsyncstart(source=source, gateways=[gateway])</span>
+        <span class="s1">rsync.send()</span>
+        <span class="s1">self.config.hook.pytest_xdist_rsyncfinish(source=source, gateways=[gateway])</span>
+
+
+<span class="s0">class </span><span class="s1">HostRSync(execnet.RSync):</span>
+    <span class="s4">&quot;&quot;&quot; RSyncer that filters out common files 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, sourcedir, *args, **kwargs):</span>
+        <span class="s1">self._synced = {}</span>
+        <span class="s1">ignores = kwargs.pop(</span><span class="s2">&quot;ignores&quot;</span><span class="s1">, </span><span class="s0">None</span><span class="s1">) </span><span class="s0">or </span><span class="s1">[]</span>
+        <span class="s1">self._ignores = [</span>
+            <span class="s1">re.compile(fnmatch.translate(getattr(x, </span><span class="s2">&quot;strpath&quot;</span><span class="s1">, x))) </span><span class="s0">for </span><span class="s1">x </span><span class="s0">in </span><span class="s1">ignores</span>
+        <span class="s1">]</span>
+        <span class="s1">super().__init__(sourcedir=sourcedir, **kwargs)</span>
+
+    <span class="s0">def </span><span class="s1">filter(self, path):</span>
+        <span class="s1">path = py.path.local(path)</span>
+        <span class="s0">for </span><span class="s1">cre </span><span class="s0">in </span><span class="s1">self._ignores:</span>
+            <span class="s0">if </span><span class="s1">cre.match(path.basename) </span><span class="s0">or </span><span class="s1">cre.match(path.strpath):</span>
+                <span class="s0">return False</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s0">return True</span>
+
+    <span class="s0">def </span><span class="s1">add_target_host(self, gateway, finished=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">remotepath = os.path.basename(self._sourcedir)</span>
+        <span class="s1">super().add_target(gateway, remotepath, finishedcallback=finished, delete=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">_report_send_file(self, gateway, modified_rel_path):</span>
+        <span class="s0">if </span><span class="s1">self._verbose &gt; </span><span class="s3">0</span><span class="s1">:</span>
+            <span class="s1">path = os.path.basename(self._sourcedir) + </span><span class="s2">&quot;/&quot; </span><span class="s1">+ modified_rel_path</span>
+            <span class="s1">remotepath = gateway.spec.chdir</span>
+            <span class="s1">print(</span><span class="s2">&quot;{}:{} &lt;= {}&quot;</span><span class="s1">.format(gateway.spec, remotepath, path))</span>
+
+
+<span class="s0">def </span><span class="s1">make_reltoroot(roots, args):</span>
+    <span class="s4"># XXX introduce/use public API for splitting pytest args</span>
+    <span class="s1">splitcode = </span><span class="s2">&quot;::&quot;</span>
+    <span class="s1">result = []</span>
+    <span class="s0">for </span><span class="s1">arg </span><span class="s0">in </span><span class="s1">args:</span>
+        <span class="s1">parts = arg.split(splitcode)</span>
+        <span class="s1">fspath = py.path.local(parts[</span><span class="s3">0</span><span class="s1">])</span>
+        <span class="s0">if not </span><span class="s1">fspath.exists():</span>
+            <span class="s1">result.append(arg)</span>
+            <span class="s0">continue</span>
+        <span class="s0">for </span><span class="s1">root </span><span class="s0">in </span><span class="s1">roots:</span>
+            <span class="s1">x = fspath.relto(root)</span>
+            <span class="s0">if </span><span class="s1">x </span><span class="s0">or </span><span class="s1">fspath == root:</span>
+                <span class="s1">parts[</span><span class="s3">0</span><span class="s1">] = root.basename + </span><span class="s2">&quot;/&quot; </span><span class="s1">+ x</span>
+                <span class="s0">break</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s2">&quot;arg {} not relative to an rsync root&quot;</span><span class="s1">.format(arg))</span>
+        <span class="s1">result.append(splitcode.join(parts))</span>
+    <span class="s0">return </span><span class="s1">result</span>
+
+
+<span class="s0">class </span><span class="s1">WorkerController:</span>
+    <span class="s1">ENDMARK = -</span><span class="s3">1</span>
+
+    <span class="s0">class </span><span class="s1">RemoteHook:</span>
+        <span class="s1">@pytest.mark.trylast</span>
+        <span class="s0">def </span><span class="s1">pytest_xdist_getremotemodule(self):</span>
+            <span class="s0">return </span><span class="s1">xdist.remote</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, nodemanager, gateway, config, putevent):</span>
+        <span class="s1">config.pluginmanager.register(self.RemoteHook())</span>
+        <span class="s1">self.nodemanager = nodemanager</span>
+        <span class="s1">self.putevent = putevent</span>
+        <span class="s1">self.gateway = gateway</span>
+        <span class="s1">self.config = config</span>
+        <span class="s1">self.workerinput = {</span>
+            <span class="s2">&quot;workerid&quot;</span><span class="s1">: gateway.id,</span>
+            <span class="s2">&quot;workercount&quot;</span><span class="s1">: len(nodemanager.specs),</span>
+            <span class="s2">&quot;testrunuid&quot;</span><span class="s1">: nodemanager.testrunuid,</span>
+            <span class="s2">&quot;mainargv&quot;</span><span class="s1">: sys.argv,</span>
+        <span class="s1">}</span>
+        <span class="s1">self._down = </span><span class="s0">False</span>
+        <span class="s1">self._shutdown_sent = </span><span class="s0">False</span>
+        <span class="s1">self.log = py.log.Producer(</span><span class="s2">&quot;workerctl-%s&quot; </span><span class="s1">% gateway.id)</span>
+        <span class="s0">if not </span><span class="s1">self.config.option.debug:</span>
+            <span class="s1">py.log.setconsumer(self.log._keywords, </span><span class="s0">None</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__repr__(self):</span>
+        <span class="s0">return </span><span class="s2">&quot;&lt;{} {}&gt;&quot;</span><span class="s1">.format(self.__class__.__name__, self.gateway.id)</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">shutting_down(self):</span>
+        <span class="s0">return </span><span class="s1">self._down </span><span class="s0">or </span><span class="s1">self._shutdown_sent</span>
+
+    <span class="s0">def </span><span class="s1">setup(self):</span>
+        <span class="s1">self.log(</span><span class="s2">&quot;setting up worker session&quot;</span><span class="s1">)</span>
+        <span class="s1">spec = self.gateway.spec</span>
+        <span class="s0">if </span><span class="s1">hasattr(self.config, </span><span class="s2">&quot;invocation_params&quot;</span><span class="s1">):</span>
+            <span class="s1">args = [str(x) </span><span class="s0">for </span><span class="s1">x </span><span class="s0">in </span><span class="s1">self.config.invocation_params.args </span><span class="s0">or </span><span class="s1">()]</span>
+            <span class="s1">option_dict = {}</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">args = self.config.args</span>
+            <span class="s1">option_dict = vars(self.config.option)</span>
+        <span class="s0">if not </span><span class="s1">spec.popen </span><span class="s0">or </span><span class="s1">spec.chdir:</span>
+            <span class="s1">args = make_reltoroot(self.nodemanager.roots, args)</span>
+        <span class="s0">if </span><span class="s1">spec.popen:</span>
+            <span class="s1">name = </span><span class="s2">&quot;popen-%s&quot; </span><span class="s1">% self.gateway.id</span>
+            <span class="s0">if </span><span class="s1">hasattr(self.config, </span><span class="s2">&quot;_tmpdirhandler&quot;</span><span class="s1">):</span>
+                <span class="s1">basetemp = self.config._tmpdirhandler.getbasetemp()</span>
+                <span class="s1">option_dict[</span><span class="s2">&quot;basetemp&quot;</span><span class="s1">] = str(basetemp.join(name))</span>
+        <span class="s1">self.config.hook.pytest_configure_node(node=self)</span>
+
+        <span class="s1">remote_module = self.config.hook.pytest_xdist_getremotemodule()</span>
+        <span class="s1">self.channel = self.gateway.remote_exec(remote_module)</span>
+        <span class="s4"># change sys.path only for remote workers</span>
+        <span class="s1">change_sys_path = </span><span class="s0">not </span><span class="s1">self.gateway.spec.popen</span>
+        <span class="s1">self.channel.send((self.workerinput, args, option_dict, change_sys_path))</span>
+
+        <span class="s0">if </span><span class="s1">self.putevent:</span>
+            <span class="s1">self.channel.setcallback(self.process_from_remote, endmarker=self.ENDMARK)</span>
+
+    <span class="s0">def </span><span class="s1">ensure_teardown(self):</span>
+        <span class="s0">if </span><span class="s1">hasattr(self, </span><span class="s2">&quot;channel&quot;</span><span class="s1">):</span>
+            <span class="s0">if not </span><span class="s1">self.channel.isclosed():</span>
+                <span class="s1">self.log(</span><span class="s2">&quot;closing&quot;</span><span class="s1">, self.channel)</span>
+                <span class="s1">self.channel.close()</span>
+            <span class="s4"># del self.channel</span>
+        <span class="s0">if </span><span class="s1">hasattr(self, </span><span class="s2">&quot;gateway&quot;</span><span class="s1">):</span>
+            <span class="s1">self.log(</span><span class="s2">&quot;exiting&quot;</span><span class="s1">, self.gateway)</span>
+            <span class="s1">self.gateway.exit()</span>
+            <span class="s4"># del self.gateway</span>
+
+    <span class="s0">def </span><span class="s1">send_runtest_some(self, indices):</span>
+        <span class="s1">self.sendcommand(</span><span class="s2">&quot;runtests&quot;</span><span class="s1">, indices=indices)</span>
+
+    <span class="s0">def </span><span class="s1">send_runtest_all(self):</span>
+        <span class="s1">self.sendcommand(</span><span class="s2">&quot;runtests_all&quot;</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">shutdown(self):</span>
+        <span class="s0">if not </span><span class="s1">self._down:</span>
+            <span class="s0">try</span><span class="s1">:</span>
+                <span class="s1">self.sendcommand(</span><span class="s2">&quot;shutdown&quot;</span><span class="s1">)</span>
+            <span class="s0">except </span><span class="s1">OSError:</span>
+                <span class="s0">pass</span>
+            <span class="s1">self._shutdown_sent = </span><span class="s0">True</span>
+
+    <span class="s0">def </span><span class="s1">sendcommand(self, name, **kwargs):</span>
+        <span class="s4">&quot;&quot;&quot; send a named parametrized command to the other side. &quot;&quot;&quot;</span>
+        <span class="s1">self.log(</span><span class="s2">&quot;sending command {}(**{})&quot;</span><span class="s1">.format(name, kwargs))</span>
+        <span class="s1">self.channel.send((name, kwargs))</span>
+
+    <span class="s0">def </span><span class="s1">notify_inproc(self, eventname, **kwargs):</span>
+        <span class="s1">self.log(</span><span class="s2">&quot;queuing {}(**{})&quot;</span><span class="s1">.format(eventname, kwargs))</span>
+        <span class="s1">self.putevent((eventname, kwargs))</span>
+
+    <span class="s0">def </span><span class="s1">process_from_remote(self, eventcall):  </span><span class="s4"># noqa too complex</span>
+        <span class="s4">&quot;&quot;&quot; this gets called for each object we receive from 
+            the other side and if the channel closes. 
+ 
+            Note that channel callbacks run in the receiver 
+            thread of execnet gateways - we need to 
+            avoid raising exceptions or doing heavy work. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s0">if </span><span class="s1">eventcall == self.ENDMARK:</span>
+                <span class="s1">err = self.channel._getremoteerror()</span>
+                <span class="s0">if not </span><span class="s1">self._down:</span>
+                    <span class="s0">if not </span><span class="s1">err </span><span class="s0">or </span><span class="s1">isinstance(err, EOFError):</span>
+                        <span class="s1">err = </span><span class="s2">&quot;Not properly terminated&quot;  </span><span class="s4"># lost connection?</span>
+                    <span class="s1">self.notify_inproc(</span><span class="s2">&quot;errordown&quot;</span><span class="s1">, node=self, error=err)</span>
+                    <span class="s1">self._down = </span><span class="s0">True</span>
+                <span class="s0">return</span>
+            <span class="s1">eventname, kwargs = eventcall</span>
+            <span class="s0">if </span><span class="s1">eventname </span><span class="s0">in </span><span class="s1">(</span><span class="s2">&quot;collectionstart&quot;</span><span class="s1">,):</span>
+                <span class="s1">self.log(</span><span class="s2">&quot;ignoring {}({})&quot;</span><span class="s1">.format(eventname, kwargs))</span>
+            <span class="s0">elif </span><span class="s1">eventname == </span><span class="s2">&quot;workerready&quot;</span><span class="s1">:</span>
+                <span class="s1">self.notify_inproc(eventname, node=self, **kwargs)</span>
+            <span class="s0">elif </span><span class="s1">eventname == </span><span class="s2">&quot;internal_error&quot;</span><span class="s1">:</span>
+                <span class="s1">self.notify_inproc(eventname, node=self, **kwargs)</span>
+            <span class="s0">elif </span><span class="s1">eventname == </span><span class="s2">&quot;workerfinished&quot;</span><span class="s1">:</span>
+                <span class="s1">self._down = </span><span class="s0">True</span>
+                <span class="s1">self.workeroutput = kwargs[</span><span class="s2">&quot;workeroutput&quot;</span><span class="s1">]</span>
+                <span class="s1">self.notify_inproc(</span><span class="s2">&quot;workerfinished&quot;</span><span class="s1">, node=self)</span>
+            <span class="s0">elif </span><span class="s1">eventname </span><span class="s0">in </span><span class="s1">(</span><span class="s2">&quot;logstart&quot;</span><span class="s1">, </span><span class="s2">&quot;logfinish&quot;</span><span class="s1">):</span>
+                <span class="s1">self.notify_inproc(eventname, node=self, **kwargs)</span>
+            <span class="s0">elif </span><span class="s1">eventname </span><span class="s0">in </span><span class="s1">(</span><span class="s2">&quot;testreport&quot;</span><span class="s1">, </span><span class="s2">&quot;collectreport&quot;</span><span class="s1">, </span><span class="s2">&quot;teardownreport&quot;</span><span class="s1">):</span>
+                <span class="s1">item_index = kwargs.pop(</span><span class="s2">&quot;item_index&quot;</span><span class="s1">, </span><span class="s0">None</span><span class="s1">)</span>
+                <span class="s1">rep = self.config.hook.pytest_report_from_serializable(</span>
+                    <span class="s1">config=self.config, data=kwargs[</span><span class="s2">&quot;data&quot;</span><span class="s1">]</span>
+                <span class="s1">)</span>
+                <span class="s0">if </span><span class="s1">item_index </span><span class="s0">is not None</span><span class="s1">:</span>
+                    <span class="s1">rep.item_index = item_index</span>
+                <span class="s1">self.notify_inproc(eventname, node=self, rep=rep)</span>
+            <span class="s0">elif </span><span class="s1">eventname == </span><span class="s2">&quot;collectionfinish&quot;</span><span class="s1">:</span>
+                <span class="s1">self.notify_inproc(eventname, node=self, ids=kwargs[</span><span class="s2">&quot;ids&quot;</span><span class="s1">])</span>
+            <span class="s0">elif </span><span class="s1">eventname == </span><span class="s2">&quot;runtest_protocol_complete&quot;</span><span class="s1">:</span>
+                <span class="s1">self.notify_inproc(eventname, node=self, **kwargs)</span>
+            <span class="s0">elif </span><span class="s1">eventname == </span><span class="s2">&quot;logwarning&quot;</span><span class="s1">:</span>
+                <span class="s1">self.notify_inproc(</span>
+                    <span class="s1">eventname,</span>
+                    <span class="s1">message=kwargs[</span><span class="s2">&quot;message&quot;</span><span class="s1">],</span>
+                    <span class="s1">code=kwargs[</span><span class="s2">&quot;code&quot;</span><span class="s1">],</span>
+                    <span class="s1">nodeid=kwargs[</span><span class="s2">&quot;nodeid&quot;</span><span class="s1">],</span>
+                    <span class="s1">fslocation=kwargs[</span><span class="s2">&quot;nodeid&quot;</span><span class="s1">],</span>
+                <span class="s1">)</span>
+            <span class="s0">elif </span><span class="s1">eventname == </span><span class="s2">&quot;warning_captured&quot;</span><span class="s1">:</span>
+                <span class="s1">warning_message = unserialize_warning_message(</span>
+                    <span class="s1">kwargs[</span><span class="s2">&quot;warning_message_data&quot;</span><span class="s1">]</span>
+                <span class="s1">)</span>
+                <span class="s1">self.notify_inproc(</span>
+                    <span class="s1">eventname,</span>
+                    <span class="s1">warning_message=warning_message,</span>
+                    <span class="s1">when=kwargs[</span><span class="s2">&quot;when&quot;</span><span class="s1">],</span>
+                    <span class="s1">item=kwargs[</span><span class="s2">&quot;item&quot;</span><span class="s1">],</span>
+                <span class="s1">)</span>
+            <span class="s0">elif </span><span class="s1">eventname == </span><span class="s2">&quot;warning_recorded&quot;</span><span class="s1">:</span>
+                <span class="s1">warning_message = unserialize_warning_message(</span>
+                    <span class="s1">kwargs[</span><span class="s2">&quot;warning_message_data&quot;</span><span class="s1">]</span>
+                <span class="s1">)</span>
+                <span class="s1">self.notify_inproc(</span>
+                    <span class="s1">eventname,</span>
+                    <span class="s1">warning_message=warning_message,</span>
+                    <span class="s1">when=kwargs[</span><span class="s2">&quot;when&quot;</span><span class="s1">],</span>
+                    <span class="s1">nodeid=kwargs[</span><span class="s2">&quot;nodeid&quot;</span><span class="s1">],</span>
+                    <span class="s1">location=kwargs[</span><span class="s2">&quot;location&quot;</span><span class="s1">],</span>
+                <span class="s1">)</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s2">&quot;unknown event: {}&quot;</span><span class="s1">.format(eventname))</span>
+        <span class="s0">except </span><span class="s1">KeyboardInterrupt:</span>
+            <span class="s4"># should not land in receiver-thread</span>
+            <span class="s0">raise</span>
+        <span class="s0">except</span><span class="s1">:  </span><span class="s4"># noqa</span>
+            <span class="s0">from </span><span class="s1">_pytest._code </span><span class="s0">import </span><span class="s1">ExceptionInfo</span>
+
+            <span class="s1">excinfo = ExceptionInfo.from_current()</span>
+            <span class="s1">print(</span><span class="s2">&quot;!&quot; </span><span class="s1">* </span><span class="s3">20</span><span class="s1">, excinfo)</span>
+            <span class="s1">self.config.notify_exception(excinfo)</span>
+            <span class="s1">self.shutdown()</span>
+            <span class="s1">self.notify_inproc(</span><span class="s2">&quot;errordown&quot;</span><span class="s1">, node=self, error=excinfo)</span>
+
+
+<span class="s0">def </span><span class="s1">unserialize_warning_message(data):</span>
+    <span class="s0">import </span><span class="s1">warnings</span>
+    <span class="s0">import </span><span class="s1">importlib</span>
+
+    <span class="s0">if </span><span class="s1">data[</span><span class="s2">&quot;message_module&quot;</span><span class="s1">]:</span>
+        <span class="s1">mod = importlib.import_module(data[</span><span class="s2">&quot;message_module&quot;</span><span class="s1">])</span>
+        <span class="s1">cls = getattr(mod, data[</span><span class="s2">&quot;message_class_name&quot;</span><span class="s1">])</span>
+        <span class="s1">message = </span><span class="s0">None</span>
+        <span class="s0">if </span><span class="s1">data[</span><span class="s2">&quot;message_args&quot;</span><span class="s1">] </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s0">try</span><span class="s1">:</span>
+                <span class="s1">message = cls(*data[</span><span class="s2">&quot;message_args&quot;</span><span class="s1">])</span>
+            <span class="s0">except </span><span class="s1">TypeError:</span>
+                <span class="s0">pass</span>
+        <span class="s0">if </span><span class="s1">message </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s4"># could not recreate the original warning instance;</span>
+            <span class="s4"># create a generic Warning instance with the original</span>
+            <span class="s4"># message at least</span>
+            <span class="s1">message_text = </span><span class="s2">&quot;{mod}.{cls}: {msg}&quot;</span><span class="s1">.format(</span>
+                <span class="s1">mod=data[</span><span class="s2">&quot;message_module&quot;</span><span class="s1">],</span>
+                <span class="s1">cls=data[</span><span class="s2">&quot;message_class_name&quot;</span><span class="s1">],</span>
+                <span class="s1">msg=data[</span><span class="s2">&quot;message_str&quot;</span><span class="s1">],</span>
+            <span class="s1">)</span>
+            <span class="s1">message = Warning(message_text)</span>
+    <span class="s0">else</span><span class="s1">:</span>
+        <span class="s1">message = data[</span><span class="s2">&quot;message_str&quot;</span><span class="s1">]</span>
+
+    <span class="s0">if </span><span class="s1">data[</span><span class="s2">&quot;category_module&quot;</span><span class="s1">]:</span>
+        <span class="s1">mod = importlib.import_module(data[</span><span class="s2">&quot;category_module&quot;</span><span class="s1">])</span>
+        <span class="s1">category = getattr(mod, data[</span><span class="s2">&quot;category_class_name&quot;</span><span class="s1">])</span>
+    <span class="s0">else</span><span class="s1">:</span>
+        <span class="s1">category = </span><span class="s0">None</span>
+
+    <span class="s1">kwargs = {</span><span class="s2">&quot;message&quot;</span><span class="s1">: message, </span><span class="s2">&quot;category&quot;</span><span class="s1">: category}</span>
+    <span class="s4"># access private _WARNING_DETAILS because the attributes vary between Python versions</span>
+    <span class="s0">for </span><span class="s1">attr_name </span><span class="s0">in </span><span class="s1">warnings.WarningMessage._WARNING_DETAILS:</span>
+        <span class="s0">if </span><span class="s1">attr_name </span><span class="s0">in </span><span class="s1">(</span><span class="s2">&quot;message&quot;</span><span class="s1">, </span><span class="s2">&quot;category&quot;</span><span class="s1">):</span>
+            <span class="s0">continue</span>
+        <span class="s1">kwargs[attr_name] = data[attr_name]</span>
+
+    <span class="s0">return </span><span class="s1">warnings.WarningMessage(**kwargs)</span>
+</pre>
+</body>
+</html>

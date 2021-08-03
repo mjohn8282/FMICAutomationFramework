@@ -1,0 +1,74 @@
+<html>
+<head>
+<title>Seeall.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+.s3 { color: #5c6370;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+Seeall.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">requests</span>
+<span class="s0">from </span><span class="s1">selenium.webdriver.common.by </span><span class="s0">import </span><span class="s1">By</span>
+<span class="s0">from </span><span class="s1">selenium.webdriver.support </span><span class="s0">import </span><span class="s1">expected_conditions </span><span class="s0">as </span><span class="s1">EC</span>
+<span class="s0">from </span><span class="s1">selenium.webdriver.support.ui </span><span class="s0">import </span><span class="s1">WebDriverWait</span>
+
+<span class="s0">from </span><span class="s1">Utilities.CustomLogger </span><span class="s0">import </span><span class="s1">logs</span>
+
+
+<span class="s0">class </span><span class="s1">seeall:</span>
+    <span class="s1">seeall_link_xpath = </span><span class="s2">'//div[@id=&quot;divHomeMenu&quot;]/div[@class=&quot;col-sm menu-margin&quot;]/ul/li[8]/a'</span>
+    <span class="s1">all_links_MMI_xpath = </span><span class="s2">&quot;//div[@id='divMyMarketIntelligence'] //a&quot;</span>
+    <span class="s1">Survey_report_xpath = </span><span class="s2">&quot;//div[@id='divMyMarketIntelligence']/div[1]/div[3]/div/img[2]&quot;</span>
+    <span class="s1">links_under_survey_reports_xpath = </span><span class="s2">&quot;//div[@id='myMarketIntelligencePopupBody'] //a&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, driver):</span>
+        <span class="s1">self.driver = driver</span>
+
+    <span class="s0">def </span><span class="s1">checllalllinksin_Seeall(self):</span>
+
+        <span class="s1">statuscodes = {}</span>
+
+        <span class="s1">self.driver.find_element_by_xpath(seeall.seeall_link_xpath).click()</span>
+        <span class="s1">links = self.driver.find_elements_by_xpath(seeall.all_links_MMI_xpath)</span>
+
+        <span class="s0">for </span><span class="s1">i </span><span class="s0">in </span><span class="s1">links:</span>
+            <span class="s1">href = str(i.get_attribute(</span><span class="s2">'href'</span><span class="s1">))</span>
+            <span class="s0">if </span><span class="s1">href.__contains__(</span><span class="s2">'Logoff.aspx'</span><span class="s1">) </span><span class="s0">or </span><span class="s1">href.__contains__(str(</span><span class="s0">None</span><span class="s1">)):</span>
+                <span class="s0">continue</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">status = requests.get(href).status_code</span>
+                <span class="s1">logs.loggen().info(href + </span><span class="s2">&quot; Status code &quot; </span><span class="s1">+ str(status))</span>
+                <span class="s1">statuscodes[href] = status</span>
+                <span class="s3"># assert (status == 200),f&quot;The status code for {href} is {status}&quot;</span>
+                <span class="s3"># assert (status == 200), take_screenshot(self.driver,'checllalllinksin_Seeall')</span>
+
+        <span class="s1">surveysandreports = self.driver.find_element_by_xpath(seeall.Survey_report_xpath).click()</span>
+
+        <span class="s1">element = WebDriverWait(self.driver, </span><span class="s4">10</span><span class="s1">).until(EC.presence_of_element_located((By.XPATH,</span>
+                                                                                       <span class="s1">seeall.links_under_survey_reports_xpath)))</span>
+
+        <span class="s1">surveyandreportslinks = self.driver.find_elements_by_xpath(seeall.links_under_survey_reports_xpath)</span>
+
+        <span class="s0">for </span><span class="s1">i </span><span class="s0">in </span><span class="s1">surveyandreportslinks:</span>
+            <span class="s1">href = str(i.get_attribute(</span><span class="s2">'href'</span><span class="s1">))</span>
+            <span class="s0">if </span><span class="s1">href.__contains__(</span><span class="s2">'Logoff.aspx'</span><span class="s1">) </span><span class="s0">or </span><span class="s1">href.__contains__(str(</span><span class="s0">None</span><span class="s1">)):</span>
+                <span class="s0">continue</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">status = requests.get(href).status_code</span>
+                <span class="s1">logs.loggen().info(href + </span><span class="s2">&quot; Status code &quot; </span><span class="s1">+ str(status))</span>
+                <span class="s1">statuscodes[href] = status</span>
+                <span class="s3"># assert (status == 200), f&quot;The status code for {href} is {status}&quot;</span>
+
+        <span class="s0">return </span><span class="s1">statuscodes</span>
+</pre>
+</body>
+</html>

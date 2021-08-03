@@ -1,0 +1,152 @@
+<html>
+<head>
+<title>workbook.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+workbook.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s3">&quot;&quot;&quot; 
+OO-based reader 
+&quot;&quot;&quot;</span>
+
+<span class="s0">import </span><span class="s1">posixpath</span>
+<span class="s0">from </span><span class="s1">warnings </span><span class="s0">import </span><span class="s1">warn</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s0">import </span><span class="s1">fromstring</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.packaging.relationship </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">get_dependents,</span>
+    <span class="s1">get_rels_path,</span>
+    <span class="s1">get_rel,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.packaging.manifest </span><span class="s0">import </span><span class="s1">Manifest</span>
+<span class="s0">from </span><span class="s1">openpyexcel.workbook.parser </span><span class="s0">import </span><span class="s1">WorkbookPackage</span>
+<span class="s0">from </span><span class="s1">openpyexcel.workbook.workbook </span><span class="s0">import </span><span class="s1">Workbook</span>
+<span class="s0">from </span><span class="s1">openpyexcel.workbook.defined_name </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">_unpack_print_area,</span>
+    <span class="s1">_unpack_print_titles,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.workbook.external_link.external </span><span class="s0">import </span><span class="s1">read_external_link</span>
+<span class="s0">from </span><span class="s1">openpyexcel.pivot.cache </span><span class="s0">import </span><span class="s1">CacheDefinition</span>
+<span class="s0">from </span><span class="s1">openpyexcel.pivot.record </span><span class="s0">import </span><span class="s1">RecordList</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.utils.datetime </span><span class="s0">import </span><span class="s1">CALENDAR_MAC_1904</span>
+
+
+<span class="s0">class </span><span class="s1">WorkbookParser:</span>
+
+    <span class="s1">_rels = </span><span class="s0">None</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, archive, workbook_part_name):</span>
+        <span class="s1">self.archive = archive</span>
+        <span class="s1">self.workbook_part_name = workbook_part_name</span>
+        <span class="s1">self.wb = Workbook()</span>
+        <span class="s1">self.sheets = []</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">rels(self):</span>
+        <span class="s0">if </span><span class="s1">self._rels </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">self._rels = get_dependents(self.archive, get_rels_path(self.workbook_part_name))</span>
+        <span class="s0">return </span><span class="s1">self._rels</span>
+
+
+    <span class="s0">def </span><span class="s1">parse(self):</span>
+        <span class="s1">src = self.archive.read(self.workbook_part_name)</span>
+        <span class="s1">node = fromstring(src)</span>
+        <span class="s1">package = WorkbookPackage.from_tree(node)</span>
+        <span class="s0">if </span><span class="s1">package.properties.date1904:</span>
+            <span class="s1">self.wb.epoch = CALENDAR_MAC_1904</span>
+
+        <span class="s1">self.wb.code_name = package.properties.codeName</span>
+        <span class="s1">self.wb.active = package.active</span>
+        <span class="s1">self.wb.views = package.bookViews</span>
+        <span class="s1">self.sheets = package.sheets</span>
+        <span class="s1">self.wb.calculation = package.calcPr</span>
+        <span class="s1">self.caches = package.pivotCaches</span>
+
+        <span class="s2">#external links contain cached worksheets and can be very big</span>
+        <span class="s0">if not </span><span class="s1">self.wb.keep_links:</span>
+            <span class="s1">package.externalReferences = []</span>
+
+        <span class="s0">for </span><span class="s1">ext_ref </span><span class="s0">in </span><span class="s1">package.externalReferences:</span>
+            <span class="s1">rel = self.rels[ext_ref.id]</span>
+            <span class="s1">self.wb._external_links.append(</span>
+                <span class="s1">read_external_link(self.archive, rel.Target)</span>
+            <span class="s1">)</span>
+
+        <span class="s0">if </span><span class="s1">package.definedNames:</span>
+            <span class="s1">package.definedNames._cleanup()</span>
+            <span class="s1">self.wb.defined_names = package.definedNames</span>
+
+        <span class="s1">self.wb.security = package.workbookProtection</span>
+
+
+    <span class="s0">def </span><span class="s1">find_sheets(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Find all sheets in the workbook and return the link to the source file. 
+ 
+        Older XLSM files sometimes contain invalid sheet elements. 
+        Warn user when these are removed. 
+        &quot;&quot;&quot;</span>
+
+        <span class="s0">for </span><span class="s1">sheet </span><span class="s0">in </span><span class="s1">self.sheets:</span>
+            <span class="s0">if not </span><span class="s1">sheet.id:</span>
+                <span class="s1">msg = </span><span class="s3">&quot;File contains an invalid specification for {0}. This will be removed&quot;</span><span class="s1">.format(sheet.name)</span>
+                <span class="s1">warn(msg)</span>
+                <span class="s0">continue</span>
+            <span class="s0">yield </span><span class="s1">sheet, self.rels[sheet.id]</span>
+
+
+    <span class="s0">def </span><span class="s1">assign_names(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Bind reserved names to parsed worksheets 
+        &quot;&quot;&quot;</span>
+        <span class="s1">defns = []</span>
+
+        <span class="s0">for </span><span class="s1">defn </span><span class="s0">in </span><span class="s1">self.wb.defined_names.definedName:</span>
+            <span class="s1">reserved = defn.is_reserved</span>
+            <span class="s0">if </span><span class="s1">reserved </span><span class="s0">in </span><span class="s1">(</span><span class="s3">&quot;Print_Titles&quot;</span><span class="s1">, </span><span class="s3">&quot;Print_Area&quot;</span><span class="s1">):</span>
+                <span class="s1">sheet = self.wb._sheets[defn.localSheetId]</span>
+                <span class="s0">if </span><span class="s1">reserved == </span><span class="s3">&quot;Print_Titles&quot;</span><span class="s1">:</span>
+                    <span class="s1">rows, cols = _unpack_print_titles(defn)</span>
+                    <span class="s1">sheet.print_title_rows = rows</span>
+                    <span class="s1">sheet.print_title_cols = cols</span>
+                <span class="s0">elif </span><span class="s1">reserved == </span><span class="s3">&quot;Print_Area&quot;</span><span class="s1">:</span>
+                    <span class="s1">sheet.print_area = _unpack_print_area(defn)</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">defns.append(defn)</span>
+        <span class="s1">self.wb.defined_names.definedName = defns</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">pivot_caches(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Get PivotCache objects 
+        &quot;&quot;&quot;</span>
+        <span class="s1">d = {}</span>
+        <span class="s0">for </span><span class="s1">c </span><span class="s0">in </span><span class="s1">self.caches:</span>
+            <span class="s1">cache = get_rel(self.archive, self.rels, id=c.id, cls=CacheDefinition)</span>
+            <span class="s0">if </span><span class="s1">cache.deps:</span>
+                <span class="s1">records = get_rel(self.archive, cache.deps, cache.id, RecordList)</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">records = </span><span class="s0">None</span>
+            <span class="s1">cache.records = records</span>
+            <span class="s1">d[c.cacheId]  = cache</span>
+        <span class="s0">return </span><span class="s1">d</span>
+</pre>
+</body>
+</html>

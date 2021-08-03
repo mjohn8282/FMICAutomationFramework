@@ -1,0 +1,423 @@
+<html>
+<head>
+<title>axis.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+axis.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Float,</span>
+    <span class="s1">NoneSet,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">MinMax,</span>
+    <span class="s1">NoneSet,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Alias,</span>
+<span class="s1">)</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">ExtensionList,</span>
+    <span class="s1">Percentage,</span>
+    <span class="s1">_explicit_none,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">NestedValue,</span>
+    <span class="s1">NestedSet,</span>
+    <span class="s1">NestedBool,</span>
+    <span class="s1">NestedNoneSet,</span>
+    <span class="s1">NestedFloat,</span>
+    <span class="s1">NestedInteger,</span>
+    <span class="s1">NestedMinMax,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">CHART_NS</span>
+
+<span class="s0">from </span><span class="s1">.descriptors </span><span class="s0">import </span><span class="s1">NumberFormatDescriptor</span>
+<span class="s0">from </span><span class="s1">.layout </span><span class="s0">import </span><span class="s1">Layout</span>
+<span class="s0">from </span><span class="s1">.text </span><span class="s0">import </span><span class="s1">Text, RichText</span>
+<span class="s0">from </span><span class="s1">.shapes </span><span class="s0">import </span><span class="s1">GraphicalProperties</span>
+<span class="s0">from </span><span class="s1">.title </span><span class="s0">import </span><span class="s1">Title, TitleDescriptor</span>
+
+
+<span class="s0">class </span><span class="s1">ChartLines(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;chartLines&quot;</span>
+
+    <span class="s1">spPr = Typed(expected_type=GraphicalProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">graphicalProperties = Alias(</span><span class="s3">'spPr'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, spPr=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">self.spPr = spPr</span>
+
+
+<span class="s0">class </span><span class="s1">Scaling(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;scaling&quot;</span>
+
+    <span class="s1">logBase = NestedFloat(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">orientation = NestedSet(values=([</span><span class="s3">'maxMin'</span><span class="s1">, </span><span class="s3">'minMax'</span><span class="s1">]))</span>
+    <span class="s1">max = NestedFloat(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">min = NestedFloat(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'logBase'</span><span class="s1">, </span><span class="s3">'orientation'</span><span class="s1">, </span><span class="s3">'max'</span><span class="s1">, </span><span class="s3">'min'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">logBase=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">orientation=</span><span class="s3">&quot;minMax&quot;</span><span class="s1">,</span>
+                 <span class="s1">max=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">min=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.logBase = logBase</span>
+        <span class="s1">self.orientation = orientation</span>
+        <span class="s1">self.max = max</span>
+        <span class="s1">self.min = min</span>
+
+
+<span class="s0">class </span><span class="s1">_BaseAxis(Serialisable):</span>
+
+    <span class="s1">axId = NestedInteger(expected_type=int)</span>
+    <span class="s1">scaling = Typed(expected_type=Scaling)</span>
+    <span class="s1">delete = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">axPos = NestedSet(values=([</span><span class="s3">'b'</span><span class="s1">, </span><span class="s3">'l'</span><span class="s1">, </span><span class="s3">'r'</span><span class="s1">, </span><span class="s3">'t'</span><span class="s1">]))</span>
+    <span class="s1">majorGridlines = Typed(expected_type=ChartLines, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">minorGridlines = Typed(expected_type=ChartLines, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">title = TitleDescriptor()</span>
+    <span class="s1">numFmt = NumberFormatDescriptor()</span>
+    <span class="s1">number_format = Alias(</span><span class="s3">&quot;numFmt&quot;</span><span class="s1">)</span>
+    <span class="s1">majorTickMark = NestedNoneSet(values=([</span><span class="s3">'cross'</span><span class="s1">, </span><span class="s3">'in'</span><span class="s1">, </span><span class="s3">'out'</span><span class="s1">]), to_tree=_explicit_none)</span>
+    <span class="s1">minorTickMark = NestedNoneSet(values=([</span><span class="s3">'cross'</span><span class="s1">, </span><span class="s3">'in'</span><span class="s1">, </span><span class="s3">'out'</span><span class="s1">]), to_tree=_explicit_none)</span>
+    <span class="s1">tickLblPos = NestedNoneSet(values=([</span><span class="s3">'high'</span><span class="s1">, </span><span class="s3">'low'</span><span class="s1">, </span><span class="s3">'nextTo'</span><span class="s1">]))</span>
+    <span class="s1">spPr = Typed(expected_type=GraphicalProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">graphicalProperties = Alias(</span><span class="s3">'spPr'</span><span class="s1">)</span>
+    <span class="s1">txPr = Typed(expected_type=RichText, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">textProperties = Alias(</span><span class="s3">'txPr'</span><span class="s1">)</span>
+    <span class="s1">crossAx = NestedInteger(expected_type=int) </span><span class="s2"># references other axis</span>
+    <span class="s1">crosses = NestedNoneSet(values=([</span><span class="s3">'autoZero'</span><span class="s1">, </span><span class="s3">'max'</span><span class="s1">, </span><span class="s3">'min'</span><span class="s1">]))</span>
+    <span class="s1">crossesAt = NestedFloat(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s2"># crosses &amp; crossesAt are mutually exclusive</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'axId'</span><span class="s1">, </span><span class="s3">'scaling'</span><span class="s1">, </span><span class="s3">'delete'</span><span class="s1">, </span><span class="s3">'axPos'</span><span class="s1">, </span><span class="s3">'majorGridlines'</span><span class="s1">,</span>
+                    <span class="s3">'minorGridlines'</span><span class="s1">, </span><span class="s3">'title'</span><span class="s1">, </span><span class="s3">'numFmt'</span><span class="s1">, </span><span class="s3">'majorTickMark'</span><span class="s1">, </span><span class="s3">'minorTickMark'</span><span class="s1">,</span>
+                    <span class="s3">'tickLblPos'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">, </span><span class="s3">'txPr'</span><span class="s1">, </span><span class="s3">'crossAx'</span><span class="s1">, </span><span class="s3">'crosses'</span><span class="s1">, </span><span class="s3">'crossesAt'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">axId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">scaling=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">delete=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">axPos=</span><span class="s3">'l'</span><span class="s1">,</span>
+                 <span class="s1">majorGridlines=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">minorGridlines=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">title=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">numFmt=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">majorTickMark=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">minorTickMark=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">tickLblPos=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">txPr= </span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">crossAx=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">crosses=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">crossesAt=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.axId = axId</span>
+        <span class="s0">if </span><span class="s1">scaling </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">scaling = Scaling()</span>
+        <span class="s1">self.scaling = scaling</span>
+        <span class="s1">self.delete = delete</span>
+        <span class="s1">self.axPos = axPos</span>
+        <span class="s1">self.majorGridlines = majorGridlines</span>
+        <span class="s1">self.minorGridlines = minorGridlines</span>
+        <span class="s1">self.title = title</span>
+        <span class="s1">self.numFmt = numFmt</span>
+        <span class="s1">self.majorTickMark = majorTickMark</span>
+        <span class="s1">self.minorTickMark = minorTickMark</span>
+        <span class="s1">self.tickLblPos = tickLblPos</span>
+        <span class="s1">self.spPr = spPr</span>
+        <span class="s1">self.txPr = txPr</span>
+        <span class="s1">self.crossAx = crossAx</span>
+        <span class="s1">self.crosses = crosses</span>
+        <span class="s1">self.crossesAt = </span><span class="s0">None</span>
+
+
+<span class="s0">class </span><span class="s1">DisplayUnitsLabel(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;dispUnitsLbl&quot;</span>
+
+    <span class="s1">layout = Typed(expected_type=Layout, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">tx = Typed(expected_type=Text, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">text = Alias(</span><span class="s3">&quot;tx&quot;</span><span class="s1">)</span>
+    <span class="s1">spPr = Typed(expected_type=GraphicalProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">graphicalProperties = Alias(</span><span class="s3">&quot;spPr&quot;</span><span class="s1">)</span>
+    <span class="s1">txPr = Typed(expected_type=RichText, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">textPropertes = Alias(</span><span class="s3">&quot;txPr&quot;</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'layout'</span><span class="s1">, </span><span class="s3">'tx'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">, </span><span class="s3">'txPr'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">layout=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">tx=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">txPr=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.layout = layout</span>
+        <span class="s1">self.tx = tx</span>
+        <span class="s1">self.spPr = spPr</span>
+        <span class="s1">self.txPr = txPr</span>
+
+
+<span class="s0">class </span><span class="s1">DisplayUnitsLabelList(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;dispUnits&quot;</span>
+
+    <span class="s1">custUnit = NestedFloat(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">builtInUnit = NestedNoneSet(values=([</span><span class="s3">'hundreds'</span><span class="s1">, </span><span class="s3">'thousands'</span><span class="s1">,</span>
+                                         <span class="s3">'tenThousands'</span><span class="s1">, </span><span class="s3">'hundredThousands'</span><span class="s1">, </span><span class="s3">'millions'</span><span class="s1">, </span><span class="s3">'tenMillions'</span><span class="s1">,</span>
+                                         <span class="s3">'hundredMillions'</span><span class="s1">, </span><span class="s3">'billions'</span><span class="s1">, </span><span class="s3">'trillions'</span><span class="s1">]))</span>
+    <span class="s1">dispUnitsLbl = Typed(expected_type=DisplayUnitsLabel, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'custUnit'</span><span class="s1">, </span><span class="s3">'builtInUnit'</span><span class="s1">, </span><span class="s3">'dispUnitsLbl'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">custUnit=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">builtInUnit=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dispUnitsLbl=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.custUnit = custUnit</span>
+        <span class="s1">self.builtInUnit = builtInUnit</span>
+        <span class="s1">self.dispUnitsLbl = dispUnitsLbl</span>
+
+
+<span class="s0">class </span><span class="s1">NumericAxis(_BaseAxis):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;valAx&quot;</span>
+
+    <span class="s1">axId = _BaseAxis.axId</span>
+    <span class="s1">scaling = _BaseAxis.scaling</span>
+    <span class="s1">delete = _BaseAxis.delete</span>
+    <span class="s1">axPos = _BaseAxis.axPos</span>
+    <span class="s1">majorGridlines = _BaseAxis.majorGridlines</span>
+    <span class="s1">minorGridlines = _BaseAxis.minorGridlines</span>
+    <span class="s1">title = _BaseAxis.title</span>
+    <span class="s1">numFmt = _BaseAxis.numFmt</span>
+    <span class="s1">majorTickMark = _BaseAxis.majorTickMark</span>
+    <span class="s1">minorTickMark = _BaseAxis.minorTickMark</span>
+    <span class="s1">tickLblPos = _BaseAxis.tickLblPos</span>
+    <span class="s1">spPr = _BaseAxis.spPr</span>
+    <span class="s1">txPr = _BaseAxis.txPr</span>
+    <span class="s1">crossAx = _BaseAxis.crossAx</span>
+    <span class="s1">crosses = _BaseAxis.crosses</span>
+    <span class="s1">crossesAt = _BaseAxis.crossesAt</span>
+
+    <span class="s1">crossBetween = NestedNoneSet(values=([</span><span class="s3">'between'</span><span class="s1">, </span><span class="s3">'midCat'</span><span class="s1">]))</span>
+    <span class="s1">majorUnit = NestedFloat(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">minorUnit = NestedFloat(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">dispUnits = Typed(expected_type=DisplayUnitsLabelList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = _BaseAxis.__elements__ + (</span><span class="s3">'crossBetween'</span><span class="s1">, </span><span class="s3">'majorUnit'</span><span class="s1">,</span>
+                                             <span class="s3">'minorUnit'</span><span class="s1">, </span><span class="s3">'dispUnits'</span><span class="s1">,)</span>
+
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">crossBetween=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">majorUnit=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">minorUnit=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dispUnits=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">**kw</span>
+                <span class="s1">):</span>
+        <span class="s1">self.crossBetween = crossBetween</span>
+        <span class="s1">self.majorUnit = majorUnit</span>
+        <span class="s1">self.minorUnit = minorUnit</span>
+        <span class="s1">self.dispUnits = dispUnits</span>
+        <span class="s1">kw.setdefault(</span><span class="s3">'majorGridlines'</span><span class="s1">, ChartLines())</span>
+        <span class="s1">kw.setdefault(</span><span class="s3">'axId'</span><span class="s1">, </span><span class="s4">100</span><span class="s1">)</span>
+        <span class="s1">kw.setdefault(</span><span class="s3">'crossAx'</span><span class="s1">, </span><span class="s4">10</span><span class="s1">)</span>
+        <span class="s1">super(NumericAxis, self).__init__(**kw)</span>
+
+
+    <span class="s1">@classmethod</span>
+    <span class="s0">def </span><span class="s1">from_tree(cls, node):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Special case value axes with no gridlines 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self = super(NumericAxis, cls).from_tree(node)</span>
+        <span class="s1">gridlines = node.find(</span><span class="s3">&quot;{%s}majorGridlines&quot; </span><span class="s1">% CHART_NS)</span>
+        <span class="s0">if </span><span class="s1">gridlines </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">self.majorGridlines = </span><span class="s0">None</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+
+
+<span class="s0">class </span><span class="s1">TextAxis(_BaseAxis):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;catAx&quot;</span>
+
+    <span class="s1">axId = _BaseAxis.axId</span>
+    <span class="s1">scaling = _BaseAxis.scaling</span>
+    <span class="s1">delete = _BaseAxis.delete</span>
+    <span class="s1">axPos = _BaseAxis.axPos</span>
+    <span class="s1">majorGridlines = _BaseAxis.majorGridlines</span>
+    <span class="s1">minorGridlines = _BaseAxis.minorGridlines</span>
+    <span class="s1">title = _BaseAxis.title</span>
+    <span class="s1">numFmt = _BaseAxis.numFmt</span>
+    <span class="s1">majorTickMark = _BaseAxis.majorTickMark</span>
+    <span class="s1">minorTickMark = _BaseAxis.minorTickMark</span>
+    <span class="s1">tickLblPos = _BaseAxis.tickLblPos</span>
+    <span class="s1">spPr = _BaseAxis.spPr</span>
+    <span class="s1">txPr = _BaseAxis.txPr</span>
+    <span class="s1">crossAx = _BaseAxis.crossAx</span>
+    <span class="s1">crosses = _BaseAxis.crosses</span>
+    <span class="s1">crossesAt = _BaseAxis.crossesAt</span>
+
+    <span class="s1">auto = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lblAlgn = NestedNoneSet(values=([</span><span class="s3">'ctr'</span><span class="s1">, </span><span class="s3">'l'</span><span class="s1">, </span><span class="s3">'r'</span><span class="s1">]))</span>
+    <span class="s1">lblOffset = NestedMinMax(min=</span><span class="s4">0</span><span class="s1">, max=</span><span class="s4">1000</span><span class="s1">)</span>
+    <span class="s1">tickLblSkip = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">tickMarkSkip = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noMultiLvlLbl = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = _BaseAxis.__elements__ + (</span><span class="s3">'auto'</span><span class="s1">, </span><span class="s3">'lblAlgn'</span><span class="s1">, </span><span class="s3">'lblOffset'</span><span class="s1">,</span>
+                                             <span class="s3">'tickLblSkip'</span><span class="s1">, </span><span class="s3">'tickMarkSkip'</span><span class="s1">, </span><span class="s3">'noMultiLvlLbl'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">auto=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lblAlgn=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lblOffset=</span><span class="s4">100</span><span class="s1">,</span>
+                 <span class="s1">tickLblSkip=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">tickMarkSkip=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noMultiLvlLbl=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">**kw</span>
+                <span class="s1">):</span>
+        <span class="s1">self.auto = auto</span>
+        <span class="s1">self.lblAlgn = lblAlgn</span>
+        <span class="s1">self.lblOffset = lblOffset</span>
+        <span class="s1">self.tickLblSkip = tickLblSkip</span>
+        <span class="s1">self.tickMarkSkip = tickMarkSkip</span>
+        <span class="s1">self.noMultiLvlLbl = noMultiLvlLbl</span>
+        <span class="s1">kw.setdefault(</span><span class="s3">'axId'</span><span class="s1">, </span><span class="s4">10</span><span class="s1">)</span>
+        <span class="s1">kw.setdefault(</span><span class="s3">'crossAx'</span><span class="s1">, </span><span class="s4">100</span><span class="s1">)</span>
+        <span class="s1">super(TextAxis, self).__init__(**kw)</span>
+
+
+<span class="s0">class </span><span class="s1">DateAxis(TextAxis):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;dateAx&quot;</span>
+
+    <span class="s1">axId = _BaseAxis.axId</span>
+    <span class="s1">scaling = _BaseAxis.scaling</span>
+    <span class="s1">delete = _BaseAxis.delete</span>
+    <span class="s1">axPos = _BaseAxis.axPos</span>
+    <span class="s1">majorGridlines = _BaseAxis.majorGridlines</span>
+    <span class="s1">minorGridlines = _BaseAxis.minorGridlines</span>
+    <span class="s1">title = _BaseAxis.title</span>
+    <span class="s1">numFmt = _BaseAxis.numFmt</span>
+    <span class="s1">majorTickMark = _BaseAxis.majorTickMark</span>
+    <span class="s1">minorTickMark = _BaseAxis.minorTickMark</span>
+    <span class="s1">tickLblPos = _BaseAxis.tickLblPos</span>
+    <span class="s1">spPr = _BaseAxis.spPr</span>
+    <span class="s1">txPr = _BaseAxis.txPr</span>
+    <span class="s1">crossAx = _BaseAxis.crossAx</span>
+    <span class="s1">crosses = _BaseAxis.crosses</span>
+    <span class="s1">crossesAt = _BaseAxis.crossesAt</span>
+
+    <span class="s1">auto = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lblOffset = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">baseTimeUnit = NestedNoneSet(values=([</span><span class="s3">'days'</span><span class="s1">, </span><span class="s3">'months'</span><span class="s1">, </span><span class="s3">'years'</span><span class="s1">]))</span>
+    <span class="s1">majorUnit = NestedFloat(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">majorTimeUnit = NestedNoneSet(values=([</span><span class="s3">'days'</span><span class="s1">, </span><span class="s3">'months'</span><span class="s1">, </span><span class="s3">'years'</span><span class="s1">]))</span>
+    <span class="s1">minorUnit = NestedFloat(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">minorTimeUnit = NestedNoneSet(values=([</span><span class="s3">'days'</span><span class="s1">, </span><span class="s3">'months'</span><span class="s1">, </span><span class="s3">'years'</span><span class="s1">]))</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = _BaseAxis.__elements__ + (</span><span class="s3">'auto'</span><span class="s1">, </span><span class="s3">'lblOffset'</span><span class="s1">,</span>
+                                             <span class="s3">'baseTimeUnit'</span><span class="s1">, </span><span class="s3">'majorUnit'</span><span class="s1">, </span><span class="s3">'majorTimeUnit'</span><span class="s1">, </span><span class="s3">'minorUnit'</span><span class="s1">,</span>
+                                             <span class="s3">'minorTimeUnit'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">auto=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lblOffset=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">baseTimeUnit=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">majorUnit=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">majorTimeUnit=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">minorUnit=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">minorTimeUnit=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">**kw</span>
+                <span class="s1">):</span>
+        <span class="s1">self.auto = auto</span>
+        <span class="s1">self.lblOffset = lblOffset</span>
+        <span class="s1">self.baseTimeUnit = baseTimeUnit</span>
+        <span class="s1">self.majorUnit = majorUnit</span>
+        <span class="s1">self.majorTimeUnit = majorTimeUnit</span>
+        <span class="s1">self.minorUnit = minorUnit</span>
+        <span class="s1">self.minorTimeUnit = minorTimeUnit</span>
+        <span class="s1">kw.setdefault(</span><span class="s3">'axId'</span><span class="s1">, </span><span class="s4">500</span><span class="s1">)</span>
+        <span class="s1">kw.setdefault(</span><span class="s3">'lblOffset'</span><span class="s1">, lblOffset)</span>
+        <span class="s1">super(DateAxis, self).__init__(**kw)</span>
+
+
+<span class="s0">class </span><span class="s1">SeriesAxis(_BaseAxis):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;serAx&quot;</span>
+
+    <span class="s1">axId = _BaseAxis.axId</span>
+    <span class="s1">scaling = _BaseAxis.scaling</span>
+    <span class="s1">delete = _BaseAxis.delete</span>
+    <span class="s1">axPos = _BaseAxis.axPos</span>
+    <span class="s1">majorGridlines = _BaseAxis.majorGridlines</span>
+    <span class="s1">minorGridlines = _BaseAxis.minorGridlines</span>
+    <span class="s1">title = _BaseAxis.title</span>
+    <span class="s1">numFmt = _BaseAxis.numFmt</span>
+    <span class="s1">majorTickMark = _BaseAxis.majorTickMark</span>
+    <span class="s1">minorTickMark = _BaseAxis.minorTickMark</span>
+    <span class="s1">tickLblPos = _BaseAxis.tickLblPos</span>
+    <span class="s1">spPr = _BaseAxis.spPr</span>
+    <span class="s1">txPr = _BaseAxis.txPr</span>
+    <span class="s1">crossAx = _BaseAxis.crossAx</span>
+    <span class="s1">crosses = _BaseAxis.crosses</span>
+    <span class="s1">crossesAt = _BaseAxis.crossesAt</span>
+
+    <span class="s1">tickLblSkip = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">tickMarkSkip = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = _BaseAxis.__elements__ + (</span><span class="s3">'tickLblSkip'</span><span class="s1">, </span><span class="s3">'tickMarkSkip'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">tickLblSkip=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">tickMarkSkip=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">**kw</span>
+                <span class="s1">):</span>
+        <span class="s1">self.tickLblSkip = tickLblSkip</span>
+        <span class="s1">self.tickMarkSkip = tickMarkSkip</span>
+        <span class="s1">kw.setdefault(</span><span class="s3">'axId'</span><span class="s1">, </span><span class="s4">1000</span><span class="s1">)</span>
+        <span class="s1">kw.setdefault(</span><span class="s3">'crossAx'</span><span class="s1">, </span><span class="s4">10</span><span class="s1">)</span>
+        <span class="s1">super(SeriesAxis, self).__init__(**kw)</span>
+</pre>
+</body>
+</html>

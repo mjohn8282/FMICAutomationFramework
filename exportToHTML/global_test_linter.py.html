@@ -1,0 +1,40 @@
+<html>
+<head>
+<title>global_test_linter.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+global_test_linter.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+
+<span class="s2">from </span><span class="s1">pylint </span><span class="s2">import </span><span class="s1">checkers</span>
+<span class="s2">from </span><span class="s1">pylint.lint </span><span class="s2">import </span><span class="s1">PyLinter</span>
+<span class="s2">from </span><span class="s1">pylint.testutils.reporter_for_tests </span><span class="s2">import </span><span class="s1">GenericTestReporter</span>
+
+
+<span class="s2">def </span><span class="s1">create_test_linter():</span>
+    <span class="s1">test_reporter = GenericTestReporter()</span>
+    <span class="s1">linter_ = PyLinter()</span>
+    <span class="s1">linter_.set_reporter(test_reporter)</span>
+    <span class="s1">linter_.config.persistent = </span><span class="s3">0</span>
+    <span class="s1">checkers.initialize(linter_)</span>
+    <span class="s2">return </span><span class="s1">linter_</span>
+
+
+<span class="s0"># Can't be renamed to a constant (easily), it breaks countless tests</span>
+<span class="s1">linter = create_test_linter()</span>
+</pre>
+</body>
+</html>

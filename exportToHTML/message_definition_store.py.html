@@ -1,0 +1,109 @@
+<html>
+<head>
+<title>message_definition_store.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+message_definition_store.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s2">import </span><span class="s1">collections</span>
+
+<span class="s2">from </span><span class="s1">pylint.exceptions </span><span class="s2">import </span><span class="s1">UnknownMessageError</span>
+<span class="s2">from </span><span class="s1">pylint.message.message_id_store </span><span class="s2">import </span><span class="s1">MessageIdStore</span>
+
+
+<span class="s2">class </span><span class="s1">MessageDefinitionStore:</span>
+
+    <span class="s0">&quot;&quot;&quot;The messages store knows information about every possible message definition but has 
+    no particular state during analysis. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self):</span>
+        <span class="s1">self.message_id_store = MessageIdStore()</span>
+        <span class="s0"># Primary registry for all active messages definitions.</span>
+        <span class="s0"># It contains the 1:1 mapping from msgid to MessageDefinition.</span>
+        <span class="s0"># Keys are msgid, values are MessageDefinition</span>
+        <span class="s1">self._messages_definitions = {}</span>
+        <span class="s0"># MessageDefinition kept by category</span>
+        <span class="s1">self._msgs_by_category = collections.defaultdict(list)</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">messages(self) -&gt; list:</span>
+        <span class="s0">&quot;&quot;&quot;The list of all active messages.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._messages_definitions.values()</span>
+
+    <span class="s2">def </span><span class="s1">register_messages_from_checker(self, checker):</span>
+        <span class="s0">&quot;&quot;&quot;Register all messages definitions from a checker. 
+ 
+        :param BaseChecker checker: 
+        &quot;&quot;&quot;</span>
+        <span class="s1">checker.check_consistency()</span>
+        <span class="s2">for </span><span class="s1">message </span><span class="s2">in </span><span class="s1">checker.messages:</span>
+            <span class="s1">self.register_message(message)</span>
+
+    <span class="s2">def </span><span class="s1">register_message(self, message):</span>
+        <span class="s0">&quot;&quot;&quot;Register a MessageDefinition with consistency in mind. 
+ 
+        :param MessageDefinition message: The message definition being added. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.message_id_store.register_message_definition(message)</span>
+        <span class="s1">self._messages_definitions[message.msgid] = message</span>
+        <span class="s1">self._msgs_by_category[message.msgid[</span><span class="s3">0</span><span class="s1">]].append(message.msgid)</span>
+
+    <span class="s2">def </span><span class="s1">get_message_definitions(self, msgid_or_symbol: str) -&gt; list:</span>
+        <span class="s0">&quot;&quot;&quot;Returns the Message object for this message. 
+        :param str msgid_or_symbol: msgid_or_symbol may be either a numeric or symbolic id. 
+        :raises UnknownMessageError: if the message id is not defined. 
+        :rtype: List of MessageDefinition 
+        :return: A message definition corresponding to msgid_or_symbol 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">[</span>
+            <span class="s1">self._messages_definitions[m]</span>
+            <span class="s2">for </span><span class="s1">m </span><span class="s2">in </span><span class="s1">self.message_id_store.get_active_msgids(msgid_or_symbol)</span>
+        <span class="s1">]</span>
+
+    <span class="s2">def </span><span class="s1">get_msg_display_string(self, msgid_or_symbol: str):</span>
+        <span class="s0">&quot;&quot;&quot;Generates a user-consumable representation of a message.&quot;&quot;&quot;</span>
+        <span class="s1">message_definitions = self.get_message_definitions(msgid_or_symbol)</span>
+        <span class="s2">if </span><span class="s1">len(message_definitions) == </span><span class="s3">1</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">repr(message_definitions[</span><span class="s3">0</span><span class="s1">].symbol)</span>
+        <span class="s2">return </span><span class="s1">repr([md.symbol </span><span class="s2">for </span><span class="s1">md </span><span class="s2">in </span><span class="s1">message_definitions])</span>
+
+    <span class="s2">def </span><span class="s1">help_message(self, msgids_or_symbols: list):</span>
+        <span class="s0">&quot;&quot;&quot;Display help messages for the given message identifiers&quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">msgids_or_symbol </span><span class="s2">in </span><span class="s1">msgids_or_symbols:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s2">for </span><span class="s1">message_definition </span><span class="s2">in </span><span class="s1">self.get_message_definitions(</span>
+                    <span class="s1">msgids_or_symbol</span>
+                <span class="s1">):</span>
+                    <span class="s1">print(message_definition.format_help(checkerref=</span><span class="s2">True</span><span class="s1">))</span>
+                    <span class="s1">print(</span><span class="s4">&quot;&quot;</span><span class="s1">)</span>
+            <span class="s2">except </span><span class="s1">UnknownMessageError </span><span class="s2">as </span><span class="s1">ex:</span>
+                <span class="s1">print(ex)</span>
+                <span class="s1">print(</span><span class="s4">&quot;&quot;</span><span class="s1">)</span>
+                <span class="s2">continue</span>
+
+    <span class="s2">def </span><span class="s1">list_messages(self):</span>
+        <span class="s0">&quot;&quot;&quot;Output full messages list documentation in ReST format.&quot;&quot;&quot;</span>
+        <span class="s1">messages = sorted(self._messages_definitions.values(), key=</span><span class="s2">lambda </span><span class="s1">m: m.msgid)</span>
+        <span class="s2">for </span><span class="s1">message </span><span class="s2">in </span><span class="s1">messages:</span>
+            <span class="s2">if not </span><span class="s1">message.may_be_emitted():</span>
+                <span class="s2">continue</span>
+            <span class="s1">print(message.format_help(checkerref=</span><span class="s2">False</span><span class="s1">))</span>
+        <span class="s1">print(</span><span class="s4">&quot;&quot;</span><span class="s1">)</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,277 @@
+<html>
+<head>
+<title>diagrams.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+.s5 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+diagrams.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2006, 2008-2010, 2012-2014 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2014-2018, 2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Brett Cannon &lt;brett@python.org&gt;</span>
+<span class="s0"># Copyright (c) 2014 Arun Persaud &lt;arun@nubati.net&gt;</span>
+<span class="s0"># Copyright (c) 2015 Ionel Cristian Maries &lt;contact@ionelmc.ro&gt;</span>
+<span class="s0"># Copyright (c) 2018 ssolanki &lt;sushobhitsolanki@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019-2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;diagram objects 
+&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+
+<span class="s2">from </span><span class="s1">pylint.checkers.utils </span><span class="s2">import </span><span class="s1">decorated_with_property</span>
+<span class="s2">from </span><span class="s1">pylint.pyreverse.utils </span><span class="s2">import </span><span class="s1">FilterMixIn, is_interface</span>
+
+
+<span class="s2">class </span><span class="s1">Figure:</span>
+    <span class="s0">&quot;&quot;&quot;base class for counter handling&quot;&quot;&quot;</span>
+
+
+<span class="s2">class </span><span class="s1">Relationship(Figure):</span>
+    <span class="s0">&quot;&quot;&quot;a relation ship from an object in the diagram to another&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, from_object, to_object, relation_type, name=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">Figure.__init__(self)</span>
+        <span class="s1">self.from_object = from_object</span>
+        <span class="s1">self.to_object = to_object</span>
+        <span class="s1">self.type = relation_type</span>
+        <span class="s1">self.name = name</span>
+
+
+<span class="s2">class </span><span class="s1">DiagramEntity(Figure):</span>
+    <span class="s0">&quot;&quot;&quot;a diagram object, i.e. a label associated to an astroid node&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, title=</span><span class="s3">&quot;No name&quot;</span><span class="s1">, node=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">Figure.__init__(self)</span>
+        <span class="s1">self.title = title</span>
+        <span class="s1">self.node = node</span>
+
+
+<span class="s2">class </span><span class="s1">ClassDiagram(Figure, FilterMixIn):</span>
+    <span class="s0">&quot;&quot;&quot;main class diagram handling&quot;&quot;&quot;</span>
+
+    <span class="s1">TYPE = </span><span class="s3">&quot;class&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, title, mode):</span>
+        <span class="s1">FilterMixIn.__init__(self, mode)</span>
+        <span class="s1">Figure.__init__(self)</span>
+        <span class="s1">self.title = title</span>
+        <span class="s1">self.objects = []</span>
+        <span class="s1">self.relationships = {}</span>
+        <span class="s1">self._nodes = {}</span>
+        <span class="s1">self.depends = []</span>
+
+    <span class="s2">def </span><span class="s1">get_relationships(self, role):</span>
+        <span class="s0"># sorted to get predictable (hence testable) results</span>
+        <span class="s2">return </span><span class="s1">sorted(</span>
+            <span class="s1">self.relationships.get(role, ()),</span>
+            <span class="s1">key=</span><span class="s2">lambda </span><span class="s1">x: (x.from_object.fig_id, x.to_object.fig_id),</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">add_relationship(self, from_object, to_object, relation_type, name=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;create a relation ship&quot;&quot;&quot;</span>
+        <span class="s1">rel = Relationship(from_object, to_object, relation_type, name)</span>
+        <span class="s1">self.relationships.setdefault(relation_type, []).append(rel)</span>
+
+    <span class="s2">def </span><span class="s1">get_relationship(self, from_object, relation_type):</span>
+        <span class="s0">&quot;&quot;&quot;return a relation ship or None&quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">rel </span><span class="s2">in </span><span class="s1">self.relationships.get(relation_type, ()):</span>
+            <span class="s2">if </span><span class="s1">rel.from_object </span><span class="s2">is </span><span class="s1">from_object:</span>
+                <span class="s2">return </span><span class="s1">rel</span>
+        <span class="s2">raise </span><span class="s1">KeyError(relation_type)</span>
+
+    <span class="s2">def </span><span class="s1">get_attrs(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return visible attributes, possibly with class name&quot;&quot;&quot;</span>
+        <span class="s1">attrs = []</span>
+        <span class="s1">properties = [</span>
+            <span class="s1">(n, m)</span>
+            <span class="s2">for </span><span class="s1">n, m </span><span class="s2">in </span><span class="s1">node.items()</span>
+            <span class="s2">if </span><span class="s1">isinstance(m, astroid.FunctionDef) </span><span class="s2">and </span><span class="s1">decorated_with_property(m)</span>
+        <span class="s1">]</span>
+        <span class="s2">for </span><span class="s1">node_name, associated_nodes </span><span class="s2">in </span><span class="s1">(</span>
+            <span class="s1">list(node.instance_attrs_type.items())</span>
+            <span class="s1">+ list(node.locals_type.items())</span>
+            <span class="s1">+ properties</span>
+        <span class="s1">):</span>
+            <span class="s2">if not </span><span class="s1">self.show_attr(node_name):</span>
+                <span class="s2">continue</span>
+            <span class="s1">names = self.class_names(associated_nodes)</span>
+            <span class="s2">if </span><span class="s1">names:</span>
+                <span class="s1">node_name = </span><span class="s3">&quot;{} : {}&quot;</span><span class="s1">.format(node_name, </span><span class="s3">&quot;, &quot;</span><span class="s1">.join(names))</span>
+            <span class="s1">attrs.append(node_name)</span>
+        <span class="s2">return </span><span class="s1">sorted(attrs)</span>
+
+    <span class="s2">def </span><span class="s1">get_methods(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return visible methods&quot;&quot;&quot;</span>
+        <span class="s1">methods = [</span>
+            <span class="s1">m</span>
+            <span class="s2">for </span><span class="s1">m </span><span class="s2">in </span><span class="s1">node.values()</span>
+            <span class="s2">if </span><span class="s1">isinstance(m, astroid.FunctionDef)</span>
+            <span class="s2">and not </span><span class="s1">decorated_with_property(m)</span>
+            <span class="s2">and </span><span class="s1">self.show_attr(m.name)</span>
+        <span class="s1">]</span>
+        <span class="s2">return </span><span class="s1">sorted(methods, key=</span><span class="s2">lambda </span><span class="s1">n: n.name)</span>
+
+    <span class="s2">def </span><span class="s1">add_object(self, title, node):</span>
+        <span class="s0">&quot;&quot;&quot;create a diagram object&quot;&quot;&quot;</span>
+        <span class="s2">assert </span><span class="s1">node </span><span class="s2">not in </span><span class="s1">self._nodes</span>
+        <span class="s1">ent = DiagramEntity(title, node)</span>
+        <span class="s1">self._nodes[node] = ent</span>
+        <span class="s1">self.objects.append(ent)</span>
+
+    <span class="s2">def </span><span class="s1">class_names(self, nodes):</span>
+        <span class="s0">&quot;&quot;&quot;return class names if needed in diagram&quot;&quot;&quot;</span>
+        <span class="s1">names = []</span>
+        <span class="s2">for </span><span class="s1">node </span><span class="s2">in </span><span class="s1">nodes:</span>
+            <span class="s2">if </span><span class="s1">isinstance(node, astroid.Instance):</span>
+                <span class="s1">node = node._proxied</span>
+            <span class="s2">if </span><span class="s1">(</span>
+                <span class="s1">isinstance(node, astroid.ClassDef)</span>
+                <span class="s2">and </span><span class="s1">hasattr(node, </span><span class="s3">&quot;name&quot;</span><span class="s1">)</span>
+                <span class="s2">and not </span><span class="s1">self.has_node(node)</span>
+            <span class="s1">):</span>
+                <span class="s2">if </span><span class="s1">node.name </span><span class="s2">not in </span><span class="s1">names:</span>
+                    <span class="s1">node_name = node.name</span>
+                    <span class="s1">names.append(node_name)</span>
+        <span class="s2">return </span><span class="s1">names</span>
+
+    <span class="s2">def </span><span class="s1">nodes(self):</span>
+        <span class="s0">&quot;&quot;&quot;return the list of underlying nodes&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._nodes.keys()</span>
+
+    <span class="s2">def </span><span class="s1">has_node(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return true if the given node is included in the diagram&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">node </span><span class="s2">in </span><span class="s1">self._nodes</span>
+
+    <span class="s2">def </span><span class="s1">object_from_node(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;return the diagram object mapped to node&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._nodes[node]</span>
+
+    <span class="s2">def </span><span class="s1">classes(self):</span>
+        <span class="s0">&quot;&quot;&quot;return all class nodes in the diagram&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">[o </span><span class="s2">for </span><span class="s1">o </span><span class="s2">in </span><span class="s1">self.objects </span><span class="s2">if </span><span class="s1">isinstance(o.node, astroid.ClassDef)]</span>
+
+    <span class="s2">def </span><span class="s1">classe(self, name):</span>
+        <span class="s0">&quot;&quot;&quot;return a class by its name, raise KeyError if not found&quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">klass </span><span class="s2">in </span><span class="s1">self.classes():</span>
+            <span class="s2">if </span><span class="s1">klass.node.name == name:</span>
+                <span class="s2">return </span><span class="s1">klass</span>
+        <span class="s2">raise </span><span class="s1">KeyError(name)</span>
+
+    <span class="s2">def </span><span class="s1">extract_relationships(self):</span>
+        <span class="s0">&quot;&quot;&quot;extract relation ships between nodes in the diagram&quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">obj </span><span class="s2">in </span><span class="s1">self.classes():</span>
+            <span class="s1">node = obj.node</span>
+            <span class="s1">obj.attrs = self.get_attrs(node)</span>
+            <span class="s1">obj.methods = self.get_methods(node)</span>
+            <span class="s0"># shape</span>
+            <span class="s2">if </span><span class="s1">is_interface(node):</span>
+                <span class="s1">obj.shape = </span><span class="s3">&quot;interface&quot;</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">obj.shape = </span><span class="s3">&quot;class&quot;</span>
+            <span class="s0"># inheritance link</span>
+            <span class="s2">for </span><span class="s1">par_node </span><span class="s2">in </span><span class="s1">node.ancestors(recurs=</span><span class="s2">False</span><span class="s1">):</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">par_obj = self.object_from_node(par_node)</span>
+                    <span class="s1">self.add_relationship(obj, par_obj, </span><span class="s3">&quot;specialization&quot;</span><span class="s1">)</span>
+                <span class="s2">except </span><span class="s1">KeyError:</span>
+                    <span class="s2">continue</span>
+            <span class="s0"># implements link</span>
+            <span class="s2">for </span><span class="s1">impl_node </span><span class="s2">in </span><span class="s1">node.implements:</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">impl_obj = self.object_from_node(impl_node)</span>
+                    <span class="s1">self.add_relationship(obj, impl_obj, </span><span class="s3">&quot;implements&quot;</span><span class="s1">)</span>
+                <span class="s2">except </span><span class="s1">KeyError:</span>
+                    <span class="s2">continue</span>
+            <span class="s0"># associations link</span>
+            <span class="s2">for </span><span class="s1">name, values </span><span class="s2">in </span><span class="s1">list(node.instance_attrs_type.items()) + list(</span>
+                <span class="s1">node.locals_type.items()</span>
+            <span class="s1">):</span>
+                <span class="s2">for </span><span class="s1">value </span><span class="s2">in </span><span class="s1">values:</span>
+                    <span class="s2">if </span><span class="s1">value </span><span class="s2">is </span><span class="s1">astroid.Uninferable:</span>
+                        <span class="s2">continue</span>
+                    <span class="s2">if </span><span class="s1">isinstance(value, astroid.Instance):</span>
+                        <span class="s1">value = value._proxied</span>
+                    <span class="s2">try</span><span class="s1">:</span>
+                        <span class="s1">associated_obj = self.object_from_node(value)</span>
+                        <span class="s1">self.add_relationship(associated_obj, obj, </span><span class="s3">&quot;association&quot;</span><span class="s1">, name)</span>
+                    <span class="s2">except </span><span class="s1">KeyError:</span>
+                        <span class="s2">continue</span>
+
+
+<span class="s2">class </span><span class="s1">PackageDiagram(ClassDiagram):</span>
+    <span class="s0">&quot;&quot;&quot;package diagram handling&quot;&quot;&quot;</span>
+
+    <span class="s1">TYPE = </span><span class="s3">&quot;package&quot;</span>
+
+    <span class="s2">def </span><span class="s1">modules(self):</span>
+        <span class="s0">&quot;&quot;&quot;return all module nodes in the diagram&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">[o </span><span class="s2">for </span><span class="s1">o </span><span class="s2">in </span><span class="s1">self.objects </span><span class="s2">if </span><span class="s1">isinstance(o.node, astroid.Module)]</span>
+
+    <span class="s2">def </span><span class="s1">module(self, name):</span>
+        <span class="s0">&quot;&quot;&quot;return a module by its name, raise KeyError if not found&quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">mod </span><span class="s2">in </span><span class="s1">self.modules():</span>
+            <span class="s2">if </span><span class="s1">mod.node.name == name:</span>
+                <span class="s2">return </span><span class="s1">mod</span>
+        <span class="s2">raise </span><span class="s1">KeyError(name)</span>
+
+    <span class="s2">def </span><span class="s1">get_module(self, name, node):</span>
+        <span class="s0">&quot;&quot;&quot;return a module by its name, looking also for relative imports; 
+        raise KeyError if not found 
+        &quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">mod </span><span class="s2">in </span><span class="s1">self.modules():</span>
+            <span class="s1">mod_name = mod.node.name</span>
+            <span class="s2">if </span><span class="s1">mod_name == name:</span>
+                <span class="s2">return </span><span class="s1">mod</span>
+            <span class="s0"># search for fullname of relative import modules</span>
+            <span class="s1">package = node.root().name</span>
+            <span class="s2">if </span><span class="s1">mod_name == </span><span class="s3">f&quot;</span><span class="s4">{</span><span class="s1">package</span><span class="s4">}</span><span class="s3">.</span><span class="s4">{</span><span class="s1">name</span><span class="s4">}</span><span class="s3">&quot;</span><span class="s1">:</span>
+                <span class="s2">return </span><span class="s1">mod</span>
+            <span class="s2">if </span><span class="s1">mod_name == </span><span class="s3">&quot;{}.{}&quot;</span><span class="s1">.format(package.rsplit(</span><span class="s3">&quot;.&quot;</span><span class="s1">, </span><span class="s5">1</span><span class="s1">)[</span><span class="s5">0</span><span class="s1">], name):</span>
+                <span class="s2">return </span><span class="s1">mod</span>
+        <span class="s2">raise </span><span class="s1">KeyError(name)</span>
+
+    <span class="s2">def </span><span class="s1">add_from_depend(self, node, from_module):</span>
+        <span class="s0">&quot;&quot;&quot;add dependencies created by from-imports&quot;&quot;&quot;</span>
+        <span class="s1">mod_name = node.root().name</span>
+        <span class="s1">obj = self.module(mod_name)</span>
+        <span class="s2">if </span><span class="s1">from_module </span><span class="s2">not in </span><span class="s1">obj.node.depends:</span>
+            <span class="s1">obj.node.depends.append(from_module)</span>
+
+    <span class="s2">def </span><span class="s1">extract_relationships(self):</span>
+        <span class="s0">&quot;&quot;&quot;extract relation ships between nodes in the diagram&quot;&quot;&quot;</span>
+        <span class="s1">ClassDiagram.extract_relationships(self)</span>
+        <span class="s2">for </span><span class="s1">obj </span><span class="s2">in </span><span class="s1">self.classes():</span>
+            <span class="s0"># ownership</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">mod = self.object_from_node(obj.node.root())</span>
+                <span class="s1">self.add_relationship(obj, mod, </span><span class="s3">&quot;ownership&quot;</span><span class="s1">)</span>
+            <span class="s2">except </span><span class="s1">KeyError:</span>
+                <span class="s2">continue</span>
+        <span class="s2">for </span><span class="s1">obj </span><span class="s2">in </span><span class="s1">self.modules():</span>
+            <span class="s1">obj.shape = </span><span class="s3">&quot;package&quot;</span>
+            <span class="s0"># dependencies</span>
+            <span class="s2">for </span><span class="s1">dep_name </span><span class="s2">in </span><span class="s1">obj.node.depends:</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">dep = self.get_module(dep_name, obj.node)</span>
+                <span class="s2">except </span><span class="s1">KeyError:</span>
+                    <span class="s2">continue</span>
+                <span class="s1">self.add_relationship(obj, dep, </span><span class="s3">&quot;depends&quot;</span><span class="s1">)</span>
+</pre>
+</body>
+</html>

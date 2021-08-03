@@ -1,0 +1,96 @@
+<html>
+<head>
+<title>title.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+title.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">basestring</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Alias,</span>
+<span class="s1">)</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">ExtensionList</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">NestedBool</span>
+
+<span class="s0">from </span><span class="s1">.text </span><span class="s0">import </span><span class="s1">Text, RichText</span>
+<span class="s0">from </span><span class="s1">.layout </span><span class="s0">import </span><span class="s1">Layout</span>
+<span class="s0">from </span><span class="s1">.shapes </span><span class="s0">import </span><span class="s1">GraphicalProperties</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.drawing.text </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Paragraph,</span>
+    <span class="s1">RegularTextRun,</span>
+    <span class="s1">LineBreak</span>
+<span class="s1">)</span>
+
+
+<span class="s0">class </span><span class="s1">Title(Serialisable):</span>
+    <span class="s1">tagname = </span><span class="s3">&quot;title&quot;</span>
+
+    <span class="s1">tx = Typed(expected_type=Text, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">text = Alias(</span><span class="s3">'tx'</span><span class="s1">)</span>
+    <span class="s1">layout = Typed(expected_type=Layout, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">overlay = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">spPr = Typed(expected_type=GraphicalProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">graphicalProperties = Alias(</span><span class="s3">'spPr'</span><span class="s1">)</span>
+    <span class="s1">txPr = Typed(expected_type=RichText, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">body = Alias(</span><span class="s3">'txPr'</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'tx'</span><span class="s1">, </span><span class="s3">'layout'</span><span class="s1">, </span><span class="s3">'overlay'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">, </span><span class="s3">'txPr'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">tx=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">layout=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">overlay=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">txPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s0">if </span><span class="s1">tx </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">tx = Text()</span>
+        <span class="s1">self.tx = tx</span>
+        <span class="s1">self.layout = layout</span>
+        <span class="s1">self.overlay = overlay</span>
+        <span class="s1">self.spPr = spPr</span>
+        <span class="s1">self.txPr = txPr</span>
+
+
+
+<span class="s0">def </span><span class="s1">title_maker(text):</span>
+    <span class="s1">title = Title()</span>
+    <span class="s1">paras = [Paragraph(r=[RegularTextRun(t=s)]) </span><span class="s0">for </span><span class="s1">s </span><span class="s0">in </span><span class="s1">text.split(</span><span class="s3">&quot;</span><span class="s4">\n</span><span class="s3">&quot;</span><span class="s1">)]</span>
+
+    <span class="s1">title.tx.rich.paragraphs = paras</span>
+    <span class="s0">return </span><span class="s1">title</span>
+
+
+<span class="s0">class </span><span class="s1">TitleDescriptor(Typed):</span>
+
+    <span class="s1">expected_type = Title</span>
+    <span class="s1">allow_none = </span><span class="s0">True</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s0">if </span><span class="s1">isinstance(value, basestring):</span>
+            <span class="s1">value = title_maker(value)</span>
+        <span class="s1">super(TitleDescriptor, self).__set__(instance, value)</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,30 @@
+<html>
+<head>
+<title>converters.pyi</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+converters.pyi</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">TypeVar, Optional, Callable, overload</span>
+<span class="s0">from </span><span class="s1">. </span><span class="s0">import </span><span class="s1">_ConverterType</span>
+
+<span class="s1">_T = TypeVar(</span><span class="s2">&quot;_T&quot;</span><span class="s1">)</span>
+
+<span class="s0">def </span><span class="s1">pipe(*validators: _ConverterType) -&gt; _ConverterType: ...</span>
+<span class="s0">def </span><span class="s1">optional(converter: _ConverterType) -&gt; _ConverterType: ...</span>
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">default_if_none(default: _T) -&gt; _ConverterType: ...</span>
+<span class="s1">@overload</span>
+<span class="s0">def </span><span class="s1">default_if_none(*, factory: Callable[[], _T]) -&gt; _ConverterType: ...</span>
+</pre>
+</body>
+</html>

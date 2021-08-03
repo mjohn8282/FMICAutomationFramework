@@ -1,0 +1,492 @@
+<html>
+<head>
+<title>run.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+run.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">warnings</span>
+
+<span class="s2">from </span><span class="s1">pylint </span><span class="s2">import </span><span class="s1">__pkginfo__, config, extensions, interfaces</span>
+<span class="s2">from </span><span class="s1">pylint.constants </span><span class="s2">import </span><span class="s1">full_version</span>
+<span class="s2">from </span><span class="s1">pylint.lint.pylinter </span><span class="s2">import </span><span class="s1">PyLinter</span>
+<span class="s2">from </span><span class="s1">pylint.lint.utils </span><span class="s2">import </span><span class="s1">ArgumentPreprocessingError, preprocess_options</span>
+<span class="s2">from </span><span class="s1">pylint.utils </span><span class="s2">import </span><span class="s1">utils</span>
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s2">import </span><span class="s1">multiprocessing</span>
+<span class="s2">except </span><span class="s1">ImportError:</span>
+    <span class="s1">multiprocessing = </span><span class="s2">None  </span><span class="s0"># type: ignore</span>
+
+
+<span class="s2">def </span><span class="s1">_cpu_count() -&gt; int:</span>
+    <span class="s0">&quot;&quot;&quot;Use sched_affinity if available for virtualized or containerized environments.&quot;&quot;&quot;</span>
+    <span class="s1">sched_getaffinity = getattr(os, </span><span class="s3">&quot;sched_getaffinity&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+    <span class="s0"># pylint: disable=not-callable,using-constant-test</span>
+    <span class="s2">if </span><span class="s1">sched_getaffinity:</span>
+        <span class="s2">return </span><span class="s1">len(sched_getaffinity(</span><span class="s4">0</span><span class="s1">))</span>
+    <span class="s2">if </span><span class="s1">multiprocessing:</span>
+        <span class="s2">return </span><span class="s1">multiprocessing.cpu_count()</span>
+    <span class="s2">return </span><span class="s4">1</span>
+
+
+<span class="s2">def </span><span class="s1">cb_list_extensions(option, optname, value, parser):</span>
+    <span class="s0">&quot;&quot;&quot;List all the extensions under pylint.extensions&quot;&quot;&quot;</span>
+
+    <span class="s2">for </span><span class="s1">filename </span><span class="s2">in </span><span class="s1">os.listdir(os.path.dirname(extensions.__file__)):</span>
+        <span class="s2">if </span><span class="s1">filename.endswith(</span><span class="s3">&quot;.py&quot;</span><span class="s1">) </span><span class="s2">and not </span><span class="s1">filename.startswith(</span><span class="s3">&quot;_&quot;</span><span class="s1">):</span>
+            <span class="s1">extension_name, _, _ = filename.partition(</span><span class="s3">&quot;.&quot;</span><span class="s1">)</span>
+            <span class="s1">print(</span><span class="s3">f&quot;pylint.extensions.</span><span class="s5">{</span><span class="s1">extension_name</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">)</span>
+    <span class="s1">sys.exit(</span><span class="s4">0</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">cb_list_confidence_levels(option, optname, value, parser):</span>
+    <span class="s2">for </span><span class="s1">level </span><span class="s2">in </span><span class="s1">interfaces.CONFIDENCE_LEVELS:</span>
+        <span class="s1">print(</span><span class="s3">&quot;%-18s: %s&quot; </span><span class="s1">% level)</span>
+    <span class="s1">sys.exit(</span><span class="s4">0</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">cb_init_hook(optname, value):</span>
+    <span class="s0">&quot;&quot;&quot;exec arbitrary code to set sys.path for instance&quot;&quot;&quot;</span>
+    <span class="s1">exec(value)  </span><span class="s0"># pylint: disable=exec-used</span>
+
+
+<span class="s1">UNUSED_PARAM_SENTINEL = object()</span>
+
+
+<span class="s2">class </span><span class="s1">Run:</span>
+    <span class="s0">&quot;&quot;&quot;helper class to use as main for pylint : 
+ 
+    run(*sys.argv[1:]) 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">LinterClass = PyLinter</span>
+    <span class="s1">option_groups = (</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;Commands&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Options which are actually commands. Options in this </span><span class="s5">\ 
+</span><span class="s3">group are mutually exclusive.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_return_one(*args):  </span><span class="s0"># pylint: disable=unused-argument</span>
+        <span class="s2">return </span><span class="s4">1</span>
+
+    <span class="s2">def </span><span class="s1">__init__(</span>
+        <span class="s1">self,</span>
+        <span class="s1">args,</span>
+        <span class="s1">reporter=</span><span class="s2">None</span><span class="s1">,</span>
+        <span class="s1">exit=</span><span class="s2">True</span><span class="s1">,</span>
+        <span class="s1">do_exit=UNUSED_PARAM_SENTINEL,</span>
+    <span class="s1">):  </span><span class="s0"># pylint: disable=redefined-builtin</span>
+        <span class="s1">self._rcfile = </span><span class="s2">None</span>
+        <span class="s1">self._output = </span><span class="s2">None</span>
+        <span class="s1">self._version_asked = </span><span class="s2">False</span>
+        <span class="s1">self._plugins = []</span>
+        <span class="s1">self.verbose = </span><span class="s2">None</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">preprocess_options(</span>
+                <span class="s1">args,</span>
+                <span class="s1">{</span>
+                    <span class="s0"># option: (callback, takearg)</span>
+                    <span class="s3">&quot;version&quot;</span><span class="s1">: (self.version_asked, </span><span class="s2">False</span><span class="s1">),</span>
+                    <span class="s3">&quot;init-hook&quot;</span><span class="s1">: (cb_init_hook, </span><span class="s2">True</span><span class="s1">),</span>
+                    <span class="s3">&quot;rcfile&quot;</span><span class="s1">: (self.cb_set_rcfile, </span><span class="s2">True</span><span class="s1">),</span>
+                    <span class="s3">&quot;load-plugins&quot;</span><span class="s1">: (self.cb_add_plugins, </span><span class="s2">True</span><span class="s1">),</span>
+                    <span class="s3">&quot;verbose&quot;</span><span class="s1">: (self.cb_verbose_mode, </span><span class="s2">False</span><span class="s1">),</span>
+                    <span class="s3">&quot;output&quot;</span><span class="s1">: (self.cb_set_output, </span><span class="s2">True</span><span class="s1">),</span>
+                <span class="s1">},</span>
+            <span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">ArgumentPreprocessingError </span><span class="s2">as </span><span class="s1">ex:</span>
+            <span class="s1">print(ex, file=sys.stderr)</span>
+            <span class="s1">sys.exit(</span><span class="s4">32</span><span class="s1">)</span>
+
+        <span class="s1">self.linter = linter = self.LinterClass(</span>
+            <span class="s1">(</span>
+                <span class="s1">(</span>
+                    <span class="s3">&quot;rcfile&quot;</span><span class="s1">,</span>
+                    <span class="s1">{</span>
+                        <span class="s3">&quot;action&quot;</span><span class="s1">: </span><span class="s3">&quot;callback&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;callback&quot;</span><span class="s1">: Run._return_one,</span>
+                        <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Commands&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;string&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;file&gt;&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Specify a configuration file to load.&quot;</span><span class="s1">,</span>
+                    <span class="s1">},</span>
+                <span class="s1">),</span>
+                <span class="s1">(</span>
+                    <span class="s3">&quot;output&quot;</span><span class="s1">,</span>
+                    <span class="s1">{</span>
+                        <span class="s3">&quot;action&quot;</span><span class="s1">: </span><span class="s3">&quot;callback&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;callback&quot;</span><span class="s1">: Run._return_one,</span>
+                        <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Commands&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;string&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;file&gt;&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Specify an output file.&quot;</span><span class="s1">,</span>
+                    <span class="s1">},</span>
+                <span class="s1">),</span>
+                <span class="s1">(</span>
+                    <span class="s3">&quot;init-hook&quot;</span><span class="s1">,</span>
+                    <span class="s1">{</span>
+                        <span class="s3">&quot;action&quot;</span><span class="s1">: </span><span class="s3">&quot;callback&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;callback&quot;</span><span class="s1">: Run._return_one,</span>
+                        <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;string&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;code&gt;&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;level&quot;</span><span class="s1">: </span><span class="s4">1</span><span class="s1">,</span>
+                        <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Python code to execute, usually for sys.path &quot;</span>
+                        <span class="s3">&quot;manipulation such as pygtk.require().&quot;</span><span class="s1">,</span>
+                    <span class="s1">},</span>
+                <span class="s1">),</span>
+                <span class="s1">(</span>
+                    <span class="s3">&quot;help-msg&quot;</span><span class="s1">,</span>
+                    <span class="s1">{</span>
+                        <span class="s3">&quot;action&quot;</span><span class="s1">: </span><span class="s3">&quot;callback&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;string&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;msg-id&gt;&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;callback&quot;</span><span class="s1">: self.cb_help_message,</span>
+                        <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Commands&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Display a help message for the given message id and &quot;</span>
+                        <span class="s3">&quot;exit. The value may be a comma separated list of message ids.&quot;</span><span class="s1">,</span>
+                    <span class="s1">},</span>
+                <span class="s1">),</span>
+                <span class="s1">(</span>
+                    <span class="s3">&quot;list-msgs&quot;</span><span class="s1">,</span>
+                    <span class="s1">{</span>
+                        <span class="s3">&quot;action&quot;</span><span class="s1">: </span><span class="s3">&quot;callback&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;msg-id&gt;&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;callback&quot;</span><span class="s1">: self.cb_list_messages,</span>
+                        <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Commands&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;level&quot;</span><span class="s1">: </span><span class="s4">1</span><span class="s1">,</span>
+                        <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Generate pylint's messages.&quot;</span><span class="s1">,</span>
+                    <span class="s1">},</span>
+                <span class="s1">),</span>
+                <span class="s1">(</span>
+                    <span class="s3">&quot;list-msgs-enabled&quot;</span><span class="s1">,</span>
+                    <span class="s1">{</span>
+                        <span class="s3">&quot;action&quot;</span><span class="s1">: </span><span class="s3">&quot;callback&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;msg-id&gt;&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;callback&quot;</span><span class="s1">: self.cb_list_messages_enabled,</span>
+                        <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Commands&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;level&quot;</span><span class="s1">: </span><span class="s4">1</span><span class="s1">,</span>
+                        <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Display a list of what messages are enabled &quot;</span>
+                        <span class="s3">&quot;and disabled with the given configuration.&quot;</span><span class="s1">,</span>
+                    <span class="s1">},</span>
+                <span class="s1">),</span>
+                <span class="s1">(</span>
+                    <span class="s3">&quot;list-groups&quot;</span><span class="s1">,</span>
+                    <span class="s1">{</span>
+                        <span class="s3">&quot;action&quot;</span><span class="s1">: </span><span class="s3">&quot;callback&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;msg-id&gt;&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;callback&quot;</span><span class="s1">: self.cb_list_groups,</span>
+                        <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Commands&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;level&quot;</span><span class="s1">: </span><span class="s4">1</span><span class="s1">,</span>
+                        <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;List pylint's message groups.&quot;</span><span class="s1">,</span>
+                    <span class="s1">},</span>
+                <span class="s1">),</span>
+                <span class="s1">(</span>
+                    <span class="s3">&quot;list-conf-levels&quot;</span><span class="s1">,</span>
+                    <span class="s1">{</span>
+                        <span class="s3">&quot;action&quot;</span><span class="s1">: </span><span class="s3">&quot;callback&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;callback&quot;</span><span class="s1">: cb_list_confidence_levels,</span>
+                        <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Commands&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;level&quot;</span><span class="s1">: </span><span class="s4">1</span><span class="s1">,</span>
+                        <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Generate pylint's confidence levels.&quot;</span><span class="s1">,</span>
+                    <span class="s1">},</span>
+                <span class="s1">),</span>
+                <span class="s1">(</span>
+                    <span class="s3">&quot;list-extensions&quot;</span><span class="s1">,</span>
+                    <span class="s1">{</span>
+                        <span class="s3">&quot;action&quot;</span><span class="s1">: </span><span class="s3">&quot;callback&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;callback&quot;</span><span class="s1">: cb_list_extensions,</span>
+                        <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Commands&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;level&quot;</span><span class="s1">: </span><span class="s4">1</span><span class="s1">,</span>
+                        <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;List available extensions.&quot;</span><span class="s1">,</span>
+                    <span class="s1">},</span>
+                <span class="s1">),</span>
+                <span class="s1">(</span>
+                    <span class="s3">&quot;full-documentation&quot;</span><span class="s1">,</span>
+                    <span class="s1">{</span>
+                        <span class="s3">&quot;action&quot;</span><span class="s1">: </span><span class="s3">&quot;callback&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;msg-id&gt;&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;callback&quot;</span><span class="s1">: self.cb_full_documentation,</span>
+                        <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Commands&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;level&quot;</span><span class="s1">: </span><span class="s4">1</span><span class="s1">,</span>
+                        <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Generate pylint's full documentation.&quot;</span><span class="s1">,</span>
+                    <span class="s1">},</span>
+                <span class="s1">),</span>
+                <span class="s1">(</span>
+                    <span class="s3">&quot;generate-rcfile&quot;</span><span class="s1">,</span>
+                    <span class="s1">{</span>
+                        <span class="s3">&quot;action&quot;</span><span class="s1">: </span><span class="s3">&quot;callback&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;callback&quot;</span><span class="s1">: self.cb_generate_config,</span>
+                        <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Commands&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Generate a sample configuration file according to &quot;</span>
+                        <span class="s3">&quot;the current configuration. You can put other options &quot;</span>
+                        <span class="s3">&quot;before this one to get them in the generated &quot;</span>
+                        <span class="s3">&quot;configuration.&quot;</span><span class="s1">,</span>
+                    <span class="s1">},</span>
+                <span class="s1">),</span>
+                <span class="s1">(</span>
+                    <span class="s3">&quot;generate-man&quot;</span><span class="s1">,</span>
+                    <span class="s1">{</span>
+                        <span class="s3">&quot;action&quot;</span><span class="s1">: </span><span class="s3">&quot;callback&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;callback&quot;</span><span class="s1">: self.cb_generate_manpage,</span>
+                        <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Commands&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Generate pylint's man page.&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;hide&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+                    <span class="s1">},</span>
+                <span class="s1">),</span>
+                <span class="s1">(</span>
+                    <span class="s3">&quot;errors-only&quot;</span><span class="s1">,</span>
+                    <span class="s1">{</span>
+                        <span class="s3">&quot;action&quot;</span><span class="s1">: </span><span class="s3">&quot;callback&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;callback&quot;</span><span class="s1">: self.cb_error_mode,</span>
+                        <span class="s3">&quot;short&quot;</span><span class="s1">: </span><span class="s3">&quot;E&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;In error mode, checkers without error messages are &quot;</span>
+                        <span class="s3">&quot;disabled and for others, only the ERROR messages are &quot;</span>
+                        <span class="s3">&quot;displayed, and no reports are done by default.&quot;</span><span class="s1">,</span>
+                    <span class="s1">},</span>
+                <span class="s1">),</span>
+                <span class="s1">(</span>
+                    <span class="s3">&quot;py3k&quot;</span><span class="s1">,</span>
+                    <span class="s1">{</span>
+                        <span class="s3">&quot;action&quot;</span><span class="s1">: </span><span class="s3">&quot;callback&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;callback&quot;</span><span class="s1">: self.cb_python3_porting_mode,</span>
+                        <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;In Python 3 porting mode, all checkers will be &quot;</span>
+                        <span class="s3">&quot;disabled and only messages emitted by the porting &quot;</span>
+                        <span class="s3">&quot;checker will be displayed.&quot;</span><span class="s1">,</span>
+                    <span class="s1">},</span>
+                <span class="s1">),</span>
+                <span class="s1">(</span>
+                    <span class="s3">&quot;verbose&quot;</span><span class="s1">,</span>
+                    <span class="s1">{</span>
+                        <span class="s3">&quot;action&quot;</span><span class="s1">: </span><span class="s3">&quot;callback&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;callback&quot;</span><span class="s1">: self.cb_verbose_mode,</span>
+                        <span class="s3">&quot;short&quot;</span><span class="s1">: </span><span class="s3">&quot;v&quot;</span><span class="s1">,</span>
+                        <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;In verbose mode, extra non-checker-related info &quot;</span>
+                        <span class="s3">&quot;will be displayed.&quot;</span><span class="s1">,</span>
+                    <span class="s1">},</span>
+                <span class="s1">),</span>
+            <span class="s1">),</span>
+            <span class="s1">option_groups=self.option_groups,</span>
+            <span class="s1">pylintrc=self._rcfile,</span>
+        <span class="s1">)</span>
+        <span class="s0"># register standard checkers</span>
+        <span class="s2">if </span><span class="s1">self._version_asked:</span>
+            <span class="s1">print(full_version)</span>
+            <span class="s1">sys.exit(</span><span class="s4">0</span><span class="s1">)</span>
+        <span class="s1">linter.load_default_plugins()</span>
+        <span class="s0"># load command line plugins</span>
+        <span class="s1">linter.load_plugin_modules(self._plugins)</span>
+        <span class="s0"># add some help section</span>
+        <span class="s1">linter.add_help_section(</span><span class="s3">&quot;Environment variables&quot;</span><span class="s1">, config.ENV_HELP, level=</span><span class="s4">1</span><span class="s1">)</span>
+        <span class="s1">linter.add_help_section(</span>
+            <span class="s3">&quot;Output&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Using the default text output, the message format is :                          </span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;                                                                                </span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;        MESSAGE_TYPE: LINE_NUM:[OBJECT:] MESSAGE                                </span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;                                                                                </span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;There are 5 kind of message types :                                             </span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;    * (C) convention, for programming standard violation                        </span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;    * (R) refactor, for bad code smell                                          </span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;    * (W) warning, for python specific problems                                 </span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;    * (E) error, for probable bugs in the code                                  </span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;    * (F) fatal, if an error occurred which prevented pylint from doing further</span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;processing.</span><span class="s5">\n</span><span class="s3">&quot;</span><span class="s1">,</span>
+            <span class="s1">level=</span><span class="s4">1</span><span class="s1">,</span>
+        <span class="s1">)</span>
+        <span class="s1">linter.add_help_section(</span>
+            <span class="s3">&quot;Output status code&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Pylint should leave with following status code:                                 </span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;    * 0 if everything went fine                                                 </span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;    * 1 if a fatal message was issued                                           </span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;    * 2 if an error message was issued                                          </span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;    * 4 if a warning message was issued                                         </span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;    * 8 if a refactor message was issued                                        </span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;    * 16 if a convention message was issued                                     </span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;    * 32 on usage error                                                         </span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;                                                                                </span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;status 1 to 16 will be bit-ORed so you can know which different categories has</span><span class="s5">\n</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;been issued by analysing pylint output status code</span><span class="s5">\n</span><span class="s3">&quot;</span><span class="s1">,</span>
+            <span class="s1">level=</span><span class="s4">1</span><span class="s1">,</span>
+        <span class="s1">)</span>
+        <span class="s0"># read configuration</span>
+        <span class="s1">linter.disable(</span><span class="s3">&quot;I&quot;</span><span class="s1">)</span>
+        <span class="s1">linter.enable(</span><span class="s3">&quot;c-extension-no-member&quot;</span><span class="s1">)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">linter.read_config_file(verbose=self.verbose)</span>
+        <span class="s2">except </span><span class="s1">OSError </span><span class="s2">as </span><span class="s1">ex:</span>
+            <span class="s1">print(ex, file=sys.stderr)</span>
+            <span class="s1">sys.exit(</span><span class="s4">32</span><span class="s1">)</span>
+
+        <span class="s1">config_parser = linter.cfgfile_parser</span>
+        <span class="s0"># run init hook, if present, before loading plugins</span>
+        <span class="s2">if </span><span class="s1">config_parser.has_option(</span><span class="s3">&quot;MASTER&quot;</span><span class="s1">, </span><span class="s3">&quot;init-hook&quot;</span><span class="s1">):</span>
+            <span class="s1">cb_init_hook(</span>
+                <span class="s3">&quot;init-hook&quot;</span><span class="s1">, utils._unquote(config_parser.get(</span><span class="s3">&quot;MASTER&quot;</span><span class="s1">, </span><span class="s3">&quot;init-hook&quot;</span><span class="s1">))</span>
+            <span class="s1">)</span>
+        <span class="s0"># is there some additional plugins in the file configuration, in</span>
+        <span class="s2">if </span><span class="s1">config_parser.has_option(</span><span class="s3">&quot;MASTER&quot;</span><span class="s1">, </span><span class="s3">&quot;load-plugins&quot;</span><span class="s1">):</span>
+            <span class="s1">plugins = utils._splitstrip(config_parser.get(</span><span class="s3">&quot;MASTER&quot;</span><span class="s1">, </span><span class="s3">&quot;load-plugins&quot;</span><span class="s1">))</span>
+            <span class="s1">linter.load_plugin_modules(plugins)</span>
+        <span class="s0"># now we can load file config and command line, plugins (which can</span>
+        <span class="s0"># provide options) have been registered</span>
+        <span class="s1">linter.load_config_file()</span>
+
+        <span class="s2">if </span><span class="s1">reporter:</span>
+            <span class="s0"># if a custom reporter is provided as argument, it may be overridden</span>
+            <span class="s0"># by file parameters, so re-set it here, but before command line</span>
+            <span class="s0"># parsing so it's still overrideable by command line option</span>
+            <span class="s1">linter.set_reporter(reporter)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">args = linter.load_command_line_configuration(args)</span>
+        <span class="s2">except </span><span class="s1">SystemExit </span><span class="s2">as </span><span class="s1">exc:</span>
+            <span class="s2">if </span><span class="s1">exc.code == </span><span class="s4">2</span><span class="s1">:  </span><span class="s0"># bad options</span>
+                <span class="s1">exc.code = </span><span class="s4">32</span>
+            <span class="s2">raise</span>
+        <span class="s2">if not </span><span class="s1">args:</span>
+            <span class="s1">print(linter.help())</span>
+            <span class="s1">sys.exit(</span><span class="s4">32</span><span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">linter.config.jobs &lt; </span><span class="s4">0</span><span class="s1">:</span>
+            <span class="s1">print(</span>
+                <span class="s3">&quot;Jobs number (%d) should be greater than or equal to 0&quot;</span>
+                <span class="s1">% linter.config.jobs,</span>
+                <span class="s1">file=sys.stderr,</span>
+            <span class="s1">)</span>
+            <span class="s1">sys.exit(</span><span class="s4">32</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">linter.config.jobs &gt; </span><span class="s4">1 </span><span class="s2">or </span><span class="s1">linter.config.jobs == </span><span class="s4">0</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">multiprocessing </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s1">print(</span>
+                    <span class="s3">&quot;Multiprocessing library is missing, fallback to single process&quot;</span><span class="s1">,</span>
+                    <span class="s1">file=sys.stderr,</span>
+                <span class="s1">)</span>
+                <span class="s1">linter.set_option(</span><span class="s3">&quot;jobs&quot;</span><span class="s1">, </span><span class="s4">1</span><span class="s1">)</span>
+            <span class="s2">elif </span><span class="s1">linter.config.jobs == </span><span class="s4">0</span><span class="s1">:</span>
+                <span class="s1">linter.config.jobs = _cpu_count()</span>
+
+        <span class="s0"># We have loaded configuration from config file and command line. Now, we can</span>
+        <span class="s0"># load plugin specific configuration.</span>
+        <span class="s1">linter.load_plugin_configuration()</span>
+
+        <span class="s2">if </span><span class="s1">self._output:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s2">with </span><span class="s1">open(self._output, </span><span class="s3">&quot;w&quot;</span><span class="s1">) </span><span class="s2">as </span><span class="s1">output:</span>
+                    <span class="s1">linter.reporter.set_output(output)</span>
+                    <span class="s1">linter.check(args)</span>
+                    <span class="s1">score_value = linter.generate_reports()</span>
+            <span class="s2">except </span><span class="s1">OSError </span><span class="s2">as </span><span class="s1">ex:</span>
+                <span class="s1">print(ex, file=sys.stderr)</span>
+                <span class="s1">sys.exit(</span><span class="s4">32</span><span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">linter.check(args)</span>
+            <span class="s1">score_value = linter.generate_reports()</span>
+
+        <span class="s2">if </span><span class="s1">do_exit </span><span class="s2">is not </span><span class="s1">UNUSED_PARAM_SENTINEL:</span>
+            <span class="s1">warnings.warn(</span>
+                <span class="s3">&quot;do_exit is deprecated and it is going to be removed in a future version.&quot;</span><span class="s1">,</span>
+                <span class="s1">DeprecationWarning,</span>
+            <span class="s1">)</span>
+            <span class="s1">exit = do_exit</span>
+
+        <span class="s2">if </span><span class="s1">exit:</span>
+            <span class="s2">if </span><span class="s1">linter.config.exit_zero:</span>
+                <span class="s1">sys.exit(</span><span class="s4">0</span><span class="s1">)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">if </span><span class="s1">score_value </span><span class="s2">and </span><span class="s1">score_value &gt;= linter.config.fail_under:</span>
+                    <span class="s1">sys.exit(</span><span class="s4">0</span><span class="s1">)</span>
+                <span class="s1">sys.exit(self.linter.msg_status)</span>
+
+    <span class="s2">def </span><span class="s1">version_asked(self, _, __):</span>
+        <span class="s0">&quot;&quot;&quot;callback for version (i.e. before option parsing)&quot;&quot;&quot;</span>
+        <span class="s1">self._version_asked = </span><span class="s2">True</span>
+
+    <span class="s2">def </span><span class="s1">cb_set_rcfile(self, name, value):</span>
+        <span class="s0">&quot;&quot;&quot;callback for option preprocessing (i.e. before option parsing)&quot;&quot;&quot;</span>
+        <span class="s1">self._rcfile = value</span>
+
+    <span class="s2">def </span><span class="s1">cb_set_output(self, name, value):</span>
+        <span class="s0">&quot;&quot;&quot;callback for option preprocessing (i.e. before option parsing)&quot;&quot;&quot;</span>
+        <span class="s1">self._output = value</span>
+
+    <span class="s2">def </span><span class="s1">cb_add_plugins(self, name, value):</span>
+        <span class="s0">&quot;&quot;&quot;callback for option preprocessing (i.e. before option parsing)&quot;&quot;&quot;</span>
+        <span class="s1">self._plugins.extend(utils._splitstrip(value))</span>
+
+    <span class="s2">def </span><span class="s1">cb_error_mode(self, *args, **kwargs):</span>
+        <span class="s0">&quot;&quot;&quot;error mode: 
+        * disable all but error messages 
+        * disable the 'miscellaneous' checker which can be safely deactivated in 
+          debug 
+        * disable reports 
+        * do not save execution information 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.linter.error_mode()</span>
+
+    <span class="s2">def </span><span class="s1">cb_generate_config(self, *args, **kwargs):</span>
+        <span class="s0">&quot;&quot;&quot;optik callback for sample config file generation&quot;&quot;&quot;</span>
+        <span class="s1">self.linter.generate_config(skipsections=(</span><span class="s3">&quot;COMMANDS&quot;</span><span class="s1">,))</span>
+        <span class="s1">sys.exit(</span><span class="s4">0</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">cb_generate_manpage(self, *args, **kwargs):</span>
+        <span class="s0">&quot;&quot;&quot;optik callback for sample config file generation&quot;&quot;&quot;</span>
+        <span class="s1">self.linter.generate_manpage(__pkginfo__)</span>
+        <span class="s1">sys.exit(</span><span class="s4">0</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">cb_help_message(self, option, optname, value, parser):</span>
+        <span class="s0">&quot;&quot;&quot;optik callback for printing some help about a particular message&quot;&quot;&quot;</span>
+        <span class="s1">self.linter.msgs_store.help_message(utils._splitstrip(value))</span>
+        <span class="s1">sys.exit(</span><span class="s4">0</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">cb_full_documentation(self, option, optname, value, parser):</span>
+        <span class="s0">&quot;&quot;&quot;optik callback for printing full documentation&quot;&quot;&quot;</span>
+        <span class="s1">self.linter.print_full_documentation()</span>
+        <span class="s1">sys.exit(</span><span class="s4">0</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">cb_list_messages(self, option, optname, value, parser):</span>
+        <span class="s0">&quot;&quot;&quot;optik callback for printing available messages&quot;&quot;&quot;</span>
+        <span class="s1">self.linter.msgs_store.list_messages()</span>
+        <span class="s1">sys.exit(</span><span class="s4">0</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">cb_list_messages_enabled(self, option, optname, value, parser):</span>
+        <span class="s0">&quot;&quot;&quot;optik callback for printing available messages&quot;&quot;&quot;</span>
+        <span class="s1">self.linter.list_messages_enabled()</span>
+        <span class="s1">sys.exit(</span><span class="s4">0</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">cb_list_groups(self, *args, **kwargs):</span>
+        <span class="s0">&quot;&quot;&quot;List all the check groups that pylint knows about 
+ 
+        These should be useful to know what check groups someone can disable 
+        or enable. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">check </span><span class="s2">in </span><span class="s1">self.linter.get_checker_names():</span>
+            <span class="s1">print(check)</span>
+        <span class="s1">sys.exit(</span><span class="s4">0</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">cb_python3_porting_mode(self, *args, **kwargs):</span>
+        <span class="s0">&quot;&quot;&quot;Activate only the python3 porting checker.&quot;&quot;&quot;</span>
+        <span class="s1">self.linter.python3_porting_mode()</span>
+
+    <span class="s2">def </span><span class="s1">cb_verbose_mode(self, *args, **kwargs):</span>
+        <span class="s1">self.verbose = </span><span class="s2">True</span>
+</pre>
+</body>
+</html>

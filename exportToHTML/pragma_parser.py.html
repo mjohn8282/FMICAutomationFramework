@@ -1,0 +1,153 @@
+<html>
+<head>
+<title>pragma_parser.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+pragma_parser.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s2">import </span><span class="s1">re</span>
+<span class="s2">from </span><span class="s1">collections </span><span class="s2">import </span><span class="s1">namedtuple</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Generator, List</span>
+
+<span class="s0"># Allow stopping after the first semicolon/hash encountered,</span>
+<span class="s0"># so that an option can be continued with the reasons</span>
+<span class="s0"># why it is active or disabled.</span>
+<span class="s1">OPTION_RGX = </span><span class="s3">r&quot;&quot;&quot; 
+    \s*                # Any number of whithespace 
+    \#?                # One or zero hash 
+    .*                 # Anything (as much as possible) 
+    (\s*               # Beginning of first matched group and any number of whitespaces 
+    \#                 # Beginning of comment 
+    .*?                # Anything (as little as possible) 
+    \bpylint:          # pylint word and column 
+    \s*                # Any number of whitespaces 
+    ([^;#\n]+))        # Anything except semicolon or hash or newline (it is the second matched group) 
+                       # and end of the first matched group 
+    [;#]{0,1}&quot;&quot;&quot;  </span><span class="s0"># From 0 to 1 repetition of semicolon or hash</span>
+<span class="s1">OPTION_PO = re.compile(OPTION_RGX, re.VERBOSE)</span>
+
+
+<span class="s1">PragmaRepresenter = namedtuple(</span><span class="s3">&quot;PragmaRepresenter&quot;</span><span class="s1">, </span><span class="s3">&quot;action messages&quot;</span><span class="s1">)</span>
+
+
+<span class="s1">ATOMIC_KEYWORDS = frozenset((</span><span class="s3">&quot;disable-all&quot;</span><span class="s1">, </span><span class="s3">&quot;skip-file&quot;</span><span class="s1">))</span>
+<span class="s1">MESSAGE_KEYWORDS = frozenset((</span><span class="s3">&quot;disable-msg&quot;</span><span class="s1">, </span><span class="s3">&quot;enable-msg&quot;</span><span class="s1">, </span><span class="s3">&quot;disable&quot;</span><span class="s1">, </span><span class="s3">&quot;enable&quot;</span><span class="s1">))</span>
+<span class="s0"># sorted is necessary because sets are unordered collections and ALL_KEYWORDS</span>
+<span class="s0">#  string should not vary between executions</span>
+<span class="s0">#  reverse is necessary in order to have the longest keywords first, so that, for example,</span>
+<span class="s0"># 'disable' string should not be matched instead of 'disable-all'</span>
+<span class="s1">ALL_KEYWORDS = </span><span class="s3">&quot;|&quot;</span><span class="s1">.join(</span>
+    <span class="s1">sorted(ATOMIC_KEYWORDS | MESSAGE_KEYWORDS, key=len, reverse=</span><span class="s2">True</span><span class="s1">)</span>
+<span class="s1">)</span>
+
+
+<span class="s1">TOKEN_SPECIFICATION = [</span>
+    <span class="s1">(</span><span class="s3">&quot;KEYWORD&quot;</span><span class="s1">, </span><span class="s3">fr&quot;\b(</span><span class="s4">{</span><span class="s1">ALL_KEYWORDS</span><span class="s4">:</span><span class="s3">s</span><span class="s4">}</span><span class="s3">)\b&quot;</span><span class="s1">),</span>
+    <span class="s1">(</span><span class="s3">&quot;MESSAGE_STRING&quot;</span><span class="s1">, </span><span class="s3">r&quot;[0-9A-Za-z\-\_]{2,}&quot;</span><span class="s1">),  </span><span class="s0">#  Identifiers</span>
+    <span class="s1">(</span><span class="s3">&quot;ASSIGN&quot;</span><span class="s1">, </span><span class="s3">r&quot;=&quot;</span><span class="s1">),  </span><span class="s0">#  Assignment operator</span>
+    <span class="s1">(</span><span class="s3">&quot;MESSAGE_NUMBER&quot;</span><span class="s1">, </span><span class="s3">r&quot;[CREIWF]{1}\d*&quot;</span><span class="s1">),</span>
+<span class="s1">]</span>
+
+<span class="s1">TOK_REGEX = </span><span class="s3">&quot;|&quot;</span><span class="s1">.join(</span>
+    <span class="s3">f&quot;(?P&lt;</span><span class="s4">{</span><span class="s1">token_name</span><span class="s4">:</span><span class="s3">s</span><span class="s4">}</span><span class="s3">&gt;</span><span class="s4">{</span><span class="s1">token_rgx</span><span class="s4">:</span><span class="s3">s</span><span class="s4">}</span><span class="s3">)&quot;</span>
+    <span class="s2">for </span><span class="s1">token_name, token_rgx </span><span class="s2">in </span><span class="s1">TOKEN_SPECIFICATION</span>
+<span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">emit_pragma_representer(action, messages):</span>
+    <span class="s2">if not </span><span class="s1">messages </span><span class="s2">and </span><span class="s1">action </span><span class="s2">in </span><span class="s1">MESSAGE_KEYWORDS:</span>
+        <span class="s2">raise </span><span class="s1">InvalidPragmaError(</span>
+            <span class="s3">&quot;The keyword is not followed by message identifier&quot;</span><span class="s1">, action</span>
+        <span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">PragmaRepresenter(action, messages)</span>
+
+
+<span class="s2">class </span><span class="s1">PragmaParserError(Exception):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    A class for exceptions thrown by pragma_parser module 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, message, token):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        :args message: explain the reason why the exception has been thrown 
+        :args token: token concerned by the exception 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.message = message</span>
+        <span class="s1">self.token = token</span>
+        <span class="s1">super().__init__(self.message)</span>
+
+
+<span class="s2">class </span><span class="s1">UnRecognizedOptionError(PragmaParserError):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Thrown in case the of a valid but unrecognized option 
+    &quot;&quot;&quot;</span>
+
+
+<span class="s2">class </span><span class="s1">InvalidPragmaError(PragmaParserError):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Thrown in case the pragma is invalid 
+    &quot;&quot;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">parse_pragma(pylint_pragma: str) -&gt; Generator[PragmaRepresenter, </span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">]:</span>
+    <span class="s1">action = </span><span class="s2">None</span>
+    <span class="s1">messages: List[str] = []</span>
+    <span class="s1">assignment_required = </span><span class="s2">False</span>
+    <span class="s1">previous_token = </span><span class="s3">&quot;&quot;</span>
+
+    <span class="s2">for </span><span class="s1">mo </span><span class="s2">in </span><span class="s1">re.finditer(TOK_REGEX, pylint_pragma):</span>
+        <span class="s1">kind = mo.lastgroup</span>
+        <span class="s1">value = mo.group()</span>
+
+        <span class="s2">if </span><span class="s1">kind == </span><span class="s3">&quot;ASSIGN&quot;</span><span class="s1">:</span>
+            <span class="s2">if not </span><span class="s1">assignment_required:</span>
+                <span class="s2">if </span><span class="s1">action:</span>
+                    <span class="s0"># A keyword has been found previously but doesn't support assignement</span>
+                    <span class="s2">raise </span><span class="s1">UnRecognizedOptionError(</span>
+                        <span class="s3">&quot;The keyword doesn't support assignment&quot;</span><span class="s1">, action</span>
+                    <span class="s1">)</span>
+                <span class="s2">if </span><span class="s1">previous_token:</span>
+                    <span class="s0">#  Something found previously but not a known keyword</span>
+                    <span class="s2">raise </span><span class="s1">UnRecognizedOptionError(</span>
+                        <span class="s3">&quot;The keyword is unknown&quot;</span><span class="s1">, previous_token</span>
+                    <span class="s1">)</span>
+                <span class="s0"># Nothing at all detected before this assignment</span>
+                <span class="s2">raise </span><span class="s1">InvalidPragmaError(</span><span class="s3">&quot;Missing keyword before assignment&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+            <span class="s1">assignment_required = </span><span class="s2">False</span>
+        <span class="s2">elif </span><span class="s1">assignment_required:</span>
+            <span class="s2">raise </span><span class="s1">InvalidPragmaError(</span><span class="s3">&quot;The = sign is missing after the keyword&quot;</span><span class="s1">, action)</span>
+        <span class="s2">elif </span><span class="s1">kind == </span><span class="s3">&quot;KEYWORD&quot;</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">action:</span>
+                <span class="s2">yield </span><span class="s1">emit_pragma_representer(action, messages)</span>
+            <span class="s1">action = value</span>
+            <span class="s1">messages = list()</span>
+            <span class="s1">assignment_required = action </span><span class="s2">in </span><span class="s1">MESSAGE_KEYWORDS</span>
+        <span class="s2">elif </span><span class="s1">kind </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;MESSAGE_STRING&quot;</span><span class="s1">, </span><span class="s3">&quot;MESSAGE_NUMBER&quot;</span><span class="s1">):</span>
+            <span class="s1">messages.append(value)</span>
+            <span class="s1">assignment_required = </span><span class="s2">False</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">RuntimeError(</span><span class="s3">&quot;Token not recognized&quot;</span><span class="s1">)</span>
+
+        <span class="s1">previous_token = value</span>
+
+    <span class="s2">if </span><span class="s1">action:</span>
+        <span class="s2">yield </span><span class="s1">emit_pragma_representer(action, messages)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">UnRecognizedOptionError(</span><span class="s3">&quot;The keyword is unknown&quot;</span><span class="s1">, previous_token)</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,137 @@
+<html>
+<head>
+<title>man_help_formatter.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+man_help_formatter.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s2">import </span><span class="s1">optparse</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">time</span>
+
+
+<span class="s0"># pylint: disable=abstract-method; by design?</span>
+<span class="s2">class </span><span class="s1">_ManHelpFormatter(optparse.HelpFormatter):</span>
+    <span class="s2">def </span><span class="s1">__init__(</span>
+        <span class="s1">self, indent_increment=</span><span class="s3">0</span><span class="s1">, max_help_position=</span><span class="s3">24</span><span class="s1">, width=</span><span class="s3">79</span><span class="s1">, short_first=</span><span class="s3">0</span>
+    <span class="s1">):</span>
+        <span class="s1">optparse.HelpFormatter.__init__(</span>
+            <span class="s1">self, indent_increment, max_help_position, width, short_first</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">format_heading(self, heading):</span>
+        <span class="s2">return </span><span class="s4">&quot;.SH %s</span><span class="s5">\n</span><span class="s4">&quot; </span><span class="s1">% heading.upper()</span>
+
+    <span class="s2">def </span><span class="s1">format_description(self, description):</span>
+        <span class="s2">return </span><span class="s1">description</span>
+
+    <span class="s2">def </span><span class="s1">format_option(self, option):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">optstring = option.option_strings</span>
+        <span class="s2">except </span><span class="s1">AttributeError:</span>
+            <span class="s1">optstring = self.format_option_strings(option)</span>
+        <span class="s2">if </span><span class="s1">option.help:</span>
+            <span class="s1">help_text = self.expand_default(option)</span>
+            <span class="s1">help_string = </span><span class="s4">&quot; &quot;</span><span class="s1">.join([line.strip() </span><span class="s2">for </span><span class="s1">line </span><span class="s2">in </span><span class="s1">help_text.splitlines()])</span>
+            <span class="s1">help_string = help_string.replace(</span><span class="s4">&quot;</span><span class="s5">\\</span><span class="s4">&quot;</span><span class="s1">, </span><span class="s4">&quot;</span><span class="s5">\\\\</span><span class="s4">&quot;</span><span class="s1">)</span>
+            <span class="s1">help_string = help_string.replace(</span><span class="s4">&quot;[current:&quot;</span><span class="s1">, </span><span class="s4">&quot;[default:&quot;</span><span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">help_string = </span><span class="s4">&quot;&quot;</span>
+        <span class="s2">return </span><span class="s4">f&quot;&quot;&quot;.IP &quot;</span><span class="s5">{</span><span class="s1">optstring</span><span class="s5">}</span><span class="s4">&quot;</span>
+<span class="s5">{</span><span class="s1">help_string</span><span class="s5">}</span>
+<span class="s4">&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">format_head(self, optparser, pkginfo, section=</span><span class="s3">1</span><span class="s1">):</span>
+        <span class="s1">long_desc = </span><span class="s4">&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">pgm = optparser._get_prog_name()</span>
+        <span class="s2">except </span><span class="s1">AttributeError:</span>
+            <span class="s0"># py &gt;= 2.4.X (dunno which X exactly, at least 2)</span>
+            <span class="s1">pgm = optparser.get_prog_name()</span>
+        <span class="s1">short_desc = self.format_short_description(pgm, pkginfo.description)</span>
+        <span class="s2">if </span><span class="s1">hasattr(pkginfo, </span><span class="s4">&quot;long_desc&quot;</span><span class="s1">):</span>
+            <span class="s1">long_desc = self.format_long_description(pgm, pkginfo.long_desc)</span>
+        <span class="s2">return </span><span class="s4">f&quot;&quot;&quot;</span><span class="s5">{</span><span class="s1">self.format_title(pgm, section)</span><span class="s5">}</span>
+<span class="s5">{</span><span class="s1">short_desc</span><span class="s5">}</span>
+<span class="s5">{</span><span class="s1">self.format_synopsis(pgm)</span><span class="s5">}</span>
+<span class="s5">{</span><span class="s1">long_desc</span><span class="s5">}</span><span class="s4">&quot;&quot;&quot;</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">format_title(pgm, section):</span>
+        <span class="s1">date = </span><span class="s4">&quot;%d-%02d-%02d&quot; </span><span class="s1">% time.localtime()[:</span><span class="s3">3</span><span class="s1">]</span>
+        <span class="s2">return </span><span class="s4">f'.TH </span><span class="s5">{</span><span class="s1">pgm</span><span class="s5">} {</span><span class="s1">section</span><span class="s5">} </span><span class="s4">&quot;</span><span class="s5">{</span><span class="s1">date</span><span class="s5">}</span><span class="s4">&quot; </span><span class="s5">{</span><span class="s1">pgm</span><span class="s5">}</span><span class="s4">'</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">format_short_description(pgm, short_desc):</span>
+        <span class="s2">return </span><span class="s4">f&quot;&quot;&quot;.SH NAME</span>
+<span class="s4">.B </span><span class="s5">{</span><span class="s1">pgm</span><span class="s5">}</span>
+<span class="s5">\\</span><span class="s4">- </span><span class="s5">{</span><span class="s1">short_desc.strip()</span><span class="s5">}</span>
+<span class="s4">&quot;&quot;&quot;</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">format_synopsis(pgm):</span>
+        <span class="s2">return </span><span class="s4">f&quot;&quot;&quot;.SH SYNOPSIS</span>
+<span class="s4">.B  </span><span class="s5">{</span><span class="s1">pgm</span><span class="s5">}</span>
+<span class="s4">[</span>
+<span class="s4">.I OPTIONS</span>
+<span class="s4">] [</span>
+<span class="s4">.I &lt;arguments&gt;</span>
+<span class="s4">]</span>
+<span class="s4">&quot;&quot;&quot;</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">format_long_description(pgm, long_desc):</span>
+        <span class="s1">long_desc = </span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">.join(line.lstrip() </span><span class="s2">for </span><span class="s1">line </span><span class="s2">in </span><span class="s1">long_desc.splitlines())</span>
+        <span class="s1">long_desc = long_desc.replace(</span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">.</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">, </span><span class="s4">&quot;</span><span class="s5">\n\n</span><span class="s4">&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">long_desc.lower().startswith(pgm):</span>
+            <span class="s1">long_desc = long_desc[len(pgm) :]</span>
+        <span class="s2">return </span><span class="s4">f&quot;&quot;&quot;.SH DESCRIPTION</span>
+<span class="s4">.B </span><span class="s5">{</span><span class="s1">pgm</span><span class="s5">}</span>
+<span class="s5">{</span><span class="s1">long_desc.strip()</span><span class="s5">}</span>
+<span class="s4">&quot;&quot;&quot;</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">format_tail(pkginfo):</span>
+        <span class="s1">tail = </span><span class="s4">f&quot;&quot;&quot;.SH SEE ALSO</span>
+<span class="s4">/usr/share/doc/pythonX.Y-</span><span class="s5">{</span><span class="s1">getattr(pkginfo, </span><span class="s4">&quot;debian_name&quot;</span><span class="s1">, </span><span class="s4">&quot;pylint&quot;</span><span class="s1">)</span><span class="s5">}</span><span class="s4">/</span>
+
+<span class="s4">.SH BUGS</span>
+<span class="s4">Please report bugs on the project</span><span class="s5">\'</span><span class="s4">s mailing list:</span>
+<span class="s5">{</span><span class="s1">pkginfo.mailinglist</span><span class="s5">}</span>
+
+<span class="s4">.SH AUTHOR</span>
+<span class="s5">{</span><span class="s1">pkginfo.author</span><span class="s5">} </span><span class="s4">&lt;</span><span class="s5">{</span><span class="s1">pkginfo.author_email</span><span class="s5">}</span><span class="s4">&gt;</span>
+<span class="s4">&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">hasattr(pkginfo, </span><span class="s4">&quot;copyright&quot;</span><span class="s1">):</span>
+            <span class="s1">tail += </span><span class="s4">f&quot;&quot;&quot;</span>
+<span class="s4">.SH COPYRIGHT</span>
+<span class="s5">{</span><span class="s1">pkginfo.copyright</span><span class="s5">}</span>
+<span class="s4">&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">tail</span>
+
+
+<span class="s2">def </span><span class="s1">_generate_manpage(optparser, pkginfo, section=</span><span class="s3">1</span><span class="s1">, stream=sys.stdout, level=</span><span class="s3">0</span><span class="s1">):</span>
+    <span class="s1">formatter = _ManHelpFormatter()</span>
+    <span class="s1">formatter.output_level = level</span>
+    <span class="s1">formatter.parser = optparser</span>
+    <span class="s1">print(formatter.format_head(optparser, pkginfo, section), file=stream)</span>
+    <span class="s1">print(optparser.format_option_help(formatter), file=stream)</span>
+    <span class="s1">print(formatter.format_tail(pkginfo), file=stream)</span>
+</pre>
+</body>
+</html>

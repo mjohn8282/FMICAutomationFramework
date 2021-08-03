@@ -1,0 +1,319 @@
+<html>
+<head>
+<title>phystokens.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+phystokens.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;Better tokenizing for coverage.py.&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">codecs</span>
+<span class="s2">import </span><span class="s1">keyword</span>
+<span class="s2">import </span><span class="s1">re</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">token</span>
+<span class="s2">import </span><span class="s1">tokenize</span>
+
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">env</span>
+<span class="s2">from </span><span class="s1">coverage.backward </span><span class="s2">import </span><span class="s1">iternext, unicode_class</span>
+<span class="s2">from </span><span class="s1">coverage.misc </span><span class="s2">import </span><span class="s1">contract</span>
+
+
+<span class="s2">def </span><span class="s1">phys_tokens(toks):</span>
+    <span class="s0">&quot;&quot;&quot;Return all physical tokens, even line continuations. 
+ 
+    tokenize.generate_tokens() doesn't return a token for the backslash that 
+    continues lines.  This wrapper provides those tokens so that we can 
+    re-create a faithful representation of the original source. 
+ 
+    Returns the same values as generate_tokens() 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">last_line = </span><span class="s2">None</span>
+    <span class="s1">last_lineno = -</span><span class="s3">1</span>
+    <span class="s1">last_ttext = </span><span class="s2">None</span>
+    <span class="s2">for </span><span class="s1">ttype, ttext, (slineno, scol), (elineno, ecol), ltext </span><span class="s2">in </span><span class="s1">toks:</span>
+        <span class="s2">if </span><span class="s1">last_lineno != elineno:</span>
+            <span class="s2">if </span><span class="s1">last_line </span><span class="s2">and </span><span class="s1">last_line.endswith(</span><span class="s4">&quot;</span><span class="s5">\\\n</span><span class="s4">&quot;</span><span class="s1">):</span>
+                <span class="s0"># We are at the beginning of a new line, and the last line</span>
+                <span class="s0"># ended with a backslash.  We probably have to inject a</span>
+                <span class="s0"># backslash token into the stream. Unfortunately, there's more</span>
+                <span class="s0"># to figure out.  This code::</span>
+                <span class="s0">#</span>
+                <span class="s0">#   usage = &quot;&quot;&quot;\</span>
+                <span class="s0">#   HEY THERE</span>
+                <span class="s0">#   &quot;&quot;&quot;</span>
+                <span class="s0">#</span>
+                <span class="s0"># triggers this condition, but the token text is::</span>
+                <span class="s0">#</span>
+                <span class="s0">#   '&quot;&quot;&quot;\\\nHEY THERE\n&quot;&quot;&quot;'</span>
+                <span class="s0">#</span>
+                <span class="s0"># so we need to figure out if the backslash is already in the</span>
+                <span class="s0"># string token or not.</span>
+                <span class="s1">inject_backslash = </span><span class="s2">True</span>
+                <span class="s2">if </span><span class="s1">last_ttext.endswith(</span><span class="s4">&quot;</span><span class="s5">\\</span><span class="s4">&quot;</span><span class="s1">):</span>
+                    <span class="s1">inject_backslash = </span><span class="s2">False</span>
+                <span class="s2">elif </span><span class="s1">ttype == token.STRING:</span>
+                    <span class="s2">if </span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot; </span><span class="s2">in </span><span class="s1">ttext </span><span class="s2">and </span><span class="s1">ttext.split(</span><span class="s4">'</span><span class="s5">\n</span><span class="s4">'</span><span class="s1">, </span><span class="s3">1</span><span class="s1">)[</span><span class="s3">0</span><span class="s1">][-</span><span class="s3">1</span><span class="s1">] == </span><span class="s4">'</span><span class="s5">\\</span><span class="s4">'</span><span class="s1">:</span>
+                        <span class="s0"># It's a multi-line string and the first line ends with</span>
+                        <span class="s0"># a backslash, so we don't need to inject another.</span>
+                        <span class="s1">inject_backslash = </span><span class="s2">False</span>
+                <span class="s2">if </span><span class="s1">inject_backslash:</span>
+                    <span class="s0"># Figure out what column the backslash is in.</span>
+                    <span class="s1">ccol = len(last_line.split(</span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">)[-</span><span class="s3">2</span><span class="s1">]) - </span><span class="s3">1</span>
+                    <span class="s0"># Yield the token, with a fake token type.</span>
+                    <span class="s2">yield </span><span class="s1">(</span>
+                        <span class="s3">99999</span><span class="s1">, </span><span class="s4">&quot;</span><span class="s5">\\\n</span><span class="s4">&quot;</span><span class="s1">,</span>
+                        <span class="s1">(slineno, ccol), (slineno, ccol+</span><span class="s3">2</span><span class="s1">),</span>
+                        <span class="s1">last_line</span>
+                        <span class="s1">)</span>
+            <span class="s1">last_line = ltext</span>
+        <span class="s2">if </span><span class="s1">ttype </span><span class="s2">not in </span><span class="s1">(tokenize.NEWLINE, tokenize.NL):</span>
+            <span class="s1">last_ttext = ttext</span>
+        <span class="s2">yield </span><span class="s1">ttype, ttext, (slineno, scol), (elineno, ecol), ltext</span>
+        <span class="s1">last_lineno = elineno</span>
+
+
+<span class="s1">@contract(source=</span><span class="s4">'unicode'</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">source_token_lines(source):</span>
+    <span class="s0">&quot;&quot;&quot;Generate a series of lines, one for each line in `source`. 
+ 
+    Each line is a list of pairs, each pair is a token:: 
+ 
+        [('key', 'def'), ('ws', ' '), ('nam', 'hello'), ('op', '('), ... ] 
+ 
+    Each pair has a token class, and the token text. 
+ 
+    If you concatenate all the token texts, and then join them with newlines, 
+    you should have your original `source` back, with two differences: 
+    trailing whitespace is not preserved, and a final line with no newline 
+    is indistinguishable from a final line with a newline. 
+ 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">ws_tokens = {token.INDENT, token.DEDENT, token.NEWLINE, tokenize.NL}</span>
+    <span class="s1">line = []</span>
+    <span class="s1">col = </span><span class="s3">0</span>
+
+    <span class="s1">source = source.expandtabs(</span><span class="s3">8</span><span class="s1">).replace(</span><span class="s4">'</span><span class="s5">\r\n</span><span class="s4">'</span><span class="s1">, </span><span class="s4">'</span><span class="s5">\n</span><span class="s4">'</span><span class="s1">)</span>
+    <span class="s1">tokgen = generate_tokens(source)</span>
+
+    <span class="s2">for </span><span class="s1">ttype, ttext, (_, scol), (_, ecol), _ </span><span class="s2">in </span><span class="s1">phys_tokens(tokgen):</span>
+        <span class="s1">mark_start = </span><span class="s2">True</span>
+        <span class="s2">for </span><span class="s1">part </span><span class="s2">in </span><span class="s1">re.split(</span><span class="s4">'(</span><span class="s5">\n</span><span class="s4">)'</span><span class="s1">, ttext):</span>
+            <span class="s2">if </span><span class="s1">part == </span><span class="s4">'</span><span class="s5">\n</span><span class="s4">'</span><span class="s1">:</span>
+                <span class="s2">yield </span><span class="s1">line</span>
+                <span class="s1">line = []</span>
+                <span class="s1">col = </span><span class="s3">0</span>
+                <span class="s1">mark_end = </span><span class="s2">False</span>
+            <span class="s2">elif </span><span class="s1">part == </span><span class="s4">''</span><span class="s1">:</span>
+                <span class="s1">mark_end = </span><span class="s2">False</span>
+            <span class="s2">elif </span><span class="s1">ttype </span><span class="s2">in </span><span class="s1">ws_tokens:</span>
+                <span class="s1">mark_end = </span><span class="s2">False</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">if </span><span class="s1">mark_start </span><span class="s2">and </span><span class="s1">scol &gt; col:</span>
+                    <span class="s1">line.append((</span><span class="s4">&quot;ws&quot;</span><span class="s1">, </span><span class="s4">u&quot; &quot; </span><span class="s1">* (scol - col)))</span>
+                    <span class="s1">mark_start = </span><span class="s2">False</span>
+                <span class="s1">tok_class = tokenize.tok_name.get(ttype, </span><span class="s4">'xx'</span><span class="s1">).lower()[:</span><span class="s3">3</span><span class="s1">]</span>
+                <span class="s2">if </span><span class="s1">ttype == token.NAME </span><span class="s2">and </span><span class="s1">keyword.iskeyword(ttext):</span>
+                    <span class="s1">tok_class = </span><span class="s4">&quot;key&quot;</span>
+                <span class="s1">line.append((tok_class, part))</span>
+                <span class="s1">mark_end = </span><span class="s2">True</span>
+            <span class="s1">scol = </span><span class="s3">0</span>
+        <span class="s2">if </span><span class="s1">mark_end:</span>
+            <span class="s1">col = ecol</span>
+
+    <span class="s2">if </span><span class="s1">line:</span>
+        <span class="s2">yield </span><span class="s1">line</span>
+
+
+<span class="s2">class </span><span class="s1">CachedTokenizer(object):</span>
+    <span class="s0">&quot;&quot;&quot;A one-element cache around tokenize.generate_tokens. 
+ 
+    When reporting, coverage.py tokenizes files twice, once to find the 
+    structure of the file, and once to syntax-color it.  Tokenizing is 
+    expensive, and easily cached. 
+ 
+    This is a one-element cache so that our twice-in-a-row tokenizing doesn't 
+    actually tokenize twice. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">def </span><span class="s1">__init__(self):</span>
+        <span class="s1">self.last_text = </span><span class="s2">None</span>
+        <span class="s1">self.last_tokens = </span><span class="s2">None</span>
+
+    <span class="s1">@contract(text=</span><span class="s4">'unicode'</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">generate_tokens(self, text):</span>
+        <span class="s0">&quot;&quot;&quot;A stand-in for `tokenize.generate_tokens`.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">text != self.last_text:</span>
+            <span class="s1">self.last_text = text</span>
+            <span class="s1">readline = iternext(text.splitlines(</span><span class="s2">True</span><span class="s1">))</span>
+            <span class="s1">self.last_tokens = list(tokenize.generate_tokens(readline))</span>
+        <span class="s2">return </span><span class="s1">self.last_tokens</span>
+
+<span class="s0"># Create our generate_tokens cache as a callable replacement function.</span>
+<span class="s1">generate_tokens = CachedTokenizer().generate_tokens</span>
+
+
+<span class="s1">COOKIE_RE = re.compile(</span><span class="s4">r&quot;^[ \t]*#.*coding[:=][ \t]*([-\w.]+)&quot;</span><span class="s1">, flags=re.MULTILINE)</span>
+
+<span class="s1">@contract(source=</span><span class="s4">'bytes'</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">_source_encoding_py2(source):</span>
+    <span class="s0">&quot;&quot;&quot;Determine the encoding for `source`, according to PEP 263. 
+ 
+    `source` is a byte string, the text of the program. 
+ 
+    Returns a string, the name of the encoding. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">assert </span><span class="s1">isinstance(source, bytes)</span>
+
+    <span class="s0"># Do this so the detect_encode code we copied will work.</span>
+    <span class="s1">readline = iternext(source.splitlines(</span><span class="s2">True</span><span class="s1">))</span>
+
+    <span class="s0"># This is mostly code adapted from Py3.2's tokenize module.</span>
+
+    <span class="s2">def </span><span class="s1">_get_normal_name(orig_enc):</span>
+        <span class="s0">&quot;&quot;&quot;Imitates get_normal_name in tokenizer.c.&quot;&quot;&quot;</span>
+        <span class="s0"># Only care about the first 12 characters.</span>
+        <span class="s1">enc = orig_enc[:</span><span class="s3">12</span><span class="s1">].lower().replace(</span><span class="s4">&quot;_&quot;</span><span class="s1">, </span><span class="s4">&quot;-&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">re.match(</span><span class="s4">r&quot;^utf-8($|-)&quot;</span><span class="s1">, enc):</span>
+            <span class="s2">return </span><span class="s4">&quot;utf-8&quot;</span>
+        <span class="s2">if </span><span class="s1">re.match(</span><span class="s4">r&quot;^(latin-1|iso-8859-1|iso-latin-1)($|-)&quot;</span><span class="s1">, enc):</span>
+            <span class="s2">return </span><span class="s4">&quot;iso-8859-1&quot;</span>
+        <span class="s2">return </span><span class="s1">orig_enc</span>
+
+    <span class="s0"># From detect_encode():</span>
+    <span class="s0"># It detects the encoding from the presence of a UTF-8 BOM or an encoding</span>
+    <span class="s0"># cookie as specified in PEP-0263.  If both a BOM and a cookie are present,</span>
+    <span class="s0"># but disagree, a SyntaxError will be raised.  If the encoding cookie is an</span>
+    <span class="s0"># invalid charset, raise a SyntaxError.  Note that if a UTF-8 BOM is found,</span>
+    <span class="s0"># 'utf-8-sig' is returned.</span>
+
+    <span class="s0"># If no encoding is specified, then the default will be returned.</span>
+    <span class="s1">default = </span><span class="s4">'ascii'</span>
+
+    <span class="s1">bom_found = </span><span class="s2">False</span>
+    <span class="s1">encoding = </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">read_or_stop():</span>
+        <span class="s0">&quot;&quot;&quot;Get the next source line, or ''.&quot;&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">readline()</span>
+        <span class="s2">except </span><span class="s1">StopIteration:</span>
+            <span class="s2">return </span><span class="s4">''</span>
+
+    <span class="s2">def </span><span class="s1">find_cookie(line):</span>
+        <span class="s0">&quot;&quot;&quot;Find an encoding cookie in `line`.&quot;&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">line_string = line.decode(</span><span class="s4">'ascii'</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">UnicodeDecodeError:</span>
+            <span class="s2">return None</span>
+
+        <span class="s1">matches = COOKIE_RE.findall(line_string)</span>
+        <span class="s2">if not </span><span class="s1">matches:</span>
+            <span class="s2">return None</span>
+        <span class="s1">encoding = _get_normal_name(matches[</span><span class="s3">0</span><span class="s1">])</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">codec = codecs.lookup(encoding)</span>
+        <span class="s2">except </span><span class="s1">LookupError:</span>
+            <span class="s0"># This behavior mimics the Python interpreter</span>
+            <span class="s2">raise </span><span class="s1">SyntaxError(</span><span class="s4">&quot;unknown encoding: &quot; </span><span class="s1">+ encoding)</span>
+
+        <span class="s2">if </span><span class="s1">bom_found:</span>
+            <span class="s0"># codecs in 2.3 were raw tuples of functions, assume the best.</span>
+            <span class="s1">codec_name = getattr(codec, </span><span class="s4">'name'</span><span class="s1">, encoding)</span>
+            <span class="s2">if </span><span class="s1">codec_name != </span><span class="s4">'utf-8'</span><span class="s1">:</span>
+                <span class="s0"># This behavior mimics the Python interpreter</span>
+                <span class="s2">raise </span><span class="s1">SyntaxError(</span><span class="s4">'encoding problem: utf-8'</span><span class="s1">)</span>
+            <span class="s1">encoding += </span><span class="s4">'-sig'</span>
+        <span class="s2">return </span><span class="s1">encoding</span>
+
+    <span class="s1">first = read_or_stop()</span>
+    <span class="s2">if </span><span class="s1">first.startswith(codecs.BOM_UTF8):</span>
+        <span class="s1">bom_found = </span><span class="s2">True</span>
+        <span class="s1">first = first[</span><span class="s3">3</span><span class="s1">:]</span>
+        <span class="s1">default = </span><span class="s4">'utf-8-sig'</span>
+    <span class="s2">if not </span><span class="s1">first:</span>
+        <span class="s2">return </span><span class="s1">default</span>
+
+    <span class="s1">encoding = find_cookie(first)</span>
+    <span class="s2">if </span><span class="s1">encoding:</span>
+        <span class="s2">return </span><span class="s1">encoding</span>
+
+    <span class="s1">second = read_or_stop()</span>
+    <span class="s2">if not </span><span class="s1">second:</span>
+        <span class="s2">return </span><span class="s1">default</span>
+
+    <span class="s1">encoding = find_cookie(second)</span>
+    <span class="s2">if </span><span class="s1">encoding:</span>
+        <span class="s2">return </span><span class="s1">encoding</span>
+
+    <span class="s2">return </span><span class="s1">default</span>
+
+
+<span class="s1">@contract(source=</span><span class="s4">'bytes'</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">_source_encoding_py3(source):</span>
+    <span class="s0">&quot;&quot;&quot;Determine the encoding for `source`, according to PEP 263. 
+ 
+    `source` is a byte string: the text of the program. 
+ 
+    Returns a string, the name of the encoding. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">readline = iternext(source.splitlines(</span><span class="s2">True</span><span class="s1">))</span>
+    <span class="s2">return </span><span class="s1">tokenize.detect_encoding(readline)[</span><span class="s3">0</span><span class="s1">]</span>
+
+
+<span class="s2">if </span><span class="s1">env.PY3:</span>
+    <span class="s1">source_encoding = _source_encoding_py3</span>
+<span class="s2">else</span><span class="s1">:</span>
+    <span class="s1">source_encoding = _source_encoding_py2</span>
+
+
+<span class="s1">@contract(source=</span><span class="s4">'unicode'</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">compile_unicode(source, filename, mode):</span>
+    <span class="s0">&quot;&quot;&quot;Just like the `compile` builtin, but works on any Unicode string. 
+ 
+    Python 2's compile() builtin has a stupid restriction: if the source string 
+    is Unicode, then it may not have a encoding declaration in it.  Why not? 
+    Who knows!  It also decodes to utf8, and then tries to interpret those utf8 
+    bytes according to the encoding declaration.  Why? Who knows! 
+ 
+    This function neuters the coding declaration, and compiles it. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">source = neuter_encoding_declaration(source)</span>
+    <span class="s2">if </span><span class="s1">env.PY2 </span><span class="s2">and </span><span class="s1">isinstance(filename, unicode_class):</span>
+        <span class="s1">filename = filename.encode(sys.getfilesystemencoding(), </span><span class="s4">&quot;replace&quot;</span><span class="s1">)</span>
+    <span class="s1">code = compile(source, filename, mode)</span>
+    <span class="s2">return </span><span class="s1">code</span>
+
+
+<span class="s1">@contract(source=</span><span class="s4">'unicode'</span><span class="s1">, returns=</span><span class="s4">'unicode'</span><span class="s1">)</span>
+<span class="s2">def </span><span class="s1">neuter_encoding_declaration(source):</span>
+    <span class="s0">&quot;&quot;&quot;Return `source`, with any encoding declaration neutered.&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">COOKIE_RE.search(source):</span>
+        <span class="s1">source_lines = source.splitlines(</span><span class="s2">True</span><span class="s1">)</span>
+        <span class="s2">for </span><span class="s1">lineno </span><span class="s2">in </span><span class="s1">range(min(</span><span class="s3">2</span><span class="s1">, len(source_lines))):</span>
+            <span class="s1">source_lines[lineno] = COOKIE_RE.sub(</span><span class="s4">&quot;# (deleted declaration)&quot;</span><span class="s1">, source_lines[lineno])</span>
+        <span class="s1">source = </span><span class="s4">&quot;&quot;</span><span class="s1">.join(source_lines)</span>
+    <span class="s2">return </span><span class="s1">source</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<html>
+<head>
+<title>gateway_socket.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+gateway_socket.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># -*- coding: utf-8 -*-</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s2">from </span><span class="s1">execnet.gateway_bootstrap </span><span class="s2">import </span><span class="s1">HostNotFound</span>
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s1">bytes</span>
+<span class="s2">except </span><span class="s1">NameError:</span>
+    <span class="s1">bytes = str</span>
+
+
+<span class="s2">class </span><span class="s1">SocketIO:</span>
+    <span class="s2">def </span><span class="s1">__init__(self, sock, execmodel):</span>
+        <span class="s1">self.sock = sock</span>
+        <span class="s1">self.execmodel = execmodel</span>
+        <span class="s1">socket = execmodel.socket</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s0"># IPTOS_LOWDELAY</span>
+            <span class="s1">sock.setsockopt(socket.SOL_IP, socket.IP_TOS, </span><span class="s3">0x10</span><span class="s1">)</span>
+            <span class="s1">sock.setsockopt(socket.SOL_TCP, socket.TCP_NODELAY, </span><span class="s3">1</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">(AttributeError, socket.error):</span>
+            <span class="s1">sys.stderr.write(</span><span class="s4">&quot;WARNING: cannot set socketoption&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">read(self, numbytes):</span>
+        <span class="s0">&quot;Read exactly 'bytes' bytes from the socket.&quot;</span>
+        <span class="s1">buf = bytes()</span>
+        <span class="s2">while </span><span class="s1">len(buf) &lt; numbytes:</span>
+            <span class="s1">t = self.sock.recv(numbytes - len(buf))</span>
+            <span class="s2">if not </span><span class="s1">t:</span>
+                <span class="s2">raise </span><span class="s1">EOFError</span>
+            <span class="s1">buf += t</span>
+        <span class="s2">return </span><span class="s1">buf</span>
+
+    <span class="s2">def </span><span class="s1">write(self, data):</span>
+        <span class="s1">self.sock.sendall(data)</span>
+
+    <span class="s2">def </span><span class="s1">close_read(self):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">self.sock.shutdown(</span><span class="s3">0</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">self.execmodel.socket.error:</span>
+            <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">close_write(self):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">self.sock.shutdown(</span><span class="s3">1</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">self.execmodel.socket.error:</span>
+            <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">wait(self):</span>
+        <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">kill(self):</span>
+        <span class="s2">pass</span>
+
+
+<span class="s2">def </span><span class="s1">start_via(gateway, hostport=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;return a host, port tuple, 
+    after instanciating a socketserver on the given gateway 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">hostport </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s1">host, port = (</span><span class="s4">&quot;localhost&quot;</span><span class="s1">, </span><span class="s3">0</span><span class="s1">)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">host, port = hostport</span>
+
+    <span class="s2">from </span><span class="s1">execnet.script </span><span class="s2">import </span><span class="s1">socketserver</span>
+
+    <span class="s0"># execute the above socketserverbootstrap on the other side</span>
+    <span class="s1">channel = gateway.remote_exec(socketserver)</span>
+    <span class="s1">channel.send((host, port))</span>
+    <span class="s1">(realhost, realport) = channel.receive()</span>
+    <span class="s0"># self._trace(&quot;new_remote received&quot;</span>
+    <span class="s0">#               &quot;port=%r, hostname = %r&quot; %(realport, hostname))</span>
+    <span class="s2">if not </span><span class="s1">realhost </span><span class="s2">or </span><span class="s1">realhost == </span><span class="s4">&quot;0.0.0.0&quot;</span><span class="s1">:</span>
+        <span class="s1">realhost = </span><span class="s4">&quot;localhost&quot;</span>
+    <span class="s2">return </span><span class="s1">realhost, realport</span>
+
+
+<span class="s2">def </span><span class="s1">create_io(spec, group, execmodel):</span>
+    <span class="s2">assert not </span><span class="s1">spec.python, </span><span class="s4">&quot;socket: specifying python executables not yet supported&quot;</span>
+    <span class="s1">gateway_id = spec.installvia</span>
+    <span class="s2">if </span><span class="s1">gateway_id:</span>
+        <span class="s1">host, port = start_via(group[gateway_id])</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">host, port = spec.socket.split(</span><span class="s4">&quot;:&quot;</span><span class="s1">)</span>
+        <span class="s1">port = int(port)</span>
+
+    <span class="s1">socket = execmodel.socket</span>
+    <span class="s1">sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)</span>
+    <span class="s1">io = SocketIO(sock, execmodel)</span>
+    <span class="s1">io.remoteaddress = </span><span class="s4">&quot;%s:%d&quot; </span><span class="s1">% (host, port)</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">sock.connect((host, port))</span>
+    <span class="s2">except </span><span class="s1">execmodel.socket.gaierror:</span>
+        <span class="s2">raise </span><span class="s1">HostNotFound(str(sys.exc_info()[</span><span class="s3">1</span><span class="s1">]))</span>
+    <span class="s2">return </span><span class="s1">io</span>
+</pre>
+</body>
+</html>

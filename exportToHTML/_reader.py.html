@@ -1,0 +1,477 @@
+<html>
+<head>
+<title>_reader.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+_reader.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2010-2021 openpyxl</span>
+
+<span class="s0">&quot;&quot;&quot;Reader for a single worksheet.&quot;&quot;&quot;</span>
+<span class="s2">from </span><span class="s1">copy </span><span class="s2">import </span><span class="s1">copy</span>
+<span class="s2">from </span><span class="s1">warnings </span><span class="s2">import </span><span class="s1">warn</span>
+
+<span class="s0"># compatibility imports</span>
+<span class="s2">from </span><span class="s1">openpyxl.xml.functions </span><span class="s2">import </span><span class="s1">iterparse</span>
+
+<span class="s0"># package imports</span>
+<span class="s2">from </span><span class="s1">openpyxl.cell </span><span class="s2">import </span><span class="s1">Cell, MergedCell</span>
+<span class="s2">from </span><span class="s1">openpyxl.cell.text </span><span class="s2">import </span><span class="s1">Text</span>
+<span class="s2">from </span><span class="s1">openpyxl.worksheet.dimensions </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">ColumnDimension,</span>
+    <span class="s1">RowDimension,</span>
+    <span class="s1">SheetFormatProperties,</span>
+<span class="s1">)</span>
+
+<span class="s2">from </span><span class="s1">openpyxl.xml.constants </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">SHEET_MAIN_NS,</span>
+    <span class="s1">EXT_TYPES,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">openpyxl.formatting.formatting </span><span class="s2">import </span><span class="s1">ConditionalFormatting</span>
+<span class="s2">from </span><span class="s1">openpyxl.formula.translate </span><span class="s2">import </span><span class="s1">Translator</span>
+<span class="s2">from </span><span class="s1">openpyxl.utils </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">get_column_letter,</span>
+    <span class="s1">coordinate_to_tuple,</span>
+    <span class="s1">)</span>
+<span class="s2">from </span><span class="s1">openpyxl.utils.datetime </span><span class="s2">import </span><span class="s1">from_excel, from_ISO8601, WINDOWS_EPOCH</span>
+<span class="s2">from </span><span class="s1">openpyxl.descriptors.excel </span><span class="s2">import </span><span class="s1">ExtensionList</span>
+
+<span class="s2">from </span><span class="s1">.filters </span><span class="s2">import </span><span class="s1">AutoFilter</span>
+<span class="s2">from </span><span class="s1">.header_footer </span><span class="s2">import </span><span class="s1">HeaderFooter</span>
+<span class="s2">from </span><span class="s1">.hyperlink </span><span class="s2">import </span><span class="s1">HyperlinkList</span>
+<span class="s2">from </span><span class="s1">.merge </span><span class="s2">import </span><span class="s1">MergeCells</span>
+<span class="s2">from </span><span class="s1">.page </span><span class="s2">import </span><span class="s1">PageMargins, PrintOptions, PrintPageSetup</span>
+<span class="s2">from </span><span class="s1">.pagebreak </span><span class="s2">import </span><span class="s1">RowBreak, ColBreak</span>
+<span class="s2">from </span><span class="s1">.protection </span><span class="s2">import </span><span class="s1">SheetProtection</span>
+<span class="s2">from </span><span class="s1">.scenario </span><span class="s2">import </span><span class="s1">ScenarioList</span>
+<span class="s2">from </span><span class="s1">.views </span><span class="s2">import </span><span class="s1">SheetViewList</span>
+<span class="s2">from </span><span class="s1">.datavalidation </span><span class="s2">import </span><span class="s1">DataValidationList</span>
+<span class="s2">from </span><span class="s1">.table </span><span class="s2">import </span><span class="s1">TablePartList</span>
+<span class="s2">from </span><span class="s1">.properties </span><span class="s2">import </span><span class="s1">WorksheetProperties</span>
+<span class="s2">from </span><span class="s1">.dimensions </span><span class="s2">import </span><span class="s1">SheetDimension</span>
+<span class="s2">from </span><span class="s1">.related </span><span class="s2">import </span><span class="s1">Related</span>
+
+
+<span class="s1">CELL_TAG = </span><span class="s3">'{%s}c' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">VALUE_TAG = </span><span class="s3">'{%s}v' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">FORMULA_TAG = </span><span class="s3">'{%s}f' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">MERGE_TAG = </span><span class="s3">'{%s}mergeCells' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">INLINE_STRING = </span><span class="s3">&quot;{%s}is&quot; </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">COL_TAG = </span><span class="s3">'{%s}col' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">ROW_TAG = </span><span class="s3">'{%s}row' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">CF_TAG = </span><span class="s3">'{%s}conditionalFormatting' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">LEGACY_TAG = </span><span class="s3">'{%s}legacyDrawing' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">PROT_TAG = </span><span class="s3">'{%s}sheetProtection' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">EXT_TAG = </span><span class="s3">&quot;{%s}extLst&quot; </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">HYPERLINK_TAG = </span><span class="s3">&quot;{%s}hyperlinks&quot; </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">TABLE_TAG = </span><span class="s3">&quot;{%s}tableParts&quot; </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">PRINT_TAG = </span><span class="s3">'{%s}printOptions' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">MARGINS_TAG = </span><span class="s3">'{%s}pageMargins' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">PAGE_TAG = </span><span class="s3">'{%s}pageSetup' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">HEADER_TAG = </span><span class="s3">'{%s}headerFooter' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">FILTER_TAG = </span><span class="s3">'{%s}autoFilter' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">VALIDATION_TAG = </span><span class="s3">'{%s}dataValidations' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">PROPERTIES_TAG = </span><span class="s3">'{%s}sheetPr' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">VIEWS_TAG = </span><span class="s3">'{%s}sheetViews' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">FORMAT_TAG = </span><span class="s3">'{%s}sheetFormatPr' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">ROW_BREAK_TAG = </span><span class="s3">'{%s}rowBreaks' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">COL_BREAK_TAG = </span><span class="s3">'{%s}colBreaks' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">SCENARIOS_TAG = </span><span class="s3">'{%s}scenarios' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">DATA_TAG = </span><span class="s3">'{%s}sheetData' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">DIMENSION_TAG = </span><span class="s3">'{%s}dimension' </span><span class="s1">% SHEET_MAIN_NS</span>
+<span class="s1">CUSTOM_VIEWS_TAG = </span><span class="s3">'{%s}customSheetViews' </span><span class="s1">% SHEET_MAIN_NS</span>
+
+
+<span class="s2">def </span><span class="s1">_cast_number(value):</span>
+    <span class="s0">&quot;Convert numbers as string to an int or float&quot;</span>
+    <span class="s2">if </span><span class="s3">&quot;.&quot; </span><span class="s2">in </span><span class="s1">value </span><span class="s2">or </span><span class="s3">&quot;E&quot; </span><span class="s2">in </span><span class="s1">value </span><span class="s2">or </span><span class="s3">&quot;e&quot; </span><span class="s2">in </span><span class="s1">value:</span>
+        <span class="s2">return </span><span class="s1">float(value)</span>
+    <span class="s2">return </span><span class="s1">int(value)</span>
+
+
+<span class="s2">class </span><span class="s1">WorkSheetParser(object):</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, src, shared_strings, data_only=</span><span class="s2">False</span><span class="s1">,</span>
+                 <span class="s1">epoch=WINDOWS_EPOCH, date_formats=set(),</span>
+                 <span class="s1">timedelta_formats=set()):</span>
+        <span class="s1">self.min_row = self.min_col = </span><span class="s2">None</span>
+        <span class="s1">self.epoch = epoch</span>
+        <span class="s1">self.source = src</span>
+        <span class="s1">self.shared_strings = shared_strings</span>
+        <span class="s1">self.data_only = data_only</span>
+        <span class="s1">self.shared_formulae = {}</span>
+        <span class="s1">self.array_formulae = {}</span>
+        <span class="s1">self.row_counter = self.col_counter = </span><span class="s4">0</span>
+        <span class="s1">self.tables = TablePartList()</span>
+        <span class="s1">self.date_formats = date_formats</span>
+        <span class="s1">self.timedelta_formats = timedelta_formats</span>
+        <span class="s1">self.row_dimensions = {}</span>
+        <span class="s1">self.column_dimensions = {}</span>
+        <span class="s1">self.number_formats = []</span>
+        <span class="s1">self.keep_vba = </span><span class="s2">False</span>
+        <span class="s1">self.hyperlinks = HyperlinkList()</span>
+        <span class="s1">self.formatting = []</span>
+        <span class="s1">self.legacy_drawing = </span><span class="s2">None</span>
+        <span class="s1">self.merged_cells = </span><span class="s2">None</span>
+        <span class="s1">self.row_breaks = RowBreak()</span>
+        <span class="s1">self.col_breaks = ColBreak()</span>
+
+
+    <span class="s2">def </span><span class="s1">parse(self):</span>
+        <span class="s1">dispatcher = {</span>
+            <span class="s1">COL_TAG: self.parse_column_dimensions,</span>
+            <span class="s1">PROT_TAG: self.parse_sheet_protection,</span>
+            <span class="s1">EXT_TAG: self.parse_extensions,</span>
+            <span class="s1">CF_TAG: self.parse_formatting,</span>
+            <span class="s1">LEGACY_TAG: self.parse_legacy,</span>
+            <span class="s1">ROW_BREAK_TAG: self.parse_row_breaks,</span>
+            <span class="s1">COL_BREAK_TAG: self.parse_col_breaks,</span>
+            <span class="s1">CUSTOM_VIEWS_TAG: self.parse_custom_views,</span>
+                      <span class="s1">}</span>
+
+        <span class="s1">properties = {</span>
+            <span class="s1">PRINT_TAG: (</span><span class="s3">'print_options'</span><span class="s1">, PrintOptions),</span>
+            <span class="s1">MARGINS_TAG: (</span><span class="s3">'page_margins'</span><span class="s1">, PageMargins),</span>
+            <span class="s1">PAGE_TAG: (</span><span class="s3">'page_setup'</span><span class="s1">, PrintPageSetup),</span>
+            <span class="s1">HEADER_TAG: (</span><span class="s3">'HeaderFooter'</span><span class="s1">, HeaderFooter),</span>
+            <span class="s1">FILTER_TAG: (</span><span class="s3">'auto_filter'</span><span class="s1">, AutoFilter),</span>
+            <span class="s1">VALIDATION_TAG: (</span><span class="s3">'data_validations'</span><span class="s1">, DataValidationList),</span>
+            <span class="s1">PROPERTIES_TAG: (</span><span class="s3">'sheet_properties'</span><span class="s1">, WorksheetProperties),</span>
+            <span class="s1">VIEWS_TAG: (</span><span class="s3">'views'</span><span class="s1">, SheetViewList),</span>
+            <span class="s1">FORMAT_TAG: (</span><span class="s3">'sheet_format'</span><span class="s1">, SheetFormatProperties),</span>
+            <span class="s1">SCENARIOS_TAG: (</span><span class="s3">'scenarios'</span><span class="s1">, ScenarioList),</span>
+            <span class="s1">TABLE_TAG: (</span><span class="s3">'tables'</span><span class="s1">, TablePartList),</span>
+            <span class="s1">HYPERLINK_TAG: (</span><span class="s3">'hyperlinks'</span><span class="s1">, HyperlinkList),</span>
+            <span class="s1">MERGE_TAG: (</span><span class="s3">'merged_cells'</span><span class="s1">, MergeCells),</span>
+
+        <span class="s1">}</span>
+
+        <span class="s1">it = iterparse(self.source) </span><span class="s0"># add a finaliser to close the source when this becomes possible</span>
+
+        <span class="s2">for </span><span class="s1">_, element </span><span class="s2">in </span><span class="s1">it:</span>
+            <span class="s1">tag_name = element.tag</span>
+            <span class="s2">if </span><span class="s1">tag_name </span><span class="s2">in </span><span class="s1">dispatcher:</span>
+                <span class="s1">dispatcher[tag_name](element)</span>
+                <span class="s1">element.clear()</span>
+            <span class="s2">elif </span><span class="s1">tag_name </span><span class="s2">in </span><span class="s1">properties:</span>
+                <span class="s1">prop = properties[tag_name]</span>
+                <span class="s1">obj = prop[</span><span class="s4">1</span><span class="s1">].from_tree(element)</span>
+                <span class="s1">setattr(self, prop[</span><span class="s4">0</span><span class="s1">], obj)</span>
+                <span class="s1">element.clear()</span>
+            <span class="s2">elif </span><span class="s1">tag_name == ROW_TAG:</span>
+                <span class="s1">row = self.parse_row(element)</span>
+                <span class="s1">element.clear()</span>
+                <span class="s2">yield </span><span class="s1">row</span>
+
+
+    <span class="s2">def </span><span class="s1">parse_dimensions(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Get worksheet dimensions if they are provided. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">it = iterparse(self.source)</span>
+
+        <span class="s2">for </span><span class="s1">_event, element </span><span class="s2">in </span><span class="s1">it:</span>
+            <span class="s2">if </span><span class="s1">element.tag == DIMENSION_TAG:</span>
+                <span class="s1">dim = SheetDimension.from_tree(element)</span>
+                <span class="s2">return </span><span class="s1">dim.boundaries</span>
+
+            <span class="s2">elif </span><span class="s1">element.tag == DATA_TAG:</span>
+                <span class="s0"># Dimensions missing</span>
+                <span class="s2">break</span>
+            <span class="s1">element.clear()</span>
+
+
+    <span class="s2">def </span><span class="s1">parse_cell(self, element):</span>
+        <span class="s1">data_type = element.get(</span><span class="s3">'t'</span><span class="s1">, </span><span class="s3">'n'</span><span class="s1">)</span>
+        <span class="s1">coordinate = element.get(</span><span class="s3">'r'</span><span class="s1">)</span>
+        <span class="s1">style_id = element.get(</span><span class="s3">'s'</span><span class="s1">, </span><span class="s4">0</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">style_id:</span>
+            <span class="s1">style_id = int(style_id)</span>
+
+        <span class="s2">if </span><span class="s1">data_type == </span><span class="s3">&quot;inlineStr&quot;</span><span class="s1">:</span>
+            <span class="s1">value = </span><span class="s2">None</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">value = element.findtext(VALUE_TAG, </span><span class="s2">None</span><span class="s1">) </span><span class="s2">or None</span>
+
+        <span class="s2">if </span><span class="s1">coordinate:</span>
+            <span class="s1">row, column = coordinate_to_tuple(coordinate)</span>
+            <span class="s1">self.col_counter = column</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.col_counter += </span><span class="s4">1</span>
+            <span class="s1">row, column = self.row_counter, self.col_counter</span>
+
+        <span class="s2">if not </span><span class="s1">self.data_only </span><span class="s2">and </span><span class="s1">element.find(FORMULA_TAG) </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">data_type = </span><span class="s3">'f'</span>
+            <span class="s1">value = self.parse_formula(element)</span>
+
+        <span class="s2">elif </span><span class="s1">value </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">data_type == </span><span class="s3">'n'</span><span class="s1">:</span>
+                <span class="s1">value = _cast_number(value)</span>
+                <span class="s2">if </span><span class="s1">style_id </span><span class="s2">in </span><span class="s1">self.date_formats:</span>
+                    <span class="s1">data_type = </span><span class="s3">'d'</span>
+                    <span class="s2">try</span><span class="s1">:</span>
+                        <span class="s1">value = from_excel(</span>
+                            <span class="s1">value, self.epoch, timedelta=style_id </span><span class="s2">in </span><span class="s1">self.timedelta_formats</span>
+                        <span class="s1">)</span>
+                    <span class="s2">except </span><span class="s1">ValueError:</span>
+                        <span class="s1">msg = </span><span class="s3">&quot;&quot;&quot;Cell {0} is marked as a date but the serial value {1} is outside the limits for dates. The cell will be treated as an error.&quot;&quot;&quot;</span><span class="s1">.format(coordinate, value)</span>
+                        <span class="s1">warn(msg)</span>
+                        <span class="s1">data_type = </span><span class="s3">&quot;e&quot;</span>
+                        <span class="s1">value = </span><span class="s3">&quot;#VALUE!&quot;</span>
+            <span class="s2">elif </span><span class="s1">data_type == </span><span class="s3">'s'</span><span class="s1">:</span>
+                <span class="s1">value = self.shared_strings[int(value)]</span>
+            <span class="s2">elif </span><span class="s1">data_type == </span><span class="s3">'b'</span><span class="s1">:</span>
+                <span class="s1">value = bool(int(value))</span>
+            <span class="s2">elif </span><span class="s1">data_type == </span><span class="s3">&quot;str&quot;</span><span class="s1">:</span>
+                <span class="s1">data_type = </span><span class="s3">&quot;s&quot;</span>
+            <span class="s2">elif </span><span class="s1">data_type == </span><span class="s3">'d'</span><span class="s1">:</span>
+                <span class="s1">value = from_ISO8601(value)</span>
+
+        <span class="s2">elif </span><span class="s1">data_type == </span><span class="s3">'inlineStr'</span><span class="s1">:</span>
+                <span class="s1">child = element.find(INLINE_STRING)</span>
+                <span class="s2">if </span><span class="s1">child </span><span class="s2">is not None</span><span class="s1">:</span>
+                    <span class="s1">data_type = </span><span class="s3">'s'</span>
+                    <span class="s1">richtext = Text.from_tree(child)</span>
+                    <span class="s1">value = richtext.content</span>
+
+        <span class="s2">return </span><span class="s1">{</span><span class="s3">'row'</span><span class="s1">:row, </span><span class="s3">'column'</span><span class="s1">:column, </span><span class="s3">'value'</span><span class="s1">:value, </span><span class="s3">'data_type'</span><span class="s1">:data_type, </span><span class="s3">'style_id'</span><span class="s1">:style_id}</span>
+
+
+    <span class="s2">def </span><span class="s1">parse_formula(self, element):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        possible formulae types: shared, array, datatable 
+        &quot;&quot;&quot;</span>
+        <span class="s1">formula = element.find(FORMULA_TAG)</span>
+        <span class="s1">formula_type = formula.get(</span><span class="s3">'t'</span><span class="s1">)</span>
+        <span class="s1">coordinate = element.get(</span><span class="s3">'r'</span><span class="s1">)</span>
+        <span class="s1">value = </span><span class="s3">&quot;=&quot;</span>
+        <span class="s2">if </span><span class="s1">formula.text </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">value += formula.text</span>
+
+        <span class="s2">if </span><span class="s1">formula_type == </span><span class="s3">&quot;array&quot;</span><span class="s1">:</span>
+            <span class="s1">self.array_formulae[coordinate] = dict(formula.attrib)</span>
+
+        <span class="s2">elif </span><span class="s1">formula_type == </span><span class="s3">&quot;shared&quot;</span><span class="s1">:</span>
+            <span class="s1">idx = formula.get(</span><span class="s3">'si'</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">idx </span><span class="s2">in </span><span class="s1">self.shared_formulae:</span>
+                <span class="s1">trans = self.shared_formulae[idx]</span>
+                <span class="s1">value = trans.translate_formula(coordinate)</span>
+            <span class="s2">elif </span><span class="s1">value != </span><span class="s3">&quot;=&quot;</span><span class="s1">:</span>
+                <span class="s1">self.shared_formulae[idx] = Translator(value, coordinate)</span>
+
+        <span class="s2">return </span><span class="s1">value</span>
+
+
+    <span class="s2">def </span><span class="s1">parse_column_dimensions(self, col):</span>
+        <span class="s1">attrs = dict(col.attrib)</span>
+        <span class="s1">column = get_column_letter(int(attrs[</span><span class="s3">'min'</span><span class="s1">]))</span>
+        <span class="s1">attrs[</span><span class="s3">'index'</span><span class="s1">] = column</span>
+        <span class="s1">self.column_dimensions[column] = attrs</span>
+
+
+    <span class="s2">def </span><span class="s1">parse_row(self, row):</span>
+        <span class="s1">attrs = dict(row.attrib)</span>
+
+        <span class="s2">if </span><span class="s3">&quot;r&quot; </span><span class="s2">in </span><span class="s1">attrs:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">self.row_counter = int(attrs[</span><span class="s3">'r'</span><span class="s1">])</span>
+            <span class="s2">except </span><span class="s1">ValueError:</span>
+                <span class="s1">val = float(attrs[</span><span class="s3">'r'</span><span class="s1">])</span>
+                <span class="s2">if </span><span class="s1">val.is_integer():</span>
+                    <span class="s1">self.row_counter = int(val)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">attrs[</span><span class="s3">'r'</span><span class="s1">]</span><span class="s5">} </span><span class="s3">is not a valid row number&quot;</span><span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.row_counter += </span><span class="s4">1</span>
+        <span class="s1">self.col_counter = </span><span class="s4">0</span>
+
+        <span class="s1">keys = {k </span><span class="s2">for </span><span class="s1">k </span><span class="s2">in </span><span class="s1">attrs </span><span class="s2">if not </span><span class="s1">k.startswith(</span><span class="s3">'{'</span><span class="s1">)}</span>
+        <span class="s2">if </span><span class="s1">keys - {</span><span class="s3">'r'</span><span class="s1">, </span><span class="s3">'spans'</span><span class="s1">}:</span>
+            <span class="s0"># don't create dimension objects unless they have relevant information</span>
+            <span class="s1">self.row_dimensions[str(self.row_counter)] = attrs</span>
+
+        <span class="s1">cells = [self.parse_cell(el) </span><span class="s2">for </span><span class="s1">el </span><span class="s2">in </span><span class="s1">row]</span>
+        <span class="s2">return </span><span class="s1">self.row_counter, cells</span>
+
+
+    <span class="s2">def </span><span class="s1">parse_formatting(self, element):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">cf = ConditionalFormatting.from_tree(element)</span>
+            <span class="s1">self.formatting.append(cf)</span>
+        <span class="s2">except </span><span class="s1">TypeError </span><span class="s2">as </span><span class="s1">e:</span>
+            <span class="s1">msg = </span><span class="s3">f&quot;Failed to load a conditional formatting rule. It will be discarded. Cause: </span><span class="s5">{</span><span class="s1">e</span><span class="s5">}</span><span class="s3">&quot;</span>
+            <span class="s1">warn(msg)</span>
+
+
+    <span class="s2">def </span><span class="s1">parse_sheet_protection(self, element):</span>
+        <span class="s1">protection = SheetProtection.from_tree(element)</span>
+        <span class="s1">password = element.get(</span><span class="s3">&quot;password&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">password </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">protection.set_password(password, </span><span class="s2">True</span><span class="s1">)</span>
+        <span class="s1">self.protection = protection</span>
+
+
+    <span class="s2">def </span><span class="s1">parse_extensions(self, element):</span>
+        <span class="s1">extLst = ExtensionList.from_tree(element)</span>
+        <span class="s2">for </span><span class="s1">e </span><span class="s2">in </span><span class="s1">extLst.ext:</span>
+            <span class="s1">ext_type = EXT_TYPES.get(e.uri.upper(), </span><span class="s3">&quot;Unknown&quot;</span><span class="s1">)</span>
+            <span class="s1">msg = </span><span class="s3">&quot;{0} extension is not supported and will be removed&quot;</span><span class="s1">.format(ext_type)</span>
+            <span class="s1">warn(msg)</span>
+
+
+    <span class="s2">def </span><span class="s1">parse_legacy(self, element):</span>
+        <span class="s1">obj = Related.from_tree(element)</span>
+        <span class="s1">self.legacy_drawing = obj.id</span>
+
+
+    <span class="s2">def </span><span class="s1">parse_row_breaks(self, element):</span>
+        <span class="s1">brk = RowBreak.from_tree(element)</span>
+        <span class="s1">self.row_breaks = brk</span>
+
+
+    <span class="s2">def </span><span class="s1">parse_col_breaks(self, element):</span>
+        <span class="s1">brk = ColBreak.from_tree(element)</span>
+        <span class="s1">self.col_breaks = brk</span>
+
+
+    <span class="s2">def </span><span class="s1">parse_custom_views(self, element):</span>
+        <span class="s0"># clear page_breaks to avoid duplication which Excel doesn't like</span>
+        <span class="s0"># basically they're ignored in custom views</span>
+        <span class="s1">self.row_breaks = RowBreak()</span>
+        <span class="s1">self.col_breaks = ColBreak()</span>
+
+
+<span class="s2">class </span><span class="s1">WorksheetReader(object):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Create a parser and apply it to a workbook 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, ws, xml_source, shared_strings, data_only):</span>
+        <span class="s1">self.ws = ws</span>
+        <span class="s1">self.parser = WorkSheetParser(xml_source, shared_strings,</span>
+                <span class="s1">data_only, ws.parent.epoch, ws.parent._date_formats,</span>
+                <span class="s1">ws.parent._timedelta_formats)</span>
+        <span class="s1">self.tables = []</span>
+
+
+    <span class="s2">def </span><span class="s1">bind_cells(self):</span>
+        <span class="s2">for </span><span class="s1">idx, row </span><span class="s2">in </span><span class="s1">self.parser.parse():</span>
+            <span class="s2">for </span><span class="s1">cell </span><span class="s2">in </span><span class="s1">row:</span>
+                <span class="s1">style = self.ws.parent._cell_styles[cell[</span><span class="s3">'style_id'</span><span class="s1">]]</span>
+                <span class="s1">c = Cell(self.ws, row=cell[</span><span class="s3">'row'</span><span class="s1">], column=cell[</span><span class="s3">'column'</span><span class="s1">], style_array=style)</span>
+                <span class="s1">c._value = cell[</span><span class="s3">'value'</span><span class="s1">]</span>
+                <span class="s1">c.data_type = cell[</span><span class="s3">'data_type'</span><span class="s1">]</span>
+                <span class="s1">self.ws._cells[(cell[</span><span class="s3">'row'</span><span class="s1">], cell[</span><span class="s3">'column'</span><span class="s1">])] = c</span>
+        <span class="s1">self.ws.formula_attributes = self.parser.array_formulae</span>
+        <span class="s2">if </span><span class="s1">self.ws._cells:</span>
+            <span class="s1">self.ws._current_row = self.ws.max_row </span><span class="s0"># use cells not row dimensions</span>
+
+
+    <span class="s2">def </span><span class="s1">bind_formatting(self):</span>
+        <span class="s2">for </span><span class="s1">cf </span><span class="s2">in </span><span class="s1">self.parser.formatting:</span>
+            <span class="s2">for </span><span class="s1">rule </span><span class="s2">in </span><span class="s1">cf.rules:</span>
+                <span class="s2">if </span><span class="s1">rule.dxfId </span><span class="s2">is not None</span><span class="s1">:</span>
+                    <span class="s1">rule.dxf = self.ws.parent._differential_styles[rule.dxfId]</span>
+                <span class="s1">self.ws.conditional_formatting[cf] = rule</span>
+
+
+    <span class="s2">def </span><span class="s1">bind_tables(self):</span>
+        <span class="s2">for </span><span class="s1">t </span><span class="s2">in </span><span class="s1">self.parser.tables.tablePart:</span>
+            <span class="s1">rel = self.ws._rels[t.id]</span>
+            <span class="s1">self.tables.append(rel.Target)</span>
+
+
+    <span class="s2">def </span><span class="s1">bind_merged_cells(self):</span>
+        <span class="s2">from </span><span class="s1">openpyxl.worksheet.cell_range </span><span class="s2">import </span><span class="s1">MultiCellRange</span>
+        <span class="s2">from </span><span class="s1">openpyxl.worksheet.merge </span><span class="s2">import </span><span class="s1">MergedCellRange</span>
+        <span class="s2">if not </span><span class="s1">self.parser.merged_cells:</span>
+            <span class="s2">return</span>
+
+        <span class="s1">ranges = []</span>
+        <span class="s2">for </span><span class="s1">cr </span><span class="s2">in </span><span class="s1">self.parser.merged_cells.mergeCell:</span>
+            <span class="s1">mcr = MergedCellRange(self.ws, cr.ref)</span>
+            <span class="s1">self.ws._clean_merge_range(mcr)</span>
+            <span class="s1">ranges.append(mcr)</span>
+        <span class="s1">self.ws.merged_cells = MultiCellRange(ranges)</span>
+
+
+    <span class="s2">def </span><span class="s1">bind_hyperlinks(self):</span>
+        <span class="s2">for </span><span class="s1">link </span><span class="s2">in </span><span class="s1">self.parser.hyperlinks.hyperlink:</span>
+            <span class="s2">if </span><span class="s1">link.id:</span>
+                <span class="s1">rel = self.ws._rels[link.id]</span>
+                <span class="s1">link.target = rel.Target</span>
+            <span class="s2">if </span><span class="s3">&quot;:&quot; </span><span class="s2">in </span><span class="s1">link.ref:</span>
+                <span class="s0"># range of cells</span>
+                <span class="s2">for </span><span class="s1">row </span><span class="s2">in </span><span class="s1">self.ws[link.ref]:</span>
+                    <span class="s2">for </span><span class="s1">cell </span><span class="s2">in </span><span class="s1">row:</span>
+                        <span class="s2">try</span><span class="s1">:</span>
+                            <span class="s1">cell.hyperlink = copy(link)</span>
+                        <span class="s2">except </span><span class="s1">AttributeError:</span>
+                            <span class="s2">pass</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">cell = self.ws[link.ref]</span>
+                <span class="s2">if </span><span class="s1">isinstance(cell, MergedCell):</span>
+                    <span class="s1">cell = self.normalize_merged_cell_link(cell.coordinate)</span>
+                <span class="s1">cell.hyperlink = link</span>
+
+    <span class="s2">def </span><span class="s1">normalize_merged_cell_link(self, coord):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Returns the appropriate cell to which a hyperlink, which references a merged cell at the specified coordinates, 
+        should be bound. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">rng </span><span class="s2">in </span><span class="s1">self.ws.merged_cells:</span>
+            <span class="s2">if </span><span class="s1">coord </span><span class="s2">in </span><span class="s1">rng:</span>
+                <span class="s2">return </span><span class="s1">self.ws.cell(*rng.top[</span><span class="s4">0</span><span class="s1">])</span>
+
+    <span class="s2">def </span><span class="s1">bind_col_dimensions(self):</span>
+        <span class="s2">for </span><span class="s1">col, cd </span><span class="s2">in </span><span class="s1">self.parser.column_dimensions.items():</span>
+            <span class="s2">if </span><span class="s3">'style' </span><span class="s2">in </span><span class="s1">cd:</span>
+                <span class="s1">key = int(cd[</span><span class="s3">'style'</span><span class="s1">])</span>
+                <span class="s1">cd[</span><span class="s3">'style'</span><span class="s1">] = self.ws.parent._cell_styles[key]</span>
+            <span class="s1">self.ws.column_dimensions[col] = ColumnDimension(self.ws, **cd)</span>
+
+
+    <span class="s2">def </span><span class="s1">bind_row_dimensions(self):</span>
+        <span class="s2">for </span><span class="s1">row, rd </span><span class="s2">in </span><span class="s1">self.parser.row_dimensions.items():</span>
+            <span class="s2">if </span><span class="s3">'s' </span><span class="s2">in </span><span class="s1">rd:</span>
+                <span class="s1">key = int(rd[</span><span class="s3">'s'</span><span class="s1">])</span>
+                <span class="s1">rd[</span><span class="s3">'s'</span><span class="s1">] = self.ws.parent._cell_styles[key]</span>
+            <span class="s1">self.ws.row_dimensions[int(row)] = RowDimension(self.ws, **rd)</span>
+
+
+    <span class="s2">def </span><span class="s1">bind_properties(self):</span>
+        <span class="s2">for </span><span class="s1">k </span><span class="s2">in </span><span class="s1">(</span><span class="s3">'print_options'</span><span class="s1">, </span><span class="s3">'page_margins'</span><span class="s1">, </span><span class="s3">'page_setup'</span><span class="s1">,</span>
+                  <span class="s3">'HeaderFooter'</span><span class="s1">, </span><span class="s3">'auto_filter'</span><span class="s1">, </span><span class="s3">'data_validations'</span><span class="s1">,</span>
+                  <span class="s3">'sheet_properties'</span><span class="s1">, </span><span class="s3">'views'</span><span class="s1">, </span><span class="s3">'sheet_format'</span><span class="s1">,</span>
+                  <span class="s3">'row_breaks'</span><span class="s1">, </span><span class="s3">'col_breaks'</span><span class="s1">, </span><span class="s3">'scenarios'</span><span class="s1">, </span><span class="s3">'legacy_drawing'</span><span class="s1">,</span>
+                  <span class="s3">'protection'</span><span class="s1">,</span>
+                  <span class="s1">):</span>
+            <span class="s1">v = getattr(self.parser, k, </span><span class="s2">None</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">v </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s1">setattr(self.ws, k, v)</span>
+
+
+    <span class="s2">def </span><span class="s1">bind_all(self):</span>
+        <span class="s1">self.bind_cells()</span>
+        <span class="s1">self.bind_merged_cells()</span>
+        <span class="s1">self.bind_hyperlinks()</span>
+        <span class="s1">self.bind_formatting()</span>
+        <span class="s1">self.bind_col_dimensions()</span>
+        <span class="s1">self.bind_row_dimensions()</span>
+        <span class="s1">self.bind_tables()</span>
+        <span class="s1">self.bind_properties()</span>
+</pre>
+</body>
+</html>

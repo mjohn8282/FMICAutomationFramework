@@ -1,0 +1,181 @@
+<html>
+<head>
+<title>_write_only.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+_write_only.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2010-2021 openpyxl</span>
+
+
+<span class="s0">&quot;&quot;&quot;Write worksheets to xml representations in an optimized way&quot;&quot;&quot;</span>
+
+<span class="s2">from </span><span class="s1">inspect </span><span class="s2">import </span><span class="s1">isgenerator</span>
+
+<span class="s2">from </span><span class="s1">openpyxl.cell </span><span class="s2">import </span><span class="s1">Cell, WriteOnlyCell</span>
+<span class="s2">from </span><span class="s1">openpyxl.workbook.child </span><span class="s2">import </span><span class="s1">_WorkbookChild</span>
+<span class="s2">from </span><span class="s1">.worksheet </span><span class="s2">import </span><span class="s1">Worksheet</span>
+<span class="s2">from </span><span class="s1">openpyxl.utils.exceptions </span><span class="s2">import </span><span class="s1">WorkbookAlreadySaved</span>
+
+<span class="s2">from </span><span class="s1">._writer </span><span class="s2">import </span><span class="s1">WorksheetWriter</span>
+
+
+<span class="s2">class </span><span class="s1">WriteOnlyWorksheet(_WorkbookChild):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Streaming worksheet. Optimised to reduce memory by writing rows just in 
+    time. 
+    Cells can be styled and have comments Styles for rows and columns 
+    must be applied before writing cells 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__saved = </span><span class="s2">False</span>
+    <span class="s1">_writer = </span><span class="s2">None</span>
+    <span class="s1">_rows = </span><span class="s2">None</span>
+    <span class="s1">_rel_type = Worksheet._rel_type</span>
+    <span class="s1">_path = Worksheet._path</span>
+    <span class="s1">mime_type = Worksheet.mime_type</span>
+
+    <span class="s0"># copy methods from Standard worksheet</span>
+    <span class="s1">_add_row = Worksheet._add_row</span>
+    <span class="s1">_add_column = Worksheet._add_column</span>
+    <span class="s1">add_chart = Worksheet.add_chart</span>
+    <span class="s1">add_image = Worksheet.add_image</span>
+    <span class="s1">add_table = Worksheet.add_table</span>
+    <span class="s1">tables = Worksheet.tables</span>
+    <span class="s1">print_titles = Worksheet.print_titles</span>
+    <span class="s1">print_title_cols = Worksheet.print_title_cols</span>
+    <span class="s1">print_title_rows = Worksheet.print_title_rows</span>
+    <span class="s1">freeze_panes = Worksheet.freeze_panes</span>
+    <span class="s1">print_area = Worksheet.print_area</span>
+    <span class="s1">sheet_view = Worksheet.sheet_view</span>
+    <span class="s1">_setup = Worksheet._setup</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, parent, title):</span>
+        <span class="s1">super(WriteOnlyWorksheet, self).__init__(parent, title)</span>
+        <span class="s1">self._max_col = </span><span class="s3">0</span>
+        <span class="s1">self._max_row = </span><span class="s3">0</span>
+        <span class="s1">self._setup()</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">closed(self):</span>
+        <span class="s2">return </span><span class="s1">self.__saved</span>
+
+
+    <span class="s2">def </span><span class="s1">_write_rows(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Send rows to the writer's stream 
+        &quot;&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">xf = self._writer.xf.send(</span><span class="s2">True</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">StopIteration:</span>
+            <span class="s1">self._already_saved()</span>
+
+        <span class="s2">with </span><span class="s1">xf.element(</span><span class="s4">&quot;sheetData&quot;</span><span class="s1">):</span>
+            <span class="s1">row_idx = </span><span class="s3">1</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s2">while True</span><span class="s1">:</span>
+                    <span class="s1">row = (</span><span class="s2">yield</span><span class="s1">)</span>
+                    <span class="s1">row = self._values_to_row(row, row_idx)</span>
+                    <span class="s1">self._writer.write_row(xf, row, row_idx)</span>
+                    <span class="s1">row_idx += </span><span class="s3">1</span>
+            <span class="s2">except </span><span class="s1">GeneratorExit:</span>
+                <span class="s2">pass</span>
+
+        <span class="s1">self._writer.xf.send(</span><span class="s2">None</span><span class="s1">)</span>
+
+
+    <span class="s2">def </span><span class="s1">_get_writer(self):</span>
+        <span class="s2">if </span><span class="s1">self._writer </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">self._writer = WorksheetWriter(self)</span>
+            <span class="s1">self._writer.write_top()</span>
+
+
+    <span class="s2">def </span><span class="s1">close(self):</span>
+        <span class="s2">if </span><span class="s1">self.__saved:</span>
+            <span class="s1">self._already_saved()</span>
+
+        <span class="s1">self._get_writer()</span>
+
+        <span class="s2">if </span><span class="s1">self._rows </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">self._writer.write_rows()</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self._rows.close()</span>
+
+        <span class="s1">self._writer.write_tail()</span>
+
+        <span class="s1">self._writer.close()</span>
+        <span class="s1">self.__saved = </span><span class="s2">True</span>
+
+
+    <span class="s2">def </span><span class="s1">append(self, row):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        :param row: iterable containing values to append 
+        :type row: iterable 
+        &quot;&quot;&quot;</span>
+
+        <span class="s2">if </span><span class="s1">(</span><span class="s2">not </span><span class="s1">isgenerator(row) </span><span class="s2">and</span>
+            <span class="s2">not </span><span class="s1">isinstance(row, (list, tuple, range))</span>
+            <span class="s1">):</span>
+            <span class="s1">self._invalid_row(row)</span>
+
+        <span class="s1">self._get_writer()</span>
+
+        <span class="s2">if </span><span class="s1">self._rows </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">self._rows = self._write_rows()</span>
+            <span class="s1">next(self._rows)</span>
+
+        <span class="s1">self._rows.send(row)</span>
+
+
+    <span class="s2">def </span><span class="s1">_values_to_row(self, values, row_idx):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Convert whatever has been appended into a form suitable for work_rows 
+        &quot;&quot;&quot;</span>
+        <span class="s1">cell = WriteOnlyCell(self)</span>
+
+        <span class="s2">for </span><span class="s1">col_idx, value </span><span class="s2">in </span><span class="s1">enumerate(values, </span><span class="s3">1</span><span class="s1">):</span>
+            <span class="s2">if </span><span class="s1">value </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s2">continue</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">cell.value = value</span>
+            <span class="s2">except </span><span class="s1">ValueError:</span>
+                <span class="s2">if </span><span class="s1">isinstance(value, Cell):</span>
+                    <span class="s1">cell = value</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s2">raise </span><span class="s1">ValueError</span>
+
+            <span class="s1">cell.column = col_idx</span>
+            <span class="s1">cell.row = row_idx</span>
+
+            <span class="s2">if </span><span class="s1">cell.hyperlink </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s1">cell.hyperlink.ref = cell.coordinate</span>
+
+            <span class="s2">yield </span><span class="s1">cell</span>
+
+            <span class="s0"># reset cell if style applied</span>
+            <span class="s2">if </span><span class="s1">cell.has_style </span><span class="s2">or </span><span class="s1">cell.hyperlink:</span>
+                <span class="s1">cell = WriteOnlyCell(self)</span>
+
+
+    <span class="s2">def </span><span class="s1">_already_saved(self):</span>
+        <span class="s2">raise </span><span class="s1">WorkbookAlreadySaved(</span><span class="s4">'Workbook has already been saved and cannot be modified or saved anymore.'</span><span class="s1">)</span>
+
+
+    <span class="s2">def </span><span class="s1">_invalid_row(self, iterable):</span>
+        <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s4">'Value must be a list, tuple, range or a generator Supplied value is {0}'</span><span class="s1">.format(</span>
+            <span class="s1">type(iterable))</span>
+                        <span class="s1">)</span>
+</pre>
+</body>
+</html>

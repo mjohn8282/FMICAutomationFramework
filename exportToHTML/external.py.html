@@ -1,0 +1,213 @@
+<html>
+<head>
+<title>external.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+external.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">unicode</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">NoneSet,</span>
+    <span class="s1">Sequence,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">Relation, ExtensionList</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">NestedText</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.sequence </span><span class="s0">import </span><span class="s1">NestedSequence, ValueSequence</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.packaging.relationship </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Relationship,</span>
+    <span class="s1">get_rels_path,</span>
+    <span class="s1">get_dependents</span>
+    <span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">SHEET_MAIN_NS</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s0">import </span><span class="s1">fromstring</span>
+
+
+<span class="s3">&quot;&quot;&quot;Manage links to external Workbooks&quot;&quot;&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">ExternalCell(Serialisable):</span>
+
+    <span class="s1">r = String()</span>
+    <span class="s1">t = NoneSet(values=([</span><span class="s3">'b'</span><span class="s1">, </span><span class="s3">'d'</span><span class="s1">, </span><span class="s3">'n'</span><span class="s1">, </span><span class="s3">'e'</span><span class="s1">, </span><span class="s3">'s'</span><span class="s1">, </span><span class="s3">'str'</span><span class="s1">, </span><span class="s3">'inlineStr'</span><span class="s1">]))</span>
+    <span class="s1">vm = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">v = NestedText(allow_none=</span><span class="s0">True</span><span class="s1">, expected_type=unicode)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">r=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">t=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">vm=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">v=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.r = r</span>
+        <span class="s1">self.t = t</span>
+        <span class="s1">self.vm = vm</span>
+        <span class="s1">self.v = v</span>
+
+
+<span class="s0">class </span><span class="s1">ExternalRow(Serialisable):</span>
+
+    <span class="s1">r = Integer()</span>
+    <span class="s1">cell = Sequence(expected_type=ExternalCell)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'cell'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">r=(),</span>
+                 <span class="s1">cell=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.r = r</span>
+        <span class="s1">self.cell = cell</span>
+
+
+<span class="s0">class </span><span class="s1">ExternalSheetData(Serialisable):</span>
+
+    <span class="s1">sheetId = Integer()</span>
+    <span class="s1">refreshError = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">row = Sequence(expected_type=ExternalRow)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'row'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">sheetId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">refreshError=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">row=(),</span>
+                <span class="s1">):</span>
+        <span class="s1">self.sheetId = sheetId</span>
+        <span class="s1">self.refreshError = refreshError</span>
+        <span class="s1">self.row = row</span>
+
+
+<span class="s0">class </span><span class="s1">ExternalSheetDataSet(Serialisable):</span>
+
+    <span class="s1">sheetData = Sequence(expected_type=ExternalSheetData, )</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'sheetData'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">sheetData=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.sheetData = sheetData</span>
+
+
+<span class="s0">class </span><span class="s1">ExternalSheetNames(Serialisable):</span>
+
+    <span class="s1">sheetName = ValueSequence(expected_type=unicode)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'sheetName'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">sheetName=(),</span>
+                <span class="s1">):</span>
+        <span class="s1">self.sheetName = sheetName</span>
+
+
+<span class="s0">class </span><span class="s1">ExternalDefinedName(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;definedName&quot;</span>
+
+    <span class="s1">name = String()</span>
+    <span class="s1">refersTo = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">sheetId = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">name=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">refersTo=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sheetId=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.refersTo = refersTo</span>
+        <span class="s1">self.sheetId = sheetId</span>
+
+
+<span class="s0">class </span><span class="s1">ExternalBook(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;externalBook&quot;</span>
+
+    <span class="s1">sheetNames = Typed(expected_type=ExternalSheetNames, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">definedNames = NestedSequence(expected_type=ExternalDefinedName)</span>
+    <span class="s1">sheetDataSet = Typed(expected_type=ExternalSheetDataSet, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">id = Relation()</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'sheetNames'</span><span class="s1">, </span><span class="s3">'definedNames'</span><span class="s1">, </span><span class="s3">'sheetDataSet'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">sheetNames=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">definedNames=(),</span>
+                 <span class="s1">sheetDataSet=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">id=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.sheetNames = sheetNames</span>
+        <span class="s1">self.definedNames = definedNames</span>
+        <span class="s1">self.sheetDataSet = sheetDataSet</span>
+        <span class="s1">self.id = id</span>
+
+
+<span class="s0">class </span><span class="s1">ExternalLink(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;externalLink&quot;</span>
+
+    <span class="s1">_id = </span><span class="s0">None</span>
+    <span class="s1">_path = </span><span class="s3">&quot;/xl/externalLinks/externalLink{0}.xml&quot;</span>
+    <span class="s1">_rel_type = </span><span class="s3">&quot;externalLink&quot;</span>
+    <span class="s1">mime_type = </span><span class="s3">&quot;application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml&quot;</span>
+
+    <span class="s1">externalBook = Typed(expected_type=ExternalBook, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">file_link = Typed(expected_type=Relationship, allow_none=</span><span class="s0">True</span><span class="s1">) </span><span class="s2"># link to external file</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'externalBook'</span><span class="s1">, )</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">externalBook=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">ddeLink=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">oleLink=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.externalBook = externalBook</span>
+        <span class="s2"># ignore other items for the moment.</span>
+
+
+    <span class="s0">def </span><span class="s1">to_tree(self):</span>
+        <span class="s1">node = super(ExternalLink, self).to_tree()</span>
+        <span class="s1">node.set(</span><span class="s3">&quot;xmlns&quot;</span><span class="s1">, SHEET_MAIN_NS)</span>
+        <span class="s0">return </span><span class="s1">node</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">path(self):</span>
+        <span class="s0">return </span><span class="s1">self._path.format(self._id)</span>
+
+
+<span class="s0">def </span><span class="s1">read_external_link(archive, book_path):</span>
+    <span class="s1">src = archive.read(book_path)</span>
+    <span class="s1">node = fromstring(src)</span>
+    <span class="s1">book = ExternalLink.from_tree(node)</span>
+
+    <span class="s1">link_path = get_rels_path(book_path)</span>
+    <span class="s1">deps = get_dependents(archive, link_path)</span>
+    <span class="s1">book.file_link = deps.Relationship[</span><span class="s4">0</span><span class="s1">]</span>
+
+    <span class="s0">return </span><span class="s1">book</span>
+</pre>
+</body>
+</html>

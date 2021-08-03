@@ -1,0 +1,198 @@
+<html>
+<head>
+<title>nodes.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+nodes.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2006-2011, 2013 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2010 Daniel Harding &lt;dharding@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Google, Inc.</span>
+<span class="s0"># Copyright (c) 2015-2016 Ceridwen &lt;ceridwenv@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Jared Garst &lt;jgarst@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Ashley Whetter &lt;ashley@awhetter.co.uk&gt;</span>
+<span class="s0"># Copyright (c) 2017 rr- &lt;rr-@sakuya.pl&gt;</span>
+<span class="s0"># Copyright (c) 2018 Bryce Guinta &lt;bryce.paul.guinta@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;Every available node class. 
+ 
+.. seealso:: 
+    :doc:`ast documentation &lt;green_tree_snakes:nodes&gt;` 
+ 
+All nodes inherit from :class:`~astroid.node_classes.NodeNG`. 
+&quot;&quot;&quot;</span>
+<span class="s0"># pylint: disable=redefined-builtin</span>
+
+<span class="s0"># Nodes not present in the builtin ast module:  DictUnpack, Unknown, and EvaluatedObject.</span>
+<span class="s2">from </span><span class="s1">astroid.node_classes </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">AnnAssign,</span>
+    <span class="s1">Arguments,</span>
+    <span class="s1">Assert,</span>
+    <span class="s1">Assign,</span>
+    <span class="s1">AssignAttr,</span>
+    <span class="s1">AssignName,</span>
+    <span class="s1">AsyncFor,</span>
+    <span class="s1">AsyncWith,</span>
+    <span class="s1">Attribute,</span>
+    <span class="s1">AugAssign,</span>
+    <span class="s1">Await,</span>
+    <span class="s1">BinOp,</span>
+    <span class="s1">BoolOp,</span>
+    <span class="s1">Break,</span>
+    <span class="s1">Call,</span>
+    <span class="s1">Compare,</span>
+    <span class="s1">Comprehension,</span>
+    <span class="s1">Const,</span>
+    <span class="s1">Continue,</span>
+    <span class="s1">Decorators,</span>
+    <span class="s1">DelAttr,</span>
+    <span class="s1">Delete,</span>
+    <span class="s1">DelName,</span>
+    <span class="s1">Dict,</span>
+    <span class="s1">DictUnpack,</span>
+    <span class="s1">Ellipsis,</span>
+    <span class="s1">EmptyNode,</span>
+    <span class="s1">EvaluatedObject,</span>
+    <span class="s1">ExceptHandler,</span>
+    <span class="s1">Exec,</span>
+    <span class="s1">Expr,</span>
+    <span class="s1">ExtSlice,</span>
+    <span class="s1">For,</span>
+    <span class="s1">FormattedValue,</span>
+    <span class="s1">Global,</span>
+    <span class="s1">If,</span>
+    <span class="s1">IfExp,</span>
+    <span class="s1">Import,</span>
+    <span class="s1">ImportFrom,</span>
+    <span class="s1">Index,</span>
+    <span class="s1">JoinedStr,</span>
+    <span class="s1">Keyword,</span>
+    <span class="s1">List,</span>
+    <span class="s1">Name,</span>
+    <span class="s1">NamedExpr,</span>
+    <span class="s1">Nonlocal,</span>
+    <span class="s1">Pass,</span>
+    <span class="s1">Print,</span>
+    <span class="s1">Raise,</span>
+    <span class="s1">Repr,</span>
+    <span class="s1">Return,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">Slice,</span>
+    <span class="s1">Starred,</span>
+    <span class="s1">Subscript,</span>
+    <span class="s1">TryExcept,</span>
+    <span class="s1">TryFinally,</span>
+    <span class="s1">Tuple,</span>
+    <span class="s1">UnaryOp,</span>
+    <span class="s1">Unknown,</span>
+    <span class="s1">While,</span>
+    <span class="s1">With,</span>
+    <span class="s1">Yield,</span>
+    <span class="s1">YieldFrom,</span>
+    <span class="s1">const_factory,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">astroid.scoped_nodes </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">AsyncFunctionDef,</span>
+    <span class="s1">ClassDef,</span>
+    <span class="s1">DictComp,</span>
+    <span class="s1">FunctionDef,</span>
+    <span class="s1">GeneratorExp,</span>
+    <span class="s1">Lambda,</span>
+    <span class="s1">ListComp,</span>
+    <span class="s1">Module,</span>
+    <span class="s1">SetComp,</span>
+<span class="s1">)</span>
+
+<span class="s1">ALL_NODE_CLASSES = (</span>
+    <span class="s1">AsyncFunctionDef,</span>
+    <span class="s1">AsyncFor,</span>
+    <span class="s1">AsyncWith,</span>
+    <span class="s1">Await,</span>
+    <span class="s1">Arguments,</span>
+    <span class="s1">AssignAttr,</span>
+    <span class="s1">Assert,</span>
+    <span class="s1">Assign,</span>
+    <span class="s1">AnnAssign,</span>
+    <span class="s1">AssignName,</span>
+    <span class="s1">AugAssign,</span>
+    <span class="s1">Repr,</span>
+    <span class="s1">BinOp,</span>
+    <span class="s1">BoolOp,</span>
+    <span class="s1">Break,</span>
+    <span class="s1">Call,</span>
+    <span class="s1">ClassDef,</span>
+    <span class="s1">Compare,</span>
+    <span class="s1">Comprehension,</span>
+    <span class="s1">Const,</span>
+    <span class="s1">const_factory,</span>
+    <span class="s1">Continue,</span>
+    <span class="s1">Decorators,</span>
+    <span class="s1">DelAttr,</span>
+    <span class="s1">DelName,</span>
+    <span class="s1">Delete,</span>
+    <span class="s1">Dict,</span>
+    <span class="s1">DictComp,</span>
+    <span class="s1">DictUnpack,</span>
+    <span class="s1">Expr,</span>
+    <span class="s1">Ellipsis,</span>
+    <span class="s1">EmptyNode,</span>
+    <span class="s1">EvaluatedObject,</span>
+    <span class="s1">ExceptHandler,</span>
+    <span class="s1">Exec,</span>
+    <span class="s1">ExtSlice,</span>
+    <span class="s1">For,</span>
+    <span class="s1">ImportFrom,</span>
+    <span class="s1">FunctionDef,</span>
+    <span class="s1">Attribute,</span>
+    <span class="s1">GeneratorExp,</span>
+    <span class="s1">Global,</span>
+    <span class="s1">If,</span>
+    <span class="s1">IfExp,</span>
+    <span class="s1">Import,</span>
+    <span class="s1">Index,</span>
+    <span class="s1">Keyword,</span>
+    <span class="s1">Lambda,</span>
+    <span class="s1">List,</span>
+    <span class="s1">ListComp,</span>
+    <span class="s1">Name,</span>
+    <span class="s1">NamedExpr,</span>
+    <span class="s1">Nonlocal,</span>
+    <span class="s1">Module,</span>
+    <span class="s1">Pass,</span>
+    <span class="s1">Print,</span>
+    <span class="s1">Raise,</span>
+    <span class="s1">Return,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">SetComp,</span>
+    <span class="s1">Slice,</span>
+    <span class="s1">Starred,</span>
+    <span class="s1">Subscript,</span>
+    <span class="s1">TryExcept,</span>
+    <span class="s1">TryFinally,</span>
+    <span class="s1">Tuple,</span>
+    <span class="s1">UnaryOp,</span>
+    <span class="s1">Unknown,</span>
+    <span class="s1">While,</span>
+    <span class="s1">With,</span>
+    <span class="s1">Yield,</span>
+    <span class="s1">YieldFrom,</span>
+    <span class="s1">FormattedValue,</span>
+    <span class="s1">JoinedStr,</span>
+<span class="s1">)</span>
+</pre>
+</body>
+</html>

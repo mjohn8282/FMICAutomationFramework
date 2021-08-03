@@ -1,0 +1,289 @@
+<html>
+<head>
+<title>chartspace.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+chartspace.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s3">&quot;&quot;&quot; 
+Enclosing chart object. The various chart types are actually child objects. 
+Will probably need to call this indirectly 
+&quot;&quot;&quot;</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">unicode</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">Float,</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">MinMax,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">NoneSet,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Alias,</span>
+    <span class="s1">Sequence,</span>
+    <span class="s1">Typed,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Percentage,</span>
+    <span class="s1">ExtensionList,</span>
+    <span class="s1">Relation</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">NestedBool,</span>
+    <span class="s1">NestedNoneSet,</span>
+    <span class="s1">NestedInteger,</span>
+    <span class="s1">NestedString,</span>
+    <span class="s1">NestedMinMax,</span>
+    <span class="s1">NestedText,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">CHART_NS</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.drawing.colors </span><span class="s0">import </span><span class="s1">ColorMapping</span>
+<span class="s0">from </span><span class="s1">.text </span><span class="s0">import </span><span class="s1">Text, RichText</span>
+<span class="s0">from </span><span class="s1">.shapes </span><span class="s0">import </span><span class="s1">GraphicalProperties</span>
+<span class="s0">from </span><span class="s1">.legend </span><span class="s0">import </span><span class="s1">Legend</span>
+<span class="s0">from </span><span class="s1">.marker </span><span class="s0">import </span><span class="s1">PictureOptions, Marker</span>
+<span class="s0">from </span><span class="s1">.label </span><span class="s0">import </span><span class="s1">DataLabel</span>
+<span class="s0">from </span><span class="s1">._3d </span><span class="s0">import </span><span class="s1">_3DBase, View3D</span>
+<span class="s0">from </span><span class="s1">.plotarea </span><span class="s0">import </span><span class="s1">PlotArea</span>
+<span class="s0">from </span><span class="s1">.title </span><span class="s0">import </span><span class="s1">Title</span>
+<span class="s0">from </span><span class="s1">.print_settings </span><span class="s0">import </span><span class="s1">PrintSettings</span>
+
+
+<span class="s0">class </span><span class="s1">PivotFormat(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;pivotFmt&quot;</span>
+
+    <span class="s1">idx = NestedInteger(nested=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">spPr = Typed(expected_type=GraphicalProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">graphicalProperties = Alias(</span><span class="s3">&quot;spPr&quot;</span><span class="s1">)</span>
+    <span class="s1">txPr = Typed(expected_type=RichText, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">TextBody = Alias(</span><span class="s3">&quot;txPr&quot;</span><span class="s1">)</span>
+    <span class="s1">marker = Typed(expected_type=Marker, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">dLbl = Typed(expected_type=DataLabel, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">DataLabel = Alias(</span><span class="s3">&quot;dLbl&quot;</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'idx'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">, </span><span class="s3">'txPr'</span><span class="s1">, </span><span class="s3">'marker'</span><span class="s1">, </span><span class="s3">'dLbl'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">idx=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">spPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">txPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">marker=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dLbl=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.idx = idx</span>
+        <span class="s1">self.spPr = spPr</span>
+        <span class="s1">self.txPr = txPr</span>
+        <span class="s1">self.marker = marker</span>
+        <span class="s1">self.dLbl = dLbl</span>
+
+
+<span class="s0">class </span><span class="s1">PivotFormatList(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;pivotFmts&quot;</span>
+
+    <span class="s1">pivotFmt = Sequence(expected_type=PivotFormat, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'pivotFmt'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">pivotFmt=(),</span>
+                <span class="s1">):</span>
+        <span class="s1">self.pivotFmt = pivotFmt</span>
+
+
+<span class="s0">class </span><span class="s1">ChartContainer(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;chart&quot;</span>
+
+    <span class="s1">title = Typed(expected_type=Title, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">autoTitleDeleted = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">pivotFmts = Typed(expected_type=PivotFormatList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">view3D = _3DBase.view3D</span>
+    <span class="s1">floor = _3DBase.floor</span>
+    <span class="s1">sideWall = _3DBase.sideWall</span>
+    <span class="s1">backWall = _3DBase.backWall</span>
+    <span class="s1">plotArea = Typed(expected_type=PlotArea, )</span>
+    <span class="s1">legend = Typed(expected_type=Legend, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">plotVisOnly = NestedBool()</span>
+    <span class="s1">dispBlanksAs = NestedNoneSet(values=([</span><span class="s3">'span'</span><span class="s1">, </span><span class="s3">'gap'</span><span class="s1">, </span><span class="s3">'zero'</span><span class="s1">]))</span>
+    <span class="s1">showDLblsOverMax = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'title'</span><span class="s1">, </span><span class="s3">'autoTitleDeleted'</span><span class="s1">, </span><span class="s3">'pivotFmts'</span><span class="s1">, </span><span class="s3">'view3D'</span><span class="s1">,</span>
+                    <span class="s3">'floor'</span><span class="s1">, </span><span class="s3">'sideWall'</span><span class="s1">, </span><span class="s3">'backWall'</span><span class="s1">, </span><span class="s3">'plotArea'</span><span class="s1">, </span><span class="s3">'legend'</span><span class="s1">, </span><span class="s3">'plotVisOnly'</span><span class="s1">,</span>
+                    <span class="s3">'dispBlanksAs'</span><span class="s1">, </span><span class="s3">'showDLblsOverMax'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">title=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">autoTitleDeleted=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pivotFmts=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">view3D=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">floor=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sideWall=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">backWall=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">plotArea=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">legend=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">plotVisOnly=</span><span class="s0">True</span><span class="s1">,</span>
+                 <span class="s1">dispBlanksAs=</span><span class="s3">&quot;gap&quot;</span><span class="s1">,</span>
+                 <span class="s1">showDLblsOverMax=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.title = title</span>
+        <span class="s1">self.autoTitleDeleted = autoTitleDeleted</span>
+        <span class="s1">self.pivotFmts = pivotFmts</span>
+        <span class="s1">self.view3D = view3D</span>
+        <span class="s1">self.floor = floor</span>
+        <span class="s1">self.sideWall = sideWall</span>
+        <span class="s1">self.backWall = backWall</span>
+        <span class="s0">if </span><span class="s1">plotArea </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">plotArea = PlotArea()</span>
+        <span class="s1">self.plotArea = plotArea</span>
+        <span class="s1">self.legend = legend</span>
+        <span class="s1">self.plotVisOnly = plotVisOnly</span>
+        <span class="s1">self.dispBlanksAs = dispBlanksAs</span>
+        <span class="s1">self.showDLblsOverMax = showDLblsOverMax</span>
+
+
+<span class="s0">class </span><span class="s1">Protection(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;protection&quot;</span>
+
+    <span class="s1">chartObject = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">data = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">formatting = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">selection = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">userInterface = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">&quot;chartObject&quot;</span><span class="s1">, </span><span class="s3">&quot;data&quot;</span><span class="s1">, </span><span class="s3">&quot;formatting&quot;</span><span class="s1">, </span><span class="s3">&quot;selection&quot;</span><span class="s1">, </span><span class="s3">&quot;userInterface&quot;</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">chartObject=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">data=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">formatting=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">selection=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">userInterface=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.chartObject = chartObject</span>
+        <span class="s1">self.data = data</span>
+        <span class="s1">self.formatting = formatting</span>
+        <span class="s1">self.selection = selection</span>
+        <span class="s1">self.userInterface = userInterface</span>
+
+
+<span class="s0">class </span><span class="s1">PivotSource(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;pivotSource&quot;</span>
+
+    <span class="s1">name = NestedText(expected_type=unicode)</span>
+    <span class="s1">fmtId = NestedInteger(expected_type=int)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'name'</span><span class="s1">, </span><span class="s3">'fmtId'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">name=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fmtId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.fmtId = fmtId</span>
+
+
+<span class="s0">class </span><span class="s1">ExternalData(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;externalData&quot;</span>
+
+    <span class="s1">autoUpdate = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">id = String() </span><span class="s2"># Needs namespace</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">autoUpdate=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">id=</span><span class="s0">None</span>
+                <span class="s1">):</span>
+        <span class="s1">self.autoUpdate = autoUpdate</span>
+        <span class="s1">self.id = id</span>
+
+
+<span class="s0">class </span><span class="s1">ChartSpace(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;chartSpace&quot;</span>
+
+    <span class="s1">date1904 = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lang = NestedString(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">roundedCorners = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">style = NestedMinMax(allow_none=</span><span class="s0">True</span><span class="s1">, min=</span><span class="s4">1</span><span class="s1">, max=</span><span class="s4">48</span><span class="s1">)</span>
+    <span class="s1">clrMapOvr = Typed(expected_type=ColorMapping, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">pivotSource = Typed(expected_type=PivotSource, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">protection = Typed(expected_type=Protection, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">chart = Typed(expected_type=ChartContainer)</span>
+    <span class="s1">spPr = Typed(expected_type=GraphicalProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">graphicalProperties = Alias(</span><span class="s3">&quot;spPr&quot;</span><span class="s1">)</span>
+    <span class="s1">txPr = Typed(expected_type=RichText, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">textProperties = Alias(</span><span class="s3">&quot;txPr&quot;</span><span class="s1">)</span>
+    <span class="s1">externalData = Typed(expected_type=ExternalData, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">printSettings = Typed(expected_type=PrintSettings, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">userShapes = Relation()</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'date1904'</span><span class="s1">, </span><span class="s3">'lang'</span><span class="s1">, </span><span class="s3">'roundedCorners'</span><span class="s1">, </span><span class="s3">'style'</span><span class="s1">,</span>
+                    <span class="s3">'clrMapOvr'</span><span class="s1">, </span><span class="s3">'pivotSource'</span><span class="s1">, </span><span class="s3">'protection'</span><span class="s1">, </span><span class="s3">'chart'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">, </span><span class="s3">'txPr'</span><span class="s1">,</span>
+                    <span class="s3">'externalData'</span><span class="s1">, </span><span class="s3">'printSettings'</span><span class="s1">, </span><span class="s3">'userShapes'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">date1904=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lang=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">roundedCorners=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">style=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">clrMapOvr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pivotSource=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">protection=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">chart=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">txPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">externalData=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">printSettings=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">userShapes=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.date1904 = date1904</span>
+        <span class="s1">self.lang = lang</span>
+        <span class="s1">self.roundedCorners = roundedCorners</span>
+        <span class="s1">self.style = style</span>
+        <span class="s1">self.clrMapOvr = clrMapOvr</span>
+        <span class="s1">self.pivotSource = pivotSource</span>
+        <span class="s1">self.protection = protection</span>
+        <span class="s1">self.chart = chart</span>
+        <span class="s1">self.spPr = spPr</span>
+        <span class="s1">self.txPr = txPr</span>
+        <span class="s1">self.externalData = externalData</span>
+        <span class="s1">self.printSettings = printSettings</span>
+        <span class="s1">self.userShapes = userShapes</span>
+
+
+    <span class="s0">def </span><span class="s1">to_tree(self, tagname=</span><span class="s0">None</span><span class="s1">, idx=</span><span class="s0">None</span><span class="s1">, namespace=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">tree = super(ChartSpace, self).to_tree()</span>
+        <span class="s1">tree.set(</span><span class="s3">&quot;xmlns&quot;</span><span class="s1">, CHART_NS)</span>
+        <span class="s0">return </span><span class="s1">tree</span>
+</pre>
+</body>
+</html>

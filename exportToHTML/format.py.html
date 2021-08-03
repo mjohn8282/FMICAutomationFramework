@@ -1,0 +1,822 @@
+<html>
+<head>
+<title>format.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+format.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2006-2014 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2012-2015 Google, Inc.</span>
+<span class="s0"># Copyright (c) 2013 moxian &lt;aleftmail@inbox.ru&gt;</span>
+<span class="s0"># Copyright (c) 2014-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 frost-nzcr4 &lt;frost.nzcr4@jagmort.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Brett Cannon &lt;brett@python.org&gt;</span>
+<span class="s0"># Copyright (c) 2014 Michal Nowikowski &lt;godfryd@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Arun Persaud &lt;arun@nubati.net&gt;</span>
+<span class="s0"># Copyright (c) 2015 Mike Frysinger &lt;vapier@gentoo.org&gt;</span>
+<span class="s0"># Copyright (c) 2015 Fabio Natali &lt;me@fabionatali.com&gt;</span>
+<span class="s0"># Copyright (c) 2015 Harut &lt;yes@harutune.name&gt;</span>
+<span class="s0"># Copyright (c) 2015 Mihai Balint &lt;balint.mihai@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015 Pavel Roskin &lt;proski@gnu.org&gt;</span>
+<span class="s0"># Copyright (c) 2015 Ionel Cristian Maries &lt;contact@ionelmc.ro&gt;</span>
+<span class="s0"># Copyright (c) 2016 Petr Pulc &lt;petrpulc@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Moises Lopez &lt;moylop260@vauxoo.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Ashley Whetter &lt;ashley@awhetter.co.uk&gt;</span>
+<span class="s0"># Copyright (c) 2017, 2019-2020 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017-2018 Bryce Guinta &lt;bryce.paul.guinta@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Krzysztof Czapla &lt;k.czapla68@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Łukasz Rogalski &lt;rogalski.91@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 James M. Allen &lt;james.m.allen@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 vinnyrose &lt;vinnyrose@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2018-2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018, 2020 Bryce Guinta &lt;bryce.guinta@protonmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018, 2020 Anthony Sottile &lt;asottile@umich.edu&gt;</span>
+<span class="s0"># Copyright (c) 2018 Lucas Cimon &lt;lucas.cimon@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Michael Hudson-Doyle &lt;michael.hudson@canonical.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Natalie Serebryakova &lt;natalie.serebryakova@Natalies-MacBook-Pro.local&gt;</span>
+<span class="s0"># Copyright (c) 2018 ssolanki &lt;sushobhitsolanki@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Marcus Näslund &lt;naslundx@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Mike Frysinger &lt;vapier@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Fureigh &lt;rhys.fureigh@gsa.gov&gt;</span>
+<span class="s0"># Copyright (c) 2018 Andreas Freimuth &lt;andreas.freimuth@united-bits.de&gt;</span>
+<span class="s0"># Copyright (c) 2018 Jakub Wilk &lt;jwilk@jwilk.net&gt;</span>
+<span class="s0"># Copyright (c) 2019 Nick Drozd &lt;nicholasdrozd@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Hugo van Kemenade &lt;hugovk@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Raphael Gaschignard &lt;raphael@rtpg.co&gt;</span>
+<span class="s0"># Copyright (c) 2021 Marc Mueller &lt;30130371+cdce8p@users.noreply.github.com&gt;</span>
+
+<span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;Python code format's checker. 
+ 
+By default try to follow Guido's style guide : 
+ 
+https://www.python.org/doc/essays/styleguide/ 
+ 
+Some parts of the process_token method is based from The Tab Nanny std module. 
+&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">tokenize</span>
+<span class="s2">from </span><span class="s1">functools </span><span class="s2">import </span><span class="s1">reduce  </span><span class="s0"># pylint: disable=redefined-builtin</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">List</span>
+
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">nodes</span>
+
+<span class="s2">from </span><span class="s1">pylint.checkers </span><span class="s2">import </span><span class="s1">BaseTokenChecker</span>
+<span class="s2">from </span><span class="s1">pylint.checkers.utils </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">check_messages,</span>
+    <span class="s1">is_overload_stub,</span>
+    <span class="s1">is_protocol_class,</span>
+    <span class="s1">node_frame_class,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">pylint.constants </span><span class="s2">import </span><span class="s1">WarningScope</span>
+<span class="s2">from </span><span class="s1">pylint.interfaces </span><span class="s2">import </span><span class="s1">IAstroidChecker, IRawChecker, ITokenChecker</span>
+<span class="s2">from </span><span class="s1">pylint.utils.pragma_parser </span><span class="s2">import </span><span class="s1">OPTION_PO, PragmaParserError, parse_pragma</span>
+
+<span class="s1">_ASYNC_TOKEN = </span><span class="s3">&quot;async&quot;</span>
+<span class="s1">_KEYWORD_TOKENS = [</span>
+    <span class="s3">&quot;assert&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;del&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;elif&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;except&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;for&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;if&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;in&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;not&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;raise&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;return&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;while&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;yield&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;with&quot;</span><span class="s1">,</span>
+<span class="s1">]</span>
+
+<span class="s1">_SPACED_OPERATORS = [</span>
+    <span class="s3">&quot;==&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;&lt;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;&gt;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;!=&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;&lt;&gt;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;&lt;=&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;&gt;=&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;+=&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;-=&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;*=&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;**=&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;/=&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;//=&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;&amp;=&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;|=&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;^=&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;%=&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;&gt;&gt;=&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;&lt;&lt;=&quot;</span><span class="s1">,</span>
+<span class="s1">]</span>
+<span class="s1">_OPENING_BRACKETS = [</span><span class="s3">&quot;(&quot;</span><span class="s1">, </span><span class="s3">&quot;[&quot;</span><span class="s1">, </span><span class="s3">&quot;{&quot;</span><span class="s1">]</span>
+<span class="s1">_CLOSING_BRACKETS = [</span><span class="s3">&quot;)&quot;</span><span class="s1">, </span><span class="s3">&quot;]&quot;</span><span class="s1">, </span><span class="s3">&quot;}&quot;</span><span class="s1">]</span>
+<span class="s1">_TAB_LENGTH = </span><span class="s4">8</span>
+
+<span class="s1">_EOL = frozenset([tokenize.NEWLINE, tokenize.NL, tokenize.COMMENT])</span>
+<span class="s1">_JUNK_TOKENS = (tokenize.COMMENT, tokenize.NL)</span>
+
+<span class="s0"># Whitespace checking policy constants</span>
+<span class="s1">_MUST = </span><span class="s4">0</span>
+<span class="s1">_MUST_NOT = </span><span class="s4">1</span>
+<span class="s1">_IGNORE = </span><span class="s4">2</span>
+
+<span class="s1">MSGS = {</span>
+    <span class="s3">&quot;C0301&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Line too long (%s/%s)&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;line-too-long&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a line is longer than a given number of characters.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;C0302&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Too many lines in module (%s/%s)&quot;</span><span class="s1">,  </span><span class="s0"># was W0302</span>
+        <span class="s3">&quot;too-many-lines&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a module has too many lines, reducing its readability.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;C0303&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Trailing whitespace&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;trailing-whitespace&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when there is whitespace between the end of a line and the newline.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;C0304&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Final newline missing&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;missing-final-newline&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when the last line in a file is missing a newline.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;C0305&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Trailing newlines&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;trailing-newlines&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when there are trailing blank lines in a file.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;W0311&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Bad indentation. Found %s %s, expected %s&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;bad-indentation&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when an unexpected number of indentation's tabulations or &quot;</span>
+        <span class="s3">&quot;spaces has been found.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;W0301&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Unnecessary semicolon&quot;</span><span class="s1">,  </span><span class="s0"># was W0106</span>
+        <span class="s3">&quot;unnecessary-semicolon&quot;</span><span class="s1">,</span>
+        <span class="s3">'Used when a statement is ended by a semi-colon (&quot;;&quot;), which '</span>
+        <span class="s3">&quot;isn't necessary (that's python, not C ;).&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;C0321&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;More than one statement on a single line&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;multiple-statements&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when more than on statement are found on the same line.&quot;</span><span class="s1">,</span>
+        <span class="s1">{</span><span class="s3">&quot;scope&quot;</span><span class="s1">: WarningScope.NODE},</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;C0325&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Unnecessary parens after %r keyword&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;superfluous-parens&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a single item in parentheses follows an if, for, or &quot;</span>
+        <span class="s3">&quot;other keyword.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;C0327&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Mixed line endings LF and CRLF&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;mixed-line-endings&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when there are mixed (LF and CRLF) newline signs in a file.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;C0328&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Unexpected line ending format. There is '%s' while it should be '%s'.&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;unexpected-line-ending-format&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when there is different newline than expected.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+<span class="s1">}</span>
+
+
+<span class="s2">def </span><span class="s1">_last_token_on_line_is(tokens, line_end, token):</span>
+    <span class="s2">return </span><span class="s1">(</span>
+        <span class="s1">line_end &gt; </span><span class="s4">0</span>
+        <span class="s2">and </span><span class="s1">tokens.token(line_end - </span><span class="s4">1</span><span class="s1">) == token</span>
+        <span class="s2">or </span><span class="s1">line_end &gt; </span><span class="s4">1</span>
+        <span class="s2">and </span><span class="s1">tokens.token(line_end - </span><span class="s4">2</span><span class="s1">) == token</span>
+        <span class="s2">and </span><span class="s1">tokens.type(line_end - </span><span class="s4">1</span><span class="s1">) == tokenize.COMMENT</span>
+    <span class="s1">)</span>
+
+
+<span class="s0"># The contexts for hanging indents.</span>
+<span class="s0"># A hanging indented dictionary value after :</span>
+<span class="s1">HANGING_DICT_VALUE = </span><span class="s3">&quot;dict-value&quot;</span>
+<span class="s0"># Hanging indentation in an expression.</span>
+<span class="s1">HANGING = </span><span class="s3">&quot;hanging&quot;</span>
+<span class="s0"># Hanging indentation in a block header.</span>
+<span class="s1">HANGING_BLOCK = </span><span class="s3">&quot;hanging-block&quot;</span>
+<span class="s0"># Continued indentation inside an expression.</span>
+<span class="s1">CONTINUED = </span><span class="s3">&quot;continued&quot;</span>
+<span class="s0"># Continued indentation in a block header.</span>
+<span class="s1">CONTINUED_BLOCK = </span><span class="s3">&quot;continued-block&quot;</span>
+
+<span class="s1">SINGLE_LINE = </span><span class="s3">&quot;single&quot;</span>
+<span class="s1">WITH_BODY = </span><span class="s3">&quot;multi&quot;</span>
+
+
+<span class="s2">class </span><span class="s1">TokenWrapper:</span>
+    <span class="s0">&quot;&quot;&quot;A wrapper for readable access to token information.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, tokens):</span>
+        <span class="s1">self._tokens = tokens</span>
+
+    <span class="s2">def </span><span class="s1">token(self, idx):</span>
+        <span class="s2">return </span><span class="s1">self._tokens[idx][</span><span class="s4">1</span><span class="s1">]</span>
+
+    <span class="s2">def </span><span class="s1">type(self, idx):</span>
+        <span class="s2">return </span><span class="s1">self._tokens[idx][</span><span class="s4">0</span><span class="s1">]</span>
+
+    <span class="s2">def </span><span class="s1">start_line(self, idx):</span>
+        <span class="s2">return </span><span class="s1">self._tokens[idx][</span><span class="s4">2</span><span class="s1">][</span><span class="s4">0</span><span class="s1">]</span>
+
+    <span class="s2">def </span><span class="s1">start_col(self, idx):</span>
+        <span class="s2">return </span><span class="s1">self._tokens[idx][</span><span class="s4">2</span><span class="s1">][</span><span class="s4">1</span><span class="s1">]</span>
+
+    <span class="s2">def </span><span class="s1">line(self, idx):</span>
+        <span class="s2">return </span><span class="s1">self._tokens[idx][</span><span class="s4">4</span><span class="s1">]</span>
+
+
+<span class="s2">class </span><span class="s1">FormatChecker(BaseTokenChecker):</span>
+    <span class="s0">&quot;&quot;&quot;checks for : 
+    * unauthorized constructions 
+    * strict indentation 
+    * line length 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__implements__ = (ITokenChecker, IAstroidChecker, IRawChecker)</span>
+
+    <span class="s0"># configuration section name</span>
+    <span class="s1">name = </span><span class="s3">&quot;format&quot;</span>
+    <span class="s0"># messages</span>
+    <span class="s1">msgs = MSGS</span>
+    <span class="s0"># configuration options</span>
+    <span class="s0"># for available dict keys/values see the optik parser 'add_option' method</span>
+    <span class="s1">options = (</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;max-line-length&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s4">100</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;int&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Maximum number of characters on a single line.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;ignore-long-lines&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;regexp&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;regexp&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s3">r&quot;^\s*(# )?&lt;?https?://\S+&gt;?$&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: (</span>
+                    <span class="s3">&quot;Regexp for a line that is allowed to be longer than the limit.&quot;</span>
+                <span class="s1">),</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;single-line-if-stmt&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s2">False</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;yn&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;y_or_n&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: (</span>
+                    <span class="s3">&quot;Allow the body of an if to be on the same &quot;</span>
+                    <span class="s3">&quot;line as the test if there is no else.&quot;</span>
+                <span class="s1">),</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;single-line-class-stmt&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s2">False</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;yn&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;y_or_n&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: (</span>
+                    <span class="s3">&quot;Allow the body of a class to be on the same &quot;</span>
+                    <span class="s3">&quot;line as the declaration if body contains &quot;</span>
+                    <span class="s3">&quot;single statement.&quot;</span>
+                <span class="s1">),</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;max-module-lines&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s4">1000</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;int&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Maximum number of lines in a module.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;indent-string&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s3">&quot;    &quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;non_empty_string&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;string&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;String used as indentation unit. This is usually &quot;</span>
+                <span class="s3">'&quot;    &quot; (4 spaces) or &quot;</span><span class="s5">\\</span><span class="s3">t&quot; (1 tab).'</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;indent-after-paren&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;int&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s4">4</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Number of spaces of indent required inside a hanging &quot;</span>
+                <span class="s3">&quot;or continued line.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;expected-line-ending-format&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;choice&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;empty or LF or CRLF&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;choices&quot;</span><span class="s1">: [</span><span class="s3">&quot;&quot;</span><span class="s1">, </span><span class="s3">&quot;LF&quot;</span><span class="s1">, </span><span class="s3">&quot;CRLF&quot;</span><span class="s1">],</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: (</span>
+                    <span class="s3">&quot;Expected format of line ending, &quot;</span>
+                    <span class="s3">&quot;e.g. empty (any line ending), LF or CRLF.&quot;</span>
+                <span class="s1">),</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, linter=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">BaseTokenChecker.__init__(self, linter)</span>
+        <span class="s1">self._lines = </span><span class="s2">None</span>
+        <span class="s1">self._visited_lines = </span><span class="s2">None</span>
+        <span class="s1">self._bracket_stack = [</span><span class="s2">None</span><span class="s1">]</span>
+
+    <span class="s2">def </span><span class="s1">new_line(self, tokens, line_end, line_start):</span>
+        <span class="s0">&quot;&quot;&quot;a new line has been encountered, process it if necessary&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">_last_token_on_line_is(tokens, line_end, </span><span class="s3">&quot;;&quot;</span><span class="s1">):</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;unnecessary-semicolon&quot;</span><span class="s1">, line=tokens.start_line(line_end))</span>
+
+        <span class="s1">line_num = tokens.start_line(line_start)</span>
+        <span class="s1">line = tokens.line(line_start)</span>
+        <span class="s2">if </span><span class="s1">tokens.type(line_start) </span><span class="s2">not in </span><span class="s1">_JUNK_TOKENS:</span>
+            <span class="s1">self._lines[line_num] = line.split(</span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">&quot;</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s1">self.check_lines(line, line_num)</span>
+
+    <span class="s2">def </span><span class="s1">process_module(self, _module):</span>
+        <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">_check_keyword_parentheses(</span>
+        <span class="s1">self, tokens: List[tokenize.TokenInfo], start: int</span>
+    <span class="s1">) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot;Check that there are not unnecessary parentheses after a keyword. 
+ 
+        Parens are unnecessary if there is exactly one balanced outer pair on a 
+        line, and it is followed by a colon, and contains no commas (i.e. is not a 
+        tuple). 
+ 
+        Args: 
+        tokens: list of Tokens; the entire list of Tokens. 
+        start: int; the position of the keyword in the token list. 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># If the next token is not a paren, we're fine.</span>
+        <span class="s2">if </span><span class="s1">self._bracket_stack[-</span><span class="s4">1</span><span class="s1">] == </span><span class="s3">&quot;:&quot; </span><span class="s2">and </span><span class="s1">tokens[start].string == </span><span class="s3">&quot;for&quot;</span><span class="s1">:</span>
+            <span class="s1">self._bracket_stack.pop()</span>
+        <span class="s2">if </span><span class="s1">tokens[start + </span><span class="s4">1</span><span class="s1">].string != </span><span class="s3">&quot;(&quot;</span><span class="s1">:</span>
+            <span class="s2">return</span>
+        <span class="s1">found_and_or = </span><span class="s2">False</span>
+        <span class="s1">contains_walrus_operator = </span><span class="s2">False</span>
+        <span class="s1">walrus_operator_depth = </span><span class="s4">0</span>
+        <span class="s1">depth = </span><span class="s4">0</span>
+        <span class="s1">keyword_token = str(tokens[start].string)</span>
+        <span class="s1">line_num = tokens[start].start[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s2">for </span><span class="s1">i </span><span class="s2">in </span><span class="s1">range(start, len(tokens) - </span><span class="s4">1</span><span class="s1">):</span>
+            <span class="s1">token = tokens[i]</span>
+
+            <span class="s0"># If we hit a newline, then assume any parens were for continuation.</span>
+            <span class="s2">if </span><span class="s1">token.type == tokenize.NL:</span>
+                <span class="s2">return</span>
+            <span class="s0"># Since the walrus operator doesn't exist below python3.8, the tokenizer</span>
+            <span class="s0"># generates independent tokens</span>
+            <span class="s2">if </span><span class="s1">(</span>
+                <span class="s1">token.string == </span><span class="s3">&quot;:=&quot;  </span><span class="s0"># &lt;-- python3.8+ path</span>
+                <span class="s2">or </span><span class="s1">token.string + tokens[i + </span><span class="s4">1</span><span class="s1">].string == </span><span class="s3">&quot;:=&quot;</span>
+            <span class="s1">):</span>
+                <span class="s1">contains_walrus_operator = </span><span class="s2">True</span>
+                <span class="s1">walrus_operator_depth = depth</span>
+            <span class="s2">if </span><span class="s1">token.string == </span><span class="s3">&quot;(&quot;</span><span class="s1">:</span>
+                <span class="s1">depth += </span><span class="s4">1</span>
+            <span class="s2">elif </span><span class="s1">token.string == </span><span class="s3">&quot;)&quot;</span><span class="s1">:</span>
+                <span class="s1">depth -= </span><span class="s4">1</span>
+                <span class="s2">if </span><span class="s1">depth:</span>
+                    <span class="s2">continue</span>
+                <span class="s0"># ')' can't happen after if (foo), since it would be a syntax error.</span>
+                <span class="s2">if </span><span class="s1">tokens[i + </span><span class="s4">1</span><span class="s1">].string </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;:&quot;</span><span class="s1">, </span><span class="s3">&quot;)&quot;</span><span class="s1">, </span><span class="s3">&quot;]&quot;</span><span class="s1">, </span><span class="s3">&quot;}&quot;</span><span class="s1">, </span><span class="s3">&quot;in&quot;</span><span class="s1">) </span><span class="s2">or </span><span class="s1">tokens[</span>
+                    <span class="s1">i + </span><span class="s4">1</span>
+                <span class="s1">].type </span><span class="s2">in </span><span class="s1">(tokenize.NEWLINE, tokenize.ENDMARKER, tokenize.COMMENT):</span>
+                    <span class="s0"># The empty tuple () is always accepted.</span>
+                    <span class="s2">if </span><span class="s1">contains_walrus_operator </span><span class="s2">and </span><span class="s1">walrus_operator_depth - </span><span class="s4">1 </span><span class="s1">== depth:</span>
+                        <span class="s0"># Reset variable for possible following expressions</span>
+                        <span class="s1">contains_walrus_operator = </span><span class="s2">False</span>
+                        <span class="s2">continue</span>
+                    <span class="s2">if </span><span class="s1">i == start + </span><span class="s4">2</span><span class="s1">:</span>
+                        <span class="s2">return</span>
+                    <span class="s2">if </span><span class="s1">keyword_token == </span><span class="s3">&quot;not&quot;</span><span class="s1">:</span>
+                        <span class="s2">if not </span><span class="s1">found_and_or:</span>
+                            <span class="s1">self.add_message(</span>
+                                <span class="s3">&quot;superfluous-parens&quot;</span><span class="s1">, line=line_num, args=keyword_token</span>
+                            <span class="s1">)</span>
+                    <span class="s2">elif </span><span class="s1">keyword_token </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;return&quot;</span><span class="s1">, </span><span class="s3">&quot;yield&quot;</span><span class="s1">):</span>
+                        <span class="s1">self.add_message(</span>
+                            <span class="s3">&quot;superfluous-parens&quot;</span><span class="s1">, line=line_num, args=keyword_token</span>
+                        <span class="s1">)</span>
+                    <span class="s2">elif not </span><span class="s1">found_and_or:</span>
+                        <span class="s1">self.add_message(</span>
+                            <span class="s3">&quot;superfluous-parens&quot;</span><span class="s1">, line=line_num, args=keyword_token</span>
+                        <span class="s1">)</span>
+                <span class="s2">return</span>
+            <span class="s2">elif </span><span class="s1">depth == </span><span class="s4">1</span><span class="s1">:</span>
+                <span class="s0"># This is a tuple, which is always acceptable.</span>
+                <span class="s2">if </span><span class="s1">token[</span><span class="s4">1</span><span class="s1">] == </span><span class="s3">&quot;,&quot;</span><span class="s1">:</span>
+                    <span class="s2">return</span>
+                <span class="s0"># 'and' and 'or' are the only boolean operators with lower precedence</span>
+                <span class="s0"># than 'not', so parens are only required when they are found.</span>
+                <span class="s2">if </span><span class="s1">token[</span><span class="s4">1</span><span class="s1">] </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;and&quot;</span><span class="s1">, </span><span class="s3">&quot;or&quot;</span><span class="s1">):</span>
+                    <span class="s1">found_and_or = </span><span class="s2">True</span>
+                <span class="s0"># A yield inside an expression must always be in parentheses,</span>
+                <span class="s0"># quit early without error.</span>
+                <span class="s2">elif </span><span class="s1">token[</span><span class="s4">1</span><span class="s1">] == </span><span class="s3">&quot;yield&quot;</span><span class="s1">:</span>
+                    <span class="s2">return</span>
+                <span class="s0"># A generator expression always has a 'for' token in it, and</span>
+                <span class="s0"># the 'for' token is only legal inside parens when it is in a</span>
+                <span class="s0"># generator expression.  The parens are necessary here, so bail</span>
+                <span class="s0"># without an error.</span>
+                <span class="s2">elif </span><span class="s1">token[</span><span class="s4">1</span><span class="s1">] == </span><span class="s3">&quot;for&quot;</span><span class="s1">:</span>
+                    <span class="s2">return</span>
+
+    <span class="s2">def </span><span class="s1">_prepare_token_dispatcher(self):</span>
+        <span class="s1">dispatch = {}</span>
+        <span class="s2">for </span><span class="s1">tokens, handler </span><span class="s2">in </span><span class="s1">[(_KEYWORD_TOKENS, self._check_keyword_parentheses)]:</span>
+            <span class="s2">for </span><span class="s1">token </span><span class="s2">in </span><span class="s1">tokens:</span>
+                <span class="s1">dispatch[token] = handler</span>
+        <span class="s2">return </span><span class="s1">dispatch</span>
+
+    <span class="s2">def </span><span class="s1">process_tokens(self, tokens):</span>
+        <span class="s0">&quot;&quot;&quot;process tokens and search for : 
+ 
+        _ too long lines (i.e. longer than &lt;max_chars&gt;) 
+        _ optionally bad construct (if given, bad_construct must be a compiled 
+          regular expression). 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self._bracket_stack = [</span><span class="s2">None</span><span class="s1">]</span>
+        <span class="s1">indents = [</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s1">check_equal = </span><span class="s2">False</span>
+        <span class="s1">line_num = </span><span class="s4">0</span>
+        <span class="s1">self._lines = {}</span>
+        <span class="s1">self._visited_lines = {}</span>
+        <span class="s1">token_handlers = self._prepare_token_dispatcher()</span>
+        <span class="s1">self._last_line_ending = </span><span class="s2">None</span>
+        <span class="s1">last_blank_line_num = </span><span class="s4">0</span>
+        <span class="s2">for </span><span class="s1">idx, (tok_type, token, start, _, line) </span><span class="s2">in </span><span class="s1">enumerate(tokens):</span>
+            <span class="s2">if </span><span class="s1">start[</span><span class="s4">0</span><span class="s1">] != line_num:</span>
+                <span class="s1">line_num = start[</span><span class="s4">0</span><span class="s1">]</span>
+                <span class="s0"># A tokenizer oddity: if an indented line contains a multi-line</span>
+                <span class="s0"># docstring, the line member of the INDENT token does not contain</span>
+                <span class="s0"># the full line; therefore we check the next token on the line.</span>
+                <span class="s2">if </span><span class="s1">tok_type == tokenize.INDENT:</span>
+                    <span class="s1">self.new_line(TokenWrapper(tokens), idx - </span><span class="s4">1</span><span class="s1">, idx + </span><span class="s4">1</span><span class="s1">)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">self.new_line(TokenWrapper(tokens), idx - </span><span class="s4">1</span><span class="s1">, idx)</span>
+
+            <span class="s2">if </span><span class="s1">tok_type == tokenize.NEWLINE:</span>
+                <span class="s0"># a program statement, or ENDMARKER, will eventually follow,</span>
+                <span class="s0"># after some (possibly empty) run of tokens of the form</span>
+                <span class="s0">#     (NL | COMMENT)* (INDENT | DEDENT+)?</span>
+                <span class="s0"># If an INDENT appears, setting check_equal is wrong, and will</span>
+                <span class="s0"># be undone when we see the INDENT.</span>
+                <span class="s1">check_equal = </span><span class="s2">True</span>
+                <span class="s1">self._check_line_ending(token, line_num)</span>
+            <span class="s2">elif </span><span class="s1">tok_type == tokenize.INDENT:</span>
+                <span class="s1">check_equal = </span><span class="s2">False</span>
+                <span class="s1">self.check_indent_level(token, indents[-</span><span class="s4">1</span><span class="s1">] + </span><span class="s4">1</span><span class="s1">, line_num)</span>
+                <span class="s1">indents.append(indents[-</span><span class="s4">1</span><span class="s1">] + </span><span class="s4">1</span><span class="s1">)</span>
+            <span class="s2">elif </span><span class="s1">tok_type == tokenize.DEDENT:</span>
+                <span class="s0"># there's nothing we need to check here!  what's important is</span>
+                <span class="s0"># that when the run of DEDENTs ends, the indentation of the</span>
+                <span class="s0"># program statement (or ENDMARKER) that triggered the run is</span>
+                <span class="s0"># equal to what's left at the top of the indents stack</span>
+                <span class="s1">check_equal = </span><span class="s2">True</span>
+                <span class="s2">if </span><span class="s1">len(indents) &gt; </span><span class="s4">1</span><span class="s1">:</span>
+                    <span class="s2">del </span><span class="s1">indents[-</span><span class="s4">1</span><span class="s1">]</span>
+            <span class="s2">elif </span><span class="s1">tok_type == tokenize.NL:</span>
+                <span class="s2">if not </span><span class="s1">line.strip(</span><span class="s3">&quot;</span><span class="s5">\r\n</span><span class="s3">&quot;</span><span class="s1">):</span>
+                    <span class="s1">last_blank_line_num = line_num</span>
+            <span class="s2">elif </span><span class="s1">tok_type </span><span class="s2">not in </span><span class="s1">(tokenize.COMMENT, tokenize.ENCODING):</span>
+                <span class="s0"># This is the first concrete token following a NEWLINE, so it</span>
+                <span class="s0"># must be the first token of the next program statement, or an</span>
+                <span class="s0"># ENDMARKER; the &quot;line&quot; argument exposes the leading whitespace</span>
+                <span class="s0"># for this statement; in the case of ENDMARKER, line is an empty</span>
+                <span class="s0"># string, so will properly match the empty string with which the</span>
+                <span class="s0"># &quot;indents&quot; stack was seeded</span>
+                <span class="s2">if </span><span class="s1">check_equal:</span>
+                    <span class="s1">check_equal = </span><span class="s2">False</span>
+                    <span class="s1">self.check_indent_level(line, indents[-</span><span class="s4">1</span><span class="s1">], line_num)</span>
+
+            <span class="s2">if </span><span class="s1">tok_type == tokenize.NUMBER </span><span class="s2">and </span><span class="s1">token.endswith(</span><span class="s3">&quot;l&quot;</span><span class="s1">):</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;lowercase-l-suffix&quot;</span><span class="s1">, line=line_num)</span>
+
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">handler = token_handlers[token]</span>
+            <span class="s2">except </span><span class="s1">KeyError:</span>
+                <span class="s2">pass</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">handler(tokens, idx)</span>
+
+        <span class="s1">line_num -= </span><span class="s4">1  </span><span class="s0"># to be ok with &quot;wc -l&quot;</span>
+        <span class="s2">if </span><span class="s1">line_num &gt; self.config.max_module_lines:</span>
+            <span class="s0"># Get the line where the too-many-lines (or its message id)</span>
+            <span class="s0"># was disabled or default to 1.</span>
+            <span class="s1">message_definition = self.linter.msgs_store.get_message_definitions(</span>
+                <span class="s3">&quot;too-many-lines&quot;</span>
+            <span class="s1">)[</span><span class="s4">0</span><span class="s1">]</span>
+            <span class="s1">names = (message_definition.msgid, </span><span class="s3">&quot;too-many-lines&quot;</span><span class="s1">)</span>
+            <span class="s1">line = next(</span>
+                <span class="s1">filter(</span><span class="s2">None</span><span class="s1">, (self.linter._pragma_lineno.get(name) </span><span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">names)),</span>
+                <span class="s4">1</span><span class="s1">,</span>
+            <span class="s1">)</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;too-many-lines&quot;</span><span class="s1">,</span>
+                <span class="s1">args=(line_num, self.config.max_module_lines),</span>
+                <span class="s1">line=line,</span>
+            <span class="s1">)</span>
+
+        <span class="s0"># See if there are any trailing lines.  Do not complain about empty</span>
+        <span class="s0"># files like __init__.py markers.</span>
+        <span class="s2">if </span><span class="s1">line_num == last_blank_line_num </span><span class="s2">and </span><span class="s1">line_num &gt; </span><span class="s4">0</span><span class="s1">:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;trailing-newlines&quot;</span><span class="s1">, line=line_num)</span>
+
+    <span class="s2">def </span><span class="s1">_check_line_ending(self, line_ending, line_num):</span>
+        <span class="s0"># check if line endings are mixed</span>
+        <span class="s2">if </span><span class="s1">self._last_line_ending </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s0"># line_ending == &quot;&quot; indicates a synthetic newline added at</span>
+            <span class="s0"># the end of a file that does not, in fact, end with a</span>
+            <span class="s0"># newline.</span>
+            <span class="s2">if </span><span class="s1">line_ending </span><span class="s2">and </span><span class="s1">line_ending != self._last_line_ending:</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;mixed-line-endings&quot;</span><span class="s1">, line=line_num)</span>
+
+        <span class="s1">self._last_line_ending = line_ending</span>
+
+        <span class="s0"># check if line ending is as expected</span>
+        <span class="s1">expected = self.config.expected_line_ending_format</span>
+        <span class="s2">if </span><span class="s1">expected:</span>
+            <span class="s0"># reduce multiple \n\n\n\n to one \n</span>
+            <span class="s1">line_ending = reduce(</span><span class="s2">lambda </span><span class="s1">x, y: x + y </span><span class="s2">if </span><span class="s1">x != y </span><span class="s2">else </span><span class="s1">x, line_ending, </span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+            <span class="s1">line_ending = </span><span class="s3">&quot;LF&quot; </span><span class="s2">if </span><span class="s1">line_ending == </span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">&quot; </span><span class="s2">else </span><span class="s3">&quot;CRLF&quot;</span>
+            <span class="s2">if </span><span class="s1">line_ending != expected:</span>
+                <span class="s1">self.add_message(</span>
+                    <span class="s3">&quot;unexpected-line-ending-format&quot;</span><span class="s1">,</span>
+                    <span class="s1">args=(line_ending, expected),</span>
+                    <span class="s1">line=line_num,</span>
+                <span class="s1">)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;multiple-statements&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_default(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;check the node line number and check it if not yet done&quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">node.is_statement:</span>
+            <span class="s2">return</span>
+        <span class="s2">if not </span><span class="s1">node.root().pure_python:</span>
+            <span class="s2">return</span>
+        <span class="s1">prev_sibl = node.previous_sibling()</span>
+        <span class="s2">if </span><span class="s1">prev_sibl </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">prev_line = prev_sibl.fromlineno</span>
+        <span class="s0"># The line on which a finally: occurs in a try/finally</span>
+        <span class="s0"># is not directly represented in the AST. We infer it</span>
+        <span class="s0"># by taking the last line of the body and adding 1, which</span>
+        <span class="s0"># should be the line of finally:</span>
+        <span class="s2">elif </span><span class="s1">(</span>
+            <span class="s1">isinstance(node.parent, nodes.TryFinally) </span><span class="s2">and </span><span class="s1">node </span><span class="s2">in </span><span class="s1">node.parent.finalbody</span>
+        <span class="s1">):</span>
+            <span class="s1">prev_line = node.parent.body[</span><span class="s4">0</span><span class="s1">].tolineno + </span><span class="s4">1</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">prev_line = node.parent.statement().fromlineno</span>
+        <span class="s1">line = node.fromlineno</span>
+        <span class="s2">assert </span><span class="s1">line, node</span>
+        <span class="s2">if </span><span class="s1">prev_line == line </span><span class="s2">and </span><span class="s1">self._visited_lines.get(line) != </span><span class="s4">2</span><span class="s1">:</span>
+            <span class="s1">self._check_multi_statement_line(node, line)</span>
+            <span class="s2">return</span>
+        <span class="s2">if </span><span class="s1">line </span><span class="s2">in </span><span class="s1">self._visited_lines:</span>
+            <span class="s2">return</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">tolineno = node.blockstart_tolineno</span>
+        <span class="s2">except </span><span class="s1">AttributeError:</span>
+            <span class="s1">tolineno = node.tolineno</span>
+        <span class="s2">assert </span><span class="s1">tolineno, node</span>
+        <span class="s1">lines = []</span>
+        <span class="s2">for </span><span class="s1">line </span><span class="s2">in </span><span class="s1">range(line, tolineno + </span><span class="s4">1</span><span class="s1">):</span>
+            <span class="s1">self._visited_lines[line] = </span><span class="s4">1</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">lines.append(self._lines[line].rstrip())</span>
+            <span class="s2">except </span><span class="s1">KeyError:</span>
+                <span class="s1">lines.append(</span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_check_multi_statement_line(self, node, line):</span>
+        <span class="s0">&quot;&quot;&quot;Check for lines containing multiple statements.&quot;&quot;&quot;</span>
+        <span class="s0"># Do not warn about multiple nested context managers</span>
+        <span class="s0"># in with statements.</span>
+        <span class="s2">if </span><span class="s1">isinstance(node, nodes.With):</span>
+            <span class="s2">return</span>
+        <span class="s0"># For try... except... finally..., the two nodes</span>
+        <span class="s0"># appear to be on the same line due to how the AST is built.</span>
+        <span class="s2">if </span><span class="s1">isinstance(node, nodes.TryExcept) </span><span class="s2">and </span><span class="s1">isinstance(</span>
+            <span class="s1">node.parent, nodes.TryFinally</span>
+        <span class="s1">):</span>
+            <span class="s2">return</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">isinstance(node.parent, nodes.If)</span>
+            <span class="s2">and not </span><span class="s1">node.parent.orelse</span>
+            <span class="s2">and </span><span class="s1">self.config.single_line_if_stmt</span>
+        <span class="s1">):</span>
+            <span class="s2">return</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">isinstance(node.parent, nodes.ClassDef)</span>
+            <span class="s2">and </span><span class="s1">len(node.parent.body) == </span><span class="s4">1</span>
+            <span class="s2">and </span><span class="s1">self.config.single_line_class_stmt</span>
+        <span class="s1">):</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># Function overloads that use ``Ellipsis`` are exempted.</span>
+        <span class="s2">if </span><span class="s1">isinstance(node, nodes.Expr) </span><span class="s2">and </span><span class="s1">(</span>
+            <span class="s1">isinstance(node.value, nodes.Ellipsis)</span>
+            <span class="s2">or </span><span class="s1">(isinstance(node.value, nodes.Const) </span><span class="s2">and </span><span class="s1">node.value.value </span><span class="s2">is </span><span class="s1">Ellipsis)</span>
+        <span class="s1">):</span>
+            <span class="s1">frame = node.frame()</span>
+            <span class="s2">if </span><span class="s1">is_overload_stub(frame) </span><span class="s2">or </span><span class="s1">is_protocol_class(node_frame_class(frame)):</span>
+                <span class="s2">return</span>
+
+        <span class="s1">self.add_message(</span><span class="s3">&quot;multiple-statements&quot;</span><span class="s1">, node=node)</span>
+        <span class="s1">self._visited_lines[line] = </span><span class="s4">2</span>
+
+    <span class="s2">def </span><span class="s1">check_line_ending(self, line: str, i: int) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Check that the final newline is not missing and that there is no trailing whitespace. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">line.endswith(</span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">&quot;</span><span class="s1">):</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;missing-final-newline&quot;</span><span class="s1">, line=i)</span>
+            <span class="s2">return</span>
+        <span class="s0"># exclude \f (formfeed) from the rstrip</span>
+        <span class="s1">stripped_line = line.rstrip(</span><span class="s3">&quot;</span><span class="s5">\t\n\r\v </span><span class="s3">&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">line[len(stripped_line) :] </span><span class="s2">not in </span><span class="s1">(</span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">&quot;</span><span class="s1">, </span><span class="s3">&quot;</span><span class="s5">\r\n</span><span class="s3">&quot;</span><span class="s1">):</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;trailing-whitespace&quot;</span><span class="s1">, line=i, col_offset=len(stripped_line)</span>
+            <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">check_line_length(self, line: str, i: int) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Check that the line length is less than the authorized value 
+        &quot;&quot;&quot;</span>
+        <span class="s1">max_chars = self.config.max_line_length</span>
+        <span class="s1">ignore_long_line = self.config.ignore_long_lines</span>
+        <span class="s1">line = line.rstrip()</span>
+        <span class="s2">if </span><span class="s1">len(line) &gt; max_chars </span><span class="s2">and not </span><span class="s1">ignore_long_line.search(line):</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;line-too-long&quot;</span><span class="s1">, line=i, args=(len(line), max_chars))</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">remove_pylint_option_from_lines(options_pattern_obj) -&gt; str:</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Remove the `# pylint ...` pattern from lines 
+        &quot;&quot;&quot;</span>
+        <span class="s1">lines = options_pattern_obj.string</span>
+        <span class="s1">purged_lines = (</span>
+            <span class="s1">lines[: options_pattern_obj.start(</span><span class="s4">1</span><span class="s1">)].rstrip()</span>
+            <span class="s1">+ lines[options_pattern_obj.end(</span><span class="s4">1</span><span class="s1">) :]</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">purged_lines</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">is_line_length_check_activated(pylint_pattern_match_object) -&gt; bool:</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Return true if the line length check is activated 
+        &quot;&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">for </span><span class="s1">pragma </span><span class="s2">in </span><span class="s1">parse_pragma(pylint_pattern_match_object.group(</span><span class="s4">2</span><span class="s1">)):</span>
+                <span class="s2">if </span><span class="s1">pragma.action == </span><span class="s3">&quot;disable&quot; </span><span class="s2">and </span><span class="s3">&quot;line-too-long&quot; </span><span class="s2">in </span><span class="s1">pragma.messages:</span>
+                    <span class="s2">return False</span>
+        <span class="s2">except </span><span class="s1">PragmaParserError:</span>
+            <span class="s0"># Printing useful information dealing with this error is done in the lint package</span>
+            <span class="s2">pass</span>
+        <span class="s2">return True</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">specific_splitlines(lines: str) -&gt; List[str]:</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Split lines according to universal newlines except those in a specific sets 
+        &quot;&quot;&quot;</span>
+        <span class="s1">unsplit_ends = {</span>
+            <span class="s3">&quot;</span><span class="s5">\v</span><span class="s3">&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;</span><span class="s5">\x0b</span><span class="s3">&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;</span><span class="s5">\f</span><span class="s3">&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;</span><span class="s5">\x0c</span><span class="s3">&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;</span><span class="s5">\x1c</span><span class="s3">&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;</span><span class="s5">\x1d</span><span class="s3">&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;</span><span class="s5">\x1e</span><span class="s3">&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;</span><span class="s5">\x85</span><span class="s3">&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;</span><span class="s5">\u2028</span><span class="s3">&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;</span><span class="s5">\u2029</span><span class="s3">&quot;</span><span class="s1">,</span>
+        <span class="s1">}</span>
+        <span class="s1">res = []</span>
+        <span class="s1">buffer = </span><span class="s3">&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">atomic_line </span><span class="s2">in </span><span class="s1">lines.splitlines(</span><span class="s2">True</span><span class="s1">):</span>
+            <span class="s2">if </span><span class="s1">atomic_line[-</span><span class="s4">1</span><span class="s1">] </span><span class="s2">not in </span><span class="s1">unsplit_ends:</span>
+                <span class="s1">res.append(buffer + atomic_line)</span>
+                <span class="s1">buffer = </span><span class="s3">&quot;&quot;</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">buffer += atomic_line</span>
+        <span class="s2">return </span><span class="s1">res</span>
+
+    <span class="s2">def </span><span class="s1">check_lines(self, lines: str, lineno: int) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Check lines have : 
+            - a final newline 
+            - no trailing whitespace 
+            - less than a maximum number of characters 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># we're first going to do a rough check whether any lines in this set</span>
+        <span class="s0"># go over the line limit. If none of them do, then we don't need to</span>
+        <span class="s0"># parse out the pylint options later on and can just assume that these</span>
+        <span class="s0"># lines are clean</span>
+
+        <span class="s0"># we'll also handle the line ending check here to avoid double-iteration</span>
+        <span class="s0"># unless the line lengths are suspect</span>
+
+        <span class="s1">max_chars = self.config.max_line_length</span>
+
+        <span class="s1">split_lines = self.specific_splitlines(lines)</span>
+
+        <span class="s2">for </span><span class="s1">offset, line </span><span class="s2">in </span><span class="s1">enumerate(split_lines):</span>
+            <span class="s1">self.check_line_ending(line, lineno + offset)</span>
+
+        <span class="s0"># hold onto the initial lineno for later</span>
+        <span class="s1">potential_line_length_warning = </span><span class="s2">False</span>
+        <span class="s2">for </span><span class="s1">offset, line </span><span class="s2">in </span><span class="s1">enumerate(split_lines):</span>
+            <span class="s0"># this check is purposefully simple and doesn't rstrip</span>
+            <span class="s0"># since this is running on every line you're checking it's</span>
+            <span class="s0"># advantageous to avoid doing a lot of work</span>
+            <span class="s2">if </span><span class="s1">len(line) &gt; max_chars:</span>
+                <span class="s1">potential_line_length_warning = </span><span class="s2">True</span>
+                <span class="s2">break</span>
+
+        <span class="s0"># if there were no lines passing the max_chars config, we don't bother</span>
+        <span class="s0"># running the full line check (as we've met an even more strict condition)</span>
+        <span class="s2">if not </span><span class="s1">potential_line_length_warning:</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># Line length check may be deactivated through `pylint: disable` comment</span>
+        <span class="s1">mobj = OPTION_PO.search(lines)</span>
+        <span class="s2">if </span><span class="s1">mobj:</span>
+            <span class="s2">if not </span><span class="s1">self.is_line_length_check_activated(mobj):</span>
+                <span class="s0"># the line length check is deactivated, we can stop here</span>
+                <span class="s2">return</span>
+            <span class="s0"># The 'pylint: disable whatever' should not be taken into account for line length count</span>
+            <span class="s1">lines = self.remove_pylint_option_from_lines(mobj)</span>
+
+        <span class="s0"># here we re-run specific_splitlines since we have filtered out pylint options above</span>
+        <span class="s2">for </span><span class="s1">offset, line </span><span class="s2">in </span><span class="s1">enumerate(self.specific_splitlines(lines)):</span>
+            <span class="s1">self.check_line_length(line, lineno + offset)</span>
+
+    <span class="s2">def </span><span class="s1">check_indent_level(self, string, expected, line_num):</span>
+        <span class="s0">&quot;&quot;&quot;return the indent level of the string&quot;&quot;&quot;</span>
+        <span class="s1">indent = self.config.indent_string</span>
+        <span class="s2">if </span><span class="s1">indent == </span><span class="s3">&quot;</span><span class="s5">\\</span><span class="s3">t&quot;</span><span class="s1">:  </span><span class="s0"># \t is not interpreted in the configuration file</span>
+            <span class="s1">indent = </span><span class="s3">&quot;</span><span class="s5">\t</span><span class="s3">&quot;</span>
+        <span class="s1">level = </span><span class="s4">0</span>
+        <span class="s1">unit_size = len(indent)</span>
+        <span class="s2">while </span><span class="s1">string[:unit_size] == indent:</span>
+            <span class="s1">string = string[unit_size:]</span>
+            <span class="s1">level += </span><span class="s4">1</span>
+        <span class="s1">suppl = </span><span class="s3">&quot;&quot;</span>
+        <span class="s2">while </span><span class="s1">string </span><span class="s2">and </span><span class="s1">string[</span><span class="s4">0</span><span class="s1">] </span><span class="s2">in </span><span class="s3">&quot; </span><span class="s5">\t</span><span class="s3">&quot;</span><span class="s1">:</span>
+            <span class="s1">suppl += string[</span><span class="s4">0</span><span class="s1">]</span>
+            <span class="s1">string = string[</span><span class="s4">1</span><span class="s1">:]</span>
+        <span class="s2">if </span><span class="s1">level != expected </span><span class="s2">or </span><span class="s1">suppl:</span>
+            <span class="s1">i_type = </span><span class="s3">&quot;spaces&quot;</span>
+            <span class="s2">if </span><span class="s1">indent[</span><span class="s4">0</span><span class="s1">] == </span><span class="s3">&quot;</span><span class="s5">\t</span><span class="s3">&quot;</span><span class="s1">:</span>
+                <span class="s1">i_type = </span><span class="s3">&quot;tabs&quot;</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;bad-indentation&quot;</span><span class="s1">,</span>
+                <span class="s1">line=line_num,</span>
+                <span class="s1">args=(level * unit_size + len(suppl), i_type, expected * unit_size),</span>
+            <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">register(linter):</span>
+    <span class="s0">&quot;&quot;&quot;required method to auto register this checker&quot;&quot;&quot;</span>
+    <span class="s1">linter.register_checker(FormatChecker(linter))</span>
+</pre>
+</body>
+</html>

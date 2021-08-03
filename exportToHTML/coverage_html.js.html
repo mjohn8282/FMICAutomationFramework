@@ -1,0 +1,637 @@
+<html>
+<head>
+<title>coverage_html.js</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+coverage_html.js</font>
+</center></td></tr></table>
+<pre><span class="s0">// Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0">// For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">// Coverage.py HTML report browser code.</span>
+<span class="s0">/*jslint browser: true, sloppy: true, vars: true, plusplus: true, maxerr: 50, indent: 4 */</span>
+<span class="s0">/*global coverage: true, document, window, $ */</span>
+
+<span class="s1">coverage = {};</span>
+
+<span class="s0">// Find all the elements with shortkey_* class, and use them to assign a shortcut key.</span>
+<span class="s1">coverage.assign_shortkeys = </span><span class="s2">function </span><span class="s1">() {</span>
+    <span class="s1">$(</span><span class="s3">&quot;*[class*='shortkey_']&quot;</span><span class="s1">).each(</span><span class="s2">function </span><span class="s1">(i, e) {</span>
+        <span class="s1">$.each($(e).attr(</span><span class="s3">&quot;class&quot;</span><span class="s1">).split(</span><span class="s3">&quot; &quot;</span><span class="s1">), </span><span class="s2">function </span><span class="s1">(i, c) {</span>
+            <span class="s2">if </span><span class="s1">(/^shortkey_/.test(c)) {</span>
+                <span class="s1">$(document).bind(</span><span class="s3">'keydown'</span><span class="s1">, c.substr(</span><span class="s4">9</span><span class="s1">), </span><span class="s2">function </span><span class="s1">() {</span>
+                    <span class="s1">$(e).click();</span>
+                <span class="s1">});</span>
+            <span class="s1">}</span>
+        <span class="s1">});</span>
+    <span class="s1">});</span>
+<span class="s1">};</span>
+
+<span class="s0">// Create the events for the help panel.</span>
+<span class="s1">coverage.wire_up_help_panel = </span><span class="s2">function </span><span class="s1">() {</span>
+    <span class="s1">$(</span><span class="s3">&quot;#keyboard_icon&quot;</span><span class="s1">).click(</span><span class="s2">function </span><span class="s1">() {</span>
+        <span class="s0">// Show the help panel, and position it so the keyboard icon in the</span>
+        <span class="s0">// panel is in the same place as the keyboard icon in the header.</span>
+        <span class="s1">$(</span><span class="s3">&quot;.help_panel&quot;</span><span class="s1">).show();</span>
+        <span class="s2">var </span><span class="s1">koff = $(</span><span class="s3">&quot;#keyboard_icon&quot;</span><span class="s1">).offset();</span>
+        <span class="s2">var </span><span class="s1">poff = $(</span><span class="s3">&quot;#panel_icon&quot;</span><span class="s1">).position();</span>
+        <span class="s1">$(</span><span class="s3">&quot;.help_panel&quot;</span><span class="s1">).offset({</span>
+            <span class="s1">top: koff.top-poff.top,</span>
+            <span class="s1">left: koff.left-poff.left</span>
+        <span class="s1">});</span>
+    <span class="s1">});</span>
+    <span class="s1">$(</span><span class="s3">&quot;#panel_icon&quot;</span><span class="s1">).click(</span><span class="s2">function </span><span class="s1">() {</span>
+        <span class="s1">$(</span><span class="s3">&quot;.help_panel&quot;</span><span class="s1">).hide();</span>
+    <span class="s1">});</span>
+<span class="s1">};</span>
+
+<span class="s0">// Create the events for the filter box.</span>
+<span class="s1">coverage.wire_up_filter = </span><span class="s2">function </span><span class="s1">() {</span>
+    <span class="s0">// Cache elements.</span>
+    <span class="s2">var </span><span class="s1">table = $(</span><span class="s3">&quot;table.index&quot;</span><span class="s1">);</span>
+    <span class="s2">var </span><span class="s1">table_rows = table.find(</span><span class="s3">&quot;tbody tr&quot;</span><span class="s1">);</span>
+    <span class="s2">var </span><span class="s1">table_row_names = table_rows.find(</span><span class="s3">&quot;td.name a&quot;</span><span class="s1">);</span>
+    <span class="s2">var </span><span class="s1">no_rows = $(</span><span class="s3">&quot;#no_rows&quot;</span><span class="s1">);</span>
+
+    <span class="s0">// Create a duplicate table footer that we can modify with dynamic summed values.</span>
+    <span class="s2">var </span><span class="s1">table_footer = $(</span><span class="s3">&quot;table.index tfoot tr&quot;</span><span class="s1">);</span>
+    <span class="s2">var </span><span class="s1">table_dynamic_footer = table_footer.clone();</span>
+    <span class="s1">table_dynamic_footer.attr(</span><span class="s3">'class'</span><span class="s1">, </span><span class="s3">'total_dynamic hidden'</span><span class="s1">);</span>
+    <span class="s1">table_footer.after(table_dynamic_footer);</span>
+
+    <span class="s0">// Observe filter keyevents.</span>
+    <span class="s1">$(</span><span class="s3">&quot;#filter&quot;</span><span class="s1">).on(</span><span class="s3">&quot;keyup change&quot;</span><span class="s1">, $.debounce(</span><span class="s4">150</span><span class="s1">, </span><span class="s2">function </span><span class="s1">(event) {</span>
+        <span class="s2">var </span><span class="s1">filter_value = $(</span><span class="s2">this</span><span class="s1">).val();</span>
+
+        <span class="s2">if </span><span class="s1">(filter_value === </span><span class="s3">&quot;&quot;</span><span class="s1">) {</span>
+            <span class="s0">// Filter box is empty, remove all filtering.</span>
+            <span class="s1">table_rows.removeClass(</span><span class="s3">&quot;hidden&quot;</span><span class="s1">);</span>
+
+            <span class="s0">// Show standard footer, hide dynamic footer.</span>
+            <span class="s1">table_footer.removeClass(</span><span class="s3">&quot;hidden&quot;</span><span class="s1">);</span>
+            <span class="s1">table_dynamic_footer.addClass(</span><span class="s3">&quot;hidden&quot;</span><span class="s1">);</span>
+
+            <span class="s0">// Hide placeholder, show table.</span>
+            <span class="s2">if </span><span class="s1">(no_rows.length &gt; </span><span class="s4">0</span><span class="s1">) {</span>
+                <span class="s1">no_rows.hide();</span>
+            <span class="s1">}</span>
+            <span class="s1">table.show();</span>
+
+        <span class="s1">}</span>
+        <span class="s2">else </span><span class="s1">{</span>
+            <span class="s0">// Filter table items by value.</span>
+            <span class="s2">var </span><span class="s1">hidden = </span><span class="s4">0</span><span class="s1">;</span>
+            <span class="s2">var </span><span class="s1">shown = </span><span class="s4">0</span><span class="s1">;</span>
+
+            <span class="s0">// Hide / show elements.</span>
+            <span class="s1">$.each(table_row_names, </span><span class="s2">function </span><span class="s1">() {</span>
+                <span class="s2">var </span><span class="s1">element = $(</span><span class="s2">this</span><span class="s1">).parents(</span><span class="s3">&quot;tr&quot;</span><span class="s1">);</span>
+
+                <span class="s2">if </span><span class="s1">($(</span><span class="s2">this</span><span class="s1">).text().indexOf(filter_value) === -</span><span class="s4">1</span><span class="s1">) {</span>
+                    <span class="s0">// hide</span>
+                    <span class="s1">element.addClass(</span><span class="s3">&quot;hidden&quot;</span><span class="s1">);</span>
+                    <span class="s1">hidden++;</span>
+                <span class="s1">}</span>
+                <span class="s2">else </span><span class="s1">{</span>
+                    <span class="s0">// show</span>
+                    <span class="s1">element.removeClass(</span><span class="s3">&quot;hidden&quot;</span><span class="s1">);</span>
+                    <span class="s1">shown++;</span>
+                <span class="s1">}</span>
+            <span class="s1">});</span>
+
+            <span class="s0">// Show placeholder if no rows will be displayed.</span>
+            <span class="s2">if </span><span class="s1">(no_rows.length &gt; </span><span class="s4">0</span><span class="s1">) {</span>
+                <span class="s2">if </span><span class="s1">(shown === </span><span class="s4">0</span><span class="s1">) {</span>
+                    <span class="s0">// Show placeholder, hide table.</span>
+                    <span class="s1">no_rows.show();</span>
+                    <span class="s1">table.hide();</span>
+                <span class="s1">}</span>
+                <span class="s2">else </span><span class="s1">{</span>
+                    <span class="s0">// Hide placeholder, show table.</span>
+                    <span class="s1">no_rows.hide();</span>
+                    <span class="s1">table.show();</span>
+                <span class="s1">}</span>
+            <span class="s1">}</span>
+
+            <span class="s0">// Manage dynamic header:</span>
+            <span class="s2">if </span><span class="s1">(hidden &gt; </span><span class="s4">0</span><span class="s1">) {</span>
+                <span class="s0">// Calculate new dynamic sum values based on visible rows.</span>
+                <span class="s2">for </span><span class="s1">(</span><span class="s2">var </span><span class="s1">column = </span><span class="s4">2</span><span class="s1">; column &lt; </span><span class="s4">20</span><span class="s1">; column++) {</span>
+                    <span class="s0">// Calculate summed value.</span>
+                    <span class="s2">var </span><span class="s1">cells = table_rows.find(</span><span class="s3">'td:nth-child(' </span><span class="s1">+ column + </span><span class="s3">')'</span><span class="s1">);</span>
+                    <span class="s2">if </span><span class="s1">(!cells.length) {</span>
+                        <span class="s0">// No more columns...!</span>
+                        <span class="s2">break</span><span class="s1">;</span>
+                    <span class="s1">}</span>
+
+                    <span class="s2">var </span><span class="s1">sum = </span><span class="s4">0</span><span class="s1">, numer = </span><span class="s4">0</span><span class="s1">, denom = </span><span class="s4">0</span><span class="s1">;</span>
+                    <span class="s1">$.each(cells.filter(</span><span class="s3">':visible'</span><span class="s1">), </span><span class="s2">function </span><span class="s1">() {</span>
+                        <span class="s2">var </span><span class="s1">ratio = $(</span><span class="s2">this</span><span class="s1">).data(</span><span class="s3">&quot;ratio&quot;</span><span class="s1">);</span>
+                        <span class="s2">if </span><span class="s1">(ratio) {</span>
+                            <span class="s2">var </span><span class="s1">splitted = ratio.split(</span><span class="s3">&quot; &quot;</span><span class="s1">);</span>
+                            <span class="s1">numer += parseInt(splitted[</span><span class="s4">0</span><span class="s1">], </span><span class="s4">10</span><span class="s1">);</span>
+                            <span class="s1">denom += parseInt(splitted[</span><span class="s4">1</span><span class="s1">], </span><span class="s4">10</span><span class="s1">);</span>
+                        <span class="s1">}</span>
+                        <span class="s2">else </span><span class="s1">{</span>
+                            <span class="s1">sum += parseInt(</span><span class="s2">this</span><span class="s1">.innerHTML, </span><span class="s4">10</span><span class="s1">);</span>
+                        <span class="s1">}</span>
+                    <span class="s1">});</span>
+
+                    <span class="s0">// Get footer cell element.</span>
+                    <span class="s2">var </span><span class="s1">footer_cell = table_dynamic_footer.find(</span><span class="s3">'td:nth-child(' </span><span class="s1">+ column + </span><span class="s3">')'</span><span class="s1">);</span>
+
+                    <span class="s0">// Set value into dynamic footer cell element.</span>
+                    <span class="s2">if </span><span class="s1">(cells[</span><span class="s4">0</span><span class="s1">].innerHTML.indexOf(</span><span class="s3">'%'</span><span class="s1">) &gt; -</span><span class="s4">1</span><span class="s1">) {</span>
+                        <span class="s0">// Percentage columns use the numerator and denominator,</span>
+                        <span class="s0">// and adapt to the number of decimal places.</span>
+                        <span class="s2">var </span><span class="s1">match = /\.([</span><span class="s4">0</span><span class="s1">-</span><span class="s4">9</span><span class="s1">]+)/.exec(cells[</span><span class="s4">0</span><span class="s1">].innerHTML);</span>
+                        <span class="s2">var </span><span class="s1">places = </span><span class="s4">0</span><span class="s1">;</span>
+                        <span class="s2">if </span><span class="s1">(match) {</span>
+                            <span class="s1">places = match[</span><span class="s4">1</span><span class="s1">].length;</span>
+                        <span class="s1">}</span>
+                        <span class="s2">var </span><span class="s1">pct = numer * </span><span class="s4">100 </span><span class="s1">/ denom;</span>
+                        <span class="s1">footer_cell.text(pct.toFixed(places) + </span><span class="s3">'%'</span><span class="s1">);</span>
+                    <span class="s1">}</span>
+                    <span class="s2">else </span><span class="s1">{</span>
+                        <span class="s1">footer_cell.text(sum);</span>
+                    <span class="s1">}</span>
+                <span class="s1">}</span>
+
+                <span class="s0">// Hide standard footer, show dynamic footer.</span>
+                <span class="s1">table_footer.addClass(</span><span class="s3">&quot;hidden&quot;</span><span class="s1">);</span>
+                <span class="s1">table_dynamic_footer.removeClass(</span><span class="s3">&quot;hidden&quot;</span><span class="s1">);</span>
+            <span class="s1">}</span>
+            <span class="s2">else </span><span class="s1">{</span>
+                <span class="s0">// Show standard footer, hide dynamic footer.</span>
+                <span class="s1">table_footer.removeClass(</span><span class="s3">&quot;hidden&quot;</span><span class="s1">);</span>
+                <span class="s1">table_dynamic_footer.addClass(</span><span class="s3">&quot;hidden&quot;</span><span class="s1">);</span>
+            <span class="s1">}</span>
+        <span class="s1">}</span>
+    <span class="s1">}));</span>
+
+    <span class="s0">// Trigger change event on setup, to force filter on page refresh</span>
+    <span class="s0">// (filter value may still be present).</span>
+    <span class="s1">$(</span><span class="s3">&quot;#filter&quot;</span><span class="s1">).trigger(</span><span class="s3">&quot;change&quot;</span><span class="s1">);</span>
+<span class="s1">};</span>
+
+<span class="s0">// Loaded on index.html</span>
+<span class="s1">coverage.index_ready = </span><span class="s2">function </span><span class="s1">($) {</span>
+    <span class="s0">// Look for a localStorage item containing previous sort settings:</span>
+    <span class="s2">var </span><span class="s1">sort_list = [];</span>
+    <span class="s2">var </span><span class="s1">storage_name = </span><span class="s3">&quot;COVERAGE_INDEX_SORT&quot;</span><span class="s1">;</span>
+    <span class="s2">var </span><span class="s1">stored_list = undefined;</span>
+    <span class="s2">try </span><span class="s1">{</span>
+        <span class="s1">stored_list = localStorage.getItem(storage_name);</span>
+    <span class="s1">} </span><span class="s2">catch</span><span class="s1">(err) {}</span>
+
+    <span class="s2">if </span><span class="s1">(stored_list) {</span>
+        <span class="s1">sort_list = JSON.parse(</span><span class="s3">'[[' </span><span class="s1">+ stored_list + </span><span class="s3">']]'</span><span class="s1">);</span>
+    <span class="s1">}</span>
+
+    <span class="s0">// Create a new widget which exists only to save and restore</span>
+    <span class="s0">// the sort order:</span>
+    <span class="s1">$.tablesorter.addWidget({</span>
+        <span class="s1">id: </span><span class="s3">&quot;persistentSort&quot;</span><span class="s1">,</span>
+
+        <span class="s0">// Format is called by the widget before displaying:</span>
+        <span class="s1">format: </span><span class="s2">function </span><span class="s1">(table) {</span>
+            <span class="s2">if </span><span class="s1">(table.config.sortList.length === </span><span class="s4">0 </span><span class="s1">&amp;&amp; sort_list.length &gt; </span><span class="s4">0</span><span class="s1">) {</span>
+                <span class="s0">// This table hasn't been sorted before - we'll use</span>
+                <span class="s0">// our stored settings:</span>
+                <span class="s1">$(table).trigger(</span><span class="s3">'sorton'</span><span class="s1">, [sort_list]);</span>
+            <span class="s1">}</span>
+            <span class="s2">else </span><span class="s1">{</span>
+                <span class="s0">// This is not the first load - something has</span>
+                <span class="s0">// already defined sorting so we'll just update</span>
+                <span class="s0">// our stored value to match:</span>
+                <span class="s1">sort_list = table.config.sortList;</span>
+            <span class="s1">}</span>
+        <span class="s1">}</span>
+    <span class="s1">});</span>
+
+    <span class="s0">// Configure our tablesorter to handle the variable number of</span>
+    <span class="s0">// columns produced depending on report options:</span>
+    <span class="s2">var </span><span class="s1">headers = [];</span>
+    <span class="s2">var </span><span class="s1">col_count = $(</span><span class="s3">&quot;table.index &gt; thead &gt; tr &gt; th&quot;</span><span class="s1">).length;</span>
+
+    <span class="s1">headers[</span><span class="s4">0</span><span class="s1">] = { sorter: </span><span class="s3">'text' </span><span class="s1">};</span>
+    <span class="s2">for </span><span class="s1">(i = </span><span class="s4">1</span><span class="s1">; i &lt; col_count-1; i++) {</span>
+        <span class="s1">headers[i] = { sorter: </span><span class="s3">'digit' </span><span class="s1">};</span>
+    <span class="s1">}</span>
+    <span class="s1">headers[col_count-1] = { sorter: </span><span class="s3">'percent' </span><span class="s1">};</span>
+
+    <span class="s0">// Enable the table sorter:</span>
+    <span class="s1">$(</span><span class="s3">&quot;table.index&quot;</span><span class="s1">).tablesorter({</span>
+        <span class="s1">widgets: [</span><span class="s3">'persistentSort'</span><span class="s1">],</span>
+        <span class="s1">headers: headers</span>
+    <span class="s1">});</span>
+
+    <span class="s1">coverage.assign_shortkeys();</span>
+    <span class="s1">coverage.wire_up_help_panel();</span>
+    <span class="s1">coverage.wire_up_filter();</span>
+
+    <span class="s0">// Watch for page unload events so we can save the final sort settings:</span>
+    <span class="s1">$(window).on(</span><span class="s3">&quot;unload&quot;</span><span class="s1">, </span><span class="s2">function </span><span class="s1">() {</span>
+        <span class="s2">try </span><span class="s1">{</span>
+            <span class="s1">localStorage.setItem(storage_name, sort_list.toString())</span>
+        <span class="s1">} </span><span class="s2">catch</span><span class="s1">(err) {}</span>
+    <span class="s1">});</span>
+<span class="s1">};</span>
+
+<span class="s0">// -- pyfile stuff --</span>
+
+<span class="s1">coverage.LINE_FILTERS_STORAGE = </span><span class="s3">&quot;COVERAGE_LINE_FILTERS&quot;</span><span class="s1">;</span>
+
+<span class="s1">coverage.pyfile_ready = </span><span class="s2">function </span><span class="s1">($) {</span>
+    <span class="s0">// If we're directed to a particular line number, highlight the line.</span>
+    <span class="s2">var </span><span class="s1">frag = location.hash;</span>
+    <span class="s2">if </span><span class="s1">(frag.length &gt; </span><span class="s4">2 </span><span class="s1">&amp;&amp; frag[</span><span class="s4">1</span><span class="s1">] === </span><span class="s3">'t'</span><span class="s1">) {</span>
+        <span class="s1">$(frag).addClass(</span><span class="s3">'highlight'</span><span class="s1">);</span>
+        <span class="s1">coverage.set_sel(parseInt(frag.substr(</span><span class="s4">2</span><span class="s1">), </span><span class="s4">10</span><span class="s1">));</span>
+    <span class="s1">}</span>
+    <span class="s2">else </span><span class="s1">{</span>
+        <span class="s1">coverage.set_sel(</span><span class="s4">0</span><span class="s1">);</span>
+    <span class="s1">}</span>
+
+    <span class="s1">$(document)</span>
+        <span class="s1">.bind(</span><span class="s3">'keydown'</span><span class="s1">, </span><span class="s3">'j'</span><span class="s1">, coverage.to_next_chunk_nicely)</span>
+        <span class="s1">.bind(</span><span class="s3">'keydown'</span><span class="s1">, </span><span class="s3">'k'</span><span class="s1">, coverage.to_prev_chunk_nicely)</span>
+        <span class="s1">.bind(</span><span class="s3">'keydown'</span><span class="s1">, </span><span class="s3">'0'</span><span class="s1">, coverage.to_top)</span>
+        <span class="s1">.bind(</span><span class="s3">'keydown'</span><span class="s1">, </span><span class="s3">'1'</span><span class="s1">, coverage.to_first_chunk)</span>
+        <span class="s1">;</span>
+
+    <span class="s1">$(</span><span class="s3">&quot;.button_toggle_run&quot;</span><span class="s1">).click(</span><span class="s2">function </span><span class="s1">(evt) {coverage.toggle_lines(evt.target, </span><span class="s3">&quot;run&quot;</span><span class="s1">);});</span>
+    <span class="s1">$(</span><span class="s3">&quot;.button_toggle_exc&quot;</span><span class="s1">).click(</span><span class="s2">function </span><span class="s1">(evt) {coverage.toggle_lines(evt.target, </span><span class="s3">&quot;exc&quot;</span><span class="s1">);});</span>
+    <span class="s1">$(</span><span class="s3">&quot;.button_toggle_mis&quot;</span><span class="s1">).click(</span><span class="s2">function </span><span class="s1">(evt) {coverage.toggle_lines(evt.target, </span><span class="s3">&quot;mis&quot;</span><span class="s1">);});</span>
+    <span class="s1">$(</span><span class="s3">&quot;.button_toggle_par&quot;</span><span class="s1">).click(</span><span class="s2">function </span><span class="s1">(evt) {coverage.toggle_lines(evt.target, </span><span class="s3">&quot;par&quot;</span><span class="s1">);});</span>
+
+    <span class="s1">coverage.filters = undefined;</span>
+    <span class="s2">try </span><span class="s1">{</span>
+        <span class="s1">coverage.filters = localStorage.getItem(coverage.LINE_FILTERS_STORAGE);</span>
+    <span class="s1">} </span><span class="s2">catch</span><span class="s1">(err) {}</span>
+
+    <span class="s2">if </span><span class="s1">(coverage.filters) {</span>
+        <span class="s1">coverage.filters = JSON.parse(coverage.filters);</span>
+    <span class="s1">}</span>
+    <span class="s2">else </span><span class="s1">{</span>
+        <span class="s1">coverage.filters = {run: </span><span class="s2">false</span><span class="s1">, exc: </span><span class="s2">true</span><span class="s1">, mis: </span><span class="s2">true</span><span class="s1">, par: </span><span class="s2">true</span><span class="s1">};</span>
+    <span class="s1">}</span>
+
+    <span class="s2">for </span><span class="s1">(cls </span><span class="s2">in </span><span class="s1">coverage.filters) {</span>
+        <span class="s1">coverage.set_line_visibilty(cls, coverage.filters[cls]);</span>
+    <span class="s1">}</span>
+
+    <span class="s1">coverage.assign_shortkeys();</span>
+    <span class="s1">coverage.wire_up_help_panel();</span>
+
+    <span class="s1">coverage.init_scroll_markers();</span>
+
+    <span class="s0">// Rebuild scroll markers when the window height changes.</span>
+    <span class="s1">$(window).resize(coverage.build_scroll_markers);</span>
+<span class="s1">};</span>
+
+<span class="s1">coverage.toggle_lines = </span><span class="s2">function </span><span class="s1">(btn, cls) {</span>
+    <span class="s2">var </span><span class="s1">onoff = !$(btn).hasClass(</span><span class="s3">&quot;show_&quot; </span><span class="s1">+ cls);</span>
+    <span class="s1">coverage.set_line_visibilty(cls, onoff);</span>
+    <span class="s1">coverage.build_scroll_markers();</span>
+    <span class="s1">coverage.filters[cls] = onoff;</span>
+    <span class="s2">try </span><span class="s1">{</span>
+        <span class="s1">localStorage.setItem(coverage.LINE_FILTERS_STORAGE, JSON.stringify(coverage.filters));</span>
+    <span class="s1">} </span><span class="s2">catch</span><span class="s1">(err) {}</span>
+<span class="s1">};</span>
+
+<span class="s1">coverage.set_line_visibilty = </span><span class="s2">function </span><span class="s1">(cls, onoff) {</span>
+    <span class="s2">var </span><span class="s1">show = </span><span class="s3">&quot;show_&quot; </span><span class="s1">+ cls;</span>
+    <span class="s2">var </span><span class="s1">btn = $(</span><span class="s3">&quot;.button_toggle_&quot; </span><span class="s1">+ cls);</span>
+    <span class="s2">if </span><span class="s1">(onoff) {</span>
+        <span class="s1">$(</span><span class="s3">&quot;#source .&quot; </span><span class="s1">+ cls).addClass(show);</span>
+        <span class="s1">btn.addClass(show);</span>
+    <span class="s1">}</span>
+    <span class="s2">else </span><span class="s1">{</span>
+        <span class="s1">$(</span><span class="s3">&quot;#source .&quot; </span><span class="s1">+ cls).removeClass(show);</span>
+        <span class="s1">btn.removeClass(show);</span>
+    <span class="s1">}</span>
+<span class="s1">};</span>
+
+<span class="s0">// Return the nth line div.</span>
+<span class="s1">coverage.line_elt = </span><span class="s2">function </span><span class="s1">(n) {</span>
+    <span class="s2">return </span><span class="s1">$(</span><span class="s3">&quot;#t&quot; </span><span class="s1">+ n);</span>
+<span class="s1">};</span>
+
+<span class="s0">// Return the nth line number div.</span>
+<span class="s1">coverage.num_elt = </span><span class="s2">function </span><span class="s1">(n) {</span>
+    <span class="s2">return </span><span class="s1">$(</span><span class="s3">&quot;#n&quot; </span><span class="s1">+ n);</span>
+<span class="s1">};</span>
+
+<span class="s0">// Set the selection.  b and e are line numbers.</span>
+<span class="s1">coverage.set_sel = </span><span class="s2">function </span><span class="s1">(b, e) {</span>
+    <span class="s0">// The first line selected.</span>
+    <span class="s1">coverage.sel_begin = b;</span>
+    <span class="s0">// The next line not selected.</span>
+    <span class="s1">coverage.sel_end = (e === undefined) ? b+</span><span class="s4">1 </span><span class="s1">: e;</span>
+<span class="s1">};</span>
+
+<span class="s1">coverage.to_top = </span><span class="s2">function </span><span class="s1">() {</span>
+    <span class="s1">coverage.set_sel(</span><span class="s4">0</span><span class="s1">, </span><span class="s4">1</span><span class="s1">);</span>
+    <span class="s1">coverage.scroll_window(</span><span class="s4">0</span><span class="s1">);</span>
+<span class="s1">};</span>
+
+<span class="s1">coverage.to_first_chunk = </span><span class="s2">function </span><span class="s1">() {</span>
+    <span class="s1">coverage.set_sel(</span><span class="s4">0</span><span class="s1">, </span><span class="s4">1</span><span class="s1">);</span>
+    <span class="s1">coverage.to_next_chunk();</span>
+<span class="s1">};</span>
+
+<span class="s0">// Return a string indicating what kind of chunk this line belongs to,</span>
+<span class="s0">// or null if not a chunk.</span>
+<span class="s1">coverage.chunk_indicator = </span><span class="s2">function </span><span class="s1">(line_elt) {</span>
+    <span class="s2">var </span><span class="s1">klass = line_elt.attr(</span><span class="s3">'class'</span><span class="s1">);</span>
+    <span class="s2">if </span><span class="s1">(klass) {</span>
+        <span class="s2">var </span><span class="s1">m = klass.match(/\bshow_\w+\b/);</span>
+        <span class="s2">if </span><span class="s1">(m) {</span>
+            <span class="s2">return </span><span class="s1">m[</span><span class="s4">0</span><span class="s1">];</span>
+        <span class="s1">}</span>
+    <span class="s1">}</span>
+    <span class="s2">return null</span><span class="s1">;</span>
+<span class="s1">};</span>
+
+<span class="s1">coverage.to_next_chunk = </span><span class="s2">function </span><span class="s1">() {</span>
+    <span class="s2">var </span><span class="s1">c = coverage;</span>
+
+    <span class="s0">// Find the start of the next colored chunk.</span>
+    <span class="s2">var </span><span class="s1">probe = c.sel_end;</span>
+    <span class="s2">var </span><span class="s1">chunk_indicator, probe_line;</span>
+    <span class="s2">while </span><span class="s1">(</span><span class="s2">true</span><span class="s1">) {</span>
+        <span class="s1">probe_line = c.line_elt(probe);</span>
+        <span class="s2">if </span><span class="s1">(probe_line.length === </span><span class="s4">0</span><span class="s1">) {</span>
+            <span class="s2">return</span><span class="s1">;</span>
+        <span class="s1">}</span>
+        <span class="s1">chunk_indicator = c.chunk_indicator(probe_line);</span>
+        <span class="s2">if </span><span class="s1">(chunk_indicator) {</span>
+            <span class="s2">break</span><span class="s1">;</span>
+        <span class="s1">}</span>
+        <span class="s1">probe++;</span>
+    <span class="s1">}</span>
+
+    <span class="s0">// There's a next chunk, `probe` points to it.</span>
+    <span class="s2">var </span><span class="s1">begin = probe;</span>
+
+    <span class="s0">// Find the end of this chunk.</span>
+    <span class="s2">var </span><span class="s1">next_indicator = chunk_indicator;</span>
+    <span class="s2">while </span><span class="s1">(next_indicator === chunk_indicator) {</span>
+        <span class="s1">probe++;</span>
+        <span class="s1">probe_line = c.line_elt(probe);</span>
+        <span class="s1">next_indicator = c.chunk_indicator(probe_line);</span>
+    <span class="s1">}</span>
+    <span class="s1">c.set_sel(begin, probe);</span>
+    <span class="s1">c.show_selection();</span>
+<span class="s1">};</span>
+
+<span class="s1">coverage.to_prev_chunk = </span><span class="s2">function </span><span class="s1">() {</span>
+    <span class="s2">var </span><span class="s1">c = coverage;</span>
+
+    <span class="s0">// Find the end of the prev colored chunk.</span>
+    <span class="s2">var </span><span class="s1">probe = c.sel_begin-1;</span>
+    <span class="s2">var </span><span class="s1">probe_line = c.line_elt(probe);</span>
+    <span class="s2">if </span><span class="s1">(probe_line.length === </span><span class="s4">0</span><span class="s1">) {</span>
+        <span class="s2">return</span><span class="s1">;</span>
+    <span class="s1">}</span>
+    <span class="s2">var </span><span class="s1">chunk_indicator = c.chunk_indicator(probe_line);</span>
+    <span class="s2">while </span><span class="s1">(probe &gt; </span><span class="s4">0 </span><span class="s1">&amp;&amp; !chunk_indicator) {</span>
+        <span class="s1">probe--;</span>
+        <span class="s1">probe_line = c.line_elt(probe);</span>
+        <span class="s2">if </span><span class="s1">(probe_line.length === </span><span class="s4">0</span><span class="s1">) {</span>
+            <span class="s2">return</span><span class="s1">;</span>
+        <span class="s1">}</span>
+        <span class="s1">chunk_indicator = c.chunk_indicator(probe_line);</span>
+    <span class="s1">}</span>
+
+    <span class="s0">// There's a prev chunk, `probe` points to its last line.</span>
+    <span class="s2">var </span><span class="s1">end = probe+</span><span class="s4">1</span><span class="s1">;</span>
+
+    <span class="s0">// Find the beginning of this chunk.</span>
+    <span class="s2">var </span><span class="s1">prev_indicator = chunk_indicator;</span>
+    <span class="s2">while </span><span class="s1">(prev_indicator === chunk_indicator) {</span>
+        <span class="s1">probe--;</span>
+        <span class="s1">probe_line = c.line_elt(probe);</span>
+        <span class="s1">prev_indicator = c.chunk_indicator(probe_line);</span>
+    <span class="s1">}</span>
+    <span class="s1">c.set_sel(probe+</span><span class="s4">1</span><span class="s1">, end);</span>
+    <span class="s1">c.show_selection();</span>
+<span class="s1">};</span>
+
+<span class="s0">// Return the line number of the line nearest pixel position pos</span>
+<span class="s1">coverage.line_at_pos = </span><span class="s2">function </span><span class="s1">(pos) {</span>
+    <span class="s2">var </span><span class="s1">l1 = coverage.line_elt(</span><span class="s4">1</span><span class="s1">),</span>
+        <span class="s1">l2 = coverage.line_elt(</span><span class="s4">2</span><span class="s1">),</span>
+        <span class="s1">result;</span>
+    <span class="s2">if </span><span class="s1">(l1.length &amp;&amp; l2.length) {</span>
+        <span class="s2">var </span><span class="s1">l1_top = l1.offset().top,</span>
+            <span class="s1">line_height = l2.offset().top - l1_top,</span>
+            <span class="s1">nlines = (pos - l1_top) / line_height;</span>
+        <span class="s2">if </span><span class="s1">(nlines &lt; </span><span class="s4">1</span><span class="s1">) {</span>
+            <span class="s1">result = </span><span class="s4">1</span><span class="s1">;</span>
+        <span class="s1">}</span>
+        <span class="s2">else </span><span class="s1">{</span>
+            <span class="s1">result = Math.ceil(nlines);</span>
+        <span class="s1">}</span>
+    <span class="s1">}</span>
+    <span class="s2">else </span><span class="s1">{</span>
+        <span class="s1">result = </span><span class="s4">1</span><span class="s1">;</span>
+    <span class="s1">}</span>
+    <span class="s2">return </span><span class="s1">result;</span>
+<span class="s1">};</span>
+
+<span class="s0">// Returns 0, 1, or 2: how many of the two ends of the selection are on</span>
+<span class="s0">// the screen right now?</span>
+<span class="s1">coverage.selection_ends_on_screen = </span><span class="s2">function </span><span class="s1">() {</span>
+    <span class="s2">if </span><span class="s1">(coverage.sel_begin === </span><span class="s4">0</span><span class="s1">) {</span>
+        <span class="s2">return </span><span class="s4">0</span><span class="s1">;</span>
+    <span class="s1">}</span>
+
+    <span class="s2">var </span><span class="s1">top = coverage.line_elt(coverage.sel_begin);</span>
+    <span class="s2">var </span><span class="s1">next = coverage.line_elt(coverage.sel_end-1);</span>
+
+    <span class="s2">return </span><span class="s1">(</span>
+        <span class="s1">(top.isOnScreen() ? </span><span class="s4">1 </span><span class="s1">: </span><span class="s4">0</span><span class="s1">) +</span>
+        <span class="s1">(next.isOnScreen() ? </span><span class="s4">1 </span><span class="s1">: </span><span class="s4">0</span><span class="s1">)</span>
+    <span class="s1">);</span>
+<span class="s1">};</span>
+
+<span class="s1">coverage.to_next_chunk_nicely = </span><span class="s2">function </span><span class="s1">() {</span>
+    <span class="s1">coverage.finish_scrolling();</span>
+    <span class="s2">if </span><span class="s1">(coverage.selection_ends_on_screen() === </span><span class="s4">0</span><span class="s1">) {</span>
+        <span class="s0">// The selection is entirely off the screen: select the top line on</span>
+        <span class="s0">// the screen.</span>
+        <span class="s2">var </span><span class="s1">win = $(window);</span>
+        <span class="s1">coverage.select_line_or_chunk(coverage.line_at_pos(win.scrollTop()));</span>
+    <span class="s1">}</span>
+    <span class="s1">coverage.to_next_chunk();</span>
+<span class="s1">};</span>
+
+<span class="s1">coverage.to_prev_chunk_nicely = </span><span class="s2">function </span><span class="s1">() {</span>
+    <span class="s1">coverage.finish_scrolling();</span>
+    <span class="s2">if </span><span class="s1">(coverage.selection_ends_on_screen() === </span><span class="s4">0</span><span class="s1">) {</span>
+        <span class="s2">var </span><span class="s1">win = $(window);</span>
+        <span class="s1">coverage.select_line_or_chunk(coverage.line_at_pos(win.scrollTop() + win.height()));</span>
+    <span class="s1">}</span>
+    <span class="s1">coverage.to_prev_chunk();</span>
+<span class="s1">};</span>
+
+<span class="s0">// Select line number lineno, or if it is in a colored chunk, select the</span>
+<span class="s0">// entire chunk</span>
+<span class="s1">coverage.select_line_or_chunk = </span><span class="s2">function </span><span class="s1">(lineno) {</span>
+    <span class="s2">var </span><span class="s1">c = coverage;</span>
+    <span class="s2">var </span><span class="s1">probe_line = c.line_elt(lineno);</span>
+    <span class="s2">if </span><span class="s1">(probe_line.length === </span><span class="s4">0</span><span class="s1">) {</span>
+        <span class="s2">return</span><span class="s1">;</span>
+    <span class="s1">}</span>
+    <span class="s2">var </span><span class="s1">the_indicator = c.chunk_indicator(probe_line);</span>
+    <span class="s2">if </span><span class="s1">(the_indicator) {</span>
+        <span class="s0">// The line is in a highlighted chunk.</span>
+        <span class="s0">// Search backward for the first line.</span>
+        <span class="s2">var </span><span class="s1">probe = lineno;</span>
+        <span class="s2">var </span><span class="s1">indicator = the_indicator;</span>
+        <span class="s2">while </span><span class="s1">(probe &gt; </span><span class="s4">0 </span><span class="s1">&amp;&amp; indicator === the_indicator) {</span>
+            <span class="s1">probe--;</span>
+            <span class="s1">probe_line = c.line_elt(probe);</span>
+            <span class="s2">if </span><span class="s1">(probe_line.length === </span><span class="s4">0</span><span class="s1">) {</span>
+                <span class="s2">break</span><span class="s1">;</span>
+            <span class="s1">}</span>
+            <span class="s1">indicator = c.chunk_indicator(probe_line);</span>
+        <span class="s1">}</span>
+        <span class="s2">var </span><span class="s1">begin = probe + </span><span class="s4">1</span><span class="s1">;</span>
+
+        <span class="s0">// Search forward for the last line.</span>
+        <span class="s1">probe = lineno;</span>
+        <span class="s1">indicator = the_indicator;</span>
+        <span class="s2">while </span><span class="s1">(indicator === the_indicator) {</span>
+            <span class="s1">probe++;</span>
+            <span class="s1">probe_line = c.line_elt(probe);</span>
+            <span class="s1">indicator = c.chunk_indicator(probe_line);</span>
+        <span class="s1">}</span>
+
+        <span class="s1">coverage.set_sel(begin, probe);</span>
+    <span class="s1">}</span>
+    <span class="s2">else </span><span class="s1">{</span>
+        <span class="s1">coverage.set_sel(lineno);</span>
+    <span class="s1">}</span>
+<span class="s1">};</span>
+
+<span class="s1">coverage.show_selection = </span><span class="s2">function </span><span class="s1">() {</span>
+    <span class="s2">var </span><span class="s1">c = coverage;</span>
+
+    <span class="s0">// Highlight the lines in the chunk</span>
+    <span class="s1">$(</span><span class="s3">&quot;.linenos .highlight&quot;</span><span class="s1">).removeClass(</span><span class="s3">&quot;highlight&quot;</span><span class="s1">);</span>
+    <span class="s2">for </span><span class="s1">(</span><span class="s2">var </span><span class="s1">probe = c.sel_begin; probe &gt; </span><span class="s4">0 </span><span class="s1">&amp;&amp; probe &lt; c.sel_end; probe++) {</span>
+        <span class="s1">c.num_elt(probe).addClass(</span><span class="s3">&quot;highlight&quot;</span><span class="s1">);</span>
+    <span class="s1">}</span>
+
+    <span class="s1">c.scroll_to_selection();</span>
+<span class="s1">};</span>
+
+<span class="s1">coverage.scroll_to_selection = </span><span class="s2">function </span><span class="s1">() {</span>
+    <span class="s0">// Scroll the page if the chunk isn't fully visible.</span>
+    <span class="s2">if </span><span class="s1">(coverage.selection_ends_on_screen() &lt; </span><span class="s4">2</span><span class="s1">) {</span>
+        <span class="s0">// Need to move the page. The html,body trick makes it scroll in all</span>
+        <span class="s0">// browsers, got it from http://stackoverflow.com/questions/3042651</span>
+        <span class="s2">var </span><span class="s1">top = coverage.line_elt(coverage.sel_begin);</span>
+        <span class="s2">var </span><span class="s1">top_pos = parseInt(top.offset().top, </span><span class="s4">10</span><span class="s1">);</span>
+        <span class="s1">coverage.scroll_window(top_pos - </span><span class="s4">30</span><span class="s1">);</span>
+    <span class="s1">}</span>
+<span class="s1">};</span>
+
+<span class="s1">coverage.scroll_window = </span><span class="s2">function </span><span class="s1">(to_pos) {</span>
+    <span class="s1">$(</span><span class="s3">&quot;html,body&quot;</span><span class="s1">).animate({scrollTop: to_pos}, </span><span class="s4">200</span><span class="s1">);</span>
+<span class="s1">};</span>
+
+<span class="s1">coverage.finish_scrolling = </span><span class="s2">function </span><span class="s1">() {</span>
+    <span class="s1">$(</span><span class="s3">&quot;html,body&quot;</span><span class="s1">).stop(</span><span class="s2">true</span><span class="s1">, </span><span class="s2">true</span><span class="s1">);</span>
+<span class="s1">};</span>
+
+<span class="s1">coverage.init_scroll_markers = </span><span class="s2">function </span><span class="s1">() {</span>
+    <span class="s2">var </span><span class="s1">c = coverage;</span>
+    <span class="s0">// Init some variables</span>
+    <span class="s1">c.lines_len = $(</span><span class="s3">'#source p'</span><span class="s1">).length;</span>
+    <span class="s1">c.body_h = $(</span><span class="s3">'body'</span><span class="s1">).height();</span>
+    <span class="s1">c.header_h = $(</span><span class="s3">'div#header'</span><span class="s1">).height();</span>
+
+    <span class="s0">// Build html</span>
+    <span class="s1">c.build_scroll_markers();</span>
+<span class="s1">};</span>
+
+<span class="s1">coverage.build_scroll_markers = </span><span class="s2">function </span><span class="s1">() {</span>
+    <span class="s2">var </span><span class="s1">c = coverage,</span>
+        <span class="s1">min_line_height = </span><span class="s4">3</span><span class="s1">,</span>
+        <span class="s1">max_line_height = </span><span class="s4">10</span><span class="s1">,</span>
+        <span class="s1">visible_window_h = $(window).height();</span>
+
+    <span class="s1">c.lines_to_mark = $(</span><span class="s3">'#source'</span><span class="s1">).find(</span><span class="s3">'p.show_run, p.show_mis, p.show_exc, p.show_exc, p.show_par'</span><span class="s1">);</span>
+    <span class="s1">$(</span><span class="s3">'#scroll_marker'</span><span class="s1">).remove();</span>
+    <span class="s0">// Don't build markers if the window has no scroll bar.</span>
+    <span class="s2">if </span><span class="s1">(c.body_h &lt;= visible_window_h) {</span>
+        <span class="s2">return</span><span class="s1">;</span>
+    <span class="s1">}</span>
+
+    <span class="s1">$(</span><span class="s3">&quot;body&quot;</span><span class="s1">).append(</span><span class="s3">&quot;&lt;div id='scroll_marker'&gt;&amp;nbsp;&lt;/div&gt;&quot;</span><span class="s1">);</span>
+    <span class="s2">var </span><span class="s1">scroll_marker = $(</span><span class="s3">'#scroll_marker'</span><span class="s1">),</span>
+        <span class="s1">marker_scale = scroll_marker.height() / c.body_h,</span>
+        <span class="s1">line_height = scroll_marker.height() / c.lines_len;</span>
+
+    <span class="s0">// Line height must be between the extremes.</span>
+    <span class="s2">if </span><span class="s1">(line_height &gt; min_line_height) {</span>
+        <span class="s2">if </span><span class="s1">(line_height &gt; max_line_height) {</span>
+            <span class="s1">line_height = max_line_height;</span>
+        <span class="s1">}</span>
+    <span class="s1">}</span>
+    <span class="s2">else </span><span class="s1">{</span>
+        <span class="s1">line_height = min_line_height;</span>
+    <span class="s1">}</span>
+
+    <span class="s2">var </span><span class="s1">previous_line = -</span><span class="s4">99</span><span class="s1">,</span>
+        <span class="s1">last_mark,</span>
+        <span class="s1">last_top,</span>
+        <span class="s1">offsets = {};</span>
+
+    <span class="s0">// Calculate line offsets outside loop to prevent relayouts</span>
+    <span class="s1">c.lines_to_mark.each(</span><span class="s2">function</span><span class="s1">() {</span>
+        <span class="s1">offsets[</span><span class="s2">this</span><span class="s1">.id] = $(</span><span class="s2">this</span><span class="s1">).offset().top;</span>
+    <span class="s1">});</span>
+    <span class="s1">c.lines_to_mark.each(</span><span class="s2">function </span><span class="s1">() {</span>
+        <span class="s2">var </span><span class="s1">id_name = $(</span><span class="s2">this</span><span class="s1">).attr(</span><span class="s3">'id'</span><span class="s1">),</span>
+            <span class="s1">line_top = Math.round(offsets[id_name] * marker_scale),</span>
+            <span class="s1">line_number = parseInt(id_name.substring(</span><span class="s4">1</span><span class="s1">, id_name.length));</span>
+
+        <span class="s2">if </span><span class="s1">(line_number === previous_line + </span><span class="s4">1</span><span class="s1">) {</span>
+            <span class="s0">// If this solid missed block just make previous mark higher.</span>
+            <span class="s1">last_mark.css({</span>
+                <span class="s3">'height'</span><span class="s1">: line_top + line_height - last_top</span>
+            <span class="s1">});</span>
+        <span class="s1">}</span>
+        <span class="s2">else </span><span class="s1">{</span>
+            <span class="s0">// Add colored line in scroll_marker block.</span>
+            <span class="s1">scroll_marker.append(</span><span class="s3">'&lt;div id=&quot;m' </span><span class="s1">+ line_number + </span><span class="s3">'&quot; class=&quot;marker&quot;&gt;&lt;/div&gt;'</span><span class="s1">);</span>
+            <span class="s1">last_mark = $(</span><span class="s3">'#m' </span><span class="s1">+ line_number);</span>
+            <span class="s1">last_mark.css({</span>
+                <span class="s3">'height'</span><span class="s1">: line_height,</span>
+                <span class="s3">'top'</span><span class="s1">: line_top</span>
+            <span class="s1">});</span>
+            <span class="s1">last_top = line_top;</span>
+        <span class="s1">}</span>
+
+        <span class="s1">previous_line = line_number;</span>
+    <span class="s1">});</span>
+<span class="s1">};</span>
+</pre>
+</body>
+</html>

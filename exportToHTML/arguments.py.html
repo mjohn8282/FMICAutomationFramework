@@ -1,0 +1,321 @@
+<html>
+<head>
+<title>arguments.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+arguments.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2015-2016, 2018-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015-2016 Ceridwen &lt;ceridwenv@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Bryce Guinta &lt;bryce.paul.guinta@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Nick Drozd &lt;nicholasdrozd@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Anthony Sottile &lt;asottile@umich.edu&gt;</span>
+<span class="s0"># Copyright (c) 2020 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">bases</span>
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">context </span><span class="s2">as </span><span class="s1">contextmod</span>
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">exceptions, nodes, util</span>
+
+
+<span class="s2">class </span><span class="s1">CallSite:</span>
+    <span class="s0">&quot;&quot;&quot;Class for understanding arguments passed into a call site 
+ 
+    It needs a call context, which contains the arguments and the 
+    keyword arguments that were passed into a given call site. 
+    In order to infer what an argument represents, call :meth:`infer_argument` 
+    with the corresponding function node and the argument name. 
+ 
+    :param callcontext: 
+        An instance of :class:`astroid.context.CallContext`, that holds 
+        the arguments for the call site. 
+    :param argument_context_map: 
+        Additional contexts per node, passed in from :attr:`astroid.context.Context.extra_context` 
+    :param context: 
+        An instance of :class:`astroid.context.Context`. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, callcontext, argument_context_map=</span><span class="s2">None</span><span class="s1">, context=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s2">if </span><span class="s1">argument_context_map </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">argument_context_map = {}</span>
+        <span class="s1">self.argument_context_map = argument_context_map</span>
+        <span class="s1">args = callcontext.args</span>
+        <span class="s1">keywords = callcontext.keywords</span>
+        <span class="s1">self.duplicated_keywords = set()</span>
+        <span class="s1">self._unpacked_args = self._unpack_args(args, context=context)</span>
+        <span class="s1">self._unpacked_kwargs = self._unpack_keywords(keywords, context=context)</span>
+
+        <span class="s1">self.positional_arguments = [</span>
+            <span class="s1">arg </span><span class="s2">for </span><span class="s1">arg </span><span class="s2">in </span><span class="s1">self._unpacked_args </span><span class="s2">if </span><span class="s1">arg </span><span class="s2">is not </span><span class="s1">util.Uninferable</span>
+        <span class="s1">]</span>
+        <span class="s1">self.keyword_arguments = {</span>
+            <span class="s1">key: value</span>
+            <span class="s2">for </span><span class="s1">key, value </span><span class="s2">in </span><span class="s1">self._unpacked_kwargs.items()</span>
+            <span class="s2">if </span><span class="s1">value </span><span class="s2">is not </span><span class="s1">util.Uninferable</span>
+        <span class="s1">}</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s2">def </span><span class="s1">from_call(cls, call_node, context=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Get a CallSite object from the given Call node. 
+ 
+        :param context: 
+            An instance of :class:`astroid.context.Context` that will be used 
+            to force a single inference path. 
+        &quot;&quot;&quot;</span>
+
+        <span class="s0"># Determine the callcontext from the given `context` object if any.</span>
+        <span class="s1">context = context </span><span class="s2">or </span><span class="s1">contextmod.InferenceContext()</span>
+        <span class="s1">callcontext = contextmod.CallContext(call_node.args, call_node.keywords)</span>
+        <span class="s2">return </span><span class="s1">cls(callcontext, context=context)</span>
+
+    <span class="s2">def </span><span class="s1">has_invalid_arguments(self):</span>
+        <span class="s0">&quot;&quot;&quot;Check if in the current CallSite were passed *invalid* arguments 
+ 
+        This can mean multiple things. For instance, if an unpacking 
+        of an invalid object was passed, then this method will return True. 
+        Other cases can be when the arguments can't be inferred by astroid, 
+        for example, by passing objects which aren't known statically. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">len(self.positional_arguments) != len(self._unpacked_args)</span>
+
+    <span class="s2">def </span><span class="s1">has_invalid_keywords(self):</span>
+        <span class="s0">&quot;&quot;&quot;Check if in the current CallSite were passed *invalid* keyword arguments 
+ 
+        For instance, unpacking a dictionary with integer keys is invalid 
+        (**{1:2}), because the keys must be strings, which will make this 
+        method to return True. Other cases where this might return True if 
+        objects which can't be inferred were passed. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">len(self.keyword_arguments) != len(self._unpacked_kwargs)</span>
+
+    <span class="s2">def </span><span class="s1">_unpack_keywords(self, keywords, context=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">values = {}</span>
+        <span class="s1">context = context </span><span class="s2">or </span><span class="s1">contextmod.InferenceContext()</span>
+        <span class="s1">context.extra_context = self.argument_context_map</span>
+        <span class="s2">for </span><span class="s1">name, value </span><span class="s2">in </span><span class="s1">keywords:</span>
+            <span class="s2">if </span><span class="s1">name </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s0"># Then it's an unpacking operation (**)</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">inferred = next(value.infer(context=context))</span>
+                <span class="s2">except </span><span class="s1">exceptions.InferenceError:</span>
+                    <span class="s1">values[name] = util.Uninferable</span>
+                    <span class="s2">continue</span>
+
+                <span class="s2">if not </span><span class="s1">isinstance(inferred, nodes.Dict):</span>
+                    <span class="s0"># Not something we can work with.</span>
+                    <span class="s1">values[name] = util.Uninferable</span>
+                    <span class="s2">continue</span>
+
+                <span class="s2">for </span><span class="s1">dict_key, dict_value </span><span class="s2">in </span><span class="s1">inferred.items:</span>
+                    <span class="s2">try</span><span class="s1">:</span>
+                        <span class="s1">dict_key = next(dict_key.infer(context=context))</span>
+                    <span class="s2">except </span><span class="s1">exceptions.InferenceError:</span>
+                        <span class="s1">values[name] = util.Uninferable</span>
+                        <span class="s2">continue</span>
+                    <span class="s2">if not </span><span class="s1">isinstance(dict_key, nodes.Const):</span>
+                        <span class="s1">values[name] = util.Uninferable</span>
+                        <span class="s2">continue</span>
+                    <span class="s2">if not </span><span class="s1">isinstance(dict_key.value, str):</span>
+                        <span class="s1">values[name] = util.Uninferable</span>
+                        <span class="s2">continue</span>
+                    <span class="s2">if </span><span class="s1">dict_key.value </span><span class="s2">in </span><span class="s1">values:</span>
+                        <span class="s0"># The name is already in the dictionary</span>
+                        <span class="s1">values[dict_key.value] = util.Uninferable</span>
+                        <span class="s1">self.duplicated_keywords.add(dict_key.value)</span>
+                        <span class="s2">continue</span>
+                    <span class="s1">values[dict_key.value] = dict_value</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">values[name] = value</span>
+        <span class="s2">return </span><span class="s1">values</span>
+
+    <span class="s2">def </span><span class="s1">_unpack_args(self, args, context=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">values = []</span>
+        <span class="s1">context = context </span><span class="s2">or </span><span class="s1">contextmod.InferenceContext()</span>
+        <span class="s1">context.extra_context = self.argument_context_map</span>
+        <span class="s2">for </span><span class="s1">arg </span><span class="s2">in </span><span class="s1">args:</span>
+            <span class="s2">if </span><span class="s1">isinstance(arg, nodes.Starred):</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">inferred = next(arg.value.infer(context=context))</span>
+                <span class="s2">except </span><span class="s1">exceptions.InferenceError:</span>
+                    <span class="s1">values.append(util.Uninferable)</span>
+                    <span class="s2">continue</span>
+
+                <span class="s2">if </span><span class="s1">inferred </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+                    <span class="s1">values.append(util.Uninferable)</span>
+                    <span class="s2">continue</span>
+                <span class="s2">if not </span><span class="s1">hasattr(inferred, </span><span class="s3">&quot;elts&quot;</span><span class="s1">):</span>
+                    <span class="s1">values.append(util.Uninferable)</span>
+                    <span class="s2">continue</span>
+                <span class="s1">values.extend(inferred.elts)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">values.append(arg)</span>
+        <span class="s2">return </span><span class="s1">values</span>
+
+    <span class="s2">def </span><span class="s1">infer_argument(self, funcnode, name, context):</span>
+        <span class="s0">&quot;&quot;&quot;infer a function argument value according to the call context 
+ 
+        Arguments: 
+            funcnode: The function being called. 
+            name: The name of the argument whose value is being inferred. 
+            context: Inference context object 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">name </span><span class="s2">in </span><span class="s1">self.duplicated_keywords:</span>
+            <span class="s2">raise </span><span class="s1">exceptions.InferenceError(</span>
+                <span class="s3">&quot;The arguments passed to {func!r} &quot; &quot; have duplicate keywords.&quot;</span><span class="s1">,</span>
+                <span class="s1">call_site=self,</span>
+                <span class="s1">func=funcnode,</span>
+                <span class="s1">arg=name,</span>
+                <span class="s1">context=context,</span>
+            <span class="s1">)</span>
+
+        <span class="s0"># Look into the keywords first, maybe it's already there.</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">self.keyword_arguments[name].infer(context)</span>
+        <span class="s2">except </span><span class="s1">KeyError:</span>
+            <span class="s2">pass</span>
+
+        <span class="s0"># Too many arguments given and no variable arguments.</span>
+        <span class="s2">if </span><span class="s1">len(self.positional_arguments) &gt; len(funcnode.args.args):</span>
+            <span class="s2">if not </span><span class="s1">funcnode.args.vararg </span><span class="s2">and not </span><span class="s1">funcnode.args.posonlyargs:</span>
+                <span class="s2">raise </span><span class="s1">exceptions.InferenceError(</span>
+                    <span class="s3">&quot;Too many positional arguments &quot;</span>
+                    <span class="s3">&quot;passed to {func!r} that does &quot;</span>
+                    <span class="s3">&quot;not have *args.&quot;</span><span class="s1">,</span>
+                    <span class="s1">call_site=self,</span>
+                    <span class="s1">func=funcnode,</span>
+                    <span class="s1">arg=name,</span>
+                    <span class="s1">context=context,</span>
+                <span class="s1">)</span>
+
+        <span class="s1">positional = self.positional_arguments[: len(funcnode.args.args)]</span>
+        <span class="s1">vararg = self.positional_arguments[len(funcnode.args.args) :]</span>
+        <span class="s1">argindex = funcnode.args.find_argname(name)[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s1">kwonlyargs = {arg.name </span><span class="s2">for </span><span class="s1">arg </span><span class="s2">in </span><span class="s1">funcnode.args.kwonlyargs}</span>
+        <span class="s1">kwargs = {</span>
+            <span class="s1">key: value</span>
+            <span class="s2">for </span><span class="s1">key, value </span><span class="s2">in </span><span class="s1">self.keyword_arguments.items()</span>
+            <span class="s2">if </span><span class="s1">key </span><span class="s2">not in </span><span class="s1">kwonlyargs</span>
+        <span class="s1">}</span>
+        <span class="s0"># If there are too few positionals compared to</span>
+        <span class="s0"># what the function expects to receive, check to see</span>
+        <span class="s0"># if the missing positional arguments were passed</span>
+        <span class="s0"># as keyword arguments and if so, place them into the</span>
+        <span class="s0"># positional args list.</span>
+        <span class="s2">if </span><span class="s1">len(positional) &lt; len(funcnode.args.args):</span>
+            <span class="s2">for </span><span class="s1">func_arg </span><span class="s2">in </span><span class="s1">funcnode.args.args:</span>
+                <span class="s2">if </span><span class="s1">func_arg.name </span><span class="s2">in </span><span class="s1">kwargs:</span>
+                    <span class="s1">arg = kwargs.pop(func_arg.name)</span>
+                    <span class="s1">positional.append(arg)</span>
+
+        <span class="s2">if </span><span class="s1">argindex </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s0"># 2. first argument of instance/class method</span>
+            <span class="s2">if </span><span class="s1">argindex == </span><span class="s4">0 </span><span class="s2">and </span><span class="s1">funcnode.type </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;method&quot;</span><span class="s1">, </span><span class="s3">&quot;classmethod&quot;</span><span class="s1">):</span>
+                <span class="s2">if </span><span class="s1">context.boundnode </span><span class="s2">is not None</span><span class="s1">:</span>
+                    <span class="s1">boundnode = context.boundnode</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s0"># XXX can do better ?</span>
+                    <span class="s1">boundnode = funcnode.parent.frame()</span>
+
+                <span class="s2">if </span><span class="s1">isinstance(boundnode, nodes.ClassDef):</span>
+                    <span class="s0"># Verify that we're accessing a method</span>
+                    <span class="s0"># of the metaclass through a class, as in</span>
+                    <span class="s0"># `cls.metaclass_method`. In this case, the</span>
+                    <span class="s0"># first argument is always the class.</span>
+                    <span class="s1">method_scope = funcnode.parent.scope()</span>
+                    <span class="s2">if </span><span class="s1">method_scope </span><span class="s2">is </span><span class="s1">boundnode.metaclass():</span>
+                        <span class="s2">return </span><span class="s1">iter((boundnode,))</span>
+
+                <span class="s2">if </span><span class="s1">funcnode.type == </span><span class="s3">&quot;method&quot;</span><span class="s1">:</span>
+                    <span class="s2">if not </span><span class="s1">isinstance(boundnode, bases.Instance):</span>
+                        <span class="s1">boundnode = boundnode.instantiate_class()</span>
+                    <span class="s2">return </span><span class="s1">iter((boundnode,))</span>
+                <span class="s2">if </span><span class="s1">funcnode.type == </span><span class="s3">&quot;classmethod&quot;</span><span class="s1">:</span>
+                    <span class="s2">return </span><span class="s1">iter((boundnode,))</span>
+            <span class="s0"># if we have a method, extract one position</span>
+            <span class="s0"># from the index, so we'll take in account</span>
+            <span class="s0"># the extra parameter represented by `self` or `cls`</span>
+            <span class="s2">if </span><span class="s1">funcnode.type </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;method&quot;</span><span class="s1">, </span><span class="s3">&quot;classmethod&quot;</span><span class="s1">):</span>
+                <span class="s1">argindex -= </span><span class="s4">1</span>
+            <span class="s0"># 2. search arg index</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s2">return </span><span class="s1">self.positional_arguments[argindex].infer(context)</span>
+            <span class="s2">except </span><span class="s1">IndexError:</span>
+                <span class="s2">pass</span>
+
+        <span class="s2">if </span><span class="s1">funcnode.args.kwarg == name:</span>
+            <span class="s0"># It wants all the keywords that were passed into</span>
+            <span class="s0"># the call site.</span>
+            <span class="s2">if </span><span class="s1">self.has_invalid_keywords():</span>
+                <span class="s2">raise </span><span class="s1">exceptions.InferenceError(</span>
+                    <span class="s3">&quot;Inference failed to find values for all keyword arguments &quot;</span>
+                    <span class="s3">&quot;to {func!r}: {unpacked_kwargs!r} doesn't correspond to &quot;</span>
+                    <span class="s3">&quot;{keyword_arguments!r}.&quot;</span><span class="s1">,</span>
+                    <span class="s1">keyword_arguments=self.keyword_arguments,</span>
+                    <span class="s1">unpacked_kwargs=self._unpacked_kwargs,</span>
+                    <span class="s1">call_site=self,</span>
+                    <span class="s1">func=funcnode,</span>
+                    <span class="s1">arg=name,</span>
+                    <span class="s1">context=context,</span>
+                <span class="s1">)</span>
+            <span class="s1">kwarg = nodes.Dict(</span>
+                <span class="s1">lineno=funcnode.args.lineno,</span>
+                <span class="s1">col_offset=funcnode.args.col_offset,</span>
+                <span class="s1">parent=funcnode.args,</span>
+            <span class="s1">)</span>
+            <span class="s1">kwarg.postinit(</span>
+                <span class="s1">[(nodes.const_factory(key), value) </span><span class="s2">for </span><span class="s1">key, value </span><span class="s2">in </span><span class="s1">kwargs.items()]</span>
+            <span class="s1">)</span>
+            <span class="s2">return </span><span class="s1">iter((kwarg,))</span>
+        <span class="s2">if </span><span class="s1">funcnode.args.vararg == name:</span>
+            <span class="s0"># It wants all the args that were passed into</span>
+            <span class="s0"># the call site.</span>
+            <span class="s2">if </span><span class="s1">self.has_invalid_arguments():</span>
+                <span class="s2">raise </span><span class="s1">exceptions.InferenceError(</span>
+                    <span class="s3">&quot;Inference failed to find values for all positional &quot;</span>
+                    <span class="s3">&quot;arguments to {func!r}: {unpacked_args!r} doesn't &quot;</span>
+                    <span class="s3">&quot;correspond to {positional_arguments!r}.&quot;</span><span class="s1">,</span>
+                    <span class="s1">positional_arguments=self.positional_arguments,</span>
+                    <span class="s1">unpacked_args=self._unpacked_args,</span>
+                    <span class="s1">call_site=self,</span>
+                    <span class="s1">func=funcnode,</span>
+                    <span class="s1">arg=name,</span>
+                    <span class="s1">context=context,</span>
+                <span class="s1">)</span>
+            <span class="s1">args = nodes.Tuple(</span>
+                <span class="s1">lineno=funcnode.args.lineno,</span>
+                <span class="s1">col_offset=funcnode.args.col_offset,</span>
+                <span class="s1">parent=funcnode.args,</span>
+            <span class="s1">)</span>
+            <span class="s1">args.postinit(vararg)</span>
+            <span class="s2">return </span><span class="s1">iter((args,))</span>
+
+        <span class="s0"># Check if it's a default parameter.</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">funcnode.args.default_value(name).infer(context)</span>
+        <span class="s2">except </span><span class="s1">exceptions.NoDefault:</span>
+            <span class="s2">pass</span>
+        <span class="s2">raise </span><span class="s1">exceptions.InferenceError(</span>
+            <span class="s3">&quot;No value found for argument {arg} to {func!r}&quot;</span><span class="s1">,</span>
+            <span class="s1">call_site=self,</span>
+            <span class="s1">func=funcnode,</span>
+            <span class="s1">arg=name,</span>
+            <span class="s1">context=context,</span>
+        <span class="s1">)</span>
+</pre>
+</body>
+</html>

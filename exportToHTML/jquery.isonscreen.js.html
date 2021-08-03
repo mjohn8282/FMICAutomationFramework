@@ -1,0 +1,73 @@
+<html>
+<head>
+<title>jquery.isonscreen.js</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+jquery.isonscreen.js</font>
+</center></td></tr></table>
+<pre><span class="s0">/* Copyright (c) 2010 
+ * @author Laurence Wheway 
+ * Dual licensed under the MIT (http://www.opensource.org/licenses/mit-license.php) 
+ * and GPL (http://www.opensource.org/licenses/gpl-license.php) licenses. 
+ * 
+ * @version 1.2.0 
+ */</span>
+<span class="s1">(</span><span class="s2">function</span><span class="s1">($) {</span>
+	<span class="s1">jQuery.extend({</span>
+		<span class="s1">isOnScreen: </span><span class="s2">function</span><span class="s1">(box, container) {</span>
+			<span class="s0">//ensure numbers come in as intgers (not strings) and remove 'px' is it's there</span>
+			<span class="s2">for</span><span class="s1">(</span><span class="s2">var </span><span class="s1">i </span><span class="s2">in </span><span class="s1">box){box[i] = parseFloat(box[i])};</span>
+			<span class="s2">for</span><span class="s1">(</span><span class="s2">var </span><span class="s1">i </span><span class="s2">in </span><span class="s1">container){container[i] = parseFloat(container[i])};</span>
+
+			<span class="s2">if</span><span class="s1">(!container){</span>
+				<span class="s1">container = {</span>
+					<span class="s1">left: $(window).scrollLeft(),</span>
+					<span class="s1">top: $(window).scrollTop(),</span>
+					<span class="s1">width: $(window).width(),</span>
+					<span class="s1">height: $(window).height()</span>
+				<span class="s1">}</span>
+			<span class="s1">}</span>
+
+			<span class="s2">if</span><span class="s1">(	box.left+box.width-container.left &gt; </span><span class="s3">0 </span><span class="s1">&amp;&amp;</span>
+				<span class="s1">box.left &lt; container.width+container.left &amp;&amp;</span>
+				<span class="s1">box.top+box.height-container.top &gt; </span><span class="s3">0 </span><span class="s1">&amp;&amp;</span>
+				<span class="s1">box.top &lt; container.height+container.top</span>
+			<span class="s1">) </span><span class="s2">return true</span><span class="s1">;</span>
+			<span class="s2">return false</span><span class="s1">;</span>
+		<span class="s1">}</span>
+	<span class="s1">})</span>
+
+
+	<span class="s1">jQuery.fn.isOnScreen = </span><span class="s2">function </span><span class="s1">(container) {</span>
+		<span class="s2">for</span><span class="s1">(</span><span class="s2">var </span><span class="s1">i </span><span class="s2">in </span><span class="s1">container){container[i] = parseFloat(container[i])};</span>
+
+		<span class="s2">if</span><span class="s1">(!container){</span>
+			<span class="s1">container = {</span>
+				<span class="s1">left: $(window).scrollLeft(),</span>
+				<span class="s1">top: $(window).scrollTop(),</span>
+				<span class="s1">width: $(window).width(),</span>
+				<span class="s1">height: $(window).height()</span>
+			<span class="s1">}</span>
+		<span class="s1">}</span>
+
+		<span class="s2">if</span><span class="s1">(	$(</span><span class="s2">this</span><span class="s1">).offset().left+$(</span><span class="s2">this</span><span class="s1">).width()-container.left &gt; </span><span class="s3">0 </span><span class="s1">&amp;&amp;</span>
+			<span class="s1">$(</span><span class="s2">this</span><span class="s1">).offset().left &lt; container.width+container.left &amp;&amp;</span>
+			<span class="s1">$(</span><span class="s2">this</span><span class="s1">).offset().top+$(</span><span class="s2">this</span><span class="s1">).height()-container.top &gt; </span><span class="s3">0 </span><span class="s1">&amp;&amp;</span>
+			<span class="s1">$(</span><span class="s2">this</span><span class="s1">).offset().top &lt; container.height+container.top</span>
+		<span class="s1">) </span><span class="s2">return true</span><span class="s1">;</span>
+		<span class="s2">return false</span><span class="s1">;</span>
+	<span class="s1">}</span>
+<span class="s1">})(jQuery);</span>
+</pre>
+</body>
+</html>

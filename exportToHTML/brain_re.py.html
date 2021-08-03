@@ -1,0 +1,108 @@
+<html>
+<head>
+<title>brain_re.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_re.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">MANAGER, context, inference_tip, nodes</span>
+
+<span class="s1">PY36 = sys.version_info &gt;= (</span><span class="s3">3</span><span class="s1">, </span><span class="s3">6</span><span class="s1">)</span>
+<span class="s1">PY37 = sys.version_info[:</span><span class="s3">2</span><span class="s1">] &gt;= (</span><span class="s3">3</span><span class="s1">, </span><span class="s3">7</span><span class="s1">)</span>
+<span class="s1">PY39 = sys.version_info[:</span><span class="s3">2</span><span class="s1">] &gt;= (</span><span class="s3">3</span><span class="s1">, </span><span class="s3">9</span><span class="s1">)</span>
+
+<span class="s2">if </span><span class="s1">PY36:</span>
+    <span class="s0"># Since Python 3.6 there is the RegexFlag enum</span>
+    <span class="s0"># where every entry will be exposed via updating globals()</span>
+
+    <span class="s2">def </span><span class="s1">_re_transform():</span>
+        <span class="s2">return </span><span class="s1">astroid.parse(</span>
+            <span class="s4">&quot;&quot;&quot; 
+        import sre_compile 
+        ASCII = sre_compile.SRE_FLAG_ASCII 
+        IGNORECASE = sre_compile.SRE_FLAG_IGNORECASE 
+        LOCALE = sre_compile.SRE_FLAG_LOCALE 
+        UNICODE = sre_compile.SRE_FLAG_UNICODE 
+        MULTILINE = sre_compile.SRE_FLAG_MULTILINE 
+        DOTALL = sre_compile.SRE_FLAG_DOTALL 
+        VERBOSE = sre_compile.SRE_FLAG_VERBOSE 
+        A = ASCII 
+        I = IGNORECASE 
+        L = LOCALE 
+        U = UNICODE 
+        M = MULTILINE 
+        S = DOTALL 
+        X = VERBOSE 
+        TEMPLATE = sre_compile.SRE_FLAG_TEMPLATE 
+        T = TEMPLATE 
+        DEBUG = sre_compile.SRE_FLAG_DEBUG 
+        &quot;&quot;&quot;</span>
+        <span class="s1">)</span>
+
+    <span class="s1">astroid.register_module_extender(astroid.MANAGER, </span><span class="s4">&quot;re&quot;</span><span class="s1">, _re_transform)</span>
+
+
+<span class="s1">CLASS_GETITEM_TEMPLATE = </span><span class="s4">&quot;&quot;&quot; 
+@classmethod 
+def __class_getitem__(cls, item): 
+    return cls 
+&quot;&quot;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">_looks_like_pattern_or_match(node: nodes.Call) -&gt; bool:</span>
+    <span class="s0">&quot;&quot;&quot;Check for re.Pattern or re.Match call in stdlib. 
+ 
+    Match these patterns from stdlib/re.py 
+    ```py 
+    Pattern = type(...) 
+    Match = type(...) 
+    ``` 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">(</span>
+        <span class="s1">node.root().name == </span><span class="s4">&quot;re&quot;</span>
+        <span class="s2">and </span><span class="s1">isinstance(node.func, nodes.Name)</span>
+        <span class="s2">and </span><span class="s1">node.func.name == </span><span class="s4">&quot;type&quot;</span>
+        <span class="s2">and </span><span class="s1">isinstance(node.parent, nodes.Assign)</span>
+        <span class="s2">and </span><span class="s1">len(node.parent.targets) == </span><span class="s3">1</span>
+        <span class="s2">and </span><span class="s1">isinstance(node.parent.targets[</span><span class="s3">0</span><span class="s1">], nodes.AssignName)</span>
+        <span class="s2">and </span><span class="s1">node.parent.targets[</span><span class="s3">0</span><span class="s1">].name </span><span class="s2">in </span><span class="s1">(</span><span class="s4">&quot;Pattern&quot;</span><span class="s1">, </span><span class="s4">&quot;Match&quot;</span><span class="s1">)</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">infer_pattern_match(node: nodes.Call, ctx: context.InferenceContext = </span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Infer re.Pattern and re.Match as classes. For PY39+ add `__class_getitem__`.&quot;&quot;&quot;</span>
+    <span class="s1">class_def = nodes.ClassDef(</span>
+        <span class="s1">name=node.parent.targets[</span><span class="s3">0</span><span class="s1">].name,</span>
+        <span class="s1">lineno=node.lineno,</span>
+        <span class="s1">col_offset=node.col_offset,</span>
+        <span class="s1">parent=node.parent,</span>
+    <span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">PY39:</span>
+        <span class="s1">func_to_add = astroid.extract_node(CLASS_GETITEM_TEMPLATE)</span>
+        <span class="s1">class_def.locals[</span><span class="s4">&quot;__class_getitem__&quot;</span><span class="s1">] = [func_to_add]</span>
+    <span class="s2">return </span><span class="s1">iter([class_def])</span>
+
+
+<span class="s2">if </span><span class="s1">PY37:</span>
+    <span class="s1">MANAGER.register_transform(</span>
+        <span class="s1">nodes.Call, inference_tip(infer_pattern_match), _looks_like_pattern_or_match</span>
+    <span class="s1">)</span>
+</pre>
+</body>
+</html>

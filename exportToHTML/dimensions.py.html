@@ -1,0 +1,320 @@
+<html>
+<head>
+<title>dimensions.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+dimensions.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">copy </span><span class="s0">import </span><span class="s1">copy</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">safe_string, deprecated</span>
+<span class="s0">from </span><span class="s1">openpyexcel.utils </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">get_column_interval,</span>
+    <span class="s1">column_index_from_string,</span>
+    <span class="s1">range_boundaries,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Float,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">Strict,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Alias,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.styles.styleable </span><span class="s0">import </span><span class="s1">StyleableObject</span>
+<span class="s0">from </span><span class="s1">openpyexcel.styles.cell_style </span><span class="s0">import </span><span class="s1">StyleArray</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.utils.bound_dictionary </span><span class="s0">import </span><span class="s1">BoundDictionary</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s0">import </span><span class="s1">Element</span>
+
+
+<span class="s0">class </span><span class="s1">Dimension(Strict, StyleableObject):</span>
+    <span class="s2">&quot;&quot;&quot;Information about the display properties of a row or column.&quot;&quot;&quot;</span>
+    <span class="s1">__fields__ = (</span><span class="s3">'hidden'</span><span class="s1">,</span>
+                 <span class="s3">'outlineLevel'</span><span class="s1">,</span>
+                 <span class="s3">'collapsed'</span><span class="s1">,)</span>
+
+    <span class="s1">index = Integer()</span>
+    <span class="s1">hidden = Bool()</span>
+    <span class="s1">outlineLevel = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">outline_level = Alias(</span><span class="s3">'outlineLevel'</span><span class="s1">)</span>
+    <span class="s1">collapsed = Bool()</span>
+    <span class="s1">style = Alias(</span><span class="s3">'style_id'</span><span class="s1">)</span>
+
+
+    <span class="s0">def </span><span class="s1">__init__(self, index, hidden, outlineLevel,</span>
+                 <span class="s1">collapsed, worksheet, visible=</span><span class="s0">True</span><span class="s1">, style=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">super(Dimension, self).__init__(sheet=worksheet, style_array=style)</span>
+        <span class="s1">self.index = index</span>
+        <span class="s1">self.hidden = hidden</span>
+        <span class="s1">self.outlineLevel = outlineLevel</span>
+        <span class="s1">self.collapsed = collapsed</span>
+
+
+    <span class="s0">def </span><span class="s1">__iter__(self):</span>
+        <span class="s0">for </span><span class="s1">key </span><span class="s0">in </span><span class="s1">self.__fields__:</span>
+            <span class="s1">value = getattr(self, key, </span><span class="s0">None</span><span class="s1">)</span>
+            <span class="s0">if </span><span class="s1">value:</span>
+                <span class="s0">yield </span><span class="s1">key, safe_string(value)</span>
+
+
+    <span class="s0">def </span><span class="s1">__copy__(self):</span>
+        <span class="s1">cp = self.__new__(self.__class__)</span>
+        <span class="s1">attrib = self.__dict__</span>
+        <span class="s1">attrib[</span><span class="s3">'worksheet'</span><span class="s1">] = self.parent</span>
+        <span class="s1">cp.__init__(**attrib)</span>
+        <span class="s1">cp._style = copy(self._style)</span>
+        <span class="s0">return </span><span class="s1">cp</span>
+
+
+<span class="s0">class </span><span class="s1">RowDimension(Dimension):</span>
+    <span class="s2">&quot;&quot;&quot;Information about the display properties of a row.&quot;&quot;&quot;</span>
+
+    <span class="s1">__fields__ = Dimension.__fields__ + (</span><span class="s3">'ht'</span><span class="s1">, </span><span class="s3">'customFormat'</span><span class="s1">, </span><span class="s3">'customHeight'</span><span class="s1">, </span><span class="s3">'s'</span><span class="s1">,</span>
+                                         <span class="s3">'thickBot'</span><span class="s1">, </span><span class="s3">'thickTop'</span><span class="s1">)</span>
+    <span class="s1">r = Alias(</span><span class="s3">'index'</span><span class="s1">)</span>
+    <span class="s1">s = Alias(</span><span class="s3">'style_id'</span><span class="s1">)</span>
+    <span class="s1">ht = Float(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">height = Alias(</span><span class="s3">'ht'</span><span class="s1">)</span>
+    <span class="s1">thickBot = Bool()</span>
+    <span class="s1">thickTop = Bool()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">worksheet,</span>
+                 <span class="s1">index=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">ht=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">customHeight=</span><span class="s0">None</span><span class="s1">, </span><span class="s2"># do not write</span>
+                 <span class="s1">s=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">customFormat=</span><span class="s0">None</span><span class="s1">, </span><span class="s2"># do not write</span>
+                 <span class="s1">hidden=</span><span class="s0">False</span><span class="s1">,</span>
+                 <span class="s1">outlineLevel=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">outline_level=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">collapsed=</span><span class="s0">False</span><span class="s1">,</span>
+                 <span class="s1">visible=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">height=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">r=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spans=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">thickBot=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">thickTop=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">**kw</span>
+                 <span class="s1">):</span>
+        <span class="s0">if </span><span class="s1">r </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">index = r</span>
+        <span class="s0">if </span><span class="s1">height </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">ht = height</span>
+        <span class="s1">self.ht = ht</span>
+        <span class="s0">if </span><span class="s1">visible </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">hidden = </span><span class="s0">not </span><span class="s1">visible</span>
+        <span class="s0">if </span><span class="s1">outline_level </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">outlineLevel = outline_level</span>
+        <span class="s1">self.thickBot = thickBot</span>
+        <span class="s1">self.thickTop = thickTop</span>
+        <span class="s1">super(RowDimension, self).__init__(index, hidden, outlineLevel,</span>
+                                           <span class="s1">collapsed, worksheet, style=s)</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">customFormat(self):</span>
+        <span class="s2">&quot;&quot;&quot;Always true if there is a style for the row&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self.has_style</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">customHeight(self):</span>
+        <span class="s2">&quot;&quot;&quot;Always true if there is a height for the row&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self.ht </span><span class="s0">is not None</span>
+
+
+<span class="s0">class </span><span class="s1">ColumnDimension(Dimension):</span>
+    <span class="s2">&quot;&quot;&quot;Information about the display properties of a column.&quot;&quot;&quot;</span>
+
+    <span class="s1">width = Float(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">bestFit = Bool()</span>
+    <span class="s1">auto_size = Alias(</span><span class="s3">'bestFit'</span><span class="s1">)</span>
+    <span class="s1">index = String()</span>
+    <span class="s1">min = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">max = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">collapsed = Bool()</span>
+
+    <span class="s1">__fields__ = Dimension.__fields__ + (</span><span class="s3">'width'</span><span class="s1">, </span><span class="s3">'bestFit'</span><span class="s1">, </span><span class="s3">'customWidth'</span><span class="s1">, </span><span class="s3">'style'</span><span class="s1">,</span>
+                                         <span class="s3">'min'</span><span class="s1">, </span><span class="s3">'max'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">worksheet,</span>
+                 <span class="s1">index=</span><span class="s3">'A'</span><span class="s1">,</span>
+                 <span class="s1">width=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">bestFit=</span><span class="s0">False</span><span class="s1">,</span>
+                 <span class="s1">hidden=</span><span class="s0">False</span><span class="s1">,</span>
+                 <span class="s1">outlineLevel=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">outline_level=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">collapsed=</span><span class="s0">False</span><span class="s1">,</span>
+                 <span class="s1">style=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">min=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">max=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">customWidth=</span><span class="s0">False</span><span class="s1">, </span><span class="s2"># do not write</span>
+                 <span class="s1">visible=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">auto_size=</span><span class="s0">None</span><span class="s1">,):</span>
+        <span class="s1">self.width = width</span>
+        <span class="s1">self.min = min</span>
+        <span class="s1">self.max = max</span>
+        <span class="s0">if </span><span class="s1">visible </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">hidden = </span><span class="s0">not </span><span class="s1">visible</span>
+        <span class="s0">if </span><span class="s1">auto_size </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">bestFit = auto_size</span>
+        <span class="s1">self.bestFit = bestFit</span>
+        <span class="s0">if </span><span class="s1">outline_level </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">outlineLevel = outline_level</span>
+        <span class="s1">self.collapsed = collapsed</span>
+        <span class="s1">super(ColumnDimension, self).__init__(index, hidden, outlineLevel,</span>
+                                              <span class="s1">collapsed, worksheet, style=style)</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">customWidth(self):</span>
+        <span class="s2">&quot;&quot;&quot;Always true if there is a width for the column&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self.width </span><span class="s0">is not None</span>
+
+
+    <span class="s0">def </span><span class="s1">reindex(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Set boundaries for column definition 
+        &quot;&quot;&quot;</span>
+        <span class="s0">if not </span><span class="s1">all([self.min, self.max]):</span>
+            <span class="s1">self.min = self.max = column_index_from_string(self.index)</span>
+
+
+    <span class="s0">def </span><span class="s1">to_tree(self):</span>
+        <span class="s1">attrs = dict(self)</span>
+        <span class="s0">if </span><span class="s1">set(attrs) != set([</span><span class="s3">'min'</span><span class="s1">, </span><span class="s3">'max'</span><span class="s1">]):</span>
+            <span class="s0">return </span><span class="s1">Element(</span><span class="s3">&quot;col&quot;</span><span class="s1">, **attrs)</span>
+
+
+<span class="s0">class </span><span class="s1">DimensionHolder(BoundDictionary):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Allow columns to be grouped 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, worksheet, reference=</span><span class="s3">&quot;index&quot;</span><span class="s1">, default_factory=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">self.worksheet = worksheet</span>
+        <span class="s1">self.max_outline = </span><span class="s0">None</span>
+        <span class="s1">self.default_factory = default_factory</span>
+        <span class="s1">super(DimensionHolder, self).__init__(reference, default_factory)</span>
+
+
+    <span class="s0">def </span><span class="s1">group(self, start, end=</span><span class="s0">None</span><span class="s1">, outline_level=</span><span class="s4">1</span><span class="s1">, hidden=</span><span class="s0">False</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot;allow grouping a range of consecutive rows or columns together 
+ 
+        :param start: first row or column to be grouped (mandatory) 
+        :param end: last row or column to be grouped (optional, default to start) 
+        :param outline_level: outline level 
+        :param hidden: should the group be hidden on workbook open or not 
+        &quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">end </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">end = start</span>
+
+        <span class="s0">if </span><span class="s1">isinstance(self.default_factory(), ColumnDimension):</span>
+            <span class="s1">new_dim = self[start]</span>
+            <span class="s1">new_dim.outline_level = outline_level</span>
+            <span class="s1">new_dim.hidden = hidden</span>
+            <span class="s1">work_sequence = get_column_interval(start, end)[</span><span class="s4">1</span><span class="s1">:]</span>
+            <span class="s0">for </span><span class="s1">column_letter </span><span class="s0">in </span><span class="s1">work_sequence:</span>
+                <span class="s0">if </span><span class="s1">column_letter </span><span class="s0">in </span><span class="s1">self:</span>
+                    <span class="s0">del </span><span class="s1">self[column_letter]</span>
+            <span class="s1">new_dim.min, new_dim.max = map(column_index_from_string, (start, end))</span>
+        <span class="s0">elif </span><span class="s1">isinstance(self.default_factory(), RowDimension):</span>
+            <span class="s0">for </span><span class="s1">el </span><span class="s0">in </span><span class="s1">range(start, end + </span><span class="s4">1</span><span class="s1">):</span>
+                <span class="s1">new_dim = self.worksheet.row_dimensions[el]</span>
+                <span class="s1">new_dim.outline_level = outline_level</span>
+                <span class="s1">new_dim.hidden = hidden</span>
+
+
+    <span class="s0">def </span><span class="s1">to_tree(self):</span>
+
+        <span class="s0">def </span><span class="s1">sorter(value):</span>
+            <span class="s1">value.reindex()</span>
+            <span class="s0">return </span><span class="s1">value.min</span>
+
+        <span class="s1">el = Element(</span><span class="s3">'cols'</span><span class="s1">)</span>
+        <span class="s1">obj = </span><span class="s0">None</span>
+        <span class="s1">outlines = set()</span>
+
+        <span class="s0">for </span><span class="s1">col </span><span class="s0">in </span><span class="s1">sorted(self.values(), key=sorter):</span>
+            <span class="s1">obj = col.to_tree()</span>
+            <span class="s1">outlines.add(col.outlineLevel)</span>
+            <span class="s0">if </span><span class="s1">obj </span><span class="s0">is not None</span><span class="s1">:</span>
+                <span class="s1">el.append(obj)</span>
+
+        <span class="s0">if </span><span class="s1">outlines:</span>
+            <span class="s1">self.max_outline = max(outlines)</span>
+
+        <span class="s0">if </span><span class="s1">obj </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">el</span>
+
+
+<span class="s0">class </span><span class="s1">SheetFormatProperties(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;sheetFormatPr&quot;</span>
+
+    <span class="s1">baseColWidth = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">defaultColWidth = Float(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">defaultRowHeight = Float()</span>
+    <span class="s1">customHeight = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">zeroHeight = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">thickTop = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">thickBottom = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">outlineLevelRow = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">outlineLevelCol = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">baseColWidth=</span><span class="s4">8</span><span class="s1">, </span><span class="s2">#according to spec</span>
+                 <span class="s1">defaultColWidth=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">defaultRowHeight=</span><span class="s4">15</span><span class="s1">,</span>
+                 <span class="s1">customHeight=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">zeroHeight=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">thickTop=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">thickBottom=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">outlineLevelRow=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">outlineLevelCol=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.baseColWidth = baseColWidth</span>
+        <span class="s1">self.defaultColWidth = defaultColWidth</span>
+        <span class="s1">self.defaultRowHeight = defaultRowHeight</span>
+        <span class="s1">self.customHeight = customHeight</span>
+        <span class="s1">self.zeroHeight = zeroHeight</span>
+        <span class="s1">self.thickTop = thickTop</span>
+        <span class="s1">self.thickBottom = thickBottom</span>
+        <span class="s1">self.outlineLevelRow = outlineLevelRow</span>
+        <span class="s1">self.outlineLevelCol = outlineLevelCol</span>
+
+
+<span class="s0">class </span><span class="s1">SheetDimension(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;dimension&quot;</span>
+
+    <span class="s1">ref = String()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">ref=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.ref = ref</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">boundaries(self):</span>
+        <span class="s0">return </span><span class="s1">range_boundaries(self.ref)</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,968 @@
+<html>
+<head>
+<title>wrappers.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #d19a66;}
+.s3 { color: #5c6370;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+wrappers.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">os</span>
+<span class="s0">import </span><span class="s1">sys</span>
+<span class="s0">import </span><span class="s1">functools</span>
+<span class="s0">import </span><span class="s1">operator</span>
+<span class="s0">import </span><span class="s1">weakref</span>
+<span class="s0">import </span><span class="s1">inspect</span>
+
+<span class="s1">PY2 = sys.version_info[</span><span class="s2">0</span><span class="s1">] == </span><span class="s2">2</span>
+
+<span class="s0">if </span><span class="s1">PY2:</span>
+    <span class="s1">string_types = basestring,</span>
+<span class="s0">else</span><span class="s1">:</span>
+    <span class="s1">string_types = str,</span>
+
+<span class="s0">def </span><span class="s1">with_metaclass(meta, *bases):</span>
+    <span class="s3">&quot;&quot;&quot;Create a base class with a metaclass.&quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">meta(</span><span class="s4">&quot;NewBase&quot;</span><span class="s1">, bases, {})</span>
+
+<span class="s0">class </span><span class="s1">_ObjectProxyMethods(object):</span>
+
+    <span class="s3"># We use properties to override the values of __module__ and</span>
+    <span class="s3"># __doc__. If we add these in ObjectProxy, the derived class</span>
+    <span class="s3"># __dict__ will still be setup to have string variants of these</span>
+    <span class="s3"># attributes and the rules of descriptors means that they appear to</span>
+    <span class="s3"># take precedence over the properties in the base class. To avoid</span>
+    <span class="s3"># that, we copy the properties into the derived class type itself</span>
+    <span class="s3"># via a meta class. In that way the properties will always take</span>
+    <span class="s3"># precedence.</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">__module__(self):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__.__module__</span>
+
+    <span class="s1">@__module__.setter</span>
+    <span class="s0">def </span><span class="s1">__module__(self, value):</span>
+        <span class="s1">self.__wrapped__.__module__ = value</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">__doc__(self):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__.__doc__</span>
+
+    <span class="s1">@__doc__.setter</span>
+    <span class="s0">def </span><span class="s1">__doc__(self, value):</span>
+        <span class="s1">self.__wrapped__.__doc__ = value</span>
+
+    <span class="s3"># We similar use a property for __dict__. We need __dict__ to be</span>
+    <span class="s3"># explicit to ensure that vars() works as expected.</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">__dict__(self):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__.__dict__</span>
+
+    <span class="s3"># Need to also propagate the special __weakref__ attribute for case</span>
+    <span class="s3"># where decorating classes which will define this. If do not define</span>
+    <span class="s3"># it and use a function like inspect.getmembers() on a decorator</span>
+    <span class="s3"># class it will fail. This can't be in the derived classes.</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">__weakref__(self):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__.__weakref__</span>
+
+<span class="s0">class </span><span class="s1">_ObjectProxyMetaType(type):</span>
+    <span class="s0">def </span><span class="s1">__new__(cls, name, bases, dictionary):</span>
+        <span class="s3"># Copy our special properties into the class so that they</span>
+        <span class="s3"># always take precedence over attributes of the same name added</span>
+        <span class="s3"># during construction of a derived class. This is to save</span>
+        <span class="s3"># duplicating the implementation for them in all derived classes.</span>
+
+        <span class="s1">dictionary.update(vars(_ObjectProxyMethods))</span>
+
+        <span class="s0">return </span><span class="s1">type.__new__(cls, name, bases, dictionary)</span>
+
+<span class="s0">class </span><span class="s1">ObjectProxy(with_metaclass(_ObjectProxyMetaType)):</span>
+
+    <span class="s1">__slots__ = </span><span class="s4">'__wrapped__'</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, wrapped):</span>
+        <span class="s1">object.__setattr__(self, </span><span class="s4">'__wrapped__'</span><span class="s1">, wrapped)</span>
+
+        <span class="s3"># Python 3.2+ has the __qualname__ attribute, but it does not</span>
+        <span class="s3"># allow it to be overridden using a property and it must instead</span>
+        <span class="s3"># be an actual string object instead.</span>
+
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s1">object.__setattr__(self, </span><span class="s4">'__qualname__'</span><span class="s1">, wrapped.__qualname__)</span>
+        <span class="s0">except </span><span class="s1">AttributeError:</span>
+            <span class="s0">pass</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">__name__(self):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__.__name__</span>
+
+    <span class="s1">@__name__.setter</span>
+    <span class="s0">def </span><span class="s1">__name__(self, value):</span>
+        <span class="s1">self.__wrapped__.__name__ = value</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">__class__(self):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__.__class__</span>
+
+    <span class="s1">@__class__.setter</span>
+    <span class="s0">def </span><span class="s1">__class__(self, value):</span>
+        <span class="s1">self.__wrapped__.__class__ = value</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">__annotations__(self):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__.__annotations__</span>
+
+    <span class="s1">@__annotations__.setter</span>
+    <span class="s0">def </span><span class="s1">__annotations__(self, value):</span>
+        <span class="s1">self.__wrapped__.__annotations__ = value</span>
+
+    <span class="s0">def </span><span class="s1">__dir__(self):</span>
+        <span class="s0">return </span><span class="s1">dir(self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__str__(self):</span>
+        <span class="s0">return </span><span class="s1">str(self.__wrapped__)</span>
+
+    <span class="s0">if not </span><span class="s1">PY2:</span>
+        <span class="s0">def </span><span class="s1">__bytes__(self):</span>
+            <span class="s0">return </span><span class="s1">bytes(self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__repr__(self):</span>
+        <span class="s0">return </span><span class="s4">'&lt;{} at 0x{:x} for {} at 0x{:x}&gt;'</span><span class="s1">.format(</span>
+                <span class="s1">type(self).__name__, id(self),</span>
+                <span class="s1">type(self.__wrapped__).__name__,</span>
+                <span class="s1">id(self.__wrapped__))</span>
+
+    <span class="s0">def </span><span class="s1">__reversed__(self):</span>
+        <span class="s0">return </span><span class="s1">reversed(self.__wrapped__)</span>
+
+    <span class="s0">if not </span><span class="s1">PY2:</span>
+        <span class="s0">def </span><span class="s1">__round__(self):</span>
+            <span class="s0">return </span><span class="s1">round(self.__wrapped__)</span>
+
+    <span class="s0">if </span><span class="s1">sys.hexversion &gt;= </span><span class="s2">0x03070000</span><span class="s1">:</span>
+        <span class="s0">def </span><span class="s1">__mro_entries__(self, bases):</span>
+            <span class="s0">return </span><span class="s1">(self.__wrapped__,)</span>
+
+    <span class="s0">def </span><span class="s1">__lt__(self, other):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__ &lt; other</span>
+
+    <span class="s0">def </span><span class="s1">__le__(self, other):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__ &lt;= other</span>
+
+    <span class="s0">def </span><span class="s1">__eq__(self, other):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__ == other</span>
+
+    <span class="s0">def </span><span class="s1">__ne__(self, other):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__ != other</span>
+
+    <span class="s0">def </span><span class="s1">__gt__(self, other):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__ &gt; other</span>
+
+    <span class="s0">def </span><span class="s1">__ge__(self, other):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__ &gt;= other</span>
+
+    <span class="s0">def </span><span class="s1">__hash__(self):</span>
+        <span class="s0">return </span><span class="s1">hash(self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__nonzero__(self):</span>
+        <span class="s0">return </span><span class="s1">bool(self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__bool__(self):</span>
+        <span class="s0">return </span><span class="s1">bool(self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__setattr__(self, name, value):</span>
+        <span class="s0">if </span><span class="s1">name.startswith(</span><span class="s4">'_self_'</span><span class="s1">):</span>
+            <span class="s1">object.__setattr__(self, name, value)</span>
+
+        <span class="s0">elif </span><span class="s1">name == </span><span class="s4">'__wrapped__'</span><span class="s1">:</span>
+            <span class="s1">object.__setattr__(self, name, value)</span>
+            <span class="s0">try</span><span class="s1">:</span>
+                <span class="s1">object.__delattr__(self, </span><span class="s4">'__qualname__'</span><span class="s1">)</span>
+            <span class="s0">except </span><span class="s1">AttributeError:</span>
+                <span class="s0">pass</span>
+            <span class="s0">try</span><span class="s1">:</span>
+                <span class="s1">object.__setattr__(self, </span><span class="s4">'__qualname__'</span><span class="s1">, value.__qualname__)</span>
+            <span class="s0">except </span><span class="s1">AttributeError:</span>
+                <span class="s0">pass</span>
+
+        <span class="s0">elif </span><span class="s1">name == </span><span class="s4">'__qualname__'</span><span class="s1">:</span>
+            <span class="s1">setattr(self.__wrapped__, name, value)</span>
+            <span class="s1">object.__setattr__(self, name, value)</span>
+
+        <span class="s0">elif </span><span class="s1">hasattr(type(self), name):</span>
+            <span class="s1">object.__setattr__(self, name, value)</span>
+
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">setattr(self.__wrapped__, name, value)</span>
+
+    <span class="s0">def </span><span class="s1">__getattr__(self, name):</span>
+        <span class="s3"># If we are being to lookup '__wrapped__' then the</span>
+        <span class="s3"># '__init__()' method cannot have been called.</span>
+
+        <span class="s0">if </span><span class="s1">name == </span><span class="s4">'__wrapped__'</span><span class="s1">:</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s4">'wrapper has not been initialised'</span><span class="s1">)</span>
+
+        <span class="s0">return </span><span class="s1">getattr(self.__wrapped__, name)</span>
+
+    <span class="s0">def </span><span class="s1">__delattr__(self, name):</span>
+        <span class="s0">if </span><span class="s1">name.startswith(</span><span class="s4">'_self_'</span><span class="s1">):</span>
+            <span class="s1">object.__delattr__(self, name)</span>
+
+        <span class="s0">elif </span><span class="s1">name == </span><span class="s4">'__wrapped__'</span><span class="s1">:</span>
+            <span class="s0">raise </span><span class="s1">TypeError(</span><span class="s4">'__wrapped__ must be an object'</span><span class="s1">)</span>
+
+        <span class="s0">elif </span><span class="s1">name == </span><span class="s4">'__qualname__'</span><span class="s1">:</span>
+            <span class="s1">object.__delattr__(self, name)</span>
+            <span class="s1">delattr(self.__wrapped__, name)</span>
+
+        <span class="s0">elif </span><span class="s1">hasattr(type(self), name):</span>
+            <span class="s1">object.__delattr__(self, name)</span>
+
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">delattr(self.__wrapped__, name)</span>
+
+    <span class="s0">def </span><span class="s1">__add__(self, other):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__ + other</span>
+
+    <span class="s0">def </span><span class="s1">__sub__(self, other):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__ - other</span>
+
+    <span class="s0">def </span><span class="s1">__mul__(self, other):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__ * other</span>
+
+    <span class="s0">def </span><span class="s1">__div__(self, other):</span>
+        <span class="s0">return </span><span class="s1">operator.div(self.__wrapped__, other)</span>
+
+    <span class="s0">def </span><span class="s1">__truediv__(self, other):</span>
+        <span class="s0">return </span><span class="s1">operator.truediv(self.__wrapped__, other)</span>
+
+    <span class="s0">def </span><span class="s1">__floordiv__(self, other):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__ // other</span>
+
+    <span class="s0">def </span><span class="s1">__mod__(self, other):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__ % other</span>
+
+    <span class="s0">def </span><span class="s1">__divmod__(self, other):</span>
+        <span class="s0">return </span><span class="s1">divmod(self.__wrapped__, other)</span>
+
+    <span class="s0">def </span><span class="s1">__pow__(self, other, *args):</span>
+        <span class="s0">return </span><span class="s1">pow(self.__wrapped__, other, *args)</span>
+
+    <span class="s0">def </span><span class="s1">__lshift__(self, other):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__ &lt;&lt; other</span>
+
+    <span class="s0">def </span><span class="s1">__rshift__(self, other):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__ &gt;&gt; other</span>
+
+    <span class="s0">def </span><span class="s1">__and__(self, other):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__ &amp; other</span>
+
+    <span class="s0">def </span><span class="s1">__xor__(self, other):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__ ^ other</span>
+
+    <span class="s0">def </span><span class="s1">__or__(self, other):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__ | other</span>
+
+    <span class="s0">def </span><span class="s1">__radd__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other + self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__rsub__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other - self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__rmul__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other * self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__rdiv__(self, other):</span>
+        <span class="s0">return </span><span class="s1">operator.div(other, self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__rtruediv__(self, other):</span>
+        <span class="s0">return </span><span class="s1">operator.truediv(other, self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__rfloordiv__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other // self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__rmod__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other % self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__rdivmod__(self, other):</span>
+        <span class="s0">return </span><span class="s1">divmod(other, self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__rpow__(self, other, *args):</span>
+        <span class="s0">return </span><span class="s1">pow(other, self.__wrapped__, *args)</span>
+
+    <span class="s0">def </span><span class="s1">__rlshift__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other &lt;&lt; self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__rrshift__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other &gt;&gt; self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__rand__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other &amp; self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__rxor__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other ^ self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__ror__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other | self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__iadd__(self, other):</span>
+        <span class="s1">self.__wrapped__ += other</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+    <span class="s0">def </span><span class="s1">__isub__(self, other):</span>
+        <span class="s1">self.__wrapped__ -= other</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+    <span class="s0">def </span><span class="s1">__imul__(self, other):</span>
+        <span class="s1">self.__wrapped__ *= other</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+    <span class="s0">def </span><span class="s1">__idiv__(self, other):</span>
+        <span class="s1">self.__wrapped__ = operator.idiv(self.__wrapped__, other)</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+    <span class="s0">def </span><span class="s1">__itruediv__(self, other):</span>
+        <span class="s1">self.__wrapped__ = operator.itruediv(self.__wrapped__, other)</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+    <span class="s0">def </span><span class="s1">__ifloordiv__(self, other):</span>
+        <span class="s1">self.__wrapped__ //= other</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+    <span class="s0">def </span><span class="s1">__imod__(self, other):</span>
+        <span class="s1">self.__wrapped__ %= other</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+    <span class="s0">def </span><span class="s1">__ipow__(self, other):</span>
+        <span class="s1">self.__wrapped__ **= other</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+    <span class="s0">def </span><span class="s1">__ilshift__(self, other):</span>
+        <span class="s1">self.__wrapped__ &lt;&lt;= other</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+    <span class="s0">def </span><span class="s1">__irshift__(self, other):</span>
+        <span class="s1">self.__wrapped__ &gt;&gt;= other</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+    <span class="s0">def </span><span class="s1">__iand__(self, other):</span>
+        <span class="s1">self.__wrapped__ &amp;= other</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+    <span class="s0">def </span><span class="s1">__ixor__(self, other):</span>
+        <span class="s1">self.__wrapped__ ^= other</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+    <span class="s0">def </span><span class="s1">__ior__(self, other):</span>
+        <span class="s1">self.__wrapped__ |= other</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+    <span class="s0">def </span><span class="s1">__neg__(self):</span>
+        <span class="s0">return </span><span class="s1">-self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__pos__(self):</span>
+        <span class="s0">return </span><span class="s1">+self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__abs__(self):</span>
+        <span class="s0">return </span><span class="s1">abs(self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__invert__(self):</span>
+        <span class="s0">return </span><span class="s1">~self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__int__(self):</span>
+        <span class="s0">return </span><span class="s1">int(self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__long__(self):</span>
+        <span class="s0">return </span><span class="s1">long(self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__float__(self):</span>
+        <span class="s0">return </span><span class="s1">float(self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__complex__(self):</span>
+        <span class="s0">return </span><span class="s1">complex(self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__oct__(self):</span>
+        <span class="s0">return </span><span class="s1">oct(self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__hex__(self):</span>
+        <span class="s0">return </span><span class="s1">hex(self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__index__(self):</span>
+        <span class="s0">return </span><span class="s1">operator.index(self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__len__(self):</span>
+        <span class="s0">return </span><span class="s1">len(self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__contains__(self, value):</span>
+        <span class="s0">return </span><span class="s1">value </span><span class="s0">in </span><span class="s1">self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__getitem__(self, key):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__[key]</span>
+
+    <span class="s0">def </span><span class="s1">__setitem__(self, key, value):</span>
+        <span class="s1">self.__wrapped__[key] = value</span>
+
+    <span class="s0">def </span><span class="s1">__delitem__(self, key):</span>
+        <span class="s0">del </span><span class="s1">self.__wrapped__[key]</span>
+
+    <span class="s0">def </span><span class="s1">__getslice__(self, i, j):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__[i:j]</span>
+
+    <span class="s0">def </span><span class="s1">__setslice__(self, i, j, value):</span>
+        <span class="s1">self.__wrapped__[i:j] = value</span>
+
+    <span class="s0">def </span><span class="s1">__delslice__(self, i, j):</span>
+        <span class="s0">del </span><span class="s1">self.__wrapped__[i:j]</span>
+
+    <span class="s0">def </span><span class="s1">__enter__(self):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__.__enter__()</span>
+
+    <span class="s0">def </span><span class="s1">__exit__(self, *args, **kwargs):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__.__exit__(*args, **kwargs)</span>
+
+    <span class="s0">def </span><span class="s1">__iter__(self):</span>
+        <span class="s0">return </span><span class="s1">iter(self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__copy__(self):</span>
+        <span class="s0">raise </span><span class="s1">NotImplementedError(</span><span class="s4">'object proxy must define __copy__()'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__deepcopy__(self, memo):</span>
+        <span class="s0">raise </span><span class="s1">NotImplementedError(</span><span class="s4">'object proxy must define __deepcopy__()'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__reduce__(self):</span>
+        <span class="s0">raise </span><span class="s1">NotImplementedError(</span>
+                <span class="s4">'object proxy must define __reduce_ex__()'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__reduce_ex__(self, protocol):</span>
+        <span class="s0">raise </span><span class="s1">NotImplementedError(</span>
+                <span class="s4">'object proxy must define __reduce_ex__()'</span><span class="s1">)</span>
+
+<span class="s0">class </span><span class="s1">CallableObjectProxy(ObjectProxy):</span>
+
+    <span class="s0">def </span><span class="s1">__call__(self, *args, **kwargs):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__(*args, **kwargs)</span>
+
+<span class="s0">class </span><span class="s1">PartialCallableObjectProxy(ObjectProxy):</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, *args, **kwargs):</span>
+        <span class="s0">if </span><span class="s1">len(args) &lt; </span><span class="s2">1</span><span class="s1">:</span>
+            <span class="s0">raise </span><span class="s1">TypeError(</span><span class="s4">'partial type takes at least one argument'</span><span class="s1">)</span>
+
+        <span class="s1">wrapped, args = args[</span><span class="s2">0</span><span class="s1">], args[</span><span class="s2">1</span><span class="s1">:]</span>
+
+        <span class="s0">if not </span><span class="s1">callable(wrapped):</span>
+            <span class="s0">raise </span><span class="s1">TypeError(</span><span class="s4">'the first argument must be callable'</span><span class="s1">)</span>
+
+        <span class="s1">super(PartialCallableObjectProxy, self).__init__(wrapped)</span>
+
+        <span class="s1">self._self_args = args</span>
+        <span class="s1">self._self_kwargs = kwargs</span>
+
+    <span class="s0">def </span><span class="s1">__call__(self, *args, **kwargs):</span>
+        <span class="s1">_args = self._self_args + args</span>
+
+        <span class="s1">_kwargs = dict(self._self_kwargs)</span>
+        <span class="s1">_kwargs.update(kwargs)</span>
+
+        <span class="s0">return </span><span class="s1">self.__wrapped__(*_args, **_kwargs)</span>
+
+<span class="s0">class </span><span class="s1">_FunctionWrapperBase(ObjectProxy):</span>
+
+    <span class="s1">__slots__ = (</span><span class="s4">'_self_instance'</span><span class="s1">, </span><span class="s4">'_self_wrapper'</span><span class="s1">, </span><span class="s4">'_self_enabled'</span><span class="s1">,</span>
+            <span class="s4">'_self_binding'</span><span class="s1">, </span><span class="s4">'_self_parent'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, wrapped, instance, wrapper, enabled=</span><span class="s0">None</span><span class="s1">,</span>
+            <span class="s1">binding=</span><span class="s4">'function'</span><span class="s1">, parent=</span><span class="s0">None</span><span class="s1">):</span>
+
+        <span class="s1">super(_FunctionWrapperBase, self).__init__(wrapped)</span>
+
+        <span class="s1">object.__setattr__(self, </span><span class="s4">'_self_instance'</span><span class="s1">, instance)</span>
+        <span class="s1">object.__setattr__(self, </span><span class="s4">'_self_wrapper'</span><span class="s1">, wrapper)</span>
+        <span class="s1">object.__setattr__(self, </span><span class="s4">'_self_enabled'</span><span class="s1">, enabled)</span>
+        <span class="s1">object.__setattr__(self, </span><span class="s4">'_self_binding'</span><span class="s1">, binding)</span>
+        <span class="s1">object.__setattr__(self, </span><span class="s4">'_self_parent'</span><span class="s1">, parent)</span>
+
+    <span class="s0">def </span><span class="s1">__get__(self, instance, owner):</span>
+        <span class="s3"># This method is actually doing double duty for both unbound and</span>
+        <span class="s3"># bound derived wrapper classes. It should possibly be broken up</span>
+        <span class="s3"># and the distinct functionality moved into the derived classes.</span>
+        <span class="s3"># Can't do that straight away due to some legacy code which is</span>
+        <span class="s3"># relying on it being here in this base class.</span>
+        <span class="s3">#</span>
+        <span class="s3"># The distinguishing attribute which determines whether we are</span>
+        <span class="s3"># being called in an unbound or bound wrapper is the parent</span>
+        <span class="s3"># attribute. If binding has never occurred, then the parent will</span>
+        <span class="s3"># be None.</span>
+        <span class="s3">#</span>
+        <span class="s3"># First therefore, is if we are called in an unbound wrapper. In</span>
+        <span class="s3"># this case we perform the binding.</span>
+        <span class="s3">#</span>
+        <span class="s3"># We have one special case to worry about here. This is where we</span>
+        <span class="s3"># are decorating a nested class. In this case the wrapped class</span>
+        <span class="s3"># would not have a __get__() method to call. In that case we</span>
+        <span class="s3"># simply return self.</span>
+        <span class="s3">#</span>
+        <span class="s3"># Note that we otherwise still do binding even if instance is</span>
+        <span class="s3"># None and accessing an unbound instance method from a class.</span>
+        <span class="s3"># This is because we need to be able to later detect that</span>
+        <span class="s3"># specific case as we will need to extract the instance from the</span>
+        <span class="s3"># first argument of those passed in.</span>
+
+        <span class="s0">if </span><span class="s1">self._self_parent </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s0">if not </span><span class="s1">inspect.isclass(self.__wrapped__):</span>
+                <span class="s1">descriptor = self.__wrapped__.__get__(instance, owner)</span>
+
+                <span class="s0">return </span><span class="s1">self.__bound_function_wrapper__(descriptor, instance,</span>
+                        <span class="s1">self._self_wrapper, self._self_enabled,</span>
+                        <span class="s1">self._self_binding, self)</span>
+
+            <span class="s0">return </span><span class="s1">self</span>
+
+        <span class="s3"># Now we have the case of binding occurring a second time on what</span>
+        <span class="s3"># was already a bound function. In this case we would usually</span>
+        <span class="s3"># return ourselves again. This mirrors what Python does.</span>
+        <span class="s3">#</span>
+        <span class="s3"># The special case this time is where we were originally bound</span>
+        <span class="s3"># with an instance of None and we were likely an instance</span>
+        <span class="s3"># method. In that case we rebind against the original wrapped</span>
+        <span class="s3"># function from the parent again.</span>
+
+        <span class="s0">if </span><span class="s1">self._self_instance </span><span class="s0">is None and </span><span class="s1">self._self_binding == </span><span class="s4">'function'</span><span class="s1">:</span>
+            <span class="s1">descriptor = self._self_parent.__wrapped__.__get__(</span>
+                    <span class="s1">instance, owner)</span>
+
+            <span class="s0">return </span><span class="s1">self._self_parent.__bound_function_wrapper__(</span>
+                    <span class="s1">descriptor, instance, self._self_wrapper,</span>
+                    <span class="s1">self._self_enabled, self._self_binding,</span>
+                    <span class="s1">self._self_parent)</span>
+
+        <span class="s0">return </span><span class="s1">self</span>
+
+    <span class="s0">def </span><span class="s1">__call__(self, *args, **kwargs):</span>
+        <span class="s3"># If enabled has been specified, then evaluate it at this point</span>
+        <span class="s3"># and if the wrapper is not to be executed, then simply return</span>
+        <span class="s3"># the bound function rather than a bound wrapper for the bound</span>
+        <span class="s3"># function. When evaluating enabled, if it is callable we call</span>
+        <span class="s3"># it, otherwise we evaluate it as a boolean.</span>
+
+        <span class="s0">if </span><span class="s1">self._self_enabled </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s0">if </span><span class="s1">callable(self._self_enabled):</span>
+                <span class="s0">if not </span><span class="s1">self._self_enabled():</span>
+                    <span class="s0">return </span><span class="s1">self.__wrapped__(*args, **kwargs)</span>
+            <span class="s0">elif not </span><span class="s1">self._self_enabled:</span>
+                <span class="s0">return </span><span class="s1">self.__wrapped__(*args, **kwargs)</span>
+
+        <span class="s3"># This can occur where initial function wrapper was applied to</span>
+        <span class="s3"># a function that was already bound to an instance. In that case</span>
+        <span class="s3"># we want to extract the instance from the function and use it.</span>
+
+        <span class="s0">if </span><span class="s1">self._self_binding == </span><span class="s4">'function'</span><span class="s1">:</span>
+            <span class="s0">if </span><span class="s1">self._self_instance </span><span class="s0">is None</span><span class="s1">:</span>
+                <span class="s1">instance = getattr(self.__wrapped__, </span><span class="s4">'__self__'</span><span class="s1">, </span><span class="s0">None</span><span class="s1">)</span>
+                <span class="s0">if </span><span class="s1">instance </span><span class="s0">is not None</span><span class="s1">:</span>
+                    <span class="s0">return </span><span class="s1">self._self_wrapper(self.__wrapped__, instance,</span>
+                            <span class="s1">args, kwargs)</span>
+
+        <span class="s3"># This is generally invoked when the wrapped function is being</span>
+        <span class="s3"># called as a normal function and is not bound to a class as an</span>
+        <span class="s3"># instance method. This is also invoked in the case where the</span>
+        <span class="s3"># wrapped function was a method, but this wrapper was in turn</span>
+        <span class="s3"># wrapped using the staticmethod decorator.</span>
+
+        <span class="s0">return </span><span class="s1">self._self_wrapper(self.__wrapped__, self._self_instance,</span>
+                <span class="s1">args, kwargs)</span>
+
+<span class="s0">class </span><span class="s1">BoundFunctionWrapper(_FunctionWrapperBase):</span>
+
+    <span class="s0">def </span><span class="s1">__call__(self, *args, **kwargs):</span>
+        <span class="s3"># If enabled has been specified, then evaluate it at this point</span>
+        <span class="s3"># and if the wrapper is not to be executed, then simply return</span>
+        <span class="s3"># the bound function rather than a bound wrapper for the bound</span>
+        <span class="s3"># function. When evaluating enabled, if it is callable we call</span>
+        <span class="s3"># it, otherwise we evaluate it as a boolean.</span>
+
+        <span class="s0">if </span><span class="s1">self._self_enabled </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s0">if </span><span class="s1">callable(self._self_enabled):</span>
+                <span class="s0">if not </span><span class="s1">self._self_enabled():</span>
+                    <span class="s0">return </span><span class="s1">self.__wrapped__(*args, **kwargs)</span>
+            <span class="s0">elif not </span><span class="s1">self._self_enabled:</span>
+                <span class="s0">return </span><span class="s1">self.__wrapped__(*args, **kwargs)</span>
+
+        <span class="s3"># We need to do things different depending on whether we are</span>
+        <span class="s3"># likely wrapping an instance method vs a static method or class</span>
+        <span class="s3"># method.</span>
+
+        <span class="s0">if </span><span class="s1">self._self_binding == </span><span class="s4">'function'</span><span class="s1">:</span>
+            <span class="s0">if </span><span class="s1">self._self_instance </span><span class="s0">is None</span><span class="s1">:</span>
+                <span class="s3"># This situation can occur where someone is calling the</span>
+                <span class="s3"># instancemethod via the class type and passing the instance</span>
+                <span class="s3"># as the first argument. We need to shift the args before</span>
+                <span class="s3"># making the call to the wrapper and effectively bind the</span>
+                <span class="s3"># instance to the wrapped function using a partial so the</span>
+                <span class="s3"># wrapper doesn't see anything as being different.</span>
+
+                <span class="s0">if not </span><span class="s1">args:</span>
+                    <span class="s0">raise </span><span class="s1">TypeError(</span><span class="s4">'missing 1 required positional argument'</span><span class="s1">)</span>
+
+                <span class="s1">instance, args = args[</span><span class="s2">0</span><span class="s1">], args[</span><span class="s2">1</span><span class="s1">:]</span>
+                <span class="s1">wrapped = PartialCallableObjectProxy(self.__wrapped__, instance)</span>
+                <span class="s0">return </span><span class="s1">self._self_wrapper(wrapped, instance, args, kwargs)</span>
+
+            <span class="s0">return </span><span class="s1">self._self_wrapper(self.__wrapped__, self._self_instance,</span>
+                    <span class="s1">args, kwargs)</span>
+
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s3"># As in this case we would be dealing with a classmethod or</span>
+            <span class="s3"># staticmethod, then _self_instance will only tell us whether</span>
+            <span class="s3"># when calling the classmethod or staticmethod they did it via an</span>
+            <span class="s3"># instance of the class it is bound to and not the case where</span>
+            <span class="s3"># done by the class type itself. We thus ignore _self_instance</span>
+            <span class="s3"># and use the __self__ attribute of the bound function instead.</span>
+            <span class="s3"># For a classmethod, this means instance will be the class type</span>
+            <span class="s3"># and for a staticmethod it will be None. This is probably the</span>
+            <span class="s3"># more useful thing we can pass through even though we loose</span>
+            <span class="s3"># knowledge of whether they were called on the instance vs the</span>
+            <span class="s3"># class type, as it reflects what they have available in the</span>
+            <span class="s3"># decoratored function.</span>
+
+            <span class="s1">instance = getattr(self.__wrapped__, </span><span class="s4">'__self__'</span><span class="s1">, </span><span class="s0">None</span><span class="s1">)</span>
+
+            <span class="s0">return </span><span class="s1">self._self_wrapper(self.__wrapped__, instance, args,</span>
+                    <span class="s1">kwargs)</span>
+
+<span class="s0">class </span><span class="s1">FunctionWrapper(_FunctionWrapperBase):</span>
+
+    <span class="s1">__bound_function_wrapper__ = BoundFunctionWrapper</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, wrapped, wrapper, enabled=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s3"># What it is we are wrapping here could be anything. We need to</span>
+        <span class="s3"># try and detect specific cases though. In particular, we need</span>
+        <span class="s3"># to detect when we are given something that is a method of a</span>
+        <span class="s3"># class. Further, we need to know when it is likely an instance</span>
+        <span class="s3"># method, as opposed to a class or static method. This can</span>
+        <span class="s3"># become problematic though as there isn't strictly a fool proof</span>
+        <span class="s3"># method of knowing.</span>
+        <span class="s3">#</span>
+        <span class="s3"># The situations we could encounter when wrapping a method are:</span>
+        <span class="s3">#</span>
+        <span class="s3"># 1. The wrapper is being applied as part of a decorator which</span>
+        <span class="s3"># is a part of the class definition. In this case what we are</span>
+        <span class="s3"># given is the raw unbound function, classmethod or staticmethod</span>
+        <span class="s3"># wrapper objects.</span>
+        <span class="s3">#</span>
+        <span class="s3"># The problem here is that we will not know we are being applied</span>
+        <span class="s3"># in the context of the class being set up. This becomes</span>
+        <span class="s3"># important later for the case of an instance method, because in</span>
+        <span class="s3"># that case we just see it as a raw function and can't</span>
+        <span class="s3"># distinguish it from wrapping a normal function outside of</span>
+        <span class="s3"># a class context.</span>
+        <span class="s3">#</span>
+        <span class="s3"># 2. The wrapper is being applied when performing monkey</span>
+        <span class="s3"># patching of the class type afterwards and the method to be</span>
+        <span class="s3"># wrapped was retrieved direct from the __dict__ of the class</span>
+        <span class="s3"># type. This is effectively the same as (1) above.</span>
+        <span class="s3">#</span>
+        <span class="s3"># 3. The wrapper is being applied when performing monkey</span>
+        <span class="s3"># patching of the class type afterwards and the method to be</span>
+        <span class="s3"># wrapped was retrieved from the class type. In this case</span>
+        <span class="s3"># binding will have been performed where the instance against</span>
+        <span class="s3"># which the method is bound will be None at that point.</span>
+        <span class="s3">#</span>
+        <span class="s3"># This case is a problem because we can no longer tell if the</span>
+        <span class="s3"># method was a static method, plus if using Python3, we cannot</span>
+        <span class="s3"># tell if it was an instance method as the concept of an</span>
+        <span class="s3"># unnbound method no longer exists.</span>
+        <span class="s3">#</span>
+        <span class="s3"># 4. The wrapper is being applied when performing monkey</span>
+        <span class="s3"># patching of an instance of a class. In this case binding will</span>
+        <span class="s3"># have been perfomed where the instance was not None.</span>
+        <span class="s3">#</span>
+        <span class="s3"># This case is a problem because we can no longer tell if the</span>
+        <span class="s3"># method was a static method.</span>
+        <span class="s3">#</span>
+        <span class="s3"># Overall, the best we can do is look at the original type of the</span>
+        <span class="s3"># object which was wrapped prior to any binding being done and</span>
+        <span class="s3"># see if it is an instance of classmethod or staticmethod. In</span>
+        <span class="s3"># the case where other decorators are between us and them, if</span>
+        <span class="s3"># they do not propagate the __class__  attribute so that the</span>
+        <span class="s3"># isinstance() checks works, then likely this will do the wrong</span>
+        <span class="s3"># thing where classmethod and staticmethod are used.</span>
+        <span class="s3">#</span>
+        <span class="s3"># Since it is likely to be very rare that anyone even puts</span>
+        <span class="s3"># decorators around classmethod and staticmethod, likelihood of</span>
+        <span class="s3"># that being an issue is very small, so we accept it and suggest</span>
+        <span class="s3"># that those other decorators be fixed. It is also only an issue</span>
+        <span class="s3"># if a decorator wants to actually do things with the arguments.</span>
+        <span class="s3">#</span>
+        <span class="s3"># As to not being able to identify static methods properly, we</span>
+        <span class="s3"># just hope that that isn't something people are going to want</span>
+        <span class="s3"># to wrap, or if they do suggest they do it the correct way by</span>
+        <span class="s3"># ensuring that it is decorated in the class definition itself,</span>
+        <span class="s3"># or patch it in the __dict__ of the class type.</span>
+        <span class="s3">#</span>
+        <span class="s3"># So to get the best outcome we can, whenever we aren't sure what</span>
+        <span class="s3"># it is, we label it as a 'function'. If it was already bound and</span>
+        <span class="s3"># that is rebound later, we assume that it will be an instance</span>
+        <span class="s3"># method and try an cope with the possibility that the 'self'</span>
+        <span class="s3"># argument it being passed as an explicit argument and shuffle</span>
+        <span class="s3"># the arguments around to extract 'self' for use as the instance.</span>
+
+        <span class="s0">if </span><span class="s1">isinstance(wrapped, classmethod):</span>
+            <span class="s1">binding = </span><span class="s4">'classmethod'</span>
+
+        <span class="s0">elif </span><span class="s1">isinstance(wrapped, staticmethod):</span>
+            <span class="s1">binding = </span><span class="s4">'staticmethod'</span>
+
+        <span class="s0">elif </span><span class="s1">hasattr(wrapped, </span><span class="s4">'__self__'</span><span class="s1">):</span>
+            <span class="s0">if </span><span class="s1">inspect.isclass(wrapped.__self__):</span>
+                <span class="s1">binding = </span><span class="s4">'classmethod'</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">binding = </span><span class="s4">'function'</span>
+
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">binding = </span><span class="s4">'function'</span>
+
+        <span class="s1">super(FunctionWrapper, self).__init__(wrapped, </span><span class="s0">None</span><span class="s1">, wrapper,</span>
+                <span class="s1">enabled, binding)</span>
+
+<span class="s0">try</span><span class="s1">:</span>
+    <span class="s0">if not </span><span class="s1">os.environ.get(</span><span class="s4">'WRAPT_DISABLE_EXTENSIONS'</span><span class="s1">):</span>
+        <span class="s0">from </span><span class="s1">._wrappers </span><span class="s0">import </span><span class="s1">(ObjectProxy, CallableObjectProxy,</span>
+            <span class="s1">PartialCallableObjectProxy, FunctionWrapper,</span>
+            <span class="s1">BoundFunctionWrapper, _FunctionWrapperBase)</span>
+<span class="s0">except </span><span class="s1">ImportError:</span>
+    <span class="s0">pass</span>
+
+<span class="s3"># Helper functions for applying wrappers to existing functions.</span>
+
+<span class="s0">def </span><span class="s1">resolve_path(module, name):</span>
+    <span class="s0">if </span><span class="s1">isinstance(module, string_types):</span>
+        <span class="s1">__import__(module)</span>
+        <span class="s1">module = sys.modules[module]</span>
+
+    <span class="s1">parent = module</span>
+
+    <span class="s1">path = name.split(</span><span class="s4">'.'</span><span class="s1">)</span>
+    <span class="s1">attribute = path[</span><span class="s2">0</span><span class="s1">]</span>
+
+    <span class="s3"># We can't just always use getattr() because in doing</span>
+    <span class="s3"># that on a class it will cause binding to occur which</span>
+    <span class="s3"># will complicate things later and cause some things not</span>
+    <span class="s3"># to work. For the case of a class we therefore access</span>
+    <span class="s3"># the __dict__ directly. To cope though with the wrong</span>
+    <span class="s3"># class being given to us, or a method being moved into</span>
+    <span class="s3"># a base class, we need to walk the class hierarchy to</span>
+    <span class="s3"># work out exactly which __dict__ the method was defined</span>
+    <span class="s3"># in, as accessing it from __dict__ will fail if it was</span>
+    <span class="s3"># not actually on the class given. Fallback to using</span>
+    <span class="s3"># getattr() if we can't find it. If it truly doesn't</span>
+    <span class="s3"># exist, then that will fail.</span>
+
+    <span class="s0">def </span><span class="s1">lookup_attribute(parent, attribute):</span>
+        <span class="s0">if </span><span class="s1">inspect.isclass(parent):</span>
+            <span class="s0">for </span><span class="s1">cls </span><span class="s0">in </span><span class="s1">inspect.getmro(parent):</span>
+                <span class="s0">if </span><span class="s1">attribute </span><span class="s0">in </span><span class="s1">vars(cls):</span>
+                    <span class="s0">return </span><span class="s1">vars(cls)[attribute]</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s0">return </span><span class="s1">getattr(parent, attribute)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">getattr(parent, attribute)</span>
+
+    <span class="s1">original = lookup_attribute(parent, attribute)</span>
+
+    <span class="s0">for </span><span class="s1">attribute </span><span class="s0">in </span><span class="s1">path[</span><span class="s2">1</span><span class="s1">:]:</span>
+        <span class="s1">parent = original</span>
+        <span class="s1">original = lookup_attribute(parent, attribute)</span>
+
+    <span class="s0">return </span><span class="s1">(parent, attribute, original)</span>
+
+<span class="s0">def </span><span class="s1">apply_patch(parent, attribute, replacement):</span>
+    <span class="s1">setattr(parent, attribute, replacement)</span>
+
+<span class="s0">def </span><span class="s1">wrap_object(module, name, factory, args=(), kwargs={}):</span>
+    <span class="s1">(parent, attribute, original) = resolve_path(module, name)</span>
+    <span class="s1">wrapper = factory(original, *args, **kwargs)</span>
+    <span class="s1">apply_patch(parent, attribute, wrapper)</span>
+    <span class="s0">return </span><span class="s1">wrapper</span>
+
+<span class="s3"># Function for applying a proxy object to an attribute of a class</span>
+<span class="s3"># instance. The wrapper works by defining an attribute of the same name</span>
+<span class="s3"># on the class which is a descriptor and which intercepts access to the</span>
+<span class="s3"># instance attribute. Note that this cannot be used on attributes which</span>
+<span class="s3"># are themselves defined by a property object.</span>
+
+<span class="s0">class </span><span class="s1">AttributeWrapper(object):</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, attribute, factory, args, kwargs):</span>
+        <span class="s1">self.attribute = attribute</span>
+        <span class="s1">self.factory = factory</span>
+        <span class="s1">self.args = args</span>
+        <span class="s1">self.kwargs = kwargs</span>
+
+    <span class="s0">def </span><span class="s1">__get__(self, instance, owner):</span>
+        <span class="s1">value = instance.__dict__[self.attribute]</span>
+        <span class="s0">return </span><span class="s1">self.factory(value, *self.args, **self.kwargs)</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s1">instance.__dict__[self.attribute] = value</span>
+
+    <span class="s0">def </span><span class="s1">__delete__(self, instance):</span>
+        <span class="s0">del </span><span class="s1">instance.__dict__[self.attribute]</span>
+
+<span class="s0">def </span><span class="s1">wrap_object_attribute(module, name, factory, args=(), kwargs={}):</span>
+    <span class="s1">path, attribute = name.rsplit(</span><span class="s4">'.'</span><span class="s1">, </span><span class="s2">1</span><span class="s1">)</span>
+    <span class="s1">parent = resolve_path(module, path)[</span><span class="s2">2</span><span class="s1">]</span>
+    <span class="s1">wrapper = AttributeWrapper(attribute, factory, args, kwargs)</span>
+    <span class="s1">apply_patch(parent, attribute, wrapper)</span>
+    <span class="s0">return </span><span class="s1">wrapper</span>
+
+<span class="s3"># Functions for creating a simple decorator using a FunctionWrapper,</span>
+<span class="s3"># plus short cut functions for applying wrappers to functions. These are</span>
+<span class="s3"># for use when doing monkey patching. For a more featured way of</span>
+<span class="s3"># creating decorators see the decorator decorator instead.</span>
+
+<span class="s0">def </span><span class="s1">function_wrapper(wrapper):</span>
+    <span class="s0">def </span><span class="s1">_wrapper(wrapped, instance, args, kwargs):</span>
+        <span class="s1">target_wrapped = args[</span><span class="s2">0</span><span class="s1">]</span>
+        <span class="s0">if </span><span class="s1">instance </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">target_wrapper = wrapper</span>
+        <span class="s0">elif </span><span class="s1">inspect.isclass(instance):</span>
+            <span class="s1">target_wrapper = wrapper.__get__(</span><span class="s0">None</span><span class="s1">, instance)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">target_wrapper = wrapper.__get__(instance, type(instance))</span>
+        <span class="s0">return </span><span class="s1">FunctionWrapper(target_wrapped, target_wrapper)</span>
+    <span class="s0">return </span><span class="s1">FunctionWrapper(wrapper, _wrapper)</span>
+
+<span class="s0">def </span><span class="s1">wrap_function_wrapper(module, name, wrapper):</span>
+    <span class="s0">return </span><span class="s1">wrap_object(module, name, FunctionWrapper, (wrapper,))</span>
+
+<span class="s0">def </span><span class="s1">patch_function_wrapper(module, name):</span>
+    <span class="s0">def </span><span class="s1">_wrapper(wrapper):</span>
+        <span class="s0">return </span><span class="s1">wrap_object(module, name, FunctionWrapper, (wrapper,))</span>
+    <span class="s0">return </span><span class="s1">_wrapper</span>
+
+<span class="s0">def </span><span class="s1">transient_function_wrapper(module, name):</span>
+    <span class="s0">def </span><span class="s1">_decorator(wrapper):</span>
+        <span class="s0">def </span><span class="s1">_wrapper(wrapped, instance, args, kwargs):</span>
+            <span class="s1">target_wrapped = args[</span><span class="s2">0</span><span class="s1">]</span>
+            <span class="s0">if </span><span class="s1">instance </span><span class="s0">is None</span><span class="s1">:</span>
+                <span class="s1">target_wrapper = wrapper</span>
+            <span class="s0">elif </span><span class="s1">inspect.isclass(instance):</span>
+                <span class="s1">target_wrapper = wrapper.__get__(</span><span class="s0">None</span><span class="s1">, instance)</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">target_wrapper = wrapper.__get__(instance, type(instance))</span>
+            <span class="s0">def </span><span class="s1">_execute(wrapped, instance, args, kwargs):</span>
+                <span class="s1">(parent, attribute, original) = resolve_path(module, name)</span>
+                <span class="s1">replacement = FunctionWrapper(original, target_wrapper)</span>
+                <span class="s1">setattr(parent, attribute, replacement)</span>
+                <span class="s0">try</span><span class="s1">:</span>
+                    <span class="s0">return </span><span class="s1">wrapped(*args, **kwargs)</span>
+                <span class="s0">finally</span><span class="s1">:</span>
+                    <span class="s1">setattr(parent, attribute, original)</span>
+            <span class="s0">return </span><span class="s1">FunctionWrapper(target_wrapped, _execute)</span>
+        <span class="s0">return </span><span class="s1">FunctionWrapper(wrapper, _wrapper)</span>
+    <span class="s0">return </span><span class="s1">_decorator</span>
+
+<span class="s3"># A weak function proxy. This will work on instance methods, class</span>
+<span class="s3"># methods, static methods and regular functions. Special treatment is</span>
+<span class="s3"># needed for the method types because the bound method is effectively a</span>
+<span class="s3"># transient object and applying a weak reference to one will immediately</span>
+<span class="s3"># result in it being destroyed and the weakref callback called. The weak</span>
+<span class="s3"># reference is therefore applied to the instance the method is bound to</span>
+<span class="s3"># and the original function. The function is then rebound at the point</span>
+<span class="s3"># of a call via the weak function proxy.</span>
+
+<span class="s0">def </span><span class="s1">_weak_function_proxy_callback(ref, proxy, callback):</span>
+    <span class="s0">if </span><span class="s1">proxy._self_expired:</span>
+        <span class="s0">return</span>
+
+    <span class="s1">proxy._self_expired = </span><span class="s0">True</span>
+
+    <span class="s3"># This could raise an exception. We let it propagate back and let</span>
+    <span class="s3"># the weakref.proxy() deal with it, at which point it generally</span>
+    <span class="s3"># prints out a short error message direct to stderr and keeps going.</span>
+
+    <span class="s0">if </span><span class="s1">callback </span><span class="s0">is not None</span><span class="s1">:</span>
+        <span class="s1">callback(proxy)</span>
+
+<span class="s0">class </span><span class="s1">WeakFunctionProxy(ObjectProxy):</span>
+
+    <span class="s1">__slots__ = (</span><span class="s4">'_self_expired'</span><span class="s1">, </span><span class="s4">'_self_instance'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, wrapped, callback=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s3"># We need to determine if the wrapped function is actually a</span>
+        <span class="s3"># bound method. In the case of a bound method, we need to keep a</span>
+        <span class="s3"># reference to the original unbound function and the instance.</span>
+        <span class="s3"># This is necessary because if we hold a reference to the bound</span>
+        <span class="s3"># function, it will be the only reference and given it is a</span>
+        <span class="s3"># temporary object, it will almost immediately expire and</span>
+        <span class="s3"># the weakref callback triggered. So what is done is that we</span>
+        <span class="s3"># hold a reference to the instance and unbound function and</span>
+        <span class="s3"># when called bind the function to the instance once again and</span>
+        <span class="s3"># then call it. Note that we avoid using a nested function for</span>
+        <span class="s3"># the callback here so as not to cause any odd reference cycles.</span>
+
+        <span class="s1">_callback = callback </span><span class="s0">and </span><span class="s1">functools.partial(</span>
+                <span class="s1">_weak_function_proxy_callback, proxy=self,</span>
+                <span class="s1">callback=callback)</span>
+
+        <span class="s1">self._self_expired = </span><span class="s0">False</span>
+
+        <span class="s0">if </span><span class="s1">isinstance(wrapped, _FunctionWrapperBase):</span>
+            <span class="s1">self._self_instance = weakref.ref(wrapped._self_instance,</span>
+                    <span class="s1">_callback)</span>
+
+            <span class="s0">if </span><span class="s1">wrapped._self_parent </span><span class="s0">is not None</span><span class="s1">:</span>
+                <span class="s1">super(WeakFunctionProxy, self).__init__(</span>
+                        <span class="s1">weakref.proxy(wrapped._self_parent, _callback))</span>
+
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">super(WeakFunctionProxy, self).__init__(</span>
+                        <span class="s1">weakref.proxy(wrapped, _callback))</span>
+
+            <span class="s0">return</span>
+
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s1">self._self_instance = weakref.ref(wrapped.__self__, _callback)</span>
+
+            <span class="s1">super(WeakFunctionProxy, self).__init__(</span>
+                    <span class="s1">weakref.proxy(wrapped.__func__, _callback))</span>
+
+        <span class="s0">except </span><span class="s1">AttributeError:</span>
+            <span class="s1">self._self_instance = </span><span class="s0">None</span>
+
+            <span class="s1">super(WeakFunctionProxy, self).__init__(</span>
+                    <span class="s1">weakref.proxy(wrapped, _callback))</span>
+
+    <span class="s0">def </span><span class="s1">__call__(self, *args, **kwargs):</span>
+        <span class="s3"># We perform a boolean check here on the instance and wrapped</span>
+        <span class="s3"># function as that will trigger the reference error prior to</span>
+        <span class="s3"># calling if the reference had expired.</span>
+
+        <span class="s1">instance = self._self_instance </span><span class="s0">and </span><span class="s1">self._self_instance()</span>
+        <span class="s1">function = self.__wrapped__ </span><span class="s0">and </span><span class="s1">self.__wrapped__</span>
+
+        <span class="s3"># If the wrapped function was originally a bound function, for</span>
+        <span class="s3"># which we retained a reference to the instance and the unbound</span>
+        <span class="s3"># function we need to rebind the function and then call it. If</span>
+        <span class="s3"># not just called the wrapped function.</span>
+
+        <span class="s0">if </span><span class="s1">instance </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">self.__wrapped__(*args, **kwargs)</span>
+
+        <span class="s0">return </span><span class="s1">function.__get__(instance, type(instance))(*args, **kwargs)</span>
+</pre>
+</body>
+</html>

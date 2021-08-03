@@ -1,0 +1,932 @@
+<html>
+<head>
+<title>cmdline.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+cmdline.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;Command-line support for coverage.py.&quot;&quot;&quot;</span>
+
+<span class="s2">from </span><span class="s1">__future__ </span><span class="s2">import </span><span class="s1">print_function</span>
+
+<span class="s2">import </span><span class="s1">glob</span>
+<span class="s2">import </span><span class="s1">optparse</span>
+<span class="s2">import </span><span class="s1">os.path</span>
+<span class="s2">import </span><span class="s1">shlex</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">textwrap</span>
+<span class="s2">import </span><span class="s1">traceback</span>
+
+<span class="s2">import </span><span class="s1">coverage</span>
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">Coverage</span>
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">env</span>
+<span class="s2">from </span><span class="s1">coverage.collector </span><span class="s2">import </span><span class="s1">CTracer</span>
+<span class="s2">from </span><span class="s1">coverage.data </span><span class="s2">import </span><span class="s1">line_counts</span>
+<span class="s2">from </span><span class="s1">coverage.debug </span><span class="s2">import </span><span class="s1">info_formatter, info_header, short_stack</span>
+<span class="s2">from </span><span class="s1">coverage.execfile </span><span class="s2">import </span><span class="s1">PyRunner</span>
+<span class="s2">from </span><span class="s1">coverage.misc </span><span class="s2">import </span><span class="s1">BaseCoverageException, ExceptionDuringRun, NoSource, output_encoding</span>
+<span class="s2">from </span><span class="s1">coverage.results </span><span class="s2">import </span><span class="s1">should_fail_under</span>
+
+
+<span class="s2">class </span><span class="s1">Opts(object):</span>
+    <span class="s0">&quot;&quot;&quot;A namespace class for individual options we'll build parsers from.&quot;&quot;&quot;</span>
+
+    <span class="s1">append = optparse.make_option(</span>
+        <span class="s3">'-a'</span><span class="s1">, </span><span class="s3">'--append'</span><span class="s1">, action=</span><span class="s3">'store_true'</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Append coverage data to .coverage, otherwise it starts clean each time.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">keep = optparse.make_option(</span>
+        <span class="s3">''</span><span class="s1">, </span><span class="s3">'--keep'</span><span class="s1">, action=</span><span class="s3">'store_true'</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Keep original coverage files, otherwise they are deleted.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">branch = optparse.make_option(</span>
+        <span class="s3">''</span><span class="s1">, </span><span class="s3">'--branch'</span><span class="s1">, action=</span><span class="s3">'store_true'</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Measure branch coverage in addition to statement coverage.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">CONCURRENCY_CHOICES = [</span>
+        <span class="s3">&quot;thread&quot;</span><span class="s1">, </span><span class="s3">&quot;gevent&quot;</span><span class="s1">, </span><span class="s3">&quot;greenlet&quot;</span><span class="s1">, </span><span class="s3">&quot;eventlet&quot;</span><span class="s1">, </span><span class="s3">&quot;multiprocessing&quot;</span><span class="s1">,</span>
+    <span class="s1">]</span>
+    <span class="s1">concurrency = optparse.make_option(</span>
+        <span class="s3">''</span><span class="s1">, </span><span class="s3">'--concurrency'</span><span class="s1">, action=</span><span class="s3">'store'</span><span class="s1">, metavar=</span><span class="s3">&quot;LIB&quot;</span><span class="s1">,</span>
+        <span class="s1">choices=CONCURRENCY_CHOICES,</span>
+        <span class="s1">help=(</span>
+            <span class="s3">&quot;Properly measure code using a concurrency library. &quot;</span>
+            <span class="s3">&quot;Valid values are: %s.&quot;</span>
+        <span class="s1">) % </span><span class="s3">&quot;, &quot;</span><span class="s1">.join(CONCURRENCY_CHOICES),</span>
+    <span class="s1">)</span>
+    <span class="s1">context = optparse.make_option(</span>
+        <span class="s3">''</span><span class="s1">, </span><span class="s3">'--context'</span><span class="s1">, action=</span><span class="s3">'store'</span><span class="s1">, metavar=</span><span class="s3">&quot;LABEL&quot;</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;The context label to record for this coverage run.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">debug = optparse.make_option(</span>
+        <span class="s3">''</span><span class="s1">, </span><span class="s3">'--debug'</span><span class="s1">, action=</span><span class="s3">'store'</span><span class="s1">, metavar=</span><span class="s3">&quot;OPTS&quot;</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Debug options, separated by commas. [env: COVERAGE_DEBUG]&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">directory = optparse.make_option(</span>
+        <span class="s3">'-d'</span><span class="s1">, </span><span class="s3">'--directory'</span><span class="s1">, action=</span><span class="s3">'store'</span><span class="s1">, metavar=</span><span class="s3">&quot;DIR&quot;</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Write the output files to DIR.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">fail_under = optparse.make_option(</span>
+        <span class="s3">''</span><span class="s1">, </span><span class="s3">'--fail-under'</span><span class="s1">, action=</span><span class="s3">'store'</span><span class="s1">, metavar=</span><span class="s3">&quot;MIN&quot;</span><span class="s1">, type=</span><span class="s3">&quot;float&quot;</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Exit with a status of 2 if the total coverage is less than MIN.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">help = optparse.make_option(</span>
+        <span class="s3">'-h'</span><span class="s1">, </span><span class="s3">'--help'</span><span class="s1">, action=</span><span class="s3">'store_true'</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Get help on this command.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">ignore_errors = optparse.make_option(</span>
+        <span class="s3">'-i'</span><span class="s1">, </span><span class="s3">'--ignore-errors'</span><span class="s1">, action=</span><span class="s3">'store_true'</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Ignore errors while reading source files.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">include = optparse.make_option(</span>
+        <span class="s3">''</span><span class="s1">, </span><span class="s3">'--include'</span><span class="s1">, action=</span><span class="s3">'store'</span><span class="s1">,</span>
+        <span class="s1">metavar=</span><span class="s3">&quot;PAT1,PAT2,...&quot;</span><span class="s1">,</span>
+        <span class="s1">help=(</span>
+            <span class="s3">&quot;Include only files whose paths match one of these patterns. &quot;</span>
+            <span class="s3">&quot;Accepts shell-style wildcards, which must be quoted.&quot;</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+    <span class="s1">pylib = optparse.make_option(</span>
+        <span class="s3">'-L'</span><span class="s1">, </span><span class="s3">'--pylib'</span><span class="s1">, action=</span><span class="s3">'store_true'</span><span class="s1">,</span>
+        <span class="s1">help=(</span>
+            <span class="s3">&quot;Measure coverage even inside the Python installed library, &quot;</span>
+            <span class="s3">&quot;which isn't done by default.&quot;</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+    <span class="s1">sort = optparse.make_option(</span>
+        <span class="s3">'--sort'</span><span class="s1">, action=</span><span class="s3">'store'</span><span class="s1">, metavar=</span><span class="s3">'COLUMN'</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Sort the report by the named column: name, stmts, miss, branch, brpart, or cover. &quot;</span>
+             <span class="s3">&quot;Default is name.&quot;</span>
+    <span class="s1">)</span>
+    <span class="s1">show_missing = optparse.make_option(</span>
+        <span class="s3">'-m'</span><span class="s1">, </span><span class="s3">'--show-missing'</span><span class="s1">, action=</span><span class="s3">'store_true'</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Show line numbers of statements in each module that weren't executed.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">skip_covered = optparse.make_option(</span>
+        <span class="s3">'--skip-covered'</span><span class="s1">, action=</span><span class="s3">'store_true'</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Skip files with 100% coverage.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">no_skip_covered = optparse.make_option(</span>
+        <span class="s3">'--no-skip-covered'</span><span class="s1">, action=</span><span class="s3">'store_false'</span><span class="s1">, dest=</span><span class="s3">'skip_covered'</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Disable --skip-covered.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">skip_empty = optparse.make_option(</span>
+        <span class="s3">'--skip-empty'</span><span class="s1">, action=</span><span class="s3">'store_true'</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Skip files with no code.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">show_contexts = optparse.make_option(</span>
+        <span class="s3">'--show-contexts'</span><span class="s1">, action=</span><span class="s3">'store_true'</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Show contexts for covered lines.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">omit = optparse.make_option(</span>
+        <span class="s3">''</span><span class="s1">, </span><span class="s3">'--omit'</span><span class="s1">, action=</span><span class="s3">'store'</span><span class="s1">,</span>
+        <span class="s1">metavar=</span><span class="s3">&quot;PAT1,PAT2,...&quot;</span><span class="s1">,</span>
+        <span class="s1">help=(</span>
+            <span class="s3">&quot;Omit files whose paths match one of these patterns. &quot;</span>
+            <span class="s3">&quot;Accepts shell-style wildcards, which must be quoted.&quot;</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+    <span class="s1">contexts = optparse.make_option(</span>
+        <span class="s3">''</span><span class="s1">, </span><span class="s3">'--contexts'</span><span class="s1">, action=</span><span class="s3">'store'</span><span class="s1">,</span>
+        <span class="s1">metavar=</span><span class="s3">&quot;REGEX1,REGEX2,...&quot;</span><span class="s1">,</span>
+        <span class="s1">help=(</span>
+            <span class="s3">&quot;Only display data from lines covered in the given contexts. &quot;</span>
+            <span class="s3">&quot;Accepts Python regexes, which must be quoted.&quot;</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+    <span class="s1">output_xml = optparse.make_option(</span>
+        <span class="s3">'-o'</span><span class="s1">, </span><span class="s3">''</span><span class="s1">, action=</span><span class="s3">'store'</span><span class="s1">, dest=</span><span class="s3">&quot;outfile&quot;</span><span class="s1">,</span>
+        <span class="s1">metavar=</span><span class="s3">&quot;OUTFILE&quot;</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Write the XML report to this file. Defaults to 'coverage.xml'&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">output_json = optparse.make_option(</span>
+        <span class="s3">'-o'</span><span class="s1">, </span><span class="s3">''</span><span class="s1">, action=</span><span class="s3">'store'</span><span class="s1">, dest=</span><span class="s3">&quot;outfile&quot;</span><span class="s1">,</span>
+        <span class="s1">metavar=</span><span class="s3">&quot;OUTFILE&quot;</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Write the JSON report to this file. Defaults to 'coverage.json'&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">json_pretty_print = optparse.make_option(</span>
+        <span class="s3">''</span><span class="s1">, </span><span class="s3">'--pretty-print'</span><span class="s1">, action=</span><span class="s3">'store_true'</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Format the JSON for human readers.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">parallel_mode = optparse.make_option(</span>
+        <span class="s3">'-p'</span><span class="s1">, </span><span class="s3">'--parallel-mode'</span><span class="s1">, action=</span><span class="s3">'store_true'</span><span class="s1">,</span>
+        <span class="s1">help=(</span>
+            <span class="s3">&quot;Append the machine name, process id and random number to the &quot;</span>
+            <span class="s3">&quot;.coverage data file name to simplify collecting data from &quot;</span>
+            <span class="s3">&quot;many processes.&quot;</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+    <span class="s1">module = optparse.make_option(</span>
+        <span class="s3">'-m'</span><span class="s1">, </span><span class="s3">'--module'</span><span class="s1">, action=</span><span class="s3">'store_true'</span><span class="s1">,</span>
+        <span class="s1">help=(</span>
+            <span class="s3">&quot;&lt;pyfile&gt; is an importable Python module, not a script path, &quot;</span>
+            <span class="s3">&quot;to be run as 'python -m' would run it.&quot;</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+    <span class="s1">precision = optparse.make_option(</span>
+        <span class="s3">''</span><span class="s1">, </span><span class="s3">'--precision'</span><span class="s1">, action=</span><span class="s3">'store'</span><span class="s1">, metavar=</span><span class="s3">'N'</span><span class="s1">, type=int,</span>
+        <span class="s1">help=(</span>
+            <span class="s3">&quot;Number of digits after the decimal point to display for &quot;</span>
+            <span class="s3">&quot;reported coverage percentages.&quot;</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+    <span class="s1">rcfile = optparse.make_option(</span>
+        <span class="s3">''</span><span class="s1">, </span><span class="s3">'--rcfile'</span><span class="s1">, action=</span><span class="s3">'store'</span><span class="s1">,</span>
+        <span class="s1">help=(</span>
+            <span class="s3">&quot;Specify configuration file. &quot;</span>
+            <span class="s3">&quot;By default '.coveragerc', 'setup.cfg', 'tox.ini', and &quot;</span>
+            <span class="s3">&quot;'pyproject.toml' are tried. [env: COVERAGE_RCFILE]&quot;</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+    <span class="s1">source = optparse.make_option(</span>
+        <span class="s3">''</span><span class="s1">, </span><span class="s3">'--source'</span><span class="s1">, action=</span><span class="s3">'store'</span><span class="s1">, metavar=</span><span class="s3">&quot;SRC1,SRC2,...&quot;</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;A list of packages or directories of code to be measured.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">timid = optparse.make_option(</span>
+        <span class="s3">''</span><span class="s1">, </span><span class="s3">'--timid'</span><span class="s1">, action=</span><span class="s3">'store_true'</span><span class="s1">,</span>
+        <span class="s1">help=(</span>
+            <span class="s3">&quot;Use a simpler but slower trace method. Try this if you get &quot;</span>
+            <span class="s3">&quot;seemingly impossible results!&quot;</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+    <span class="s1">title = optparse.make_option(</span>
+        <span class="s3">''</span><span class="s1">, </span><span class="s3">'--title'</span><span class="s1">, action=</span><span class="s3">'store'</span><span class="s1">, metavar=</span><span class="s3">&quot;TITLE&quot;</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;A text string to use as the title on the HTML.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">version = optparse.make_option(</span>
+        <span class="s3">''</span><span class="s1">, </span><span class="s3">'--version'</span><span class="s1">, action=</span><span class="s3">'store_true'</span><span class="s1">,</span>
+        <span class="s1">help=</span><span class="s3">&quot;Display version information and exit.&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">class </span><span class="s1">CoverageOptionParser(optparse.OptionParser, object):</span>
+    <span class="s0">&quot;&quot;&quot;Base OptionParser for coverage.py. 
+ 
+    Problems don't exit the program. 
+    Defaults are initialized for all options. 
+ 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, *args, **kwargs):</span>
+        <span class="s1">super(CoverageOptionParser, self).__init__(</span>
+            <span class="s1">add_help_option=</span><span class="s2">False</span><span class="s1">, *args, **kwargs</span>
+            <span class="s1">)</span>
+        <span class="s1">self.set_defaults(</span>
+            <span class="s1">action=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">append=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">branch=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">concurrency=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">context=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">debug=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">directory=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">fail_under=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">help=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">ignore_errors=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">include=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">keep=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">module=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">omit=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">contexts=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">parallel_mode=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">precision=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">pylib=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">rcfile=</span><span class="s2">True</span><span class="s1">,</span>
+            <span class="s1">show_missing=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">skip_covered=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">skip_empty=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">show_contexts=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">sort=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">source=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">timid=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">title=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">version=</span><span class="s2">None</span><span class="s1">,</span>
+            <span class="s1">)</span>
+
+        <span class="s1">self.disable_interspersed_args()</span>
+
+    <span class="s2">class </span><span class="s1">OptionParserError(Exception):</span>
+        <span class="s0">&quot;&quot;&quot;Used to stop the optparse error handler ending the process.&quot;&quot;&quot;</span>
+        <span class="s2">pass</span>
+
+    <span class="s2">def </span><span class="s1">parse_args_ok(self, args=</span><span class="s2">None</span><span class="s1">, options=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Call optparse.parse_args, but return a triple: 
+ 
+        (ok, options, args) 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">options, args = super(CoverageOptionParser, self).parse_args(args, options)</span>
+        <span class="s2">except </span><span class="s1">self.OptionParserError:</span>
+            <span class="s2">return False</span><span class="s1">, </span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span>
+        <span class="s2">return True</span><span class="s1">, options, args</span>
+
+    <span class="s2">def </span><span class="s1">error(self, msg):</span>
+        <span class="s0">&quot;&quot;&quot;Override optparse.error so sys.exit doesn't get called.&quot;&quot;&quot;</span>
+        <span class="s1">show_help(msg)</span>
+        <span class="s2">raise </span><span class="s1">self.OptionParserError</span>
+
+
+<span class="s2">class </span><span class="s1">GlobalOptionParser(CoverageOptionParser):</span>
+    <span class="s0">&quot;&quot;&quot;Command-line parser for coverage.py global option arguments.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self):</span>
+        <span class="s1">super(GlobalOptionParser, self).__init__()</span>
+
+        <span class="s1">self.add_options([</span>
+            <span class="s1">Opts.help,</span>
+            <span class="s1">Opts.version,</span>
+        <span class="s1">])</span>
+
+
+<span class="s2">class </span><span class="s1">CmdOptionParser(CoverageOptionParser):</span>
+    <span class="s0">&quot;&quot;&quot;Parse one of the new-style commands for coverage.py.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, action, options, defaults=</span><span class="s2">None</span><span class="s1">, usage=</span><span class="s2">None</span><span class="s1">, description=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Create an OptionParser for a coverage.py command. 
+ 
+        `action` is the slug to put into `options.action`. 
+        `options` is a list of Option's for the command. 
+        `defaults` is a dict of default value for options. 
+        `usage` is the usage string to display in help. 
+        `description` is the description of the command, for the help text. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">usage:</span>
+            <span class="s1">usage = </span><span class="s3">&quot;%prog &quot; </span><span class="s1">+ usage</span>
+        <span class="s1">super(CmdOptionParser, self).__init__(</span>
+            <span class="s1">usage=usage,</span>
+            <span class="s1">description=description,</span>
+        <span class="s1">)</span>
+        <span class="s1">self.set_defaults(action=action, **(defaults </span><span class="s2">or </span><span class="s1">{}))</span>
+        <span class="s1">self.add_options(options)</span>
+        <span class="s1">self.cmd = action</span>
+
+    <span class="s2">def </span><span class="s1">__eq__(self, other):</span>
+        <span class="s0"># A convenience equality, so that I can put strings in unit test</span>
+        <span class="s0"># results, and they will compare equal to objects.</span>
+        <span class="s2">return </span><span class="s1">(other == </span><span class="s3">&quot;&lt;CmdOptionParser:%s&gt;&quot; </span><span class="s1">% self.cmd)</span>
+
+    <span class="s1">__hash__ = </span><span class="s2">None     </span><span class="s0"># This object doesn't need to be hashed.</span>
+
+    <span class="s2">def </span><span class="s1">get_prog_name(self):</span>
+        <span class="s0">&quot;&quot;&quot;Override of an undocumented function in optparse.OptionParser.&quot;&quot;&quot;</span>
+        <span class="s1">program_name = super(CmdOptionParser, self).get_prog_name()</span>
+
+        <span class="s0"># Include the sub-command for this parser as part of the command.</span>
+        <span class="s2">return </span><span class="s3">&quot;{command} {subcommand}&quot;</span><span class="s1">.format(command=program_name, subcommand=self.cmd)</span>
+
+
+<span class="s1">GLOBAL_ARGS = [</span>
+    <span class="s1">Opts.debug,</span>
+    <span class="s1">Opts.help,</span>
+    <span class="s1">Opts.rcfile,</span>
+    <span class="s1">]</span>
+
+<span class="s1">CMDS = {</span>
+    <span class="s3">'annotate'</span><span class="s1">: CmdOptionParser(</span>
+        <span class="s3">&quot;annotate&quot;</span><span class="s1">,</span>
+        <span class="s1">[</span>
+            <span class="s1">Opts.directory,</span>
+            <span class="s1">Opts.ignore_errors,</span>
+            <span class="s1">Opts.include,</span>
+            <span class="s1">Opts.omit,</span>
+            <span class="s1">] + GLOBAL_ARGS,</span>
+        <span class="s1">usage=</span><span class="s3">&quot;[options] [modules]&quot;</span><span class="s1">,</span>
+        <span class="s1">description=(</span>
+            <span class="s3">&quot;Make annotated copies of the given files, marking statements that are executed &quot;</span>
+            <span class="s3">&quot;with &gt; and statements that are missed with !.&quot;</span>
+        <span class="s1">),</span>
+    <span class="s1">),</span>
+
+    <span class="s3">'combine'</span><span class="s1">: CmdOptionParser(</span>
+        <span class="s3">&quot;combine&quot;</span><span class="s1">,</span>
+        <span class="s1">[</span>
+            <span class="s1">Opts.append,</span>
+            <span class="s1">Opts.keep,</span>
+            <span class="s1">] + GLOBAL_ARGS,</span>
+        <span class="s1">usage=</span><span class="s3">&quot;[options] &lt;path1&gt; &lt;path2&gt; ... &lt;pathN&gt;&quot;</span><span class="s1">,</span>
+        <span class="s1">description=(</span>
+            <span class="s3">&quot;Combine data from multiple coverage files collected &quot;</span>
+            <span class="s3">&quot;with 'run -p'.  The combined results are written to a single &quot;</span>
+            <span class="s3">&quot;file representing the union of the data. The positional &quot;</span>
+            <span class="s3">&quot;arguments are data files or directories containing data files. &quot;</span>
+            <span class="s3">&quot;If no paths are provided, data files in the default data file's &quot;</span>
+            <span class="s3">&quot;directory are combined.&quot;</span>
+        <span class="s1">),</span>
+    <span class="s1">),</span>
+
+    <span class="s3">'debug'</span><span class="s1">: CmdOptionParser(</span>
+        <span class="s3">&quot;debug&quot;</span><span class="s1">, GLOBAL_ARGS,</span>
+        <span class="s1">usage=</span><span class="s3">&quot;&lt;topic&gt;&quot;</span><span class="s1">,</span>
+        <span class="s1">description=(</span>
+            <span class="s3">&quot;Display information about the internals of coverage.py, &quot;</span>
+            <span class="s3">&quot;for diagnosing problems. &quot;</span>
+            <span class="s3">&quot;Topics are: &quot;</span>
+                <span class="s3">&quot;'data' to show a summary of the collected data; &quot;</span>
+                <span class="s3">&quot;'sys' to show installation information; &quot;</span>
+                <span class="s3">&quot;'config' to show the configuration; &quot;</span>
+                <span class="s3">&quot;'premain' to show what is calling coverage.&quot;</span>
+        <span class="s1">),</span>
+    <span class="s1">),</span>
+
+    <span class="s3">'erase'</span><span class="s1">: CmdOptionParser(</span>
+        <span class="s3">&quot;erase&quot;</span><span class="s1">, GLOBAL_ARGS,</span>
+        <span class="s1">description=</span><span class="s3">&quot;Erase previously collected coverage data.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+
+    <span class="s3">'help'</span><span class="s1">: CmdOptionParser(</span>
+        <span class="s3">&quot;help&quot;</span><span class="s1">, GLOBAL_ARGS,</span>
+        <span class="s1">usage=</span><span class="s3">&quot;[command]&quot;</span><span class="s1">,</span>
+        <span class="s1">description=</span><span class="s3">&quot;Describe how to use coverage.py&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+
+    <span class="s3">'html'</span><span class="s1">: CmdOptionParser(</span>
+        <span class="s3">&quot;html&quot;</span><span class="s1">,</span>
+        <span class="s1">[</span>
+            <span class="s1">Opts.contexts,</span>
+            <span class="s1">Opts.directory,</span>
+            <span class="s1">Opts.fail_under,</span>
+            <span class="s1">Opts.ignore_errors,</span>
+            <span class="s1">Opts.include,</span>
+            <span class="s1">Opts.omit,</span>
+            <span class="s1">Opts.precision,</span>
+            <span class="s1">Opts.show_contexts,</span>
+            <span class="s1">Opts.skip_covered,</span>
+            <span class="s1">Opts.no_skip_covered,</span>
+            <span class="s1">Opts.skip_empty,</span>
+            <span class="s1">Opts.title,</span>
+            <span class="s1">] + GLOBAL_ARGS,</span>
+        <span class="s1">usage=</span><span class="s3">&quot;[options] [modules]&quot;</span><span class="s1">,</span>
+        <span class="s1">description=(</span>
+            <span class="s3">&quot;Create an HTML report of the coverage of the files.  &quot;</span>
+            <span class="s3">&quot;Each file gets its own page, with the source decorated to show &quot;</span>
+            <span class="s3">&quot;executed, excluded, and missed lines.&quot;</span>
+        <span class="s1">),</span>
+    <span class="s1">),</span>
+
+    <span class="s3">'json'</span><span class="s1">: CmdOptionParser(</span>
+        <span class="s3">&quot;json&quot;</span><span class="s1">,</span>
+        <span class="s1">[</span>
+            <span class="s1">Opts.contexts,</span>
+            <span class="s1">Opts.fail_under,</span>
+            <span class="s1">Opts.ignore_errors,</span>
+            <span class="s1">Opts.include,</span>
+            <span class="s1">Opts.omit,</span>
+            <span class="s1">Opts.output_json,</span>
+            <span class="s1">Opts.json_pretty_print,</span>
+            <span class="s1">Opts.show_contexts,</span>
+            <span class="s1">] + GLOBAL_ARGS,</span>
+        <span class="s1">usage=</span><span class="s3">&quot;[options] [modules]&quot;</span><span class="s1">,</span>
+        <span class="s1">description=</span><span class="s3">&quot;Generate a JSON report of coverage results.&quot;</span>
+    <span class="s1">),</span>
+
+    <span class="s3">'report'</span><span class="s1">: CmdOptionParser(</span>
+        <span class="s3">&quot;report&quot;</span><span class="s1">,</span>
+        <span class="s1">[</span>
+            <span class="s1">Opts.contexts,</span>
+            <span class="s1">Opts.fail_under,</span>
+            <span class="s1">Opts.ignore_errors,</span>
+            <span class="s1">Opts.include,</span>
+            <span class="s1">Opts.omit,</span>
+            <span class="s1">Opts.precision,</span>
+            <span class="s1">Opts.sort,</span>
+            <span class="s1">Opts.show_missing,</span>
+            <span class="s1">Opts.skip_covered,</span>
+            <span class="s1">Opts.no_skip_covered,</span>
+            <span class="s1">Opts.skip_empty,</span>
+            <span class="s1">] + GLOBAL_ARGS,</span>
+        <span class="s1">usage=</span><span class="s3">&quot;[options] [modules]&quot;</span><span class="s1">,</span>
+        <span class="s1">description=</span><span class="s3">&quot;Report coverage statistics on modules.&quot;</span>
+    <span class="s1">),</span>
+
+    <span class="s3">'run'</span><span class="s1">: CmdOptionParser(</span>
+        <span class="s3">&quot;run&quot;</span><span class="s1">,</span>
+        <span class="s1">[</span>
+            <span class="s1">Opts.append,</span>
+            <span class="s1">Opts.branch,</span>
+            <span class="s1">Opts.concurrency,</span>
+            <span class="s1">Opts.context,</span>
+            <span class="s1">Opts.include,</span>
+            <span class="s1">Opts.module,</span>
+            <span class="s1">Opts.omit,</span>
+            <span class="s1">Opts.pylib,</span>
+            <span class="s1">Opts.parallel_mode,</span>
+            <span class="s1">Opts.source,</span>
+            <span class="s1">Opts.timid,</span>
+            <span class="s1">] + GLOBAL_ARGS,</span>
+        <span class="s1">usage=</span><span class="s3">&quot;[options] &lt;pyfile&gt; [program options]&quot;</span><span class="s1">,</span>
+        <span class="s1">description=</span><span class="s3">&quot;Run a Python program, measuring code execution.&quot;</span>
+    <span class="s1">),</span>
+
+    <span class="s3">'xml'</span><span class="s1">: CmdOptionParser(</span>
+        <span class="s3">&quot;xml&quot;</span><span class="s1">,</span>
+        <span class="s1">[</span>
+            <span class="s1">Opts.fail_under,</span>
+            <span class="s1">Opts.ignore_errors,</span>
+            <span class="s1">Opts.include,</span>
+            <span class="s1">Opts.omit,</span>
+            <span class="s1">Opts.output_xml,</span>
+            <span class="s1">Opts.skip_empty,</span>
+            <span class="s1">] + GLOBAL_ARGS,</span>
+        <span class="s1">usage=</span><span class="s3">&quot;[options] [modules]&quot;</span><span class="s1">,</span>
+        <span class="s1">description=</span><span class="s3">&quot;Generate an XML report of coverage results.&quot;</span>
+    <span class="s1">),</span>
+<span class="s1">}</span>
+
+
+<span class="s2">def </span><span class="s1">show_help(error=</span><span class="s2">None</span><span class="s1">, topic=</span><span class="s2">None</span><span class="s1">, parser=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Display an error message, or the named topic.&quot;&quot;&quot;</span>
+    <span class="s2">assert </span><span class="s1">error </span><span class="s2">or </span><span class="s1">topic </span><span class="s2">or </span><span class="s1">parser</span>
+
+    <span class="s1">program_path = sys.argv[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s2">if </span><span class="s1">program_path.endswith(os.path.sep + </span><span class="s3">'__main__.py'</span><span class="s1">):</span>
+        <span class="s0"># The path is the main module of a package; get that path instead.</span>
+        <span class="s1">program_path = os.path.dirname(program_path)</span>
+    <span class="s1">program_name = os.path.basename(program_path)</span>
+    <span class="s2">if </span><span class="s1">env.WINDOWS:</span>
+        <span class="s0"># entry_points={'console_scripts':...} on Windows makes files</span>
+        <span class="s0"># called coverage.exe, coverage3.exe, and coverage-3.5.exe. These</span>
+        <span class="s0"># invoke coverage-script.py, coverage3-script.py, and</span>
+        <span class="s0"># coverage-3.5-script.py.  argv[0] is the .py file, but we want to</span>
+        <span class="s0"># get back to the original form.</span>
+        <span class="s1">auto_suffix = </span><span class="s3">&quot;-script.py&quot;</span>
+        <span class="s2">if </span><span class="s1">program_name.endswith(auto_suffix):</span>
+            <span class="s1">program_name = program_name[:-len(auto_suffix)]</span>
+
+    <span class="s1">help_params = dict(coverage.__dict__)</span>
+    <span class="s1">help_params[</span><span class="s3">'program_name'</span><span class="s1">] = program_name</span>
+    <span class="s2">if </span><span class="s1">CTracer </span><span class="s2">is not None</span><span class="s1">:</span>
+        <span class="s1">help_params[</span><span class="s3">'extension_modifier'</span><span class="s1">] = </span><span class="s3">'with C extension'</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">help_params[</span><span class="s3">'extension_modifier'</span><span class="s1">] = </span><span class="s3">'without C extension'</span>
+
+    <span class="s2">if </span><span class="s1">error:</span>
+        <span class="s1">print(error, file=sys.stderr)</span>
+        <span class="s1">print(</span><span class="s3">&quot;Use '%s help' for help.&quot; </span><span class="s1">% (program_name,), file=sys.stderr)</span>
+    <span class="s2">elif </span><span class="s1">parser:</span>
+        <span class="s1">print(parser.format_help().strip())</span>
+        <span class="s1">print()</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">help_msg = textwrap.dedent(HELP_TOPICS.get(topic, </span><span class="s3">''</span><span class="s1">)).strip()</span>
+        <span class="s2">if </span><span class="s1">help_msg:</span>
+            <span class="s1">print(help_msg.format(**help_params))</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">print(</span><span class="s3">&quot;Don't know topic %r&quot; </span><span class="s1">% topic)</span>
+    <span class="s1">print(</span><span class="s3">&quot;Full documentation is at {__url__}&quot;</span><span class="s1">.format(**help_params))</span>
+
+
+<span class="s1">OK, ERR, FAIL_UNDER = </span><span class="s4">0</span><span class="s1">, </span><span class="s4">1</span><span class="s1">, </span><span class="s4">2</span>
+
+
+<span class="s2">class </span><span class="s1">CoverageScript(object):</span>
+    <span class="s0">&quot;&quot;&quot;The command-line interface to coverage.py.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self):</span>
+        <span class="s1">self.global_option = </span><span class="s2">False</span>
+        <span class="s1">self.coverage = </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">command_line(self, argv):</span>
+        <span class="s0">&quot;&quot;&quot;The bulk of the command line interface to coverage.py. 
+ 
+        `argv` is the argument list to process. 
+ 
+        Returns 0 if all is well, 1 if something went wrong. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># Collect the command-line options.</span>
+        <span class="s2">if not </span><span class="s1">argv:</span>
+            <span class="s1">show_help(topic=</span><span class="s3">'minimum_help'</span><span class="s1">)</span>
+            <span class="s2">return </span><span class="s1">OK</span>
+
+        <span class="s0"># The command syntax we parse depends on the first argument.  Global</span>
+        <span class="s0"># switch syntax always starts with an option.</span>
+        <span class="s1">self.global_option = argv[</span><span class="s4">0</span><span class="s1">].startswith(</span><span class="s3">'-'</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">self.global_option:</span>
+            <span class="s1">parser = GlobalOptionParser()</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">parser = CMDS.get(argv[</span><span class="s4">0</span><span class="s1">])</span>
+            <span class="s2">if not </span><span class="s1">parser:</span>
+                <span class="s1">show_help(</span><span class="s3">&quot;Unknown command: '%s'&quot; </span><span class="s1">% argv[</span><span class="s4">0</span><span class="s1">])</span>
+                <span class="s2">return </span><span class="s1">ERR</span>
+            <span class="s1">argv = argv[</span><span class="s4">1</span><span class="s1">:]</span>
+
+        <span class="s1">ok, options, args = parser.parse_args_ok(argv)</span>
+        <span class="s2">if not </span><span class="s1">ok:</span>
+            <span class="s2">return </span><span class="s1">ERR</span>
+
+        <span class="s0"># Handle help and version.</span>
+        <span class="s2">if </span><span class="s1">self.do_help(options, args, parser):</span>
+            <span class="s2">return </span><span class="s1">OK</span>
+
+        <span class="s0"># Listify the list options.</span>
+        <span class="s1">source = unshell_list(options.source)</span>
+        <span class="s1">omit = unshell_list(options.omit)</span>
+        <span class="s1">include = unshell_list(options.include)</span>
+        <span class="s1">debug = unshell_list(options.debug)</span>
+        <span class="s1">contexts = unshell_list(options.contexts)</span>
+
+        <span class="s0"># Do something.</span>
+        <span class="s1">self.coverage = Coverage(</span>
+            <span class="s1">data_suffix=options.parallel_mode,</span>
+            <span class="s1">cover_pylib=options.pylib,</span>
+            <span class="s1">timid=options.timid,</span>
+            <span class="s1">branch=options.branch,</span>
+            <span class="s1">config_file=options.rcfile,</span>
+            <span class="s1">source=source,</span>
+            <span class="s1">omit=omit,</span>
+            <span class="s1">include=include,</span>
+            <span class="s1">debug=debug,</span>
+            <span class="s1">concurrency=options.concurrency,</span>
+            <span class="s1">check_preimported=</span><span class="s2">True</span><span class="s1">,</span>
+            <span class="s1">context=options.context,</span>
+            <span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">options.action == </span><span class="s3">&quot;debug&quot;</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">self.do_debug(args)</span>
+
+        <span class="s2">elif </span><span class="s1">options.action == </span><span class="s3">&quot;erase&quot;</span><span class="s1">:</span>
+            <span class="s1">self.coverage.erase()</span>
+            <span class="s2">return </span><span class="s1">OK</span>
+
+        <span class="s2">elif </span><span class="s1">options.action == </span><span class="s3">&quot;run&quot;</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">self.do_run(options, args)</span>
+
+        <span class="s2">elif </span><span class="s1">options.action == </span><span class="s3">&quot;combine&quot;</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">options.append:</span>
+                <span class="s1">self.coverage.load()</span>
+            <span class="s1">data_dirs = args </span><span class="s2">or None</span>
+            <span class="s1">self.coverage.combine(data_dirs, strict=</span><span class="s2">True</span><span class="s1">, keep=bool(options.keep))</span>
+            <span class="s1">self.coverage.save()</span>
+            <span class="s2">return </span><span class="s1">OK</span>
+
+        <span class="s0"># Remaining actions are reporting, with some common options.</span>
+        <span class="s1">report_args = dict(</span>
+            <span class="s1">morfs=unglob_args(args),</span>
+            <span class="s1">ignore_errors=options.ignore_errors,</span>
+            <span class="s1">omit=omit,</span>
+            <span class="s1">include=include,</span>
+            <span class="s1">contexts=contexts,</span>
+            <span class="s1">)</span>
+
+        <span class="s0"># We need to be able to import from the current directory, because</span>
+        <span class="s0"># plugins may try to, for example, to read Django settings.</span>
+        <span class="s1">sys.path.insert(</span><span class="s4">0</span><span class="s1">, </span><span class="s3">''</span><span class="s1">)</span>
+
+        <span class="s1">self.coverage.load()</span>
+
+        <span class="s1">total = </span><span class="s2">None</span>
+        <span class="s2">if </span><span class="s1">options.action == </span><span class="s3">&quot;report&quot;</span><span class="s1">:</span>
+            <span class="s1">total = self.coverage.report(</span>
+                <span class="s1">show_missing=options.show_missing,</span>
+                <span class="s1">skip_covered=options.skip_covered,</span>
+                <span class="s1">skip_empty=options.skip_empty,</span>
+                <span class="s1">precision=options.precision,</span>
+                <span class="s1">sort=options.sort,</span>
+                <span class="s1">**report_args</span>
+                <span class="s1">)</span>
+        <span class="s2">elif </span><span class="s1">options.action == </span><span class="s3">&quot;annotate&quot;</span><span class="s1">:</span>
+            <span class="s1">self.coverage.annotate(directory=options.directory, **report_args)</span>
+        <span class="s2">elif </span><span class="s1">options.action == </span><span class="s3">&quot;html&quot;</span><span class="s1">:</span>
+            <span class="s1">total = self.coverage.html_report(</span>
+                <span class="s1">directory=options.directory,</span>
+                <span class="s1">title=options.title,</span>
+                <span class="s1">skip_covered=options.skip_covered,</span>
+                <span class="s1">skip_empty=options.skip_empty,</span>
+                <span class="s1">show_contexts=options.show_contexts,</span>
+                <span class="s1">precision=options.precision,</span>
+                <span class="s1">**report_args</span>
+                <span class="s1">)</span>
+        <span class="s2">elif </span><span class="s1">options.action == </span><span class="s3">&quot;xml&quot;</span><span class="s1">:</span>
+            <span class="s1">outfile = options.outfile</span>
+            <span class="s1">total = self.coverage.xml_report(</span>
+                <span class="s1">outfile=outfile, skip_empty=options.skip_empty,</span>
+                <span class="s1">**report_args</span>
+                <span class="s1">)</span>
+        <span class="s2">elif </span><span class="s1">options.action == </span><span class="s3">&quot;json&quot;</span><span class="s1">:</span>
+            <span class="s1">outfile = options.outfile</span>
+            <span class="s1">total = self.coverage.json_report(</span>
+                <span class="s1">outfile=outfile,</span>
+                <span class="s1">pretty_print=options.pretty_print,</span>
+                <span class="s1">show_contexts=options.show_contexts,</span>
+                <span class="s1">**report_args</span>
+            <span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">total </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s0"># Apply the command line fail-under options, and then use the config</span>
+            <span class="s0"># value, so we can get fail_under from the config file.</span>
+            <span class="s2">if </span><span class="s1">options.fail_under </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s1">self.coverage.set_option(</span><span class="s3">&quot;report:fail_under&quot;</span><span class="s1">, options.fail_under)</span>
+
+            <span class="s1">fail_under = self.coverage.get_option(</span><span class="s3">&quot;report:fail_under&quot;</span><span class="s1">)</span>
+            <span class="s1">precision = self.coverage.get_option(</span><span class="s3">&quot;report:precision&quot;</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">should_fail_under(total, fail_under, precision):</span>
+                <span class="s1">msg = </span><span class="s3">&quot;total of {total:.{p}f} is less than fail-under={fail_under:.{p}f}&quot;</span><span class="s1">.format(</span>
+                    <span class="s1">total=total, fail_under=fail_under, p=precision,</span>
+                <span class="s1">)</span>
+                <span class="s1">print(</span><span class="s3">&quot;Coverage failure:&quot;</span><span class="s1">, msg)</span>
+                <span class="s2">return </span><span class="s1">FAIL_UNDER</span>
+
+        <span class="s2">return </span><span class="s1">OK</span>
+
+    <span class="s2">def </span><span class="s1">do_help(self, options, args, parser):</span>
+        <span class="s0">&quot;&quot;&quot;Deal with help requests. 
+ 
+        Return True if it handled the request, False if not. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># Handle help.</span>
+        <span class="s2">if </span><span class="s1">options.help:</span>
+            <span class="s2">if </span><span class="s1">self.global_option:</span>
+                <span class="s1">show_help(topic=</span><span class="s3">'help'</span><span class="s1">)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">show_help(parser=parser)</span>
+            <span class="s2">return True</span>
+
+        <span class="s2">if </span><span class="s1">options.action == </span><span class="s3">&quot;help&quot;</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">args:</span>
+                <span class="s2">for </span><span class="s1">a </span><span class="s2">in </span><span class="s1">args:</span>
+                    <span class="s1">parser = CMDS.get(a)</span>
+                    <span class="s2">if </span><span class="s1">parser:</span>
+                        <span class="s1">show_help(parser=parser)</span>
+                    <span class="s2">else</span><span class="s1">:</span>
+                        <span class="s1">show_help(topic=a)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">show_help(topic=</span><span class="s3">'help'</span><span class="s1">)</span>
+            <span class="s2">return True</span>
+
+        <span class="s0"># Handle version.</span>
+        <span class="s2">if </span><span class="s1">options.version:</span>
+            <span class="s1">show_help(topic=</span><span class="s3">'version'</span><span class="s1">)</span>
+            <span class="s2">return True</span>
+
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">do_run(self, options, args):</span>
+        <span class="s0">&quot;&quot;&quot;Implementation of 'coverage run'.&quot;&quot;&quot;</span>
+
+        <span class="s2">if not </span><span class="s1">args:</span>
+            <span class="s2">if </span><span class="s1">options.module:</span>
+                <span class="s0"># Specified -m with nothing else.</span>
+                <span class="s1">show_help(</span><span class="s3">&quot;No module specified for -m&quot;</span><span class="s1">)</span>
+                <span class="s2">return </span><span class="s1">ERR</span>
+            <span class="s1">command_line = self.coverage.get_option(</span><span class="s3">&quot;run:command_line&quot;</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">command_line </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s1">args = shlex.split(command_line)</span>
+                <span class="s2">if </span><span class="s1">args </span><span class="s2">and </span><span class="s1">args[</span><span class="s4">0</span><span class="s1">] == </span><span class="s3">&quot;-m&quot;</span><span class="s1">:</span>
+                    <span class="s1">options.module = </span><span class="s2">True</span>
+                    <span class="s1">args = args[</span><span class="s4">1</span><span class="s1">:]</span>
+        <span class="s2">if not </span><span class="s1">args:</span>
+            <span class="s1">show_help(</span><span class="s3">&quot;Nothing to do.&quot;</span><span class="s1">)</span>
+            <span class="s2">return </span><span class="s1">ERR</span>
+
+        <span class="s2">if </span><span class="s1">options.append </span><span class="s2">and </span><span class="s1">self.coverage.get_option(</span><span class="s3">&quot;run:parallel&quot;</span><span class="s1">):</span>
+            <span class="s1">show_help(</span><span class="s3">&quot;Can't append to data files in parallel mode.&quot;</span><span class="s1">)</span>
+            <span class="s2">return </span><span class="s1">ERR</span>
+
+        <span class="s2">if </span><span class="s1">options.concurrency == </span><span class="s3">&quot;multiprocessing&quot;</span><span class="s1">:</span>
+            <span class="s0"># Can't set other run-affecting command line options with</span>
+            <span class="s0"># multiprocessing.</span>
+            <span class="s2">for </span><span class="s1">opt_name </span><span class="s2">in </span><span class="s1">[</span><span class="s3">'branch'</span><span class="s1">, </span><span class="s3">'include'</span><span class="s1">, </span><span class="s3">'omit'</span><span class="s1">, </span><span class="s3">'pylib'</span><span class="s1">, </span><span class="s3">'source'</span><span class="s1">, </span><span class="s3">'timid'</span><span class="s1">]:</span>
+                <span class="s0"># As it happens, all of these options have no default, meaning</span>
+                <span class="s0"># they will be None if they have not been specified.</span>
+                <span class="s2">if </span><span class="s1">getattr(options, opt_name) </span><span class="s2">is not None</span><span class="s1">:</span>
+                    <span class="s1">show_help(</span>
+                        <span class="s3">&quot;Options affecting multiprocessing must only be specified &quot;</span>
+                        <span class="s3">&quot;in a configuration file.</span><span class="s5">\n</span><span class="s3">&quot;</span>
+                        <span class="s3">&quot;Remove --{} from the command line.&quot;</span><span class="s1">.format(opt_name)</span>
+                    <span class="s1">)</span>
+                    <span class="s2">return </span><span class="s1">ERR</span>
+
+        <span class="s1">runner = PyRunner(args, as_module=bool(options.module))</span>
+        <span class="s1">runner.prepare()</span>
+
+        <span class="s2">if </span><span class="s1">options.append:</span>
+            <span class="s1">self.coverage.load()</span>
+
+        <span class="s0"># Run the script.</span>
+        <span class="s1">self.coverage.start()</span>
+        <span class="s1">code_ran = </span><span class="s2">True</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">runner.run()</span>
+        <span class="s2">except </span><span class="s1">NoSource:</span>
+            <span class="s1">code_ran = </span><span class="s2">False</span>
+            <span class="s2">raise</span>
+        <span class="s2">finally</span><span class="s1">:</span>
+            <span class="s1">self.coverage.stop()</span>
+            <span class="s2">if </span><span class="s1">code_ran:</span>
+                <span class="s1">self.coverage.save()</span>
+
+        <span class="s2">return </span><span class="s1">OK</span>
+
+    <span class="s2">def </span><span class="s1">do_debug(self, args):</span>
+        <span class="s0">&quot;&quot;&quot;Implementation of 'coverage debug'.&quot;&quot;&quot;</span>
+
+        <span class="s2">if not </span><span class="s1">args:</span>
+            <span class="s1">show_help(</span><span class="s3">&quot;What information would you like: config, data, sys, premain?&quot;</span><span class="s1">)</span>
+            <span class="s2">return </span><span class="s1">ERR</span>
+
+        <span class="s2">for </span><span class="s1">info </span><span class="s2">in </span><span class="s1">args:</span>
+            <span class="s2">if </span><span class="s1">info == </span><span class="s3">'sys'</span><span class="s1">:</span>
+                <span class="s1">sys_info = self.coverage.sys_info()</span>
+                <span class="s1">print(info_header(</span><span class="s3">&quot;sys&quot;</span><span class="s1">))</span>
+                <span class="s2">for </span><span class="s1">line </span><span class="s2">in </span><span class="s1">info_formatter(sys_info):</span>
+                    <span class="s1">print(</span><span class="s3">&quot; %s&quot; </span><span class="s1">% line)</span>
+            <span class="s2">elif </span><span class="s1">info == </span><span class="s3">'data'</span><span class="s1">:</span>
+                <span class="s1">self.coverage.load()</span>
+                <span class="s1">data = self.coverage.get_data()</span>
+                <span class="s1">print(info_header(</span><span class="s3">&quot;data&quot;</span><span class="s1">))</span>
+                <span class="s1">print(</span><span class="s3">&quot;path: %s&quot; </span><span class="s1">% data.data_filename())</span>
+                <span class="s2">if </span><span class="s1">data:</span>
+                    <span class="s1">print(</span><span class="s3">&quot;has_arcs: %r&quot; </span><span class="s1">% data.has_arcs())</span>
+                    <span class="s1">summary = line_counts(data, fullpath=</span><span class="s2">True</span><span class="s1">)</span>
+                    <span class="s1">filenames = sorted(summary.keys())</span>
+                    <span class="s1">print(</span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">%d files:&quot; </span><span class="s1">% len(filenames))</span>
+                    <span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">filenames:</span>
+                        <span class="s1">line = </span><span class="s3">&quot;%s: %d lines&quot; </span><span class="s1">% (f, summary[f])</span>
+                        <span class="s1">plugin = data.file_tracer(f)</span>
+                        <span class="s2">if </span><span class="s1">plugin:</span>
+                            <span class="s1">line += </span><span class="s3">&quot; [%s]&quot; </span><span class="s1">% plugin</span>
+                        <span class="s1">print(line)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">print(</span><span class="s3">&quot;No data collected&quot;</span><span class="s1">)</span>
+            <span class="s2">elif </span><span class="s1">info == </span><span class="s3">'config'</span><span class="s1">:</span>
+                <span class="s1">print(info_header(</span><span class="s3">&quot;config&quot;</span><span class="s1">))</span>
+                <span class="s1">config_info = self.coverage.config.__dict__.items()</span>
+                <span class="s2">for </span><span class="s1">line </span><span class="s2">in </span><span class="s1">info_formatter(config_info):</span>
+                    <span class="s1">print(</span><span class="s3">&quot; %s&quot; </span><span class="s1">% line)</span>
+            <span class="s2">elif </span><span class="s1">info == </span><span class="s3">&quot;premain&quot;</span><span class="s1">:</span>
+                <span class="s1">print(info_header(</span><span class="s3">&quot;premain&quot;</span><span class="s1">))</span>
+                <span class="s1">print(short_stack())</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">show_help(</span><span class="s3">&quot;Don't know what you mean by %r&quot; </span><span class="s1">% info)</span>
+                <span class="s2">return </span><span class="s1">ERR</span>
+
+        <span class="s2">return </span><span class="s1">OK</span>
+
+
+<span class="s2">def </span><span class="s1">unshell_list(s):</span>
+    <span class="s0">&quot;&quot;&quot;Turn a command-line argument into a list.&quot;&quot;&quot;</span>
+    <span class="s2">if not </span><span class="s1">s:</span>
+        <span class="s2">return None</span>
+    <span class="s2">if </span><span class="s1">env.WINDOWS:</span>
+        <span class="s0"># When running coverage.py as coverage.exe, some of the behavior</span>
+        <span class="s0"># of the shell is emulated: wildcards are expanded into a list of</span>
+        <span class="s0"># file names.  So you have to single-quote patterns on the command</span>
+        <span class="s0"># line, but (not) helpfully, the single quotes are included in the</span>
+        <span class="s0"># argument, so we have to strip them off here.</span>
+        <span class="s1">s = s.strip(</span><span class="s3">&quot;'&quot;</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">s.split(</span><span class="s3">','</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">unglob_args(args):</span>
+    <span class="s0">&quot;&quot;&quot;Interpret shell wildcards for platforms that need it.&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">env.WINDOWS:</span>
+        <span class="s1">globbed = []</span>
+        <span class="s2">for </span><span class="s1">arg </span><span class="s2">in </span><span class="s1">args:</span>
+            <span class="s2">if </span><span class="s3">'?' </span><span class="s2">in </span><span class="s1">arg </span><span class="s2">or </span><span class="s3">'*' </span><span class="s2">in </span><span class="s1">arg:</span>
+                <span class="s1">globbed.extend(glob.glob(arg))</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">globbed.append(arg)</span>
+        <span class="s1">args = globbed</span>
+    <span class="s2">return </span><span class="s1">args</span>
+
+
+<span class="s1">HELP_TOPICS = {</span>
+    <span class="s3">'help'</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;</span><span class="s5">\ 
+        </span><span class="s3">Coverage.py, version {__version__} {extension_modifier} 
+        Measure, collect, and report on code coverage in Python programs. 
+ 
+        usage: {program_name} &lt;command&gt; [options] [args] 
+ 
+        Commands: 
+            annotate    Annotate source files with execution information. 
+            combine     Combine a number of data files. 
+            debug       Display information about the internals of coverage.py 
+            erase       Erase previously collected coverage data. 
+            help        Get help on using coverage.py. 
+            html        Create an HTML report. 
+            json        Create a JSON report of coverage results. 
+            report      Report coverage stats on modules. 
+            run         Run a Python program and measure code execution. 
+            xml         Create an XML report of coverage results. 
+ 
+        Use &quot;{program_name} help &lt;command&gt;&quot; for detailed help on any command. 
+    &quot;&quot;&quot;</span><span class="s1">,</span>
+
+    <span class="s3">'minimum_help'</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;</span><span class="s5">\ 
+        </span><span class="s3">Code coverage for Python, version {__version__} {extension_modifier}.  Use '{program_name} help' for help. 
+    &quot;&quot;&quot;</span><span class="s1">,</span>
+
+    <span class="s3">'version'</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;</span><span class="s5">\ 
+        </span><span class="s3">Coverage.py, version {__version__} {extension_modifier} 
+    &quot;&quot;&quot;</span><span class="s1">,</span>
+<span class="s1">}</span>
+
+
+<span class="s2">def </span><span class="s1">main(argv=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;The main entry point to coverage.py. 
+ 
+    This is installed as the script entry point. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">argv </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s1">argv = sys.argv[</span><span class="s4">1</span><span class="s1">:]</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">status = CoverageScript().command_line(argv)</span>
+    <span class="s2">except </span><span class="s1">ExceptionDuringRun </span><span class="s2">as </span><span class="s1">err:</span>
+        <span class="s0"># An exception was caught while running the product code.  The</span>
+        <span class="s0"># sys.exc_info() return tuple is packed into an ExceptionDuringRun</span>
+        <span class="s0"># exception.</span>
+        <span class="s1">traceback.print_exception(*err.args)    </span><span class="s0"># pylint: disable=no-value-for-parameter</span>
+        <span class="s1">status = ERR</span>
+    <span class="s2">except </span><span class="s1">BaseCoverageException </span><span class="s2">as </span><span class="s1">err:</span>
+        <span class="s0"># A controlled error inside coverage.py: print the message to the user.</span>
+        <span class="s1">msg = err.args[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s2">if </span><span class="s1">env.PY2:</span>
+            <span class="s1">msg = msg.encode(output_encoding())</span>
+        <span class="s1">print(msg)</span>
+        <span class="s1">status = ERR</span>
+    <span class="s2">except </span><span class="s1">SystemExit </span><span class="s2">as </span><span class="s1">err:</span>
+        <span class="s0"># The user called `sys.exit()`.  Exit with their argument, if any.</span>
+        <span class="s2">if </span><span class="s1">err.args:</span>
+            <span class="s1">status = err.args[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">status = </span><span class="s2">None</span>
+    <span class="s2">return </span><span class="s1">status</span>
+
+<span class="s0"># Profiling using ox_profile.  Install it from GitHub:</span>
+<span class="s0">#   pip install git+https://github.com/emin63/ox_profile.git</span>
+<span class="s0">#</span>
+<span class="s0"># $set_env.py: COVERAGE_PROFILE - Set to use ox_profile.</span>
+<span class="s1">_profile = os.environ.get(</span><span class="s3">&quot;COVERAGE_PROFILE&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+<span class="s2">if </span><span class="s1">_profile:                                                </span><span class="s0"># pragma: debugging</span>
+    <span class="s2">from </span><span class="s1">ox_profile.core.launchers </span><span class="s2">import </span><span class="s1">SimpleLauncher    </span><span class="s0"># pylint: disable=import-error</span>
+    <span class="s1">original_main = main</span>
+
+    <span class="s2">def </span><span class="s1">main(argv=</span><span class="s2">None</span><span class="s1">):                                    </span><span class="s0"># pylint: disable=function-redefined</span>
+        <span class="s0">&quot;&quot;&quot;A wrapper around main that profiles.&quot;&quot;&quot;</span>
+        <span class="s1">profiler = SimpleLauncher.launch()</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">original_main(argv)</span>
+        <span class="s2">finally</span><span class="s1">:</span>
+            <span class="s1">data, _ = profiler.query(re_filter=</span><span class="s3">'coverage'</span><span class="s1">, max_records=</span><span class="s4">100</span><span class="s1">)</span>
+            <span class="s1">print(profiler.show(query=data, limit=</span><span class="s4">100</span><span class="s1">, sep=</span><span class="s3">''</span><span class="s1">, col=</span><span class="s3">''</span><span class="s1">))</span>
+            <span class="s1">profiler.cancel()</span>
+</pre>
+</body>
+</html>

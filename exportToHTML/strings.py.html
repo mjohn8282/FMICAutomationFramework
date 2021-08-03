@@ -1,0 +1,48 @@
+<html>
+<head>
+<title>strings.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+strings.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s3">&quot;&quot;&quot;Write the shared string table.&quot;&quot;&quot;</span>
+<span class="s0">from </span><span class="s1">io </span><span class="s0">import </span><span class="s1">BytesIO</span>
+
+<span class="s2"># package imports</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">SHEET_MAIN_NS</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s0">import </span><span class="s1">Element, xmlfile, SubElement</span>
+
+<span class="s1">PRESERVE_SPACE = </span><span class="s3">'{%s}space' </span><span class="s1">% </span><span class="s3">&quot;http://www.w3.org/XML/1998/namespace&quot;</span>
+
+<span class="s0">def </span><span class="s1">write_string_table(string_table):</span>
+    <span class="s2">&quot;&quot;&quot;Write the string table xml.&quot;&quot;&quot;</span>
+    <span class="s1">out = BytesIO()</span>
+
+    <span class="s0">with </span><span class="s1">xmlfile(out) </span><span class="s0">as </span><span class="s1">xf:</span>
+        <span class="s0">with </span><span class="s1">xf.element(</span><span class="s3">&quot;sst&quot;</span><span class="s1">, xmlns=SHEET_MAIN_NS, uniqueCount=</span><span class="s3">&quot;%d&quot; </span><span class="s1">% len(string_table)):</span>
+
+            <span class="s0">for </span><span class="s1">key </span><span class="s0">in </span><span class="s1">string_table:</span>
+                <span class="s1">el = Element(</span><span class="s3">'si'</span><span class="s1">)</span>
+                <span class="s1">text = SubElement(el, </span><span class="s3">'t'</span><span class="s1">)</span>
+                <span class="s1">text.text = key</span>
+                <span class="s0">if </span><span class="s1">key.strip() != key:</span>
+                    <span class="s1">text.set(PRESERVE_SPACE, </span><span class="s3">'preserve'</span><span class="s1">)</span>
+                <span class="s1">xf.write(el)</span>
+
+    <span class="s0">return  </span><span class="s1">out.getvalue()</span>
+</pre>
+</body>
+</html>

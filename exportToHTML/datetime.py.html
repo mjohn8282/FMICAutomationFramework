@@ -1,0 +1,167 @@
+<html>
+<head>
+<title>datetime.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+datetime.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">division</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s3">&quot;&quot;&quot;Manage Excel date weirdness.&quot;&quot;&quot;</span>
+
+<span class="s2"># Python stdlib imports</span>
+<span class="s0">import </span><span class="s1">datetime</span>
+<span class="s0">from </span><span class="s1">datetime </span><span class="s0">import </span><span class="s1">timedelta, tzinfo</span>
+<span class="s0">from </span><span class="s1">math </span><span class="s0">import </span><span class="s1">isnan</span>
+<span class="s0">import </span><span class="s1">re</span>
+
+<span class="s0">from </span><span class="s1">jdcal </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">gcal2jd,</span>
+    <span class="s1">jd2gcal,</span>
+    <span class="s1">MJD_0</span>
+<span class="s1">)</span>
+
+
+<span class="s2"># constants</span>
+<span class="s1">MAC_EPOCH = datetime.date(</span><span class="s4">1904</span><span class="s1">, </span><span class="s4">1</span><span class="s1">, </span><span class="s4">1</span><span class="s1">)</span>
+<span class="s1">WINDOWS_EPOCH = datetime.date(</span><span class="s4">1899</span><span class="s1">, </span><span class="s4">12</span><span class="s1">, </span><span class="s4">30</span><span class="s1">)</span>
+<span class="s1">CALENDAR_WINDOWS_1900 = sum(gcal2jd(WINDOWS_EPOCH.year, WINDOWS_EPOCH.month, WINDOWS_EPOCH.day))</span>
+<span class="s1">CALENDAR_MAC_1904 = sum(gcal2jd(MAC_EPOCH.year, MAC_EPOCH.month, MAC_EPOCH.day))</span>
+<span class="s1">SECS_PER_DAY = </span><span class="s4">86400</span>
+
+<span class="s1">EPOCH = datetime.datetime.utcfromtimestamp(</span><span class="s4">0</span><span class="s1">)</span>
+<span class="s1">ISO_FORMAT = </span><span class="s3">'%Y-%m-%dT%H:%M:%SZ'</span>
+<span class="s1">ISO_REGEX = re.compile(</span><span class="s3">r''' 
+(?P&lt;date&gt;(?P&lt;year&gt;\d{4})-(?P&lt;month&gt;\d{2})-(?P&lt;day&gt;\d{2}))?T? 
+(?P&lt;time&gt;(?P&lt;hour&gt;\d{2}):(?P&lt;minute&gt;\d{2}):(?P&lt;second&gt;\d{2})(.(?P&lt;ms&gt;\d{2}))?)?Z?'''</span><span class="s1">,</span>
+                                       <span class="s1">re.VERBOSE)</span>
+
+
+<span class="s0">def </span><span class="s1">to_ISO8601(dt):</span>
+    <span class="s2">&quot;&quot;&quot;Convert from a datetime to a timestamp string.&quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">datetime.datetime.strftime(dt, ISO_FORMAT)</span>
+
+
+<span class="s0">def </span><span class="s1">from_ISO8601(formatted_string):</span>
+    <span class="s2">&quot;&quot;&quot;Convert from a timestamp string to a datetime object. According to 
+    18.17.4 in the specification the following ISO 8601 formats are 
+    supported. 
+ 
+    Dates B.1.1 and B.2.1 
+    Times B.1.2 and B.2.2 
+    Datetimes B.1.3 and B.2.3 
+ 
+    There is no concept of timedeltas 
+    &quot;&quot;&quot;</span>
+    <span class="s1">match = ISO_REGEX.match(formatted_string)</span>
+    <span class="s0">if not </span><span class="s1">match:</span>
+        <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;Invalid datetime value {}&quot;</span><span class="s1">.format(formatted_string))</span>
+
+    <span class="s1">parts = {k:int(v) </span><span class="s0">for </span><span class="s1">k, v </span><span class="s0">in </span><span class="s1">match.groupdict().items() </span><span class="s0">if </span><span class="s1">v </span><span class="s0">is not None and </span><span class="s1">v.isdigit()}</span>
+    <span class="s0">if </span><span class="s3">'year' </span><span class="s0">not in </span><span class="s1">parts:</span>
+        <span class="s1">dt = datetime.time(parts[</span><span class="s3">'hour'</span><span class="s1">], parts[</span><span class="s3">'minute'</span><span class="s1">], parts[</span><span class="s3">'second'</span><span class="s1">])</span>
+    <span class="s0">elif </span><span class="s3">'hour' </span><span class="s0">not in </span><span class="s1">parts:</span>
+        <span class="s1">dt = datetime.date(parts[</span><span class="s3">'year'</span><span class="s1">], parts[</span><span class="s3">'month'</span><span class="s1">], parts[</span><span class="s3">'day'</span><span class="s1">])</span>
+    <span class="s0">else</span><span class="s1">:</span>
+        <span class="s1">dt = datetime.datetime(year=parts[</span><span class="s3">'year'</span><span class="s1">], month=parts[</span><span class="s3">'month'</span><span class="s1">],</span>
+                               <span class="s1">day=parts[</span><span class="s3">'day'</span><span class="s1">], hour=parts[</span><span class="s3">'hour'</span><span class="s1">], minute=parts[</span><span class="s3">'minute'</span><span class="s1">],</span>
+                               <span class="s1">second=parts[</span><span class="s3">'second'</span><span class="s1">])</span>
+    <span class="s0">if </span><span class="s3">'ms' </span><span class="s0">in </span><span class="s1">parts:</span>
+        <span class="s1">dt += timedelta(microseconds=parts[</span><span class="s3">'ms'</span><span class="s1">])</span>
+    <span class="s0">return </span><span class="s1">dt</span>
+
+
+<span class="s0">def </span><span class="s1">to_excel(dt, offset=CALENDAR_WINDOWS_1900):</span>
+    <span class="s0">if </span><span class="s1">isinstance(dt, datetime.time):</span>
+        <span class="s0">return </span><span class="s1">time_to_days(dt)</span>
+    <span class="s0">if </span><span class="s1">isinstance(dt, datetime.timedelta):</span>
+        <span class="s0">return </span><span class="s1">timedelta_to_days(dt)</span>
+    <span class="s0">if </span><span class="s1">isnan(dt.year): </span><span class="s2"># Pandas supports Not a Date</span>
+        <span class="s0">return</span>
+    <span class="s1">jul = sum(gcal2jd(dt.year, dt.month, dt.day)) - offset</span>
+    <span class="s0">if </span><span class="s1">jul &lt;= </span><span class="s4">60 </span><span class="s0">and </span><span class="s1">offset == CALENDAR_WINDOWS_1900:</span>
+        <span class="s1">jul -= </span><span class="s4">1</span>
+    <span class="s0">if </span><span class="s1">hasattr(dt, </span><span class="s3">'time'</span><span class="s1">):</span>
+        <span class="s1">jul += time_to_days(dt)</span>
+    <span class="s0">return </span><span class="s1">jul</span>
+
+
+<span class="s0">def </span><span class="s1">from_excel(value, offset=CALENDAR_WINDOWS_1900):</span>
+    <span class="s0">if </span><span class="s1">value </span><span class="s0">is None</span><span class="s1">:</span>
+        <span class="s0">return</span>
+    <span class="s0">if </span><span class="s4">1 </span><span class="s1">&lt; value &lt; </span><span class="s4">60 </span><span class="s0">and </span><span class="s1">offset == CALENDAR_WINDOWS_1900:</span>
+        <span class="s1">value += </span><span class="s4">1</span>
+    <span class="s1">parts = list(jd2gcal(MJD_0, value + offset - MJD_0))</span>
+    <span class="s1">_, fraction = divmod(value, </span><span class="s4">1</span><span class="s1">)</span>
+    <span class="s1">jumped = (parts[-</span><span class="s4">1</span><span class="s1">] == </span><span class="s4">0 </span><span class="s0">and </span><span class="s1">fraction &gt; </span><span class="s4">0</span><span class="s1">)</span>
+    <span class="s1">diff = datetime.timedelta(days=fraction)</span>
+
+    <span class="s0">if </span><span class="s4">0 </span><span class="s1">&lt; abs(value) &lt; </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s0">return </span><span class="s1">days_to_time(diff)</span>
+    <span class="s0">if not </span><span class="s1">jumped:</span>
+        <span class="s0">return </span><span class="s1">datetime.datetime(*parts[:</span><span class="s4">3</span><span class="s1">]) + diff</span>
+    <span class="s0">else</span><span class="s1">:</span>
+        <span class="s0">return </span><span class="s1">datetime.datetime(*parts[:</span><span class="s4">3</span><span class="s1">] + [</span><span class="s4">0</span><span class="s1">])</span>
+
+
+<span class="s0">class </span><span class="s1">GMT(tzinfo):</span>
+
+    <span class="s0">def </span><span class="s1">utcoffset(self, dt):</span>
+        <span class="s0">return </span><span class="s1">timedelta(</span><span class="s4">0</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">dst(self, dt):</span>
+        <span class="s0">return </span><span class="s1">timedelta(</span><span class="s4">0</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">tzname(self,dt):</span>
+        <span class="s0">return </span><span class="s3">&quot;GMT&quot;</span>
+
+<span class="s0">try</span><span class="s1">:</span>
+    <span class="s0">from </span><span class="s1">datetime </span><span class="s0">import </span><span class="s1">timezone</span>
+    <span class="s1">UTC = timezone(timedelta(</span><span class="s4">0</span><span class="s1">))</span>
+<span class="s0">except </span><span class="s1">ImportError:</span>
+    <span class="s2"># Python 2</span>
+    <span class="s1">UTC = GMT()</span>
+
+
+<span class="s0">def </span><span class="s1">time_to_days(value):</span>
+    <span class="s2">&quot;&quot;&quot;Convert a time value to fractions of day&quot;&quot;&quot;</span>
+    <span class="s0">if </span><span class="s1">value.tzinfo </span><span class="s0">is not None</span><span class="s1">:</span>
+        <span class="s1">value = value.astimezone(UTC)</span>
+    <span class="s0">return </span><span class="s1">(</span>
+        <span class="s1">(value.hour * </span><span class="s4">3600</span><span class="s1">)</span>
+        <span class="s1">+ (value.minute * </span><span class="s4">60</span><span class="s1">)</span>
+        <span class="s1">+ value.second</span>
+        <span class="s1">+ value.microsecond / </span><span class="s4">10</span><span class="s1">**</span><span class="s4">6</span>
+        <span class="s1">) / SECS_PER_DAY</span>
+
+
+<span class="s0">def </span><span class="s1">timedelta_to_days(value):</span>
+    <span class="s2">&quot;&quot;&quot;Convert a timedelta value to fractions of a day&quot;&quot;&quot;</span>
+    <span class="s0">if not </span><span class="s1">hasattr(value, </span><span class="s3">'total_seconds'</span><span class="s1">):</span>
+        <span class="s1">secs = (value.microseconds +</span>
+                <span class="s1">(value.seconds + value.days * SECS_PER_DAY) * </span><span class="s4">10</span><span class="s1">**</span><span class="s4">6</span><span class="s1">) / </span><span class="s4">10</span><span class="s1">**</span><span class="s4">6</span>
+    <span class="s0">else</span><span class="s1">:</span>
+        <span class="s1">secs = value.total_seconds()</span>
+    <span class="s0">return </span><span class="s1">secs / SECS_PER_DAY</span>
+
+
+<span class="s0">def </span><span class="s1">days_to_time(value):</span>
+    <span class="s1">mins, seconds = divmod(value.seconds, </span><span class="s4">60</span><span class="s1">)</span>
+    <span class="s1">hours, mins = divmod(mins, </span><span class="s4">60</span><span class="s1">)</span>
+    <span class="s0">return </span><span class="s1">datetime.time(hours, mins, seconds, value.microseconds)</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,437 @@
+<html>
+<head>
+<title>finders.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+.s5 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+finders.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot;Finders try to find right section for passed module name&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">importlib.machinery</span>
+<span class="s2">import </span><span class="s1">inspect</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">os.path</span>
+<span class="s2">import </span><span class="s1">re</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">sysconfig</span>
+<span class="s2">from </span><span class="s1">abc </span><span class="s2">import </span><span class="s1">ABCMeta, abstractmethod</span>
+<span class="s2">from </span><span class="s1">contextlib </span><span class="s2">import </span><span class="s1">contextmanager</span>
+<span class="s2">from </span><span class="s1">fnmatch </span><span class="s2">import </span><span class="s1">fnmatch</span>
+<span class="s2">from </span><span class="s1">functools </span><span class="s2">import </span><span class="s1">lru_cache</span>
+<span class="s2">from </span><span class="s1">glob </span><span class="s2">import </span><span class="s1">glob</span>
+<span class="s2">from </span><span class="s1">pathlib </span><span class="s2">import </span><span class="s1">Path</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Dict, Iterable, Iterator, List, Optional, Pattern, Sequence, Tuple, Type</span>
+
+<span class="s2">from </span><span class="s1">isort </span><span class="s2">import </span><span class="s1">sections</span>
+<span class="s2">from </span><span class="s1">isort.settings </span><span class="s2">import </span><span class="s1">KNOWN_SECTION_MAPPING, Config</span>
+<span class="s2">from </span><span class="s1">isort.utils </span><span class="s2">import </span><span class="s1">exists_case_sensitive</span>
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s2">from </span><span class="s1">pipreqs </span><span class="s2">import </span><span class="s1">pipreqs</span>
+
+<span class="s2">except </span><span class="s1">ImportError:</span>
+    <span class="s1">pipreqs = </span><span class="s2">None</span>
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s2">from </span><span class="s1">pip_api </span><span class="s2">import </span><span class="s1">parse_requirements</span>
+
+<span class="s2">except </span><span class="s1">ImportError:</span>
+    <span class="s1">parse_requirements = </span><span class="s2">None</span>
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s2">from </span><span class="s1">requirementslib </span><span class="s2">import </span><span class="s1">Pipfile</span>
+
+<span class="s2">except </span><span class="s1">ImportError:</span>
+    <span class="s1">Pipfile = </span><span class="s2">None</span>
+
+
+<span class="s1">@contextmanager</span>
+<span class="s2">def </span><span class="s1">chdir(path: str) -&gt; Iterator[</span><span class="s2">None</span><span class="s1">]:</span>
+    <span class="s0">&quot;&quot;&quot;Context manager for changing dir and restoring previous workdir after exit.&quot;&quot;&quot;</span>
+    <span class="s1">curdir = os.getcwd()</span>
+    <span class="s1">os.chdir(path)</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">yield</span>
+    <span class="s2">finally</span><span class="s1">:</span>
+        <span class="s1">os.chdir(curdir)</span>
+
+
+<span class="s2">class </span><span class="s1">BaseFinder(metaclass=ABCMeta):</span>
+    <span class="s2">def </span><span class="s1">__init__(self, config: Config) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">self.config = config</span>
+
+    <span class="s1">@abstractmethod</span>
+    <span class="s2">def </span><span class="s1">find(self, module_name: str) -&gt; Optional[str]:</span>
+        <span class="s2">raise </span><span class="s1">NotImplementedError</span>
+
+
+<span class="s2">class </span><span class="s1">ForcedSeparateFinder(BaseFinder):</span>
+    <span class="s2">def </span><span class="s1">find(self, module_name: str) -&gt; Optional[str]:</span>
+        <span class="s2">for </span><span class="s1">forced_separate </span><span class="s2">in </span><span class="s1">self.config.forced_separate:</span>
+            <span class="s0"># Ensure all forced_separate patterns will match to end of string</span>
+            <span class="s1">path_glob = forced_separate</span>
+            <span class="s2">if not </span><span class="s1">forced_separate.endswith(</span><span class="s3">&quot;*&quot;</span><span class="s1">):</span>
+                <span class="s1">path_glob = </span><span class="s3">&quot;%s*&quot; </span><span class="s1">% forced_separate</span>
+
+            <span class="s2">if </span><span class="s1">fnmatch(module_name, path_glob) </span><span class="s2">or </span><span class="s1">fnmatch(module_name, </span><span class="s3">&quot;.&quot; </span><span class="s1">+ path_glob):</span>
+                <span class="s2">return </span><span class="s1">forced_separate</span>
+        <span class="s2">return None</span>
+
+
+<span class="s2">class </span><span class="s1">LocalFinder(BaseFinder):</span>
+    <span class="s2">def </span><span class="s1">find(self, module_name: str) -&gt; Optional[str]:</span>
+        <span class="s2">if </span><span class="s1">module_name.startswith(</span><span class="s3">&quot;.&quot;</span><span class="s1">):</span>
+            <span class="s2">return </span><span class="s3">&quot;LOCALFOLDER&quot;</span>
+        <span class="s2">return None</span>
+
+
+<span class="s2">class </span><span class="s1">KnownPatternFinder(BaseFinder):</span>
+    <span class="s2">def </span><span class="s1">__init__(self, config: Config) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">super().__init__(config)</span>
+
+        <span class="s1">self.known_patterns: List[Tuple[Pattern[str], str]] = []</span>
+        <span class="s2">for </span><span class="s1">placement </span><span class="s2">in </span><span class="s1">reversed(config.sections):</span>
+            <span class="s1">known_placement = KNOWN_SECTION_MAPPING.get(placement, placement).lower()</span>
+            <span class="s1">config_key = </span><span class="s3">f&quot;known_</span><span class="s4">{</span><span class="s1">known_placement</span><span class="s4">}</span><span class="s3">&quot;</span>
+            <span class="s1">known_patterns = list(</span>
+                <span class="s1">getattr(self.config, config_key, self.config.known_other.get(known_placement, []))</span>
+            <span class="s1">)</span>
+            <span class="s1">known_patterns = [</span>
+                <span class="s1">pattern</span>
+                <span class="s2">for </span><span class="s1">known_pattern </span><span class="s2">in </span><span class="s1">known_patterns</span>
+                <span class="s2">for </span><span class="s1">pattern </span><span class="s2">in </span><span class="s1">self._parse_known_pattern(known_pattern)</span>
+            <span class="s1">]</span>
+            <span class="s2">for </span><span class="s1">known_pattern </span><span class="s2">in </span><span class="s1">known_patterns:</span>
+                <span class="s1">regexp = </span><span class="s3">&quot;^&quot; </span><span class="s1">+ known_pattern.replace(</span><span class="s3">&quot;*&quot;</span><span class="s1">, </span><span class="s3">&quot;.*&quot;</span><span class="s1">).replace(</span><span class="s3">&quot;?&quot;</span><span class="s1">, </span><span class="s3">&quot;.?&quot;</span><span class="s1">) + </span><span class="s3">&quot;$&quot;</span>
+                <span class="s1">self.known_patterns.append((re.compile(regexp), placement))</span>
+
+    <span class="s2">def </span><span class="s1">_parse_known_pattern(self, pattern: str) -&gt; List[str]:</span>
+        <span class="s0">&quot;&quot;&quot;Expand pattern if identified as a directory and return found sub packages&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">pattern.endswith(os.path.sep):</span>
+            <span class="s1">patterns = [</span>
+                <span class="s1">filename</span>
+                <span class="s2">for </span><span class="s1">filename </span><span class="s2">in </span><span class="s1">os.listdir(os.path.join(self.config.directory, pattern))</span>
+                <span class="s2">if </span><span class="s1">os.path.isdir(os.path.join(self.config.directory, pattern, filename))</span>
+            <span class="s1">]</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">patterns = [pattern]</span>
+
+        <span class="s2">return </span><span class="s1">patterns</span>
+
+    <span class="s2">def </span><span class="s1">find(self, module_name: str) -&gt; Optional[str]:</span>
+        <span class="s0"># Try to find most specific placement instruction match (if any)</span>
+        <span class="s1">parts = module_name.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">)</span>
+        <span class="s1">module_names_to_check = (</span><span class="s3">&quot;.&quot;</span><span class="s1">.join(parts[:first_k]) </span><span class="s2">for </span><span class="s1">first_k </span><span class="s2">in </span><span class="s1">range(len(parts), </span><span class="s5">0</span><span class="s1">, -</span><span class="s5">1</span><span class="s1">))</span>
+        <span class="s2">for </span><span class="s1">module_name_to_check </span><span class="s2">in </span><span class="s1">module_names_to_check:</span>
+            <span class="s2">for </span><span class="s1">pattern, placement </span><span class="s2">in </span><span class="s1">self.known_patterns:</span>
+                <span class="s2">if </span><span class="s1">pattern.match(module_name_to_check):</span>
+                    <span class="s2">return </span><span class="s1">placement</span>
+        <span class="s2">return None</span>
+
+
+<span class="s2">class </span><span class="s1">PathFinder(BaseFinder):</span>
+    <span class="s2">def </span><span class="s1">__init__(self, config: Config, path: str = </span><span class="s3">&quot;.&quot;</span><span class="s1">) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">super().__init__(config)</span>
+
+        <span class="s0"># restore the original import path (i.e. not the path to bin/isort)</span>
+        <span class="s1">root_dir = os.path.abspath(path)</span>
+        <span class="s1">src_dir = </span><span class="s3">f&quot;</span><span class="s4">{</span><span class="s1">root_dir</span><span class="s4">}</span><span class="s3">/src&quot;</span>
+        <span class="s1">self.paths = [root_dir, src_dir]</span>
+
+        <span class="s0"># virtual env</span>
+        <span class="s1">self.virtual_env = self.config.virtual_env </span><span class="s2">or </span><span class="s1">os.environ.get(</span><span class="s3">&quot;VIRTUAL_ENV&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">self.virtual_env:</span>
+            <span class="s1">self.virtual_env = os.path.realpath(self.virtual_env)</span>
+        <span class="s1">self.virtual_env_src = </span><span class="s3">&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.virtual_env:</span>
+            <span class="s1">self.virtual_env_src = </span><span class="s3">f&quot;</span><span class="s4">{</span><span class="s1">self.virtual_env</span><span class="s4">}</span><span class="s3">/src/&quot;</span>
+            <span class="s2">for </span><span class="s1">venv_path </span><span class="s2">in </span><span class="s1">glob(</span><span class="s3">f&quot;</span><span class="s4">{</span><span class="s1">self.virtual_env</span><span class="s4">}</span><span class="s3">/lib/python*/site-packages&quot;</span><span class="s1">):</span>
+                <span class="s2">if </span><span class="s1">venv_path </span><span class="s2">not in </span><span class="s1">self.paths:</span>
+                    <span class="s1">self.paths.append(venv_path)</span>
+            <span class="s2">for </span><span class="s1">nested_venv_path </span><span class="s2">in </span><span class="s1">glob(</span><span class="s3">f&quot;</span><span class="s4">{</span><span class="s1">self.virtual_env</span><span class="s4">}</span><span class="s3">/lib/python*/*/site-packages&quot;</span><span class="s1">):</span>
+                <span class="s2">if </span><span class="s1">nested_venv_path </span><span class="s2">not in </span><span class="s1">self.paths:</span>
+                    <span class="s1">self.paths.append(nested_venv_path)</span>
+            <span class="s2">for </span><span class="s1">venv_src_path </span><span class="s2">in </span><span class="s1">glob(</span><span class="s3">f&quot;</span><span class="s4">{</span><span class="s1">self.virtual_env</span><span class="s4">}</span><span class="s3">/src/*&quot;</span><span class="s1">):</span>
+                <span class="s2">if </span><span class="s1">os.path.isdir(venv_src_path):</span>
+                    <span class="s1">self.paths.append(venv_src_path)</span>
+
+        <span class="s0"># conda</span>
+        <span class="s1">self.conda_env = self.config.conda_env </span><span class="s2">or </span><span class="s1">os.environ.get(</span><span class="s3">&quot;CONDA_PREFIX&quot;</span><span class="s1">) </span><span class="s2">or </span><span class="s3">&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.conda_env:</span>
+            <span class="s1">self.conda_env = os.path.realpath(self.conda_env)</span>
+            <span class="s2">for </span><span class="s1">conda_path </span><span class="s2">in </span><span class="s1">glob(</span><span class="s3">f&quot;</span><span class="s4">{</span><span class="s1">self.conda_env</span><span class="s4">}</span><span class="s3">/lib/python*/site-packages&quot;</span><span class="s1">):</span>
+                <span class="s2">if </span><span class="s1">conda_path </span><span class="s2">not in </span><span class="s1">self.paths:</span>
+                    <span class="s1">self.paths.append(conda_path)</span>
+            <span class="s2">for </span><span class="s1">nested_conda_path </span><span class="s2">in </span><span class="s1">glob(</span><span class="s3">f&quot;</span><span class="s4">{</span><span class="s1">self.conda_env</span><span class="s4">}</span><span class="s3">/lib/python*/*/site-packages&quot;</span><span class="s1">):</span>
+                <span class="s2">if </span><span class="s1">nested_conda_path </span><span class="s2">not in </span><span class="s1">self.paths:</span>
+                    <span class="s1">self.paths.append(nested_conda_path)</span>
+
+        <span class="s0"># handle case-insensitive paths on windows</span>
+        <span class="s1">self.stdlib_lib_prefix = os.path.normcase(sysconfig.get_paths()[</span><span class="s3">&quot;stdlib&quot;</span><span class="s1">])</span>
+        <span class="s2">if </span><span class="s1">self.stdlib_lib_prefix </span><span class="s2">not in </span><span class="s1">self.paths:</span>
+            <span class="s1">self.paths.append(self.stdlib_lib_prefix)</span>
+
+        <span class="s0"># add system paths</span>
+        <span class="s2">for </span><span class="s1">system_path </span><span class="s2">in </span><span class="s1">sys.path[</span><span class="s5">1</span><span class="s1">:]:</span>
+            <span class="s2">if </span><span class="s1">system_path </span><span class="s2">not in </span><span class="s1">self.paths:</span>
+                <span class="s1">self.paths.append(system_path)</span>
+
+    <span class="s2">def </span><span class="s1">find(self, module_name: str) -&gt; Optional[str]:</span>
+        <span class="s2">for </span><span class="s1">prefix </span><span class="s2">in </span><span class="s1">self.paths:</span>
+            <span class="s1">package_path = </span><span class="s3">&quot;/&quot;</span><span class="s1">.join((prefix, module_name.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">)[</span><span class="s5">0</span><span class="s1">]))</span>
+            <span class="s1">path_obj = Path(package_path).resolve()</span>
+            <span class="s1">is_module = (</span>
+                <span class="s1">exists_case_sensitive(package_path + </span><span class="s3">&quot;.py&quot;</span><span class="s1">)</span>
+                <span class="s2">or </span><span class="s1">any(</span>
+                    <span class="s1">exists_case_sensitive(package_path + ext_suffix)</span>
+                    <span class="s2">for </span><span class="s1">ext_suffix </span><span class="s2">in </span><span class="s1">importlib.machinery.EXTENSION_SUFFIXES</span>
+                <span class="s1">)</span>
+                <span class="s2">or </span><span class="s1">exists_case_sensitive(package_path + </span><span class="s3">&quot;/__init__.py&quot;</span><span class="s1">)</span>
+            <span class="s1">)</span>
+            <span class="s1">is_package = exists_case_sensitive(package_path) </span><span class="s2">and </span><span class="s1">os.path.isdir(package_path)</span>
+            <span class="s2">if </span><span class="s1">is_module </span><span class="s2">or </span><span class="s1">is_package:</span>
+                <span class="s2">if </span><span class="s1">(</span>
+                    <span class="s3">&quot;site-packages&quot; </span><span class="s2">in </span><span class="s1">prefix</span>
+                    <span class="s2">or </span><span class="s3">&quot;dist-packages&quot; </span><span class="s2">in </span><span class="s1">prefix</span>
+                    <span class="s2">or </span><span class="s1">(self.virtual_env </span><span class="s2">and </span><span class="s1">self.virtual_env_src </span><span class="s2">in </span><span class="s1">prefix)</span>
+                <span class="s1">):</span>
+                    <span class="s2">return </span><span class="s1">sections.THIRDPARTY</span>
+                <span class="s2">if </span><span class="s1">os.path.normcase(prefix) == self.stdlib_lib_prefix:</span>
+                    <span class="s2">return </span><span class="s1">sections.STDLIB</span>
+                <span class="s2">if </span><span class="s1">self.conda_env </span><span class="s2">and </span><span class="s1">self.conda_env </span><span class="s2">in </span><span class="s1">prefix:</span>
+                    <span class="s2">return </span><span class="s1">sections.THIRDPARTY</span>
+                <span class="s2">for </span><span class="s1">src_path </span><span class="s2">in </span><span class="s1">self.config.src_paths:</span>
+                    <span class="s2">if </span><span class="s1">src_path </span><span class="s2">in </span><span class="s1">path_obj.parents </span><span class="s2">and not </span><span class="s1">self.config.is_skipped(path_obj):</span>
+                        <span class="s2">return </span><span class="s1">sections.FIRSTPARTY</span>
+
+                <span class="s2">if </span><span class="s1">os.path.normcase(prefix).startswith(self.stdlib_lib_prefix):</span>
+                    <span class="s2">return </span><span class="s1">sections.STDLIB  </span><span class="s0"># pragma: no cover - edge case for one OS. Hard to test.</span>
+
+                <span class="s2">return </span><span class="s1">self.config.default_section</span>
+        <span class="s2">return None</span>
+
+
+<span class="s2">class </span><span class="s1">ReqsBaseFinder(BaseFinder):</span>
+    <span class="s1">enabled = </span><span class="s2">False</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, config: Config, path: str = </span><span class="s3">&quot;.&quot;</span><span class="s1">) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">super().__init__(config)</span>
+        <span class="s1">self.path = path</span>
+        <span class="s2">if </span><span class="s1">self.enabled:</span>
+            <span class="s1">self.mapping = self._load_mapping()</span>
+            <span class="s1">self.names = self._load_names()</span>
+
+    <span class="s1">@abstractmethod</span>
+    <span class="s2">def </span><span class="s1">_get_names(self, path: str) -&gt; Iterator[str]:</span>
+        <span class="s2">raise </span><span class="s1">NotImplementedError</span>
+
+    <span class="s1">@abstractmethod</span>
+    <span class="s2">def </span><span class="s1">_get_files_from_dir(self, path: str) -&gt; Iterator[str]:</span>
+        <span class="s2">raise </span><span class="s1">NotImplementedError</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_load_mapping() -&gt; Optional[Dict[str, str]]:</span>
+        <span class="s0">&quot;&quot;&quot;Return list of mappings `package_name -&gt; module_name` 
+ 
+        Example: 
+            django-haystack -&gt; haystack 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">pipreqs:</span>
+            <span class="s2">return None</span>
+        <span class="s1">path = os.path.dirname(inspect.getfile(pipreqs))</span>
+        <span class="s1">path = os.path.join(path, </span><span class="s3">&quot;mapping&quot;</span><span class="s1">)</span>
+        <span class="s2">with </span><span class="s1">open(path) </span><span class="s2">as </span><span class="s1">f:</span>
+            <span class="s1">mappings: Dict[str, str] = {}  </span><span class="s0"># pypi_name: import_name</span>
+            <span class="s2">for </span><span class="s1">line </span><span class="s2">in </span><span class="s1">f:</span>
+                <span class="s1">import_name, _, pypi_name = line.strip().partition(</span><span class="s3">&quot;:&quot;</span><span class="s1">)</span>
+                <span class="s1">mappings[pypi_name] = import_name</span>
+            <span class="s2">return </span><span class="s1">mappings</span>
+            <span class="s0"># return dict(tuple(line.strip().split(&quot;:&quot;)[::-1]) for line in f)</span>
+
+    <span class="s2">def </span><span class="s1">_load_names(self) -&gt; List[str]:</span>
+        <span class="s0">&quot;&quot;&quot;Return list of thirdparty modules from requirements&quot;&quot;&quot;</span>
+        <span class="s1">names = []</span>
+        <span class="s2">for </span><span class="s1">path </span><span class="s2">in </span><span class="s1">self._get_files():</span>
+            <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">self._get_names(path):</span>
+                <span class="s1">names.append(self._normalize_name(name))</span>
+        <span class="s2">return </span><span class="s1">names</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_get_parents(path: str) -&gt; Iterator[str]:</span>
+        <span class="s1">prev = </span><span class="s3">&quot;&quot;</span>
+        <span class="s2">while </span><span class="s1">path != prev:</span>
+            <span class="s1">prev = path</span>
+            <span class="s2">yield </span><span class="s1">path</span>
+            <span class="s1">path = os.path.dirname(path)</span>
+
+    <span class="s2">def </span><span class="s1">_get_files(self) -&gt; Iterator[str]:</span>
+        <span class="s0">&quot;&quot;&quot;Return paths to all requirements files&quot;&quot;&quot;</span>
+        <span class="s1">path = os.path.abspath(self.path)</span>
+        <span class="s2">if </span><span class="s1">os.path.isfile(path):</span>
+            <span class="s1">path = os.path.dirname(path)</span>
+
+        <span class="s2">for </span><span class="s1">path </span><span class="s2">in </span><span class="s1">self._get_parents(path):</span>
+            <span class="s2">yield from </span><span class="s1">self._get_files_from_dir(path)</span>
+
+    <span class="s2">def </span><span class="s1">_normalize_name(self, name: str) -&gt; str:</span>
+        <span class="s0">&quot;&quot;&quot;Convert package name to module name 
+ 
+        Examples: 
+            Django -&gt; django 
+            django-haystack -&gt; django_haystack 
+            Flask-RESTFul -&gt; flask_restful 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.mapping:</span>
+            <span class="s1">name = self.mapping.get(name.replace(</span><span class="s3">&quot;-&quot;</span><span class="s1">, </span><span class="s3">&quot;_&quot;</span><span class="s1">), name)</span>
+        <span class="s2">return </span><span class="s1">name.lower().replace(</span><span class="s3">&quot;-&quot;</span><span class="s1">, </span><span class="s3">&quot;_&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">find(self, module_name: str) -&gt; Optional[str]:</span>
+        <span class="s0"># required lib not installed yet</span>
+        <span class="s2">if not </span><span class="s1">self.enabled:</span>
+            <span class="s2">return None</span>
+
+        <span class="s1">module_name, _sep, _submodules = module_name.partition(</span><span class="s3">&quot;.&quot;</span><span class="s1">)</span>
+        <span class="s1">module_name = module_name.lower()</span>
+        <span class="s2">if not </span><span class="s1">module_name:</span>
+            <span class="s2">return None</span>
+
+        <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">self.names:</span>
+            <span class="s2">if </span><span class="s1">module_name == name:</span>
+                <span class="s2">return </span><span class="s1">sections.THIRDPARTY</span>
+        <span class="s2">return None</span>
+
+
+<span class="s2">class </span><span class="s1">RequirementsFinder(ReqsBaseFinder):</span>
+    <span class="s1">exts = (</span><span class="s3">&quot;.txt&quot;</span><span class="s1">, </span><span class="s3">&quot;.in&quot;</span><span class="s1">)</span>
+    <span class="s1">enabled = bool(parse_requirements)</span>
+
+    <span class="s2">def </span><span class="s1">_get_files_from_dir(self, path: str) -&gt; Iterator[str]:</span>
+        <span class="s0">&quot;&quot;&quot;Return paths to requirements files from passed dir.&quot;&quot;&quot;</span>
+        <span class="s2">yield from </span><span class="s1">self._get_files_from_dir_cached(path)</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s1">@lru_cache(maxsize=</span><span class="s5">16</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">_get_files_from_dir_cached(cls, path: str) -&gt; List[str]:</span>
+        <span class="s1">results = []</span>
+
+        <span class="s2">for </span><span class="s1">fname </span><span class="s2">in </span><span class="s1">os.listdir(path):</span>
+            <span class="s2">if </span><span class="s3">&quot;requirements&quot; </span><span class="s2">not in </span><span class="s1">fname:</span>
+                <span class="s2">continue</span>
+            <span class="s1">full_path = os.path.join(path, fname)</span>
+
+            <span class="s0"># *requirements*/*.{txt,in}</span>
+            <span class="s2">if </span><span class="s1">os.path.isdir(full_path):</span>
+                <span class="s2">for </span><span class="s1">subfile_name </span><span class="s2">in </span><span class="s1">os.listdir(full_path):</span>
+                    <span class="s2">for </span><span class="s1">ext </span><span class="s2">in </span><span class="s1">cls.exts:</span>
+                        <span class="s2">if </span><span class="s1">subfile_name.endswith(ext):</span>
+                            <span class="s1">results.append(os.path.join(full_path, subfile_name))</span>
+                <span class="s2">continue</span>
+
+            <span class="s0"># *requirements*.{txt,in}</span>
+            <span class="s2">if </span><span class="s1">os.path.isfile(full_path):</span>
+                <span class="s2">for </span><span class="s1">ext </span><span class="s2">in </span><span class="s1">cls.exts:</span>
+                    <span class="s2">if </span><span class="s1">fname.endswith(ext):</span>
+                        <span class="s1">results.append(full_path)</span>
+                        <span class="s2">break</span>
+
+        <span class="s2">return </span><span class="s1">results</span>
+
+    <span class="s2">def </span><span class="s1">_get_names(self, path: str) -&gt; Iterator[str]:</span>
+        <span class="s0">&quot;&quot;&quot;Load required packages from path to requirements file&quot;&quot;&quot;</span>
+        <span class="s2">yield from </span><span class="s1">self._get_names_cached(path)</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s1">@lru_cache(maxsize=</span><span class="s5">16</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">_get_names_cached(cls, path: str) -&gt; List[str]:</span>
+        <span class="s1">result = []</span>
+
+        <span class="s2">with </span><span class="s1">chdir(os.path.dirname(path)):</span>
+            <span class="s1">requirements = parse_requirements(path)</span>
+            <span class="s2">for </span><span class="s1">req </span><span class="s2">in </span><span class="s1">requirements.values():</span>
+                <span class="s2">if </span><span class="s1">req.name:</span>
+                    <span class="s1">result.append(req.name)</span>
+
+        <span class="s2">return </span><span class="s1">result</span>
+
+
+<span class="s2">class </span><span class="s1">PipfileFinder(ReqsBaseFinder):</span>
+    <span class="s1">enabled = bool(Pipfile)</span>
+
+    <span class="s2">def </span><span class="s1">_get_names(self, path: str) -&gt; Iterator[str]:</span>
+        <span class="s2">with </span><span class="s1">chdir(path):</span>
+            <span class="s1">project = Pipfile.load(path)</span>
+            <span class="s2">for </span><span class="s1">req </span><span class="s2">in </span><span class="s1">project.packages:</span>
+                <span class="s2">yield </span><span class="s1">req.name</span>
+
+    <span class="s2">def </span><span class="s1">_get_files_from_dir(self, path: str) -&gt; Iterator[str]:</span>
+        <span class="s2">if </span><span class="s3">&quot;Pipfile&quot; </span><span class="s2">in </span><span class="s1">os.listdir(path):</span>
+            <span class="s2">yield </span><span class="s1">path</span>
+
+
+<span class="s2">class </span><span class="s1">DefaultFinder(BaseFinder):</span>
+    <span class="s2">def </span><span class="s1">find(self, module_name: str) -&gt; Optional[str]:</span>
+        <span class="s2">return </span><span class="s1">self.config.default_section</span>
+
+
+<span class="s2">class </span><span class="s1">FindersManager:</span>
+    <span class="s1">_default_finders_classes: Sequence[Type[BaseFinder]] = (</span>
+        <span class="s1">ForcedSeparateFinder,</span>
+        <span class="s1">LocalFinder,</span>
+        <span class="s1">KnownPatternFinder,</span>
+        <span class="s1">PathFinder,</span>
+        <span class="s1">PipfileFinder,</span>
+        <span class="s1">RequirementsFinder,</span>
+        <span class="s1">DefaultFinder,</span>
+    <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(</span>
+        <span class="s1">self, config: Config, finder_classes: Optional[Iterable[Type[BaseFinder]]] = </span><span class="s2">None</span>
+    <span class="s1">) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s1">self.verbose: bool = config.verbose</span>
+
+        <span class="s2">if </span><span class="s1">finder_classes </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">finder_classes = self._default_finders_classes</span>
+        <span class="s1">finders: List[BaseFinder] = []</span>
+        <span class="s2">for </span><span class="s1">finder_cls </span><span class="s2">in </span><span class="s1">finder_classes:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">finders.append(finder_cls(config))</span>
+            <span class="s2">except </span><span class="s1">Exception </span><span class="s2">as </span><span class="s1">exception:</span>
+                <span class="s0"># if one finder fails to instantiate isort can continue using the rest</span>
+                <span class="s2">if </span><span class="s1">self.verbose:</span>
+                    <span class="s1">print(</span>
+                        <span class="s1">(</span>
+                            <span class="s3">f&quot;</span><span class="s4">{</span><span class="s1">finder_cls.__name__</span><span class="s4">} </span><span class="s3">encountered an error (</span><span class="s4">{</span><span class="s1">exception</span><span class="s4">}</span><span class="s3">) during &quot;</span>
+                            <span class="s3">&quot;instantiation and cannot be used&quot;</span>
+                        <span class="s1">)</span>
+                    <span class="s1">)</span>
+        <span class="s1">self.finders: Tuple[BaseFinder, ...] = tuple(finders)</span>
+
+    <span class="s2">def </span><span class="s1">find(self, module_name: str) -&gt; Optional[str]:</span>
+        <span class="s2">for </span><span class="s1">finder </span><span class="s2">in </span><span class="s1">self.finders:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">section = finder.find(module_name)</span>
+                <span class="s2">if </span><span class="s1">section </span><span class="s2">is not None</span><span class="s1">:</span>
+                    <span class="s2">return </span><span class="s1">section</span>
+            <span class="s2">except </span><span class="s1">Exception </span><span class="s2">as </span><span class="s1">exception:</span>
+                <span class="s0"># isort has to be able to keep trying to identify the correct</span>
+                <span class="s0"># import section even if one approach fails</span>
+                <span class="s2">if </span><span class="s1">self.verbose:</span>
+                    <span class="s1">print(</span>
+                        <span class="s3">f&quot;</span><span class="s4">{</span><span class="s1">finder.__class__.__name__</span><span class="s4">} </span><span class="s3">encountered an error (</span><span class="s4">{</span><span class="s1">exception</span><span class="s4">}</span><span class="s3">) while &quot;</span>
+                        <span class="s3">f&quot;trying to identify the </span><span class="s4">{</span><span class="s1">module_name</span><span class="s4">} </span><span class="s3">module&quot;</span>
+                    <span class="s1">)</span>
+        <span class="s2">return None</span>
+</pre>
+</body>
+</html>

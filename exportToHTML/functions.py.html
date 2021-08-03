@@ -1,0 +1,159 @@
+<html>
+<head>
+<title>functions.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+functions.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s3">&quot;&quot;&quot; 
+XML compatability functions 
+&quot;&quot;&quot;</span>
+
+<span class="s2"># Python stdlib imports</span>
+<span class="s0">import </span><span class="s1">re</span>
+<span class="s0">from </span><span class="s1">functools </span><span class="s0">import </span><span class="s1">partial</span>
+<span class="s2"># compatibility</span>
+
+<span class="s2"># package imports</span>
+<span class="s0">from </span><span class="s1">openpyexcel </span><span class="s0">import </span><span class="s1">DEFUSEDXML, LXML</span>
+
+<span class="s0">if </span><span class="s1">LXML </span><span class="s0">is True</span><span class="s1">:</span>
+    <span class="s0">from </span><span class="s1">lxml.etree </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Element,</span>
+    <span class="s1">ElementTree,</span>
+    <span class="s1">SubElement,</span>
+    <span class="s1">register_namespace,</span>
+    <span class="s1">QName,</span>
+    <span class="s1">xmlfile,</span>
+    <span class="s1">XMLParser,</span>
+    <span class="s1">)</span>
+    <span class="s0">from </span><span class="s1">lxml.etree </span><span class="s0">import </span><span class="s1">XMLSyntaxError</span>
+
+    <span class="s0">if </span><span class="s1">DEFUSEDXML </span><span class="s0">is True</span><span class="s1">:</span>
+        <span class="s0">from </span><span class="s1">defusedxml.common </span><span class="s0">import </span><span class="s1">DefusedXmlException</span>
+        <span class="s0">from </span><span class="s1">defusedxml.cElementTree </span><span class="s0">import </span><span class="s1">iterparse</span>
+        <span class="s0">from </span><span class="s1">defusedxml.lxml </span><span class="s0">import </span><span class="s1">fromstring </span><span class="s0">as </span><span class="s1">_fromstring, tostring</span>
+
+        <span class="s0">def </span><span class="s1">fromstring(*args, **kwargs):</span>
+            <span class="s0">try</span><span class="s1">:</span>
+                <span class="s0">return </span><span class="s1">_fromstring(*args, **kwargs)</span>
+            <span class="s0">except </span><span class="s1">XMLSyntaxError </span><span class="s0">as </span><span class="s1">e:</span>
+                <span class="s0">raise </span><span class="s1">DefusedXmlException(str(e))</span>
+    <span class="s0">else</span><span class="s1">:</span>
+        <span class="s0">from </span><span class="s1">lxml.etree </span><span class="s0">import </span><span class="s1">fromstring, tostring</span>
+        <span class="s0">from </span><span class="s1">xml.etree.cElementTree </span><span class="s0">import </span><span class="s1">iterparse</span>
+        <span class="s2"># do not resolve entities</span>
+        <span class="s1">safe_parser = XMLParser(resolve_entities=</span><span class="s0">False</span><span class="s1">)</span>
+        <span class="s1">fromstring = partial(fromstring, parser=safe_parser)</span>
+
+<span class="s0">else</span><span class="s1">:</span>
+    <span class="s0">try</span><span class="s1">:</span>
+        <span class="s0">from </span><span class="s1">xml.etree.cElementTree </span><span class="s0">import </span><span class="s1">(</span>
+        <span class="s1">ElementTree,</span>
+        <span class="s1">Element,</span>
+        <span class="s1">SubElement,</span>
+        <span class="s1">QName,</span>
+        <span class="s1">register_namespace</span>
+        <span class="s1">)</span>
+        <span class="s0">if </span><span class="s1">DEFUSEDXML </span><span class="s0">is True</span><span class="s1">:</span>
+            <span class="s0">from </span><span class="s1">defusedxml.cElementTree </span><span class="s0">import </span><span class="s1">(</span>
+            <span class="s1">fromstring,</span>
+            <span class="s1">tostring,</span>
+            <span class="s1">iterparse,</span>
+            <span class="s1">)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s0">from </span><span class="s1">xml.etree.cElementTree </span><span class="s0">import </span><span class="s1">(</span>
+            <span class="s1">fromstring,</span>
+            <span class="s1">tostring,</span>
+            <span class="s1">iterparse</span>
+            <span class="s1">)</span>
+    <span class="s0">except </span><span class="s1">ImportError:</span>
+        <span class="s0">from </span><span class="s1">xml.etree.ElementTree </span><span class="s0">import </span><span class="s1">(</span>
+        <span class="s1">ElementTree,</span>
+        <span class="s1">Element,</span>
+        <span class="s1">SubElement,</span>
+        <span class="s1">QName,</span>
+        <span class="s1">register_namespace</span>
+        <span class="s1">)</span>
+        <span class="s0">if </span><span class="s1">DEFUSEDXML </span><span class="s0">is True</span><span class="s1">:</span>
+            <span class="s0">from </span><span class="s1">defusedxml.ElementTree </span><span class="s0">import </span><span class="s1">(</span>
+            <span class="s1">fromstring,</span>
+            <span class="s1">tostring,</span>
+            <span class="s1">iterparse,</span>
+            <span class="s1">)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s0">from </span><span class="s1">xml.etree.ElementTree </span><span class="s0">import </span><span class="s1">(</span>
+            <span class="s1">fromstring,</span>
+            <span class="s1">tostring,</span>
+            <span class="s1">iterparse,</span>
+            <span class="s1">)</span>
+    <span class="s0">from </span><span class="s1">et_xmlfile </span><span class="s0">import </span><span class="s1">xmlfile</span>
+
+
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">CHART_NS,</span>
+    <span class="s1">DRAWING_NS,</span>
+    <span class="s1">SHEET_DRAWING_NS,</span>
+    <span class="s1">CHART_DRAWING_NS,</span>
+    <span class="s1">SHEET_MAIN_NS,</span>
+    <span class="s1">REL_NS,</span>
+    <span class="s1">VTYPES_NS,</span>
+    <span class="s1">COREPROPS_NS,</span>
+    <span class="s1">DCTERMS_NS,</span>
+    <span class="s1">DCTERMS_PREFIX</span>
+<span class="s1">)</span>
+
+<span class="s2"># allow LXML interface</span>
+<span class="s1">_iterparse = iterparse</span>
+<span class="s0">def </span><span class="s1">safe_iterparse(source, *args, **kw):</span>
+    <span class="s0">return </span><span class="s1">_iterparse(source)</span>
+
+<span class="s1">iterparse = safe_iterparse</span>
+
+
+<span class="s1">register_namespace(DCTERMS_PREFIX, DCTERMS_NS)</span>
+<span class="s1">register_namespace(</span><span class="s3">'dcmitype'</span><span class="s1">, </span><span class="s3">'http://purl.org/dc/dcmitype/'</span><span class="s1">)</span>
+<span class="s1">register_namespace(</span><span class="s3">'cp'</span><span class="s1">, COREPROPS_NS)</span>
+<span class="s1">register_namespace(</span><span class="s3">'c'</span><span class="s1">, CHART_NS)</span>
+<span class="s1">register_namespace(</span><span class="s3">'a'</span><span class="s1">, DRAWING_NS)</span>
+<span class="s1">register_namespace(</span><span class="s3">'s'</span><span class="s1">, SHEET_MAIN_NS)</span>
+<span class="s1">register_namespace(</span><span class="s3">'r'</span><span class="s1">, REL_NS)</span>
+<span class="s1">register_namespace(</span><span class="s3">'vt'</span><span class="s1">, VTYPES_NS)</span>
+<span class="s1">register_namespace(</span><span class="s3">'xdr'</span><span class="s1">, SHEET_DRAWING_NS)</span>
+<span class="s1">register_namespace(</span><span class="s3">'cdr'</span><span class="s1">, CHART_DRAWING_NS)</span>
+
+
+<span class="s1">tostring = partial(tostring, encoding=</span><span class="s3">&quot;utf-8&quot;</span><span class="s1">)</span>
+
+
+<span class="s0">def </span><span class="s1">safe_iterator(node, tag=</span><span class="s0">None</span><span class="s1">):</span>
+    <span class="s2">&quot;&quot;&quot;Return an iterator or an empty list&quot;&quot;&quot;</span>
+    <span class="s0">if </span><span class="s1">node </span><span class="s0">is None</span><span class="s1">:</span>
+        <span class="s0">return </span><span class="s1">[]</span>
+    <span class="s0">return </span><span class="s1">node.iter(tag)</span>
+
+
+
+<span class="s1">NS_REGEX = re.compile(</span><span class="s3">&quot;({(?P&lt;namespace&gt;.*)})?(?P&lt;localname&gt;.*)&quot;</span><span class="s1">)</span>
+
+<span class="s0">def </span><span class="s1">localname(node):</span>
+    <span class="s0">if </span><span class="s1">callable(node.tag):</span>
+        <span class="s0">return </span><span class="s3">&quot;comment&quot;</span>
+    <span class="s1">m = NS_REGEX.match(node.tag)</span>
+    <span class="s0">return </span><span class="s1">m.group(</span><span class="s3">'localname'</span><span class="s1">)</span>
+</pre>
+</body>
+</html>

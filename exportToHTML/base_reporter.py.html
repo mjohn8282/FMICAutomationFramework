@@ -1,0 +1,85 @@
+<html>
+<head>
+<title>base_reporter.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+base_reporter.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+
+<span class="s2">class </span><span class="s1">BaseReporter:</span>
+    <span class="s0">&quot;&quot;&quot;base class for reporters 
+ 
+    symbols: show short symbolic names for messages. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">extension = </span><span class="s3">&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, output=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">self.linter = </span><span class="s2">None</span>
+        <span class="s1">self.section = </span><span class="s4">0</span>
+        <span class="s1">self.out = </span><span class="s2">None</span>
+        <span class="s1">self.out_encoding = </span><span class="s2">None</span>
+        <span class="s1">self.set_output(output)</span>
+        <span class="s0"># Build the path prefix to strip to get relative paths</span>
+        <span class="s1">self.path_strip_prefix = os.getcwd() + os.sep</span>
+
+    <span class="s2">def </span><span class="s1">handle_message(self, msg):</span>
+        <span class="s0">&quot;&quot;&quot;Handle a new message triggered on the current file.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">set_output(self, output=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;set output stream&quot;&quot;&quot;</span>
+        <span class="s1">self.out = output </span><span class="s2">or </span><span class="s1">sys.stdout</span>
+
+    <span class="s2">def </span><span class="s1">writeln(self, string=</span><span class="s3">&quot;&quot;</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;write a line in the output buffer&quot;&quot;&quot;</span>
+        <span class="s1">print(string, file=self.out)</span>
+
+    <span class="s2">def </span><span class="s1">display_reports(self, layout):</span>
+        <span class="s0">&quot;&quot;&quot;display results encapsulated in the layout tree&quot;&quot;&quot;</span>
+        <span class="s1">self.section = </span><span class="s4">0</span>
+        <span class="s2">if </span><span class="s1">hasattr(layout, </span><span class="s3">&quot;report_id&quot;</span><span class="s1">):</span>
+            <span class="s1">layout.children[</span><span class="s4">0</span><span class="s1">].children[</span><span class="s4">0</span><span class="s1">].data += </span><span class="s3">&quot; (%s)&quot; </span><span class="s1">% layout.report_id</span>
+        <span class="s1">self._display(layout)</span>
+
+    <span class="s2">def </span><span class="s1">_display(self, layout):</span>
+        <span class="s0">&quot;&quot;&quot;display the layout&quot;&quot;&quot;</span>
+        <span class="s2">raise </span><span class="s1">NotImplementedError()</span>
+
+    <span class="s2">def </span><span class="s1">display_messages(self, layout):</span>
+        <span class="s0">&quot;&quot;&quot;Hook for displaying the messages of the reporter 
+ 
+        This will be called whenever the underlying messages 
+        needs to be displayed. For some reporters, it probably 
+        doesn't make sense to display messages as soon as they 
+        are available, so some mechanism of storing them could be used. 
+        This method can be implemented to display them after they've 
+        been aggregated. 
+        &quot;&quot;&quot;</span>
+
+    <span class="s0"># Event callbacks</span>
+
+    <span class="s2">def </span><span class="s1">on_set_current_module(self, module, filepath):</span>
+        <span class="s0">&quot;&quot;&quot;Hook called when a module starts to be analysed.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">on_close(self, stats, previous_stats):</span>
+        <span class="s0">&quot;&quot;&quot;Hook called when a module finished analyzing.&quot;&quot;&quot;</span>
+</pre>
+</body>
+</html>

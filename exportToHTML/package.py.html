@@ -1,0 +1,345 @@
+<html>
+<head>
+<title>package.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+package.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># -*- coding: utf-8 -*-</span>
+
+<span class="s0"># (The MIT License)</span>
+<span class="s0">#</span>
+<span class="s0"># Copyright (c) 2014 Kura</span>
+<span class="s0">#</span>
+<span class="s0"># Permission is hereby granted, free of charge, to any person obtaining a copy</span>
+<span class="s0"># of this software and associated documentation files (the 'Software'), to deal</span>
+<span class="s0"># in the Software without restriction, including without limitation the rights</span>
+<span class="s0"># to use, copy, modify, merge, publish, distribute, sublicense, and/or sell</span>
+<span class="s0"># copies of the Software, and to permit persons to whom the Software is</span>
+<span class="s0"># furnished to do so, subject to the following conditions:</span>
+<span class="s0">#</span>
+<span class="s0"># The above copyright notice and this permission notice shall be included in</span>
+<span class="s0"># all copies or substantial portions of the Software.</span>
+<span class="s0">#</span>
+<span class="s0"># THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR</span>
+<span class="s0"># IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,</span>
+<span class="s0"># FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE</span>
+<span class="s0"># AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER</span>
+<span class="s0"># LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,</span>
+<span class="s0"># OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE</span>
+<span class="s0"># SOFTWARE.</span>
+
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s2">import </span><span class="s1">simplejson </span><span class="s2">as </span><span class="s1">json</span>
+<span class="s2">except </span><span class="s1">ImportError:</span>
+    <span class="s2">import </span><span class="s1">json</span>
+<span class="s2">from </span><span class="s1">collections </span><span class="s2">import </span><span class="s1">namedtuple</span>
+<span class="s2">import </span><span class="s1">re</span>
+
+<span class="s2">from </span><span class="s1">.release </span><span class="s2">import </span><span class="s1">Release</span>
+
+
+<span class="s2">class </span><span class="s1">Package(object):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    A PyPI package. 
+ 
+    :param pypi_dict: A dictionary retrieved from the PyPI server. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, pypi_dict):</span>
+        <span class="s1">self._package = pypi_dict[</span><span class="s3">'info'</span><span class="s1">]</span>
+        <span class="s1">self._releases = pypi_dict[</span><span class="s3">'releases'</span><span class="s1">]</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;&lt;Package {0}&gt;&quot;</span><span class="s1">.format(self.name)</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">name(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.name 
+            u'yarg' 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._package[</span><span class="s3">'name'</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">pypi_url(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.url 
+            u'https://pypi.python.org/pypi/yarg' 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._package[</span><span class="s3">'package_url'</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">summary(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.summary 
+            u'Some random summary stuff' 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._package[</span><span class="s3">'summary'</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">description(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.description 
+            u'A super long description, usually uploaded from the README' 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._package[</span><span class="s3">'description'</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">homepage(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.homepage 
+            u'https://kura.io/yarg/' 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">(</span><span class="s3">'home_page' </span><span class="s2">not in </span><span class="s1">self._package </span><span class="s2">or</span>
+           <span class="s1">self._package[</span><span class="s3">'home_page'</span><span class="s1">] == </span><span class="s3">&quot;&quot;</span><span class="s1">):</span>
+            <span class="s2">return None</span>
+        <span class="s2">return </span><span class="s1">self._package[</span><span class="s3">'home_page'</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">bugtracker(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.bugtracker 
+            u'https://github.com/kura/yarg/issues' 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">(</span><span class="s3">'bugtrack_url' </span><span class="s2">not in </span><span class="s1">self._package </span><span class="s2">or</span>
+           <span class="s1">self._package[</span><span class="s3">'bugtrack_url'</span><span class="s1">] == </span><span class="s3">&quot;&quot;</span><span class="s1">):</span>
+            <span class="s2">return None</span>
+        <span class="s2">return </span><span class="s1">self._package[</span><span class="s3">'bugtrack_url'</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">docs(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.docs 
+            u'https://yarg.readthedocs.org/en/latest' 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">(</span><span class="s3">'docs_url' </span><span class="s2">not in </span><span class="s1">self._package </span><span class="s2">or</span>
+           <span class="s1">self._package[</span><span class="s3">'docs_url'</span><span class="s1">] == </span><span class="s3">&quot;&quot;</span><span class="s1">):</span>
+            <span class="s2">return None</span>
+        <span class="s2">return </span><span class="s1">self._package[</span><span class="s3">'docs_url'</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">author(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.author 
+            Author(name=u'Kura', email=u'kura@kura.io') 
+        &quot;&quot;&quot;</span>
+        <span class="s1">author = namedtuple(</span><span class="s3">'Author'</span><span class="s1">, </span><span class="s3">'name email'</span><span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">author(name=self._package[</span><span class="s3">'author'</span><span class="s1">],</span>
+                      <span class="s1">email=self._package[</span><span class="s3">'author_email'</span><span class="s1">])</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">maintainer(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.maintainer 
+            Maintainer(name=u'Kura', email=u'kura@kura.io') 
+        &quot;&quot;&quot;</span>
+        <span class="s1">maintainer = namedtuple(</span><span class="s3">'Maintainer'</span><span class="s1">, </span><span class="s3">'name email'</span><span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">maintainer(name=self._package[</span><span class="s3">'maintainer'</span><span class="s1">],</span>
+                          <span class="s1">email=self._package[</span><span class="s3">'maintainer_email'</span><span class="s1">])</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">license(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.license 
+            u'MIT' 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._package[</span><span class="s3">'license'</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">license_from_classifiers(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.license_from_classifiers 
+            u'MIT License' 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">len(self.classifiers) &gt; </span><span class="s4">0</span><span class="s1">:</span>
+            <span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">self.classifiers:</span>
+                <span class="s2">if </span><span class="s1">c.startswith(</span><span class="s3">&quot;License&quot;</span><span class="s1">):</span>
+                    <span class="s2">return </span><span class="s1">c.split(</span><span class="s3">&quot; :: &quot;</span><span class="s1">)[-</span><span class="s4">1</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">downloads(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.downloads 
+            Downloads(day=50100, week=367941, month=1601938)  # I wish 
+        &quot;&quot;&quot;</span>
+        <span class="s1">_downloads = self._package[</span><span class="s3">'downloads'</span><span class="s1">]</span>
+        <span class="s1">downloads = namedtuple(</span><span class="s3">'Downloads'</span><span class="s1">, </span><span class="s3">'day week month'</span><span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">downloads(day=_downloads[</span><span class="s3">'last_day'</span><span class="s1">],</span>
+                         <span class="s1">week=_downloads[</span><span class="s3">'last_week'</span><span class="s1">],</span>
+                         <span class="s1">month=_downloads[</span><span class="s3">'last_month'</span><span class="s1">])</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">classifiers(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.classifiers 
+            [u'License :: OSI Approved :: MIT License', 
+             u'Programming Language :: Python :: 2.7', 
+             u'Programming Language :: Python :: 3.4'] 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._package[</span><span class="s3">'classifiers'</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">python_versions(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Returns a list of Python version strings that 
+        the package has listed in :attr:`yarg.Release.classifiers`. 
+ 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.python_versions 
+            [u'2.6', u'2.7', u'3.3', u'3.4'] 
+        &quot;&quot;&quot;</span>
+        <span class="s1">version_re = re.compile(</span><span class="s3">r&quot;&quot;&quot;Programming Language \:\: &quot;&quot;&quot;</span>
+                                <span class="s3">&quot;&quot;&quot;Python \:\: \d\.\d&quot;&quot;&quot;</span><span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">[c.split(</span><span class="s3">' :: '</span><span class="s1">)[-</span><span class="s4">1</span><span class="s1">] </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">self.classifiers</span>
+                <span class="s2">if </span><span class="s1">version_re.match(c)]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">python_implementations(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Returns a list of Python implementation strings that 
+        the package has listed in :attr:`yarg.Release.classifiers`. 
+ 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.python_implementations 
+            [u'CPython', u'PyPy'] 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">[c.split(</span><span class="s3">' :: '</span><span class="s1">)[-</span><span class="s4">1</span><span class="s1">] </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">self.classifiers</span>
+                <span class="s2">if </span><span class="s1">c.startswith(</span><span class="s3">&quot;&quot;&quot;Programming Language :: &quot;&quot;&quot;</span>
+                                <span class="s3">&quot;&quot;&quot;Python :: Implementation&quot;&quot;&quot;</span><span class="s1">)]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">latest_release_id(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.latest_release_id 
+            u'0.1.0' 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._package[</span><span class="s3">'version'</span><span class="s1">]</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">latest_release(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        A list of :class:`yarg.release.Release` objects for each file in the 
+        latest release. 
+ 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.latest_release 
+            [&lt;Release 0.1.0&gt;, &lt;Release 0.1.0&gt;] 
+        &quot;&quot;&quot;</span>
+        <span class="s1">release_id = self.latest_release_id</span>
+        <span class="s2">return </span><span class="s1">self.release(release_id)</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">has_wheel(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Returns `True` if one of the :class:`yarg.release.Release` objects 
+        in the latest set of release files is `wheel` format. Returns 
+        `False` if not. 
+ 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.has_wheel 
+            True 
+        &quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">release </span><span class="s2">in </span><span class="s1">self.latest_release:</span>
+            <span class="s2">if </span><span class="s1">release.package_type </span><span class="s2">in </span><span class="s1">(</span><span class="s3">'wheel'</span><span class="s1">, </span><span class="s3">'bdist_wheel'</span><span class="s1">):</span>
+                <span class="s2">return True</span>
+        <span class="s2">return False</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">has_egg(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Returns `True` if one of the :class:`yarg.release.Release` objects 
+        in the latest set of release files is `egg` format. Returns 
+        `False` if not. 
+ 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.has_egg 
+            False 
+        &quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">release </span><span class="s2">in </span><span class="s1">self.latest_release:</span>
+            <span class="s2">if </span><span class="s1">release.package_type </span><span class="s2">in </span><span class="s1">(</span><span class="s3">'egg'</span><span class="s1">, </span><span class="s3">'bdist_egg'</span><span class="s1">):</span>
+                <span class="s2">return True</span>
+        <span class="s2">return False</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">has_source(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Returns `True` if one of the :class:`yarg.release.Release` objects 
+        in the latest set of release files is `source` format. Returns 
+        `False` if not. 
+ 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.has_source 
+            True 
+        &quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">release </span><span class="s2">in </span><span class="s1">self.latest_release:</span>
+            <span class="s2">if </span><span class="s1">release.package_type </span><span class="s2">in </span><span class="s1">(</span><span class="s3">'source'</span><span class="s1">, </span><span class="s3">'sdist'</span><span class="s1">):</span>
+                <span class="s2">return True</span>
+        <span class="s2">return False</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">release_ids(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; package.release_ids 
+            [u'0.0.1', u'0.0.5', u'0.1.0'] 
+        &quot;&quot;&quot;</span>
+        <span class="s1">r = [(k, self._releases[k][</span><span class="s4">0</span><span class="s1">][</span><span class="s3">'upload_time'</span><span class="s1">])</span>
+             <span class="s2">for </span><span class="s1">k </span><span class="s2">in </span><span class="s1">self._releases.keys()</span>
+             <span class="s2">if </span><span class="s1">len(self._releases[k]) &gt; </span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s2">return </span><span class="s1">[k[</span><span class="s4">0</span><span class="s1">] </span><span class="s2">for </span><span class="s1">k </span><span class="s2">in </span><span class="s1">sorted(r, key=</span><span class="s2">lambda </span><span class="s1">k: k[</span><span class="s4">1</span><span class="s1">])]</span>
+
+    <span class="s2">def </span><span class="s1">release(self, release_id):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        A list of :class:`yarg.release.Release` objects for each file in a 
+        release. 
+ 
+        :param release_id: A pypi release id. 
+ 
+            &gt;&gt;&gt; package = yarg.get('yarg') 
+            &gt;&gt;&gt; last_release = yarg.releases[-1] 
+            &gt;&gt;&gt; package.release(last_release) 
+            [&lt;Release 0.1.0&gt;, &lt;Release 0.1.0&gt;] 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">release_id </span><span class="s2">not in </span><span class="s1">self.release_ids:</span>
+            <span class="s2">return None</span>
+        <span class="s2">return </span><span class="s1">[Release(release_id, r) </span><span class="s2">for </span><span class="s1">r </span><span class="s2">in </span><span class="s1">self._releases[release_id]]</span>
+
+
+<span class="s2">def </span><span class="s1">json2package(json_content):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Returns a :class:`yarg.release.Release` object from JSON content from the 
+    PyPI server. 
+ 
+    :param json_content: JSON encoded content from the PyPI server. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">Package(json.loads(json_content))</span>
+</pre>
+</body>
+</html>

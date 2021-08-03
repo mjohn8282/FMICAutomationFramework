@@ -1,0 +1,162 @@
+<html>
+<head>
+<title>wrap.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+.s3 { color: #56b6c2;}
+.s4 { color: #5c6370;}
+.s5 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+wrap.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">copy</span>
+<span class="s0">import </span><span class="s1">re</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">List, Optional, Sequence</span>
+
+<span class="s0">from </span><span class="s1">.settings </span><span class="s0">import </span><span class="s1">DEFAULT_CONFIG, Config</span>
+<span class="s0">from </span><span class="s1">.wrap_modes </span><span class="s0">import </span><span class="s1">WrapModes </span><span class="s0">as </span><span class="s1">Modes</span>
+<span class="s0">from </span><span class="s1">.wrap_modes </span><span class="s0">import </span><span class="s1">formatter_from_string</span>
+
+
+<span class="s0">def </span><span class="s1">import_statement(</span>
+    <span class="s1">import_start: str,</span>
+    <span class="s1">from_imports: List[str],</span>
+    <span class="s1">comments: Sequence[str] = (),</span>
+    <span class="s1">line_separator: str = </span><span class="s2">&quot;</span><span class="s3">\n</span><span class="s2">&quot;</span><span class="s1">,</span>
+    <span class="s1">config: Config = DEFAULT_CONFIG,</span>
+    <span class="s1">multi_line_output: Optional[Modes] = </span><span class="s0">None</span><span class="s1">,</span>
+<span class="s1">) -&gt; str:</span>
+    <span class="s4">&quot;&quot;&quot;Returns a multi-line wrapped form of the provided from import statement.&quot;&quot;&quot;</span>
+    <span class="s1">formatter = formatter_from_string((multi_line_output </span><span class="s0">or </span><span class="s1">config.multi_line_output).name)</span>
+    <span class="s1">dynamic_indent = </span><span class="s2">&quot; &quot; </span><span class="s1">* (len(import_start) + </span><span class="s5">1</span><span class="s1">)</span>
+    <span class="s1">indent = config.indent</span>
+    <span class="s1">line_length = config.wrap_length </span><span class="s0">or </span><span class="s1">config.line_length</span>
+    <span class="s1">statement = formatter(</span>
+        <span class="s1">statement=import_start,</span>
+        <span class="s1">imports=copy.copy(from_imports),</span>
+        <span class="s1">white_space=dynamic_indent,</span>
+        <span class="s1">indent=indent,</span>
+        <span class="s1">line_length=line_length,</span>
+        <span class="s1">comments=comments,</span>
+        <span class="s1">line_separator=line_separator,</span>
+        <span class="s1">comment_prefix=config.comment_prefix,</span>
+        <span class="s1">include_trailing_comma=config.include_trailing_comma,</span>
+        <span class="s1">remove_comments=config.ignore_comments,</span>
+    <span class="s1">)</span>
+    <span class="s0">if </span><span class="s1">config.balanced_wrapping:</span>
+        <span class="s1">lines = statement.split(line_separator)</span>
+        <span class="s1">line_count = len(lines)</span>
+        <span class="s0">if </span><span class="s1">len(lines) &gt; </span><span class="s5">1</span><span class="s1">:</span>
+            <span class="s1">minimum_length = min(len(line) </span><span class="s0">for </span><span class="s1">line </span><span class="s0">in </span><span class="s1">lines[:-</span><span class="s5">1</span><span class="s1">])</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">minimum_length = </span><span class="s5">0</span>
+        <span class="s1">new_import_statement = statement</span>
+        <span class="s0">while </span><span class="s1">len(lines[-</span><span class="s5">1</span><span class="s1">]) &lt; minimum_length </span><span class="s0">and </span><span class="s1">len(lines) == line_count </span><span class="s0">and </span><span class="s1">line_length &gt; </span><span class="s5">10</span><span class="s1">:</span>
+            <span class="s1">statement = new_import_statement</span>
+            <span class="s1">line_length -= </span><span class="s5">1</span>
+            <span class="s1">new_import_statement = formatter(</span>
+                <span class="s1">statement=import_start,</span>
+                <span class="s1">imports=copy.copy(from_imports),</span>
+                <span class="s1">white_space=dynamic_indent,</span>
+                <span class="s1">indent=indent,</span>
+                <span class="s1">line_length=line_length,</span>
+                <span class="s1">comments=comments,</span>
+                <span class="s1">line_separator=line_separator,</span>
+                <span class="s1">comment_prefix=config.comment_prefix,</span>
+                <span class="s1">include_trailing_comma=config.include_trailing_comma,</span>
+                <span class="s1">remove_comments=config.ignore_comments,</span>
+            <span class="s1">)</span>
+            <span class="s1">lines = new_import_statement.split(line_separator)</span>
+    <span class="s0">if </span><span class="s1">statement.count(line_separator) == </span><span class="s5">0</span><span class="s1">:</span>
+        <span class="s0">return </span><span class="s1">_wrap_line(statement, line_separator, config)</span>
+    <span class="s0">return </span><span class="s1">statement</span>
+
+
+<span class="s0">def </span><span class="s1">line(content: str, line_separator: str, config: Config = DEFAULT_CONFIG) -&gt; str:</span>
+    <span class="s4">&quot;&quot;&quot;Returns a line wrapped to the specified line-length, if possible.&quot;&quot;&quot;</span>
+    <span class="s1">wrap_mode = config.multi_line_output</span>
+    <span class="s0">if </span><span class="s1">len(content) &gt; config.line_length </span><span class="s0">and </span><span class="s1">wrap_mode != Modes.NOQA:  </span><span class="s4"># type: ignore</span>
+        <span class="s1">line_without_comment = content</span>
+        <span class="s1">comment = </span><span class="s0">None</span>
+        <span class="s0">if </span><span class="s2">&quot;#&quot; </span><span class="s0">in </span><span class="s1">content:</span>
+            <span class="s1">line_without_comment, comment = content.split(</span><span class="s2">&quot;#&quot;</span><span class="s1">, </span><span class="s5">1</span><span class="s1">)</span>
+        <span class="s0">for </span><span class="s1">splitter </span><span class="s0">in </span><span class="s1">(</span><span class="s2">&quot;import &quot;</span><span class="s1">, </span><span class="s2">&quot;.&quot;</span><span class="s1">, </span><span class="s2">&quot;as &quot;</span><span class="s1">):</span>
+            <span class="s1">exp = </span><span class="s2">r&quot;\b&quot; </span><span class="s1">+ re.escape(splitter) + </span><span class="s2">r&quot;\b&quot;</span>
+            <span class="s0">if </span><span class="s1">re.search(exp, line_without_comment) </span><span class="s0">and not </span><span class="s1">line_without_comment.strip().startswith(</span>
+                <span class="s1">splitter</span>
+            <span class="s1">):</span>
+                <span class="s1">line_parts = re.split(exp, line_without_comment)</span>
+                <span class="s0">if </span><span class="s1">comment </span><span class="s0">and not </span><span class="s1">(config.use_parentheses </span><span class="s0">and </span><span class="s2">&quot;noqa&quot; </span><span class="s0">in </span><span class="s1">comment):</span>
+                    <span class="s1">_comma_maybe = (</span>
+                        <span class="s2">&quot;,&quot;</span>
+                        <span class="s0">if </span><span class="s1">(</span>
+                            <span class="s1">config.include_trailing_comma</span>
+                            <span class="s0">and </span><span class="s1">config.use_parentheses</span>
+                            <span class="s0">and not </span><span class="s1">line_without_comment.rstrip().endswith(</span><span class="s2">&quot;,&quot;</span><span class="s1">)</span>
+                        <span class="s1">)</span>
+                        <span class="s0">else </span><span class="s2">&quot;&quot;</span>
+                    <span class="s1">)</span>
+                    <span class="s1">line_parts[</span>
+                        <span class="s1">-</span><span class="s5">1</span>
+                    <span class="s1">] = </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">line_parts[-</span><span class="s5">1</span><span class="s1">].strip()</span><span class="s3">}{</span><span class="s1">_comma_maybe</span><span class="s3">}{</span><span class="s1">config.comment_prefix</span><span class="s3">}{</span><span class="s1">comment</span><span class="s3">}</span><span class="s2">&quot;</span>
+                <span class="s1">next_line = []</span>
+                <span class="s0">while </span><span class="s1">(len(content) + </span><span class="s5">2</span><span class="s1">) &gt; (</span>
+                    <span class="s1">config.wrap_length </span><span class="s0">or </span><span class="s1">config.line_length</span>
+                <span class="s1">) </span><span class="s0">and </span><span class="s1">line_parts:</span>
+                    <span class="s1">next_line.append(line_parts.pop())</span>
+                    <span class="s1">content = splitter.join(line_parts)</span>
+                <span class="s0">if not </span><span class="s1">content:</span>
+                    <span class="s1">content = next_line.pop()</span>
+
+                <span class="s1">cont_line = _wrap_line(</span>
+                    <span class="s1">config.indent + splitter.join(next_line).lstrip(),</span>
+                    <span class="s1">line_separator,</span>
+                    <span class="s1">config,</span>
+                <span class="s1">)</span>
+                <span class="s0">if </span><span class="s1">config.use_parentheses:</span>
+                    <span class="s0">if </span><span class="s1">splitter == </span><span class="s2">&quot;as &quot;</span><span class="s1">:</span>
+                        <span class="s1">output = </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">content</span><span class="s3">}{</span><span class="s1">splitter</span><span class="s3">}{</span><span class="s1">cont_line.lstrip()</span><span class="s3">}</span><span class="s2">&quot;</span>
+                    <span class="s0">else</span><span class="s1">:</span>
+                        <span class="s1">_comma = </span><span class="s2">&quot;,&quot; </span><span class="s0">if </span><span class="s1">config.include_trailing_comma </span><span class="s0">and not </span><span class="s1">comment </span><span class="s0">else </span><span class="s2">&quot;&quot;</span>
+
+                        <span class="s0">if </span><span class="s1">wrap_mode </span><span class="s0">in </span><span class="s1">(</span>
+                            <span class="s1">Modes.VERTICAL_HANGING_INDENT,  </span><span class="s4"># type: ignore</span>
+                            <span class="s1">Modes.VERTICAL_GRID_GROUPED,  </span><span class="s4"># type: ignore</span>
+                        <span class="s1">):</span>
+                            <span class="s1">_separator = line_separator</span>
+                        <span class="s0">else</span><span class="s1">:</span>
+                            <span class="s1">_separator = </span><span class="s2">&quot;&quot;</span>
+                        <span class="s1">_comment = </span><span class="s2">&quot;&quot;</span>
+                        <span class="s0">if </span><span class="s1">comment </span><span class="s0">and </span><span class="s2">&quot;noqa&quot; </span><span class="s0">in </span><span class="s1">comment:</span>
+                            <span class="s1">_comment = </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">config.comment_prefix</span><span class="s3">}{</span><span class="s1">comment</span><span class="s3">}</span><span class="s2">&quot;</span>
+                            <span class="s1">cont_line = cont_line.rstrip()</span>
+                            <span class="s1">_comma = </span><span class="s2">&quot;,&quot; </span><span class="s0">if </span><span class="s1">config.include_trailing_comma </span><span class="s0">else </span><span class="s2">&quot;&quot;</span>
+                        <span class="s1">output = (</span>
+                            <span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">content</span><span class="s3">}{</span><span class="s1">splitter</span><span class="s3">}</span><span class="s2">(</span><span class="s3">{</span><span class="s1">_comment</span><span class="s3">}</span><span class="s2">&quot;</span>
+                            <span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">line_separator</span><span class="s3">}{</span><span class="s1">cont_line</span><span class="s3">}{</span><span class="s1">_comma</span><span class="s3">}{</span><span class="s1">_separator</span><span class="s3">}</span><span class="s2">)&quot;</span>
+                        <span class="s1">)</span>
+                    <span class="s1">lines = output.split(line_separator)</span>
+                    <span class="s0">if </span><span class="s1">config.comment_prefix </span><span class="s0">in </span><span class="s1">lines[-</span><span class="s5">1</span><span class="s1">] </span><span class="s0">and </span><span class="s1">lines[-</span><span class="s5">1</span><span class="s1">].endswith(</span><span class="s2">&quot;)&quot;</span><span class="s1">):</span>
+                        <span class="s1">content, comment = lines[-</span><span class="s5">1</span><span class="s1">].split(config.comment_prefix, </span><span class="s5">1</span><span class="s1">)</span>
+                        <span class="s1">lines[-</span><span class="s5">1</span><span class="s1">] = content + </span><span class="s2">&quot;)&quot; </span><span class="s1">+ config.comment_prefix + comment[:-</span><span class="s5">1</span><span class="s1">]</span>
+                    <span class="s0">return </span><span class="s1">line_separator.join(lines)</span>
+                <span class="s0">return </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">content</span><span class="s3">}{</span><span class="s1">splitter</span><span class="s3">}\\{</span><span class="s1">line_separator</span><span class="s3">}{</span><span class="s1">cont_line</span><span class="s3">}</span><span class="s2">&quot;</span>
+    <span class="s0">elif </span><span class="s1">len(content) &gt; config.line_length </span><span class="s0">and </span><span class="s1">wrap_mode == Modes.NOQA:  </span><span class="s4"># type: ignore</span>
+        <span class="s0">if </span><span class="s2">&quot;# NOQA&quot; </span><span class="s0">not in </span><span class="s1">content:</span>
+            <span class="s0">return </span><span class="s2">f&quot;</span><span class="s3">{</span><span class="s1">content</span><span class="s3">}{</span><span class="s1">config.comment_prefix</span><span class="s3">} </span><span class="s2">NOQA&quot;</span>
+
+    <span class="s0">return </span><span class="s1">content</span>
+
+
+<span class="s1">_wrap_line = line</span>
+</pre>
+</body>
+</html>

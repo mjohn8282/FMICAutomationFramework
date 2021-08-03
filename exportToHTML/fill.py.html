@@ -1,0 +1,432 @@
+<html>
+<head>
+<title>fill.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+fill.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">unicode</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Alias,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">NoneSet,</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">MinMax,</span>
+    <span class="s1">Sequence,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Relation,</span>
+    <span class="s1">Percentage,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">NestedNoneSet, NestedValue</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.sequence </span><span class="s0">import </span><span class="s1">NestedSequence</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">DRAWING_NS</span>
+
+<span class="s0">from </span><span class="s1">.colors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">ColorChoice,</span>
+    <span class="s1">HSLColor,</span>
+    <span class="s1">SystemColor,</span>
+    <span class="s1">SchemeColor,</span>
+    <span class="s1">RGBPercent,</span>
+    <span class="s1">PRESET_COLORS,</span>
+<span class="s1">)</span>
+
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">ExtensionList </span><span class="s0">as </span><span class="s1">OfficeArtExtensionList</span>
+<span class="s0">from </span><span class="s1">.effect </span><span class="s0">import </span><span class="s1">*</span>
+
+<span class="s3">&quot;&quot;&quot; 
+Fill elements from drawing main schema 
+&quot;&quot;&quot;</span>
+
+<span class="s0">class </span><span class="s1">PatternFillProperties(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;pattFill&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">prst = NoneSet(values=([</span><span class="s3">'pct5'</span><span class="s1">, </span><span class="s3">'pct10'</span><span class="s1">, </span><span class="s3">'pct20'</span><span class="s1">, </span><span class="s3">'pct25'</span><span class="s1">, </span><span class="s3">'pct30'</span><span class="s1">, </span><span class="s3">'pct40'</span><span class="s1">,</span>
+                        <span class="s3">'pct50'</span><span class="s1">, </span><span class="s3">'pct60'</span><span class="s1">, </span><span class="s3">'pct70'</span><span class="s1">, </span><span class="s3">'pct75'</span><span class="s1">, </span><span class="s3">'pct80'</span><span class="s1">, </span><span class="s3">'pct90'</span><span class="s1">, </span><span class="s3">'horz'</span><span class="s1">, </span><span class="s3">'vert'</span><span class="s1">,</span>
+                        <span class="s3">'ltHorz'</span><span class="s1">, </span><span class="s3">'ltVert'</span><span class="s1">, </span><span class="s3">'dkHorz'</span><span class="s1">, </span><span class="s3">'dkVert'</span><span class="s1">, </span><span class="s3">'narHorz'</span><span class="s1">, </span><span class="s3">'narVert'</span><span class="s1">, </span><span class="s3">'dashHorz'</span><span class="s1">,</span>
+                        <span class="s3">'dashVert'</span><span class="s1">, </span><span class="s3">'cross'</span><span class="s1">, </span><span class="s3">'dnDiag'</span><span class="s1">, </span><span class="s3">'upDiag'</span><span class="s1">, </span><span class="s3">'ltDnDiag'</span><span class="s1">, </span><span class="s3">'ltUpDiag'</span><span class="s1">,</span>
+                        <span class="s3">'dkDnDiag'</span><span class="s1">, </span><span class="s3">'dkUpDiag'</span><span class="s1">, </span><span class="s3">'wdDnDiag'</span><span class="s1">, </span><span class="s3">'wdUpDiag'</span><span class="s1">, </span><span class="s3">'dashDnDiag'</span><span class="s1">,</span>
+                        <span class="s3">'dashUpDiag'</span><span class="s1">, </span><span class="s3">'diagCross'</span><span class="s1">, </span><span class="s3">'smCheck'</span><span class="s1">, </span><span class="s3">'lgCheck'</span><span class="s1">, </span><span class="s3">'smGrid'</span><span class="s1">, </span><span class="s3">'lgGrid'</span><span class="s1">,</span>
+                        <span class="s3">'dotGrid'</span><span class="s1">, </span><span class="s3">'smConfetti'</span><span class="s1">, </span><span class="s3">'lgConfetti'</span><span class="s1">, </span><span class="s3">'horzBrick'</span><span class="s1">, </span><span class="s3">'diagBrick'</span><span class="s1">,</span>
+                        <span class="s3">'solidDmnd'</span><span class="s1">, </span><span class="s3">'openDmnd'</span><span class="s1">, </span><span class="s3">'dotDmnd'</span><span class="s1">, </span><span class="s3">'plaid'</span><span class="s1">, </span><span class="s3">'sphere'</span><span class="s1">, </span><span class="s3">'weave'</span><span class="s1">, </span><span class="s3">'divot'</span><span class="s1">,</span>
+                        <span class="s3">'shingle'</span><span class="s1">, </span><span class="s3">'wave'</span><span class="s1">, </span><span class="s3">'trellis'</span><span class="s1">, </span><span class="s3">'zigZag'</span><span class="s1">]))</span>
+    <span class="s1">preset = Alias(</span><span class="s3">&quot;prst&quot;</span><span class="s1">)</span>
+    <span class="s1">fgClr = Typed(expected_type=ColorChoice, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">foreground = Alias(</span><span class="s3">&quot;fgClr&quot;</span><span class="s1">)</span>
+    <span class="s1">bgClr = Typed(expected_type=ColorChoice, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">background = Alias(</span><span class="s3">&quot;bgClr&quot;</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">&quot;fgClr&quot;</span><span class="s1">, </span><span class="s3">&quot;bgClr&quot;</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">prst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fgClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">bgClr=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.prst = prst</span>
+        <span class="s1">self.fgClr = fgClr</span>
+        <span class="s1">self.bgClr = bgClr</span>
+
+
+<span class="s0">class </span><span class="s1">RelativeRect(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;rect&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">l = Percentage(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">left = Alias(</span><span class="s3">'l'</span><span class="s1">)</span>
+    <span class="s1">t = Percentage(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">top = Alias(</span><span class="s3">'t'</span><span class="s1">)</span>
+    <span class="s1">r = Percentage(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">right = Alias(</span><span class="s3">'r'</span><span class="s1">)</span>
+    <span class="s1">b = Percentage(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">bottom = Alias(</span><span class="s3">'b'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">l=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">t=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">r=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">b=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.l = l</span>
+        <span class="s1">self.t = t</span>
+        <span class="s1">self.r = r</span>
+        <span class="s1">self.b = b</span>
+
+
+<span class="s0">class </span><span class="s1">StretchInfoProperties(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;stretch&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">fillRect = Typed(expected_type=RelativeRect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">fillRect=RelativeRect(),</span>
+                <span class="s1">):</span>
+        <span class="s1">self.fillRect = fillRect</span>
+
+
+<span class="s0">class </span><span class="s1">GradientStop(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;gs&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">pos = MinMax(min=</span><span class="s4">0</span><span class="s1">, max=</span><span class="s4">100000</span><span class="s1">, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s2"># Color Choice Group</span>
+    <span class="s1">scrgbClr = Typed(expected_type=RGBPercent, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">RGBPercent = Alias(</span><span class="s3">'scrgbClr'</span><span class="s1">)</span>
+    <span class="s1">srgbClr = NestedValue(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">) </span><span class="s2"># needs pattern and can have transform</span>
+    <span class="s1">RGB = Alias(</span><span class="s3">'srgbClr'</span><span class="s1">)</span>
+    <span class="s1">hslClr = Typed(expected_type=HSLColor, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">sysClr = Typed(expected_type=SystemColor, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">schemeClr = Typed(expected_type=SchemeColor, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">prstClr = NestedNoneSet(values=PRESET_COLORS)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'scrgbClr'</span><span class="s1">, </span><span class="s3">'srgbClr'</span><span class="s1">, </span><span class="s3">'hslClr'</span><span class="s1">, </span><span class="s3">'sysClr'</span><span class="s1">, </span><span class="s3">'schemeClr'</span><span class="s1">, </span><span class="s3">'prstClr'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">pos=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">scrgbClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">srgbClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">hslClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sysClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">schemeClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">prstClr=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s0">if </span><span class="s1">pos </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">pos = </span><span class="s4">0</span>
+        <span class="s1">self.pos = pos</span>
+
+        <span class="s1">self.scrgbClr = scrgbClr</span>
+        <span class="s1">self.srgbClr = srgbClr</span>
+        <span class="s1">self.hslClr = hslClr</span>
+        <span class="s1">self.sysClr = sysClr</span>
+        <span class="s1">self.schemeClr = schemeClr</span>
+        <span class="s1">self.prstClr = prstClr</span>
+
+
+<span class="s0">class </span><span class="s1">LinearShadeProperties(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;lin&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">ang = Integer()</span>
+    <span class="s1">scaled = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">ang=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">scaled=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.ang = ang</span>
+        <span class="s1">self.scaled = scaled</span>
+
+
+<span class="s0">class </span><span class="s1">PathShadeProperties(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;path&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">path = Set(values=([</span><span class="s3">'shape'</span><span class="s1">, </span><span class="s3">'circle'</span><span class="s1">, </span><span class="s3">'rect'</span><span class="s1">]))</span>
+    <span class="s1">fillToRect = Typed(expected_type=RelativeRect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">path=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fillToRect=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.path = path</span>
+        <span class="s1">self.fillToRect = fillToRect</span>
+
+
+<span class="s0">class </span><span class="s1">GradientFillProperties(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;gradFill&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">flip = NoneSet(values=([</span><span class="s3">'x'</span><span class="s1">, </span><span class="s3">'y'</span><span class="s1">, </span><span class="s3">'xy'</span><span class="s1">]))</span>
+    <span class="s1">rotWithShape = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">gsLst = NestedSequence(expected_type=GradientStop, count=</span><span class="s0">False</span><span class="s1">)</span>
+    <span class="s1">stop_list = Alias(</span><span class="s3">&quot;gsLst&quot;</span><span class="s1">)</span>
+
+    <span class="s1">lin = Typed(expected_type=LinearShadeProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">linear = Alias(</span><span class="s3">&quot;lin&quot;</span><span class="s1">)</span>
+    <span class="s1">path = Typed(expected_type=PathShadeProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">tileRect = Typed(expected_type=RelativeRect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'gsLst'</span><span class="s1">, </span><span class="s3">'lin'</span><span class="s1">, </span><span class="s3">'path'</span><span class="s1">, </span><span class="s3">'tileRect'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">flip=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rotWithShape=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">gsLst=(),</span>
+                 <span class="s1">lin=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">path=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">tileRect=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.flip = flip</span>
+        <span class="s1">self.rotWithShape = rotWithShape</span>
+        <span class="s1">self.gsLst = gsLst</span>
+        <span class="s1">self.lin = lin</span>
+        <span class="s1">self.path = path</span>
+        <span class="s1">self.tileRect = tileRect</span>
+
+
+<span class="s0">class </span><span class="s1">SolidColorFillProperties(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;solidFill&quot;</span>
+
+    <span class="s2"># uses element group EG_ColorChoice</span>
+    <span class="s1">scrgbClr = Typed(expected_type=RGBPercent, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">RGBPercent = Alias(</span><span class="s3">'scrgbClr'</span><span class="s1">)</span>
+    <span class="s1">srgbClr = NestedValue(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">) </span><span class="s2"># needs pattern and can have transform</span>
+    <span class="s1">RGB = Alias(</span><span class="s3">'srgbClr'</span><span class="s1">)</span>
+    <span class="s1">hslClr = Typed(expected_type=HSLColor, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">sysClr = Typed(expected_type=SystemColor, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">schemeClr = Typed(expected_type=SchemeColor, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">prstClr = NestedNoneSet(values=PRESET_COLORS)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'scrgbClr'</span><span class="s1">, </span><span class="s3">'srgbClr'</span><span class="s1">, </span><span class="s3">'hslClr'</span><span class="s1">, </span><span class="s3">'sysClr'</span><span class="s1">, </span><span class="s3">'schemeClr'</span><span class="s1">, </span><span class="s3">'prstClr'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">scrgbClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">srgbClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">hslClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sysClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">schemeClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">prstClr=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.scrgbClr = scrgbClr</span>
+        <span class="s1">self.srgbClr = srgbClr</span>
+        <span class="s1">self.hslClr = hslClr</span>
+        <span class="s1">self.sysClr = sysClr</span>
+        <span class="s1">self.schemeClr = schemeClr</span>
+        <span class="s1">self.prstClr = prstClr</span>
+
+
+<span class="s0">class </span><span class="s1">Blip(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;blip&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s2">#Using attribute groupAG_Blob</span>
+    <span class="s1">cstate = NoneSet(values=([</span><span class="s3">'email'</span><span class="s1">, </span><span class="s3">'screen'</span><span class="s1">, </span><span class="s3">'print'</span><span class="s1">, </span><span class="s3">'hqprint'</span><span class="s1">]))</span>
+    <span class="s1">embed = Relation() </span><span class="s2">#rId</span>
+    <span class="s1">link = Relation() </span><span class="s2">#hyperlink</span>
+    <span class="s1">noGrp = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noSelect = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noRot = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noChangeAspect = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noMove = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noResize = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noEditPoints = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noAdjustHandles = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noChangeArrowheads = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noChangeShapeType = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s2"># some elements are choice</span>
+    <span class="s1">extLst = Typed(expected_type=OfficeArtExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">alphaBiLevel = Typed(expected_type=AlphaBiLevelEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">alphaCeiling = Typed(expected_type=AlphaCeilingEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">alphaFloor = Typed(expected_type=AlphaFloorEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">alphaInv = Typed(expected_type=AlphaInverseEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">alphaMod = Typed(expected_type=AlphaModulateEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">alphaModFix = Typed(expected_type=AlphaModulateFixedEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">alphaRepl = Typed(expected_type=AlphaReplaceEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">biLevel = Typed(expected_type=BiLevelEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">blur = Typed(expected_type=BlurEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">clrChange = Typed(expected_type=ColorChangeEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">clrRepl = Typed(expected_type=ColorReplaceEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">duotone = Typed(expected_type=DuotoneEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">fillOverlay = Typed(expected_type=FillOverlayEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">grayscl = Typed(expected_type=GrayscaleEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">hsl = Typed(expected_type=HSLEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lum = Typed(expected_type=LuminanceEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">tint = Typed(expected_type=TintEffect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'alphaBiLevel'</span><span class="s1">, </span><span class="s3">'alphaCeiling'</span><span class="s1">, </span><span class="s3">'alphaFloor'</span><span class="s1">, </span><span class="s3">'alphaInv'</span><span class="s1">,</span>
+                    <span class="s3">'alphaMod'</span><span class="s1">, </span><span class="s3">'alphaModFix'</span><span class="s1">, </span><span class="s3">'alphaRepl'</span><span class="s1">, </span><span class="s3">'biLevel'</span><span class="s1">, </span><span class="s3">'blur'</span><span class="s1">, </span><span class="s3">'clrChange'</span><span class="s1">,</span>
+                    <span class="s3">'clrRepl'</span><span class="s1">, </span><span class="s3">'duotone'</span><span class="s1">, </span><span class="s3">'fillOverlay'</span><span class="s1">, </span><span class="s3">'grayscl'</span><span class="s1">, </span><span class="s3">'hsl'</span><span class="s1">, </span><span class="s3">'lum'</span><span class="s1">, </span><span class="s3">'tint'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">cstate=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">embed=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">link=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noGrp=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noSelect=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noRot=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noChangeAspect=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noMove=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noResize=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noEditPoints=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noAdjustHandles=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noChangeArrowheads=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noChangeShapeType=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">alphaBiLevel=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">alphaCeiling=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">alphaFloor=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">alphaInv=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">alphaMod=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">alphaModFix=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">alphaRepl=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">biLevel=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">blur=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">clrChange=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">clrRepl=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">duotone=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fillOverlay=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">grayscl=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">hsl=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lum=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">tint=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.cstate = cstate</span>
+        <span class="s1">self.embed = embed</span>
+        <span class="s1">self.link = link</span>
+        <span class="s1">self.noGrp = noGrp</span>
+        <span class="s1">self.noSelect = noSelect</span>
+        <span class="s1">self.noRot = noRot</span>
+        <span class="s1">self.noChangeAspect = noChangeAspect</span>
+        <span class="s1">self.noMove = noMove</span>
+        <span class="s1">self.noResize = noResize</span>
+        <span class="s1">self.noEditPoints = noEditPoints</span>
+        <span class="s1">self.noAdjustHandles = noAdjustHandles</span>
+        <span class="s1">self.noChangeArrowheads = noChangeArrowheads</span>
+        <span class="s1">self.noChangeShapeType = noChangeShapeType</span>
+        <span class="s1">self.extLst = extLst</span>
+        <span class="s1">self.alphaBiLevel = alphaBiLevel</span>
+        <span class="s1">self.alphaCeiling = alphaCeiling</span>
+        <span class="s1">self.alphaFloor = alphaFloor</span>
+        <span class="s1">self.alphaInv = alphaInv</span>
+        <span class="s1">self.alphaMod = alphaMod</span>
+        <span class="s1">self.alphaModFix = alphaModFix</span>
+        <span class="s1">self.alphaRepl = alphaRepl</span>
+        <span class="s1">self.biLevel = biLevel</span>
+        <span class="s1">self.blur = blur</span>
+        <span class="s1">self.clrChange = clrChange</span>
+        <span class="s1">self.clrRepl = clrRepl</span>
+        <span class="s1">self.duotone = duotone</span>
+        <span class="s1">self.fillOverlay = fillOverlay</span>
+        <span class="s1">self.grayscl = grayscl</span>
+        <span class="s1">self.hsl = hsl</span>
+        <span class="s1">self.lum = lum</span>
+        <span class="s1">self.tint = tint</span>
+
+
+<span class="s0">class </span><span class="s1">TileInfoProperties(Serialisable):</span>
+
+    <span class="s1">tx = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">ty = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">sx = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">sy = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">flip = NoneSet(values=([</span><span class="s3">'x'</span><span class="s1">, </span><span class="s3">'y'</span><span class="s1">, </span><span class="s3">'xy'</span><span class="s1">]))</span>
+    <span class="s1">algn = Set(values=([</span><span class="s3">'tl'</span><span class="s1">, </span><span class="s3">'t'</span><span class="s1">, </span><span class="s3">'tr'</span><span class="s1">, </span><span class="s3">'l'</span><span class="s1">, </span><span class="s3">'ctr'</span><span class="s1">, </span><span class="s3">'r'</span><span class="s1">, </span><span class="s3">'bl'</span><span class="s1">, </span><span class="s3">'b'</span><span class="s1">, </span><span class="s3">'br'</span><span class="s1">]))</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">tx=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">ty=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sx=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sy=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">flip=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">algn=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.tx = tx</span>
+        <span class="s1">self.ty = ty</span>
+        <span class="s1">self.sx = sx</span>
+        <span class="s1">self.sy = sy</span>
+        <span class="s1">self.flip = flip</span>
+        <span class="s1">self.algn = algn</span>
+
+
+<span class="s0">class </span><span class="s1">BlipFillProperties(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;blipFill&quot;</span>
+
+    <span class="s1">dpi = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">rotWithShape = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">blip = Typed(expected_type=Blip, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">srcRect = Typed(expected_type=RelativeRect, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">tile = Typed(expected_type=TileInfoProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">stretch = Typed(expected_type=StretchInfoProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">&quot;blip&quot;</span><span class="s1">, </span><span class="s3">&quot;srcRect&quot;</span><span class="s1">, </span><span class="s3">&quot;tile&quot;</span><span class="s1">, </span><span class="s3">&quot;stretch&quot;</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">dpi=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rotWithShape=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">blip=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">tile=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">stretch=StretchInfoProperties(),</span>
+                 <span class="s1">srcRect=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.dpi = dpi</span>
+        <span class="s1">self.rotWithShape = rotWithShape</span>
+        <span class="s1">self.blip = blip</span>
+        <span class="s1">self.tile = tile</span>
+        <span class="s1">self.stretch = stretch</span>
+        <span class="s1">self.srcRect = srcRect</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,100 @@
+<html>
+<head>
+<title>brain_nose.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_nose.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2015-2016, 2018, 2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Ceridwen &lt;ceridwenv@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020-2021 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+
+<span class="s0">&quot;&quot;&quot;Hooks for nose library.&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">re</span>
+<span class="s2">import </span><span class="s1">textwrap</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+<span class="s2">import </span><span class="s1">astroid.builder</span>
+
+<span class="s1">_BUILDER = astroid.builder.AstroidBuilder(astroid.MANAGER)</span>
+
+
+<span class="s2">def </span><span class="s1">_pep8(name, caps=re.compile(</span><span class="s3">&quot;([A-Z])&quot;</span><span class="s1">)):</span>
+    <span class="s2">return </span><span class="s1">caps.sub(</span><span class="s2">lambda </span><span class="s1">m: </span><span class="s3">&quot;_&quot; </span><span class="s1">+ m.groups()[</span><span class="s4">0</span><span class="s1">].lower(), name)</span>
+
+
+<span class="s2">def </span><span class="s1">_nose_tools_functions():</span>
+    <span class="s0">&quot;&quot;&quot;Get an iterator of names and bound methods.&quot;&quot;&quot;</span>
+    <span class="s1">module = _BUILDER.string_build(</span>
+        <span class="s1">textwrap.dedent(</span>
+            <span class="s3">&quot;&quot;&quot; 
+    import unittest 
+ 
+    class Test(unittest.TestCase): 
+        pass 
+    a = Test() 
+    &quot;&quot;&quot;</span>
+        <span class="s1">)</span>
+    <span class="s1">)</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">case = next(module[</span><span class="s3">&quot;a&quot;</span><span class="s1">].infer())</span>
+    <span class="s2">except </span><span class="s1">astroid.InferenceError:</span>
+        <span class="s2">return</span>
+    <span class="s2">for </span><span class="s1">method </span><span class="s2">in </span><span class="s1">case.methods():</span>
+        <span class="s2">if </span><span class="s1">method.name.startswith(</span><span class="s3">&quot;assert&quot;</span><span class="s1">) </span><span class="s2">and </span><span class="s3">&quot;_&quot; </span><span class="s2">not in </span><span class="s1">method.name:</span>
+            <span class="s1">pep8_name = _pep8(method.name)</span>
+            <span class="s2">yield </span><span class="s1">pep8_name, astroid.BoundMethod(method, case)</span>
+        <span class="s2">if </span><span class="s1">method.name == </span><span class="s3">&quot;assertEqual&quot;</span><span class="s1">:</span>
+            <span class="s0"># nose also exports assert_equals.</span>
+            <span class="s2">yield </span><span class="s3">&quot;assert_equals&quot;</span><span class="s1">, astroid.BoundMethod(method, case)</span>
+
+
+<span class="s2">def </span><span class="s1">_nose_tools_transform(node):</span>
+    <span class="s2">for </span><span class="s1">method_name, method </span><span class="s2">in </span><span class="s1">_nose_tools_functions():</span>
+        <span class="s1">node.locals[method_name] = [method]</span>
+
+
+<span class="s2">def </span><span class="s1">_nose_tools_trivial_transform():</span>
+    <span class="s0">&quot;&quot;&quot;Custom transform for the nose.tools module.&quot;&quot;&quot;</span>
+    <span class="s1">stub = _BUILDER.string_build(</span><span class="s3">&quot;&quot;&quot;__all__ = []&quot;&quot;&quot;</span><span class="s1">)</span>
+    <span class="s1">all_entries = [</span><span class="s3">&quot;ok_&quot;</span><span class="s1">, </span><span class="s3">&quot;eq_&quot;</span><span class="s1">]</span>
+
+    <span class="s2">for </span><span class="s1">pep8_name, method </span><span class="s2">in </span><span class="s1">_nose_tools_functions():</span>
+        <span class="s1">all_entries.append(pep8_name)</span>
+        <span class="s1">stub[pep8_name] = method</span>
+
+    <span class="s0"># Update the __all__ variable, since nose.tools</span>
+    <span class="s0"># does this manually with .append.</span>
+    <span class="s1">all_assign = stub[</span><span class="s3">&quot;__all__&quot;</span><span class="s1">].parent</span>
+    <span class="s1">all_object = astroid.List(all_entries)</span>
+    <span class="s1">all_object.parent = all_assign</span>
+    <span class="s1">all_assign.value = all_object</span>
+    <span class="s2">return </span><span class="s1">stub</span>
+
+
+<span class="s1">astroid.register_module_extender(</span>
+    <span class="s1">astroid.MANAGER, </span><span class="s3">&quot;nose.tools.trivial&quot;</span><span class="s1">, _nose_tools_trivial_transform</span>
+<span class="s1">)</span>
+<span class="s1">astroid.MANAGER.register_transform(</span>
+    <span class="s1">astroid.Module, _nose_tools_transform, </span><span class="s2">lambda </span><span class="s1">n: n.name == </span><span class="s3">&quot;nose.tools&quot;</span>
+<span class="s1">)</span>
+</pre>
+</body>
+</html>

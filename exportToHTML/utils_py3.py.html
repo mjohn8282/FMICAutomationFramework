@@ -1,0 +1,62 @@
+<html>
+<head>
+<title>utils_py3.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+utils_py3.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">collections.abc </span><span class="s0">import </span><span class="s1">Awaitable</span>
+<span class="s0">from </span><span class="s1">inspect </span><span class="s0">import </span><span class="s1">CO_ITERABLE_COROUTINE</span>
+<span class="s0">from </span><span class="s1">types </span><span class="s0">import </span><span class="s1">CoroutineType</span>
+<span class="s0">from </span><span class="s1">types </span><span class="s0">import </span><span class="s1">GeneratorType</span>
+
+
+<span class="s0">async def </span><span class="s1">do_await(obj):</span>
+    <span class="s0">return await </span><span class="s1">obj</span>
+
+
+<span class="s0">def </span><span class="s1">do_yield_from(gen):</span>
+    <span class="s0">return </span><span class="s1">(</span><span class="s0">yield from </span><span class="s1">gen)</span>
+
+
+<span class="s0">def </span><span class="s1">await_(obj):</span>
+    <span class="s1">obj_type = type(obj)</span>
+    <span class="s0">if </span><span class="s1">(</span>
+        <span class="s1">obj_type </span><span class="s0">is </span><span class="s1">CoroutineType </span><span class="s0">or</span>
+        <span class="s1">obj_type </span><span class="s0">is </span><span class="s1">GeneratorType </span><span class="s0">and </span><span class="s1">bool(obj.gi_code.co_flags &amp; CO_ITERABLE_COROUTINE) </span><span class="s0">or</span>
+        <span class="s1">isinstance(obj, Awaitable)</span>
+    <span class="s1">):</span>
+        <span class="s0">return </span><span class="s1">do_await(obj).__await__()</span>
+    <span class="s0">else</span><span class="s1">:</span>
+        <span class="s0">return </span><span class="s1">do_yield_from(obj)</span>
+
+
+<span class="s0">def </span><span class="s1">__aiter__(self):</span>
+    <span class="s0">return </span><span class="s1">self.__wrapped__.__aiter__()</span>
+
+
+<span class="s0">async def </span><span class="s1">__anext__(self):</span>
+    <span class="s0">return await </span><span class="s1">self.__wrapped__.__anext__()</span>
+
+
+<span class="s0">def </span><span class="s1">__await__(self):</span>
+    <span class="s0">return </span><span class="s1">await_(self.__wrapped__)</span>
+
+
+<span class="s0">def </span><span class="s1">__aenter__(self):</span>
+    <span class="s0">return </span><span class="s1">self.__wrapped__.__aenter__()</span>
+
+
+<span class="s0">def </span><span class="s1">__aexit__(self, *args, **kwargs):</span>
+    <span class="s0">return </span><span class="s1">self.__wrapped__.__aexit__(*args, **kwargs)</span>
+</pre>
+</body>
+</html>

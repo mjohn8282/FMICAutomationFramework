@@ -1,0 +1,181 @@
+<html>
+<head>
+<title>mixins.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+mixins.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2010-2011, 2013-2014 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2014-2016, 2018 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Google, Inc.</span>
+<span class="s0"># Copyright (c) 2014 Eevee (Alex Munroe) &lt;amunroe@yelp.com&gt;</span>
+<span class="s0"># Copyright (c) 2015-2016 Ceridwen &lt;ceridwenv@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015 Florian Bruhin &lt;me@the-compiler.org&gt;</span>
+<span class="s0"># Copyright (c) 2016 Jakub Wilk &lt;jwilk@jwilk.net&gt;</span>
+<span class="s0"># Copyright (c) 2018 Nick Drozd &lt;nicholasdrozd@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Marc Mueller &lt;30130371+cdce8p@users.noreply.github.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;This module contains some mixins for the different nodes. 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">itertools</span>
+
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">decorators, exceptions</span>
+
+
+<span class="s2">class </span><span class="s1">BlockRangeMixIn:</span>
+    <span class="s0">&quot;&quot;&quot;override block range &quot;&quot;&quot;</span>
+
+    <span class="s1">@decorators.cachedproperty</span>
+    <span class="s2">def </span><span class="s1">blockstart_tolineno(self):</span>
+        <span class="s2">return </span><span class="s1">self.lineno</span>
+
+    <span class="s2">def </span><span class="s1">_elsed_block_range(self, lineno, orelse, last=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;handle block line numbers range for try/finally, for, if and while 
+        statements 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">lineno == self.fromlineno:</span>
+            <span class="s2">return </span><span class="s1">lineno, lineno</span>
+        <span class="s2">if </span><span class="s1">orelse:</span>
+            <span class="s2">if </span><span class="s1">lineno &gt;= orelse[</span><span class="s3">0</span><span class="s1">].fromlineno:</span>
+                <span class="s2">return </span><span class="s1">lineno, orelse[-</span><span class="s3">1</span><span class="s1">].tolineno</span>
+            <span class="s2">return </span><span class="s1">lineno, orelse[</span><span class="s3">0</span><span class="s1">].fromlineno - </span><span class="s3">1</span>
+        <span class="s2">return </span><span class="s1">lineno, last </span><span class="s2">or </span><span class="s1">self.tolineno</span>
+
+
+<span class="s2">class </span><span class="s1">FilterStmtsMixin:</span>
+    <span class="s0">&quot;&quot;&quot;Mixin for statement filtering and assignment type&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">_get_filtered_stmts(self, _, node, _stmts, mystmt):</span>
+        <span class="s0">&quot;&quot;&quot;method used in _filter_stmts to get statements and trigger break&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.statement() </span><span class="s2">is </span><span class="s1">mystmt:</span>
+            <span class="s0"># original node's statement is the assignment, only keep</span>
+            <span class="s0"># current node (gen exp, list comp)</span>
+            <span class="s2">return </span><span class="s1">[node], </span><span class="s2">True</span>
+        <span class="s2">return </span><span class="s1">_stmts, </span><span class="s2">False</span>
+
+    <span class="s2">def </span><span class="s1">assign_type(self):</span>
+        <span class="s2">return </span><span class="s1">self</span>
+
+
+<span class="s2">class </span><span class="s1">AssignTypeMixin:</span>
+    <span class="s2">def </span><span class="s1">assign_type(self):</span>
+        <span class="s2">return </span><span class="s1">self</span>
+
+    <span class="s2">def </span><span class="s1">_get_filtered_stmts(self, lookup_node, node, _stmts, mystmt):</span>
+        <span class="s0">&quot;&quot;&quot;method used in filter_stmts&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self </span><span class="s2">is </span><span class="s1">mystmt:</span>
+            <span class="s2">return </span><span class="s1">_stmts, </span><span class="s2">True</span>
+        <span class="s2">if </span><span class="s1">self.statement() </span><span class="s2">is </span><span class="s1">mystmt:</span>
+            <span class="s0"># original node's statement is the assignment, only keep</span>
+            <span class="s0"># current node (gen exp, list comp)</span>
+            <span class="s2">return </span><span class="s1">[node], </span><span class="s2">True</span>
+        <span class="s2">return </span><span class="s1">_stmts, </span><span class="s2">False</span>
+
+
+<span class="s2">class </span><span class="s1">ParentAssignTypeMixin(AssignTypeMixin):</span>
+    <span class="s2">def </span><span class="s1">assign_type(self):</span>
+        <span class="s2">return </span><span class="s1">self.parent.assign_type()</span>
+
+
+<span class="s2">class </span><span class="s1">ImportFromMixin(FilterStmtsMixin):</span>
+    <span class="s0">&quot;&quot;&quot;MixIn for From and Import Nodes&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">_infer_name(self, frame, name):</span>
+        <span class="s2">return </span><span class="s1">name</span>
+
+    <span class="s2">def </span><span class="s1">do_import_module(self, modname=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;return the ast for a module whose name is &lt;modname&gt; imported by &lt;self&gt;&quot;&quot;&quot;</span>
+        <span class="s0"># handle special case where we are on a package node importing a module</span>
+        <span class="s0"># using the same name as the package, which may end in an infinite loop</span>
+        <span class="s0"># on relative imports</span>
+        <span class="s0"># XXX: no more needed ?</span>
+        <span class="s1">mymodule = self.root()</span>
+        <span class="s1">level = getattr(self, </span><span class="s4">&quot;level&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)  </span><span class="s0"># Import as no level</span>
+        <span class="s2">if </span><span class="s1">modname </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">modname = self.modname</span>
+        <span class="s0"># XXX we should investigate deeper if we really want to check</span>
+        <span class="s0"># importing itself: modname and mymodule.name be relative or absolute</span>
+        <span class="s2">if </span><span class="s1">mymodule.relative_to_absolute_name(modname, level) == mymodule.name:</span>
+            <span class="s0"># FIXME: we used to raise InferenceError here, but why ?</span>
+            <span class="s2">return </span><span class="s1">mymodule</span>
+
+        <span class="s2">return </span><span class="s1">mymodule.import_module(</span>
+            <span class="s1">modname, level=level, relative_only=level </span><span class="s2">and </span><span class="s1">level &gt;= </span><span class="s3">1</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">real_name(self, asname):</span>
+        <span class="s0">&quot;&quot;&quot;get name from 'as' name&quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">name, _asname </span><span class="s2">in </span><span class="s1">self.names:</span>
+            <span class="s2">if </span><span class="s1">name == </span><span class="s4">&quot;*&quot;</span><span class="s1">:</span>
+                <span class="s2">return </span><span class="s1">asname</span>
+            <span class="s2">if not </span><span class="s1">_asname:</span>
+                <span class="s1">name = name.split(</span><span class="s4">&quot;.&quot;</span><span class="s1">, </span><span class="s3">1</span><span class="s1">)[</span><span class="s3">0</span><span class="s1">]</span>
+                <span class="s1">_asname = name</span>
+            <span class="s2">if </span><span class="s1">asname == _asname:</span>
+                <span class="s2">return </span><span class="s1">name</span>
+        <span class="s2">raise </span><span class="s1">exceptions.AttributeInferenceError(</span>
+            <span class="s4">&quot;Could not find original name for {attribute} in {target!r}&quot;</span><span class="s1">,</span>
+            <span class="s1">target=self,</span>
+            <span class="s1">attribute=asname,</span>
+        <span class="s1">)</span>
+
+
+<span class="s2">class </span><span class="s1">MultiLineBlockMixin:</span>
+    <span class="s0">&quot;&quot;&quot;Mixin for nodes with multi-line blocks, e.g. For and FunctionDef. 
+    Note that this does not apply to every node with a `body` field. 
+    For instance, an If node has a multi-line body, but the body of an 
+    IfExpr is not multi-line, and hence cannot contain Return nodes, 
+    Assign nodes, etc. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">@decorators.cachedproperty</span>
+    <span class="s2">def </span><span class="s1">_multi_line_blocks(self):</span>
+        <span class="s2">return </span><span class="s1">tuple(getattr(self, field) </span><span class="s2">for </span><span class="s1">field </span><span class="s2">in </span><span class="s1">self._multi_line_block_fields)</span>
+
+    <span class="s2">def </span><span class="s1">_get_return_nodes_skip_functions(self):</span>
+        <span class="s2">for </span><span class="s1">block </span><span class="s2">in </span><span class="s1">self._multi_line_blocks:</span>
+            <span class="s2">for </span><span class="s1">child_node </span><span class="s2">in </span><span class="s1">block:</span>
+                <span class="s2">if </span><span class="s1">child_node.is_function:</span>
+                    <span class="s2">continue</span>
+                <span class="s2">yield from </span><span class="s1">child_node._get_return_nodes_skip_functions()</span>
+
+    <span class="s2">def </span><span class="s1">_get_yield_nodes_skip_lambdas(self):</span>
+        <span class="s2">for </span><span class="s1">block </span><span class="s2">in </span><span class="s1">self._multi_line_blocks:</span>
+            <span class="s2">for </span><span class="s1">child_node </span><span class="s2">in </span><span class="s1">block:</span>
+                <span class="s2">if </span><span class="s1">child_node.is_lambda:</span>
+                    <span class="s2">continue</span>
+                <span class="s2">yield from </span><span class="s1">child_node._get_yield_nodes_skip_lambdas()</span>
+
+    <span class="s1">@decorators.cached</span>
+    <span class="s2">def </span><span class="s1">_get_assign_nodes(self):</span>
+        <span class="s1">children_assign_nodes = (</span>
+            <span class="s1">child_node._get_assign_nodes()</span>
+            <span class="s2">for </span><span class="s1">block </span><span class="s2">in </span><span class="s1">self._multi_line_blocks</span>
+            <span class="s2">for </span><span class="s1">child_node </span><span class="s2">in </span><span class="s1">block</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">list(itertools.chain.from_iterable(children_assign_nodes))</span>
+
+
+<span class="s2">class </span><span class="s1">NoChildrenMixin:</span>
+    <span class="s0">&quot;&quot;&quot;Mixin for nodes with no children, e.g. Pass.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">get_children(self):</span>
+        <span class="s2">yield from </span><span class="s1">()</span>
+</pre>
+</body>
+</html>

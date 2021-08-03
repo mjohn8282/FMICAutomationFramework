@@ -1,0 +1,101 @@
+<html>
+<head>
+<title>image.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+image.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">division</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">io </span><span class="s0">import </span><span class="s1">BytesIO</span>
+
+<span class="s0">try</span><span class="s1">:</span>
+    <span class="s0">from </span><span class="s1">PIL </span><span class="s0">import </span><span class="s1">Image </span><span class="s0">as </span><span class="s1">PILImage</span>
+<span class="s0">except </span><span class="s1">ImportError:</span>
+    <span class="s1">PILImage = </span><span class="s0">False</span>
+
+<span class="s0">def </span><span class="s1">bounding_box(bw, bh, w, h):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Returns a tuple (new_width, new_height) which has the property 
+    that it fits within box_width and box_height and has (close to) 
+    the same aspect ratio as the original size 
+    &quot;&quot;&quot;</span>
+    <span class="s1">new_width, new_height = w, h</span>
+    <span class="s0">if </span><span class="s1">bw </span><span class="s0">and </span><span class="s1">new_width &gt; bw:</span>
+        <span class="s1">new_width = bw</span>
+        <span class="s1">new_height = new_width / (w / h)</span>
+    <span class="s0">if </span><span class="s1">bh </span><span class="s0">and </span><span class="s1">new_height &gt; bh:</span>
+        <span class="s1">new_height = bh</span>
+        <span class="s1">new_width = new_height * (w / h)</span>
+    <span class="s0">return </span><span class="s1">(new_width, new_height)</span>
+
+
+<span class="s0">def </span><span class="s1">_import_image(img):</span>
+    <span class="s0">if not </span><span class="s1">PILImage:</span>
+        <span class="s0">raise </span><span class="s1">ImportError(</span><span class="s3">'You must install Pillow to fetch image objects'</span><span class="s1">)</span>
+
+    <span class="s0">if not </span><span class="s1">isinstance(img, PILImage.Image):</span>
+        <span class="s1">img = PILImage.open(img)</span>
+
+    <span class="s0">return </span><span class="s1">img</span>
+
+
+<span class="s0">class </span><span class="s1">Image(object):</span>
+    <span class="s2">&quot;&quot;&quot;Image in a spreadsheet&quot;&quot;&quot;</span>
+
+    <span class="s1">_id = </span><span class="s4">1</span>
+    <span class="s1">_path = </span><span class="s3">&quot;/xl/media/image{0}.{1}&quot;</span>
+    <span class="s1">anchor = </span><span class="s3">&quot;A1&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, img):</span>
+
+        <span class="s1">self.ref = img</span>
+
+        <span class="s2"># don't keep the image open</span>
+        <span class="s1">image = _import_image(img)</span>
+        <span class="s1">self.width = image.size[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s1">self.height = image.size[</span><span class="s4">1</span><span class="s1">]</span>
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s1">self.format = image.format.lower()</span>
+        <span class="s0">except </span><span class="s1">AttributeError:</span>
+            <span class="s1">self.format = </span><span class="s3">&quot;png&quot;</span>
+        <span class="s1">image.close()</span>
+
+
+    <span class="s0">def </span><span class="s1">_data(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Open image and write it to a buffer when saving the workbook 
+        &quot;&quot;&quot;</span>
+        <span class="s1">img = _import_image(self.ref)</span>
+        <span class="s1">fp = </span><span class="s0">None</span>
+        <span class="s2"># don't convert these file formats</span>
+        <span class="s0">if </span><span class="s1">self.format </span><span class="s0">in </span><span class="s1">[</span><span class="s3">'gif'</span><span class="s1">, </span><span class="s3">'jpeg'</span><span class="s1">, </span><span class="s3">'png'</span><span class="s1">]:</span>
+            <span class="s0">if </span><span class="s1">img.fp:</span>
+                <span class="s1">img.fp.seek(</span><span class="s4">0</span><span class="s1">)</span>
+                <span class="s1">fp = img.fp</span>
+        <span class="s0">if not </span><span class="s1">fp:</span>
+            <span class="s1">fp = BytesIO()</span>
+            <span class="s1">img.save(fp, format=self.format)</span>
+
+        <span class="s0">return </span><span class="s1">fp.read()</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">path(self):</span>
+        <span class="s0">return </span><span class="s1">self._path.format(self._id, self.format)</span>
+</pre>
+</body>
+</html>

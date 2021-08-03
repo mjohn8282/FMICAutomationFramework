@@ -1,0 +1,124 @@
+<html>
+<head>
+<title>_3d.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+_3d.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">Typed, Alias</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">NestedBool,</span>
+    <span class="s1">NestedInteger,</span>
+    <span class="s1">NestedMinMax,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">ExtensionList</span>
+<span class="s0">from </span><span class="s1">.marker </span><span class="s0">import </span><span class="s1">PictureOptions</span>
+<span class="s0">from </span><span class="s1">.shapes </span><span class="s0">import </span><span class="s1">GraphicalProperties</span>
+
+
+<span class="s0">class </span><span class="s1">View3D(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;view3D&quot;</span>
+
+    <span class="s1">rotX = NestedMinMax(min=-</span><span class="s4">90</span><span class="s1">, max=</span><span class="s4">90</span><span class="s1">, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">x_rotation = Alias(</span><span class="s3">'rotX'</span><span class="s1">)</span>
+    <span class="s1">hPercent = NestedMinMax(min=</span><span class="s4">5</span><span class="s1">, max=</span><span class="s4">500</span><span class="s1">, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">height_percent = Alias(</span><span class="s3">'hPercent'</span><span class="s1">)</span>
+    <span class="s1">rotY = NestedInteger(min=-</span><span class="s4">90</span><span class="s1">, max=</span><span class="s4">90</span><span class="s1">, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">y_rotation = Alias(</span><span class="s3">'rotY'</span><span class="s1">)</span>
+    <span class="s1">depthPercent = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">rAngAx = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">right_angle_axes = Alias(</span><span class="s3">'rAngAx'</span><span class="s1">)</span>
+    <span class="s1">perspective = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'rotX'</span><span class="s1">, </span><span class="s3">'hPercent'</span><span class="s1">, </span><span class="s3">'rotY'</span><span class="s1">, </span><span class="s3">'depthPercent'</span><span class="s1">, </span><span class="s3">'rAngAx'</span><span class="s1">,</span>
+                    <span class="s3">'perspective'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">rotX=</span><span class="s4">15</span><span class="s1">,</span>
+                 <span class="s1">hPercent=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rotY=</span><span class="s4">20</span><span class="s1">,</span>
+                 <span class="s1">depthPercent=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rAngAx=</span><span class="s0">True</span><span class="s1">,</span>
+                 <span class="s1">perspective=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.rotX = rotX</span>
+        <span class="s1">self.hPercent = hPercent</span>
+        <span class="s1">self.rotY = rotY</span>
+        <span class="s1">self.depthPercent = depthPercent</span>
+        <span class="s1">self.rAngAx = rAngAx</span>
+        <span class="s1">self.perspective = perspective</span>
+
+
+<span class="s0">class </span><span class="s1">Surface(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;surface&quot;</span>
+
+    <span class="s1">thickness = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">spPr = Typed(expected_type=GraphicalProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">graphicalProperties = Alias(</span><span class="s3">'spPr'</span><span class="s1">)</span>
+    <span class="s1">pictureOptions = Typed(expected_type=PictureOptions, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'thickness'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">, </span><span class="s3">'pictureOptions'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">thickness=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pictureOptions=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.thickness = thickness</span>
+        <span class="s1">self.spPr = spPr</span>
+        <span class="s1">self.pictureOptions = pictureOptions</span>
+
+
+<span class="s0">class </span><span class="s1">_3DBase(Serialisable):</span>
+
+    <span class="s2">&quot;&quot;&quot; 
+    Base class for 3D charts 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">view3D = Typed(expected_type=View3D, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">floor = Typed(expected_type=Surface, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">sideWall = Typed(expected_type=Surface, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">backWall = Typed(expected_type=Surface, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">view3D=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">floor=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sideWall=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">backWall=</span><span class="s0">None</span>
+                 <span class="s1">):</span>
+        <span class="s0">if </span><span class="s1">view3D </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">view3D = View3D()</span>
+        <span class="s1">self.view3D = view3D</span>
+        <span class="s0">if </span><span class="s1">floor </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">floor = Surface()</span>
+        <span class="s1">self.floor = floor</span>
+        <span class="s0">if </span><span class="s1">sideWall </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">sideWall = Surface()</span>
+        <span class="s1">self.sideWall = sideWall</span>
+        <span class="s0">if </span><span class="s1">backWall </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">backWall = Surface()</span>
+        <span class="s1">self.backWall = backWall</span>
+</pre>
+</body>
+</html>

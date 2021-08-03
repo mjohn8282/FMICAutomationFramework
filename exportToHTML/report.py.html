@@ -1,0 +1,106 @@
+<html>
+<head>
+<title>report.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+report.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;Reporter foundation for coverage.py.&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">env</span>
+<span class="s2">from </span><span class="s1">coverage.files </span><span class="s2">import </span><span class="s1">prep_patterns, FnmatchMatcher</span>
+<span class="s2">from </span><span class="s1">coverage.misc </span><span class="s2">import </span><span class="s1">CoverageException, NoSource, NotPython, ensure_dir_for_file, file_be_gone</span>
+
+
+<span class="s2">def </span><span class="s1">render_report(output_path, reporter, morfs):</span>
+    <span class="s0">&quot;&quot;&quot;Run the provided reporter ensuring any required setup and cleanup is done 
+ 
+    At a high level this method ensures the output file is ready to be written to. Then writes the 
+    report to it. Then closes the file and deletes any garbage created if necessary. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">file_to_close = </span><span class="s2">None</span>
+    <span class="s1">delete_file = </span><span class="s2">False</span>
+    <span class="s2">if </span><span class="s1">output_path:</span>
+        <span class="s2">if </span><span class="s1">output_path == </span><span class="s3">'-'</span><span class="s1">:</span>
+            <span class="s1">outfile = sys.stdout</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s0"># Ensure that the output directory is created; done here</span>
+            <span class="s0"># because this report pre-opens the output file.</span>
+            <span class="s0"># HTMLReport does this using the Report plumbing because</span>
+            <span class="s0"># its task is more complex, being multiple files.</span>
+            <span class="s1">ensure_dir_for_file(output_path)</span>
+            <span class="s1">open_kwargs = {}</span>
+            <span class="s2">if </span><span class="s1">env.PY3:</span>
+                <span class="s1">open_kwargs[</span><span class="s3">'encoding'</span><span class="s1">] = </span><span class="s3">'utf8'</span>
+            <span class="s1">outfile = open(output_path, </span><span class="s3">&quot;w&quot;</span><span class="s1">, **open_kwargs)</span>
+            <span class="s1">file_to_close = outfile</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">reporter.report(morfs, outfile=outfile)</span>
+    <span class="s2">except </span><span class="s1">CoverageException:</span>
+        <span class="s1">delete_file = </span><span class="s2">True</span>
+        <span class="s2">raise</span>
+    <span class="s2">finally</span><span class="s1">:</span>
+        <span class="s2">if </span><span class="s1">file_to_close:</span>
+            <span class="s1">file_to_close.close()</span>
+            <span class="s2">if </span><span class="s1">delete_file:</span>
+                <span class="s1">file_be_gone(output_path)</span>
+
+
+<span class="s2">def </span><span class="s1">get_analysis_to_report(coverage, morfs):</span>
+    <span class="s0">&quot;&quot;&quot;Get the files to report on. 
+ 
+    For each morf in `morfs`, if it should be reported on (based on the omit 
+    and include configuration options), yield a pair, the `FileReporter` and 
+    `Analysis` for the morf. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">file_reporters = coverage._get_file_reporters(morfs)</span>
+    <span class="s1">config = coverage.config</span>
+
+    <span class="s2">if </span><span class="s1">config.report_include:</span>
+        <span class="s1">matcher = FnmatchMatcher(prep_patterns(config.report_include))</span>
+        <span class="s1">file_reporters = [fr </span><span class="s2">for </span><span class="s1">fr </span><span class="s2">in </span><span class="s1">file_reporters </span><span class="s2">if </span><span class="s1">matcher.match(fr.filename)]</span>
+
+    <span class="s2">if </span><span class="s1">config.report_omit:</span>
+        <span class="s1">matcher = FnmatchMatcher(prep_patterns(config.report_omit))</span>
+        <span class="s1">file_reporters = [fr </span><span class="s2">for </span><span class="s1">fr </span><span class="s2">in </span><span class="s1">file_reporters </span><span class="s2">if not </span><span class="s1">matcher.match(fr.filename)]</span>
+
+    <span class="s2">if not </span><span class="s1">file_reporters:</span>
+        <span class="s2">raise </span><span class="s1">CoverageException(</span><span class="s3">&quot;No data to report.&quot;</span><span class="s1">)</span>
+
+    <span class="s2">for </span><span class="s1">fr </span><span class="s2">in </span><span class="s1">sorted(file_reporters):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">analysis = coverage._analyze(fr)</span>
+        <span class="s2">except </span><span class="s1">NoSource:</span>
+            <span class="s2">if not </span><span class="s1">config.ignore_errors:</span>
+                <span class="s2">raise</span>
+        <span class="s2">except </span><span class="s1">NotPython:</span>
+            <span class="s0"># Only report errors for .py files, and only if we didn't</span>
+            <span class="s0"># explicitly suppress those errors.</span>
+            <span class="s0"># NotPython is only raised by PythonFileReporter, which has a</span>
+            <span class="s0"># should_be_python() method.</span>
+            <span class="s2">if </span><span class="s1">fr.should_be_python():</span>
+                <span class="s2">if </span><span class="s1">config.ignore_errors:</span>
+                    <span class="s1">msg = </span><span class="s3">&quot;Couldn't parse Python file '{}'&quot;</span><span class="s1">.format(fr.filename)</span>
+                    <span class="s1">coverage._warn(msg, slug=</span><span class="s3">&quot;couldnt-parse&quot;</span><span class="s1">)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s2">raise</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">yield </span><span class="s1">(fr, analysis)</span>
+</pre>
+</body>
+</html>

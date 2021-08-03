@@ -1,0 +1,402 @@
+<html>
+<head>
+<title>spreadsheet_drawing.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+spreadsheet_drawing.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">NoneSet,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Sequence,</span>
+    <span class="s1">Alias,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">NestedText,</span>
+    <span class="s1">NestedNoneSet,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">Relation</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.packaging.relationship </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Relationship,</span>
+    <span class="s1">RelationshipList,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.utils </span><span class="s0">import </span><span class="s1">coordinate_to_tuple</span>
+<span class="s0">from </span><span class="s1">openpyexcel.utils.units </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">cm_to_EMU,</span>
+    <span class="s1">pixels_to_EMU,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.drawing.image </span><span class="s0">import </span><span class="s1">Image</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">SHEET_DRAWING_NS</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.chart._chart </span><span class="s0">import </span><span class="s1">ChartBase</span>
+<span class="s0">from </span><span class="s1">.xdr </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">XDRPoint2D,</span>
+    <span class="s1">XDRPositiveSize2D,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">.fill </span><span class="s0">import </span><span class="s1">Blip</span>
+<span class="s0">from </span><span class="s1">.connector </span><span class="s0">import </span><span class="s1">Shape</span>
+<span class="s0">from </span><span class="s1">.graphic </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">GroupShape,</span>
+    <span class="s1">GraphicFrame,</span>
+    <span class="s1">)</span>
+<span class="s0">from </span><span class="s1">.geometry </span><span class="s0">import </span><span class="s1">PresetGeometry2D</span>
+<span class="s0">from </span><span class="s1">.picture </span><span class="s0">import </span><span class="s1">PictureFrame</span>
+<span class="s0">from </span><span class="s1">.relation </span><span class="s0">import </span><span class="s1">ChartRelation</span>
+
+
+<span class="s0">class </span><span class="s1">AnchorClientData(Serialisable):</span>
+
+    <span class="s1">fLocksWithSheet = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">fPrintsWithSheet = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">fLocksWithSheet=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fPrintsWithSheet=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.fLocksWithSheet = fLocksWithSheet</span>
+        <span class="s1">self.fPrintsWithSheet = fPrintsWithSheet</span>
+
+
+<span class="s0">class </span><span class="s1">AnchorMarker(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;marker&quot;</span>
+
+    <span class="s1">col = NestedText(expected_type=int)</span>
+    <span class="s1">colOff = NestedText(expected_type=int)</span>
+    <span class="s1">row = NestedText(expected_type=int)</span>
+    <span class="s1">rowOff = NestedText(expected_type=int)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">col=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">colOff=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">row=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">rowOff=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.col = col</span>
+        <span class="s1">self.colOff = colOff</span>
+        <span class="s1">self.row = row</span>
+        <span class="s1">self.rowOff = rowOff</span>
+
+
+<span class="s0">class </span><span class="s1">_AnchorBase(Serialisable):</span>
+
+    <span class="s2">#one of</span>
+    <span class="s1">sp = Typed(expected_type=Shape, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">shape = Alias(</span><span class="s3">&quot;sp&quot;</span><span class="s1">)</span>
+    <span class="s1">grpSp = Typed(expected_type=GroupShape, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">groupShape = Alias(</span><span class="s3">&quot;grpSp&quot;</span><span class="s1">)</span>
+    <span class="s1">graphicFrame = Typed(expected_type=GraphicFrame, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">cxnSp = Typed(expected_type=Shape, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">connectionShape = Alias(</span><span class="s3">&quot;cxnSp&quot;</span><span class="s1">)</span>
+    <span class="s1">pic = Typed(expected_type=PictureFrame, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">contentPart = Relation()</span>
+
+    <span class="s1">clientData = Typed(expected_type=AnchorClientData)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'sp'</span><span class="s1">, </span><span class="s3">'grpSp'</span><span class="s1">, </span><span class="s3">'graphicFrame'</span><span class="s1">,</span>
+                    <span class="s3">'cxnSp'</span><span class="s1">, </span><span class="s3">'pic'</span><span class="s1">, </span><span class="s3">'contentPart'</span><span class="s1">, </span><span class="s3">'clientData'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">clientData=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sp=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">grpSp=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">graphicFrame=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">cxnSp=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pic=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">contentPart=</span><span class="s0">None</span>
+                 <span class="s1">):</span>
+        <span class="s0">if </span><span class="s1">clientData </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">clientData = AnchorClientData()</span>
+        <span class="s1">self.clientData = clientData</span>
+        <span class="s1">self.sp = sp</span>
+        <span class="s1">self.grpSp = grpSp</span>
+        <span class="s1">self.graphicFrame = graphicFrame</span>
+        <span class="s1">self.cxnSp = cxnSp</span>
+        <span class="s1">self.pic = pic</span>
+        <span class="s1">self.contentPart = contentPart</span>
+
+
+<span class="s0">class </span><span class="s1">AbsoluteAnchor(_AnchorBase):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;absoluteAnchor&quot;</span>
+
+    <span class="s1">pos = Typed(expected_type=XDRPoint2D)</span>
+    <span class="s1">ext = Typed(expected_type=XDRPositiveSize2D)</span>
+
+    <span class="s1">sp = _AnchorBase.sp</span>
+    <span class="s1">grpSp = _AnchorBase.grpSp</span>
+    <span class="s1">graphicFrame = _AnchorBase.graphicFrame</span>
+    <span class="s1">cxnSp = _AnchorBase.cxnSp</span>
+    <span class="s1">pic = _AnchorBase.pic</span>
+    <span class="s1">contentPart = _AnchorBase.contentPart</span>
+    <span class="s1">clientData = _AnchorBase.clientData</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'pos'</span><span class="s1">, </span><span class="s3">'ext'</span><span class="s1">) + _AnchorBase.__elements__</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">pos=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">ext=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">**kw</span>
+                <span class="s1">):</span>
+        <span class="s0">if </span><span class="s1">pos </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">pos = XDRPoint2D(</span><span class="s4">0</span><span class="s1">, </span><span class="s4">0</span><span class="s1">)</span>
+        <span class="s1">self.pos = pos</span>
+        <span class="s0">if </span><span class="s1">ext </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">ext = XDRPositiveSize2D(</span><span class="s4">0</span><span class="s1">, </span><span class="s4">0</span><span class="s1">)</span>
+        <span class="s1">self.ext = ext</span>
+        <span class="s1">super(AbsoluteAnchor, self).__init__(**kw)</span>
+
+
+<span class="s0">class </span><span class="s1">OneCellAnchor(_AnchorBase):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;oneCellAnchor&quot;</span>
+
+    <span class="s1">_from = Typed(expected_type=AnchorMarker)</span>
+    <span class="s1">ext = Typed(expected_type=XDRPositiveSize2D)</span>
+
+    <span class="s1">sp = _AnchorBase.sp</span>
+    <span class="s1">grpSp = _AnchorBase.grpSp</span>
+    <span class="s1">graphicFrame = _AnchorBase.graphicFrame</span>
+    <span class="s1">cxnSp = _AnchorBase.cxnSp</span>
+    <span class="s1">pic = _AnchorBase.pic</span>
+    <span class="s1">contentPart = _AnchorBase.contentPart</span>
+    <span class="s1">clientData = _AnchorBase.clientData</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'_from'</span><span class="s1">, </span><span class="s3">'ext'</span><span class="s1">) + _AnchorBase.__elements__</span>
+
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">_from=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">ext=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">**kw</span>
+                <span class="s1">):</span>
+        <span class="s0">if </span><span class="s1">_from </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">_from = AnchorMarker()</span>
+        <span class="s1">self._from = _from</span>
+        <span class="s0">if </span><span class="s1">ext </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">ext = XDRPositiveSize2D(</span><span class="s4">0</span><span class="s1">, </span><span class="s4">0</span><span class="s1">)</span>
+        <span class="s1">self.ext = ext</span>
+        <span class="s1">super(OneCellAnchor, self).__init__(**kw)</span>
+
+
+<span class="s0">class </span><span class="s1">TwoCellAnchor(_AnchorBase):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;twoCellAnchor&quot;</span>
+
+    <span class="s1">editAs = NoneSet(values=([</span><span class="s3">'twoCell'</span><span class="s1">, </span><span class="s3">'oneCell'</span><span class="s1">, </span><span class="s3">'absolute'</span><span class="s1">]))</span>
+    <span class="s1">_from = Typed(expected_type=AnchorMarker)</span>
+    <span class="s1">to = Typed(expected_type=AnchorMarker)</span>
+
+    <span class="s1">sp = _AnchorBase.sp</span>
+    <span class="s1">grpSp = _AnchorBase.grpSp</span>
+    <span class="s1">graphicFrame = _AnchorBase.graphicFrame</span>
+    <span class="s1">cxnSp = _AnchorBase.cxnSp</span>
+    <span class="s1">pic = _AnchorBase.pic</span>
+    <span class="s1">contentPart = _AnchorBase.contentPart</span>
+    <span class="s1">clientData = _AnchorBase.clientData</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'_from'</span><span class="s1">, </span><span class="s3">'to'</span><span class="s1">) + _AnchorBase.__elements__</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">editAs=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">_from=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">to=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">**kw</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.editAs = editAs</span>
+        <span class="s0">if </span><span class="s1">_from </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">_from = AnchorMarker()</span>
+        <span class="s1">self._from = _from</span>
+        <span class="s0">if </span><span class="s1">to </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">to = AnchorMarker()</span>
+        <span class="s1">self.to = to</span>
+        <span class="s1">super(TwoCellAnchor, self).__init__(**kw)</span>
+
+
+<span class="s0">def </span><span class="s1">_check_anchor(obj):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Check whether an object has an existing Anchor object 
+    If not create a OneCellAnchor using the provided coordinate 
+    &quot;&quot;&quot;</span>
+    <span class="s1">anchor = obj.anchor</span>
+    <span class="s0">if not </span><span class="s1">isinstance(anchor, _AnchorBase):</span>
+        <span class="s1">row, col = coordinate_to_tuple(anchor)</span>
+        <span class="s1">anchor = OneCellAnchor()</span>
+        <span class="s1">anchor._from.row = row -</span><span class="s4">1</span>
+        <span class="s1">anchor._from.col = col -</span><span class="s4">1</span>
+        <span class="s0">if </span><span class="s1">isinstance(obj, ChartBase):</span>
+            <span class="s1">anchor.ext.width = cm_to_EMU(obj.width)</span>
+            <span class="s1">anchor.ext.height = cm_to_EMU(obj.height)</span>
+        <span class="s0">elif </span><span class="s1">isinstance(obj, Image):</span>
+            <span class="s1">anchor.ext.width = pixels_to_EMU(obj.width)</span>
+            <span class="s1">anchor.ext.height = pixels_to_EMU(obj.height)</span>
+    <span class="s0">return </span><span class="s1">anchor</span>
+
+
+<span class="s0">class </span><span class="s1">SpreadsheetDrawing(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;wsDr&quot;</span>
+    <span class="s1">mime_type = </span><span class="s3">&quot;application/vnd.openxmlformats-officedocument.drawing+xml&quot;</span>
+    <span class="s1">_rel_type = </span><span class="s3">&quot;http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing&quot;</span>
+    <span class="s1">_path = PartName=</span><span class="s3">&quot;/xl/drawings/drawing{0}.xml&quot;</span>
+    <span class="s1">_id = </span><span class="s0">None</span>
+
+    <span class="s1">twoCellAnchor = Sequence(expected_type=TwoCellAnchor, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">oneCellAnchor = Sequence(expected_type=OneCellAnchor, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">absoluteAnchor = Sequence(expected_type=AbsoluteAnchor, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">&quot;twoCellAnchor&quot;</span><span class="s1">, </span><span class="s3">&quot;oneCellAnchor&quot;</span><span class="s1">, </span><span class="s3">&quot;absoluteAnchor&quot;</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">twoCellAnchor=(),</span>
+                 <span class="s1">oneCellAnchor=(),</span>
+                 <span class="s1">absoluteAnchor=(),</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.twoCellAnchor = twoCellAnchor</span>
+        <span class="s1">self.oneCellAnchor = oneCellAnchor</span>
+        <span class="s1">self.absoluteAnchor = absoluteAnchor</span>
+        <span class="s1">self.charts = []</span>
+        <span class="s1">self.images = []</span>
+        <span class="s1">self._rels = []</span>
+
+
+    <span class="s0">def </span><span class="s1">__hash__(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Just need to check for identity 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">id(self)</span>
+
+
+    <span class="s0">def </span><span class="s1">__bool__(self):</span>
+        <span class="s0">return </span><span class="s1">bool(self.charts) </span><span class="s0">or </span><span class="s1">bool(self.images)</span>
+
+    <span class="s1">__nonzero__ = __bool__</span>
+
+
+    <span class="s0">def </span><span class="s1">_write(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        create required structure and the serialise 
+        &quot;&quot;&quot;</span>
+        <span class="s1">anchors = []</span>
+        <span class="s0">for </span><span class="s1">idx, obj </span><span class="s0">in </span><span class="s1">enumerate(self.charts + self.images, </span><span class="s4">1</span><span class="s1">):</span>
+            <span class="s1">anchor = _check_anchor(obj)</span>
+            <span class="s0">if </span><span class="s1">isinstance(obj, ChartBase):</span>
+                <span class="s1">rel = Relationship(type=</span><span class="s3">&quot;chart&quot;</span><span class="s1">, Target=obj.path)</span>
+                <span class="s1">anchor.graphicFrame = self._chart_frame(idx)</span>
+            <span class="s0">elif </span><span class="s1">isinstance(obj, Image):</span>
+                <span class="s1">rel = Relationship(type=</span><span class="s3">&quot;image&quot;</span><span class="s1">, Target=obj.path)</span>
+                <span class="s1">child = anchor.pic </span><span class="s0">or </span><span class="s1">anchor.groupShape </span><span class="s0">and </span><span class="s1">anchor.groupShape.pic</span>
+                <span class="s0">if not </span><span class="s1">child:</span>
+                    <span class="s1">anchor.pic = self._picture_frame(idx)</span>
+                <span class="s0">else</span><span class="s1">:</span>
+                    <span class="s1">child.blipFill.blip.embed = </span><span class="s3">&quot;rId{0}&quot;</span><span class="s1">.format(idx)</span>
+
+            <span class="s1">anchors.append(anchor)</span>
+            <span class="s1">self._rels.append(rel)</span>
+
+        <span class="s0">for </span><span class="s1">a </span><span class="s0">in </span><span class="s1">anchors:</span>
+            <span class="s0">if </span><span class="s1">isinstance(a, OneCellAnchor):</span>
+                <span class="s1">self.oneCellAnchor.append(a)</span>
+            <span class="s0">elif </span><span class="s1">isinstance(a, TwoCellAnchor):</span>
+                <span class="s1">self.twoCellAnchor.append(a)</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">self.absoluteAnchor.append(a)</span>
+
+        <span class="s1">tree = self.to_tree()</span>
+        <span class="s1">tree.set(</span><span class="s3">'xmlns'</span><span class="s1">, SHEET_DRAWING_NS)</span>
+        <span class="s0">return </span><span class="s1">tree</span>
+
+
+    <span class="s0">def </span><span class="s1">_chart_frame(self, idx):</span>
+        <span class="s1">chart_rel = ChartRelation(</span><span class="s3">&quot;rId%s&quot; </span><span class="s1">% idx)</span>
+        <span class="s1">frame = GraphicFrame()</span>
+        <span class="s1">nv = frame.nvGraphicFramePr.cNvPr</span>
+        <span class="s1">nv.id = idx</span>
+        <span class="s1">nv.name = </span><span class="s3">&quot;Chart {0}&quot;</span><span class="s1">.format(idx)</span>
+        <span class="s1">frame.graphic.graphicData.chart = chart_rel</span>
+        <span class="s0">return </span><span class="s1">frame</span>
+
+
+    <span class="s0">def </span><span class="s1">_picture_frame(self, idx):</span>
+        <span class="s1">pic = PictureFrame()</span>
+        <span class="s1">pic.nvPicPr.cNvPr.descr = </span><span class="s3">&quot;Picture&quot;</span>
+        <span class="s1">pic.nvPicPr.cNvPr.id = idx</span>
+        <span class="s1">pic.nvPicPr.cNvPr.name = </span><span class="s3">&quot;Image {0}&quot;</span><span class="s1">.format(idx)</span>
+
+        <span class="s1">pic.blipFill.blip = Blip()</span>
+        <span class="s1">pic.blipFill.blip.embed = </span><span class="s3">&quot;rId{0}&quot;</span><span class="s1">.format(idx)</span>
+        <span class="s1">pic.blipFill.blip.cstate = </span><span class="s3">&quot;print&quot;</span>
+
+        <span class="s1">pic.spPr.prstGeom = PresetGeometry2D(prst=</span><span class="s3">&quot;rect&quot;</span><span class="s1">)</span>
+        <span class="s1">pic.spPr.ln = </span><span class="s0">None</span>
+        <span class="s0">return </span><span class="s1">pic</span>
+
+
+    <span class="s0">def </span><span class="s1">_write_rels(self):</span>
+        <span class="s1">rels = RelationshipList()</span>
+        <span class="s1">rels.Relationship = self._rels</span>
+        <span class="s0">return </span><span class="s1">rels.to_tree()</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">path(self):</span>
+        <span class="s0">return </span><span class="s1">self._path.format(self._id)</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">_chart_rels(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Get relationship information for each chart and bind anchor to it 
+        &quot;&quot;&quot;</span>
+        <span class="s1">rels = []</span>
+        <span class="s1">anchors = self.absoluteAnchor + self.oneCellAnchor + self.twoCellAnchor</span>
+        <span class="s0">for </span><span class="s1">anchor </span><span class="s0">in </span><span class="s1">anchors:</span>
+            <span class="s0">if </span><span class="s1">anchor.graphicFrame </span><span class="s0">is not None</span><span class="s1">:</span>
+                <span class="s1">graphic = anchor.graphicFrame.graphic</span>
+                <span class="s1">rel = graphic.graphicData.chart</span>
+                <span class="s0">if </span><span class="s1">rel </span><span class="s0">is not None</span><span class="s1">:</span>
+                    <span class="s1">rel.anchor = anchor</span>
+                    <span class="s1">rel.anchor.graphicFrame = </span><span class="s0">None</span>
+                    <span class="s1">rels.append(rel)</span>
+        <span class="s0">return </span><span class="s1">rels</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">_blip_rels(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Get relationship information for each blip and bind anchor to it 
+        &quot;&quot;&quot;</span>
+        <span class="s1">rels = []</span>
+        <span class="s1">anchors = self.absoluteAnchor + self.oneCellAnchor + self.twoCellAnchor</span>
+
+        <span class="s0">for </span><span class="s1">anchor </span><span class="s0">in </span><span class="s1">anchors:</span>
+            <span class="s1">child = anchor.pic </span><span class="s0">or </span><span class="s1">anchor.groupShape </span><span class="s0">and </span><span class="s1">anchor.groupShape.pic</span>
+            <span class="s0">if </span><span class="s1">child </span><span class="s0">and </span><span class="s1">child.blipFill:</span>
+                <span class="s1">rel = child.blipFill.blip</span>
+                <span class="s0">if </span><span class="s1">rel </span><span class="s0">is not None</span><span class="s1">:</span>
+                    <span class="s1">rel.anchor = anchor</span>
+                    <span class="s1">rels.append(rel)</span>
+
+        <span class="s0">return </span><span class="s1">rels</span>
+</pre>
+</body>
+</html>

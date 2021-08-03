@@ -1,0 +1,174 @@
+<html>
+<head>
+<title>summary.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+summary.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;Summary reporting&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">env</span>
+<span class="s2">from </span><span class="s1">coverage.report </span><span class="s2">import </span><span class="s1">get_analysis_to_report</span>
+<span class="s2">from </span><span class="s1">coverage.results </span><span class="s2">import </span><span class="s1">Numbers</span>
+<span class="s2">from </span><span class="s1">coverage.misc </span><span class="s2">import </span><span class="s1">CoverageException, output_encoding</span>
+
+
+<span class="s2">class </span><span class="s1">SummaryReporter(object):</span>
+    <span class="s0">&quot;&quot;&quot;A reporter for writing the summary report.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, coverage):</span>
+        <span class="s1">self.coverage = coverage</span>
+        <span class="s1">self.config = self.coverage.config</span>
+        <span class="s1">self.branches = coverage.get_data().has_arcs()</span>
+        <span class="s1">self.outfile = </span><span class="s2">None</span>
+        <span class="s1">self.fr_analysis = []</span>
+        <span class="s1">self.skipped_count = </span><span class="s3">0</span>
+        <span class="s1">self.empty_count = </span><span class="s3">0</span>
+        <span class="s1">self.total = Numbers()</span>
+        <span class="s1">self.fmt_err = </span><span class="s4">u&quot;%s   %s: %s&quot;</span>
+
+    <span class="s2">def </span><span class="s1">writeout(self, line):</span>
+        <span class="s0">&quot;&quot;&quot;Write a line to the output, adding a newline.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">env.PY2:</span>
+            <span class="s1">line = line.encode(output_encoding())</span>
+        <span class="s1">self.outfile.write(line.rstrip())</span>
+        <span class="s1">self.outfile.write(</span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">report(self, morfs, outfile=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Writes a report summarizing coverage statistics per module. 
+ 
+        `outfile` is a file object to write the summary to. It must be opened 
+        for native strings (bytes on Python 2, Unicode on Python 3). 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.outfile = outfile </span><span class="s2">or </span><span class="s1">sys.stdout</span>
+
+        <span class="s1">self.coverage.get_data().set_query_contexts(self.config.report_contexts)</span>
+        <span class="s2">for </span><span class="s1">fr, analysis </span><span class="s2">in </span><span class="s1">get_analysis_to_report(self.coverage, morfs):</span>
+            <span class="s1">self.report_one_file(fr, analysis)</span>
+
+        <span class="s0"># Prepare the formatting strings, header, and column sorting.</span>
+        <span class="s1">max_name = max([len(fr.relative_filename()) </span><span class="s2">for </span><span class="s1">(fr, analysis) </span><span class="s2">in </span><span class="s1">self.fr_analysis] + [</span><span class="s3">5</span><span class="s1">])</span>
+        <span class="s1">fmt_name = </span><span class="s4">u&quot;%%- %ds  &quot; </span><span class="s1">% max_name</span>
+        <span class="s1">fmt_skip_covered = </span><span class="s4">u&quot;</span><span class="s5">\n</span><span class="s4">%s file%s skipped due to complete coverage.&quot;</span>
+        <span class="s1">fmt_skip_empty = </span><span class="s4">u&quot;</span><span class="s5">\n</span><span class="s4">%s empty file%s skipped.&quot;</span>
+
+        <span class="s1">header = (fmt_name % </span><span class="s4">&quot;Name&quot;</span><span class="s1">) + </span><span class="s4">u&quot; Stmts   Miss&quot;</span>
+        <span class="s1">fmt_coverage = fmt_name + </span><span class="s4">u&quot;%6d %6d&quot;</span>
+        <span class="s2">if </span><span class="s1">self.branches:</span>
+            <span class="s1">header += </span><span class="s4">u&quot; Branch BrPart&quot;</span>
+            <span class="s1">fmt_coverage += </span><span class="s4">u&quot; %6d %6d&quot;</span>
+        <span class="s1">width100 = Numbers.pc_str_width()</span>
+        <span class="s1">header += </span><span class="s4">u&quot;%*s&quot; </span><span class="s1">% (width100+</span><span class="s3">4</span><span class="s1">, </span><span class="s4">&quot;Cover&quot;</span><span class="s1">)</span>
+        <span class="s1">fmt_coverage += </span><span class="s4">u&quot;%%%ds%%%%&quot; </span><span class="s1">% (width100+</span><span class="s3">3</span><span class="s1">,)</span>
+        <span class="s2">if </span><span class="s1">self.config.show_missing:</span>
+            <span class="s1">header += </span><span class="s4">u&quot;   Missing&quot;</span>
+            <span class="s1">fmt_coverage += </span><span class="s4">u&quot;   %s&quot;</span>
+        <span class="s1">rule = </span><span class="s4">u&quot;-&quot; </span><span class="s1">* len(header)</span>
+
+        <span class="s1">column_order = dict(name=</span><span class="s3">0</span><span class="s1">, stmts=</span><span class="s3">1</span><span class="s1">, miss=</span><span class="s3">2</span><span class="s1">, cover=-</span><span class="s3">1</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">self.branches:</span>
+            <span class="s1">column_order.update(dict(branch=</span><span class="s3">3</span><span class="s1">, brpart=</span><span class="s3">4</span><span class="s1">))</span>
+
+        <span class="s0"># Write the header</span>
+        <span class="s1">self.writeout(header)</span>
+        <span class="s1">self.writeout(rule)</span>
+
+        <span class="s0"># `lines` is a list of pairs, (line text, line values).  The line text</span>
+        <span class="s0"># is a string that will be printed, and line values is a tuple of</span>
+        <span class="s0"># sortable values.</span>
+        <span class="s1">lines = []</span>
+
+        <span class="s2">for </span><span class="s1">(fr, analysis) </span><span class="s2">in </span><span class="s1">self.fr_analysis:</span>
+            <span class="s1">nums = analysis.numbers</span>
+
+            <span class="s1">args = (fr.relative_filename(), nums.n_statements, nums.n_missing)</span>
+            <span class="s2">if </span><span class="s1">self.branches:</span>
+                <span class="s1">args += (nums.n_branches, nums.n_partial_branches)</span>
+            <span class="s1">args += (nums.pc_covered_str,)</span>
+            <span class="s2">if </span><span class="s1">self.config.show_missing:</span>
+                <span class="s1">args += (analysis.missing_formatted(branches=</span><span class="s2">True</span><span class="s1">),)</span>
+            <span class="s1">text = fmt_coverage % args</span>
+            <span class="s0"># Add numeric percent coverage so that sorting makes sense.</span>
+            <span class="s1">args += (nums.pc_covered,)</span>
+            <span class="s1">lines.append((text, args))</span>
+
+        <span class="s0"># Sort the lines and write them out.</span>
+        <span class="s2">if </span><span class="s1">getattr(self.config, </span><span class="s4">'sort'</span><span class="s1">, </span><span class="s2">None</span><span class="s1">):</span>
+            <span class="s1">sort_option = self.config.sort.lower()</span>
+            <span class="s1">reverse = </span><span class="s2">False</span>
+            <span class="s2">if </span><span class="s1">sort_option[</span><span class="s3">0</span><span class="s1">] == </span><span class="s4">'-'</span><span class="s1">:</span>
+                <span class="s1">reverse = </span><span class="s2">True</span>
+                <span class="s1">sort_option = sort_option[</span><span class="s3">1</span><span class="s1">:]</span>
+            <span class="s2">elif </span><span class="s1">sort_option[</span><span class="s3">0</span><span class="s1">] == </span><span class="s4">'+'</span><span class="s1">:</span>
+                <span class="s1">sort_option = sort_option[</span><span class="s3">1</span><span class="s1">:]</span>
+
+            <span class="s1">position = column_order.get(sort_option)</span>
+            <span class="s2">if </span><span class="s1">position </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s2">raise </span><span class="s1">CoverageException(</span><span class="s4">&quot;Invalid sorting option: {!r}&quot;</span><span class="s1">.format(self.config.sort))</span>
+            <span class="s1">lines.sort(key=</span><span class="s2">lambda </span><span class="s1">l: (l[</span><span class="s3">1</span><span class="s1">][position], l[</span><span class="s3">0</span><span class="s1">]), reverse=reverse)</span>
+
+        <span class="s2">for </span><span class="s1">line </span><span class="s2">in </span><span class="s1">lines:</span>
+            <span class="s1">self.writeout(line[</span><span class="s3">0</span><span class="s1">])</span>
+
+        <span class="s0"># Write a TOTAL line if we had at least one file.</span>
+        <span class="s2">if </span><span class="s1">self.total.n_files &gt; </span><span class="s3">0</span><span class="s1">:</span>
+            <span class="s1">self.writeout(rule)</span>
+            <span class="s1">args = (</span><span class="s4">&quot;TOTAL&quot;</span><span class="s1">, self.total.n_statements, self.total.n_missing)</span>
+            <span class="s2">if </span><span class="s1">self.branches:</span>
+                <span class="s1">args += (self.total.n_branches, self.total.n_partial_branches)</span>
+            <span class="s1">args += (self.total.pc_covered_str,)</span>
+            <span class="s2">if </span><span class="s1">self.config.show_missing:</span>
+                <span class="s1">args += (</span><span class="s4">&quot;&quot;</span><span class="s1">,)</span>
+            <span class="s1">self.writeout(fmt_coverage % args)</span>
+
+        <span class="s0"># Write other final lines.</span>
+        <span class="s2">if not </span><span class="s1">self.total.n_files </span><span class="s2">and not </span><span class="s1">self.skipped_count:</span>
+            <span class="s2">raise </span><span class="s1">CoverageException(</span><span class="s4">&quot;No data to report.&quot;</span><span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">self.config.skip_covered </span><span class="s2">and </span><span class="s1">self.skipped_count:</span>
+            <span class="s1">self.writeout(</span>
+                <span class="s1">fmt_skip_covered % (self.skipped_count, </span><span class="s4">'s' </span><span class="s2">if </span><span class="s1">self.skipped_count &gt; </span><span class="s3">1 </span><span class="s2">else </span><span class="s4">''</span><span class="s1">)</span>
+                <span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">self.config.skip_empty </span><span class="s2">and </span><span class="s1">self.empty_count:</span>
+            <span class="s1">self.writeout(</span>
+                <span class="s1">fmt_skip_empty % (self.empty_count, </span><span class="s4">'s' </span><span class="s2">if </span><span class="s1">self.empty_count &gt; </span><span class="s3">1 </span><span class="s2">else </span><span class="s4">''</span><span class="s1">)</span>
+                <span class="s1">)</span>
+
+        <span class="s2">return </span><span class="s1">self.total.n_statements </span><span class="s2">and </span><span class="s1">self.total.pc_covered</span>
+
+    <span class="s2">def </span><span class="s1">report_one_file(self, fr, analysis):</span>
+        <span class="s0">&quot;&quot;&quot;Report on just one file, the callback from report().&quot;&quot;&quot;</span>
+        <span class="s1">nums = analysis.numbers</span>
+        <span class="s1">self.total += nums</span>
+
+        <span class="s1">no_missing_lines = (nums.n_missing == </span><span class="s3">0</span><span class="s1">)</span>
+        <span class="s1">no_missing_branches = (nums.n_partial_branches == </span><span class="s3">0</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">self.config.skip_covered </span><span class="s2">and </span><span class="s1">no_missing_lines </span><span class="s2">and </span><span class="s1">no_missing_branches:</span>
+            <span class="s0"># Don't report on 100% files.</span>
+            <span class="s1">self.skipped_count += </span><span class="s3">1</span>
+        <span class="s2">elif </span><span class="s1">self.config.skip_empty </span><span class="s2">and </span><span class="s1">nums.n_statements == </span><span class="s3">0</span><span class="s1">:</span>
+            <span class="s0"># Don't report on empty files.</span>
+            <span class="s1">self.empty_count += </span><span class="s3">1</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.fr_analysis.append((fr, analysis))</span>
+</pre>
+</body>
+</html>

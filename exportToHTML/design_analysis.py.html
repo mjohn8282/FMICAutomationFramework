@@ -1,0 +1,524 @@
+<html>
+<head>
+<title>design_analysis.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+design_analysis.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2006, 2009-2010, 2012-2015 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2012, 2014 Google, Inc.</span>
+<span class="s0"># Copyright (c) 2014-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Arun Persaud &lt;arun@nubati.net&gt;</span>
+<span class="s0"># Copyright (c) 2015 Ionel Cristian Maries &lt;contact@ionelmc.ro&gt;</span>
+<span class="s0"># Copyright (c) 2016 Łukasz Rogalski &lt;rogalski.91@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 ahirnish &lt;ahirnish@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Lucas Cimon &lt;lucas.cimon@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Mike Frysinger &lt;vapier@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Mark Miller &lt;725mrm@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Ashley Whetter &lt;ashley@awhetter.co.uk&gt;</span>
+<span class="s0"># Copyright (c) 2018 Ville Skyttä &lt;ville.skytta@iki.fi&gt;</span>
+<span class="s0"># Copyright (c) 2018 Jakub Wilk &lt;jwilk@jwilk.net&gt;</span>
+<span class="s0"># Copyright (c) 2019-2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Michael Scott Cuthbert &lt;cuthbert@mit.edu&gt;</span>
+<span class="s0"># Copyright (c) 2020 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Anthony Sottile &lt;asottile@umich.edu&gt;</span>
+<span class="s0"># Copyright (c) 2021 Marc Mueller &lt;30130371+cdce8p@users.noreply.github.com&gt;</span>
+
+<span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;check for signs of poor design&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">re</span>
+<span class="s2">from </span><span class="s1">collections </span><span class="s2">import </span><span class="s1">defaultdict</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+
+<span class="s2">from </span><span class="s1">pylint </span><span class="s2">import </span><span class="s1">utils</span>
+<span class="s2">from </span><span class="s1">pylint.checkers </span><span class="s2">import </span><span class="s1">BaseChecker</span>
+<span class="s2">from </span><span class="s1">pylint.checkers.utils </span><span class="s2">import </span><span class="s1">check_messages</span>
+<span class="s2">from </span><span class="s1">pylint.interfaces </span><span class="s2">import </span><span class="s1">IAstroidChecker</span>
+
+<span class="s1">MSGS = {</span>
+    <span class="s3">&quot;R0901&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Too many ancestors (%s/%s)&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-ancestors&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when class has too many parent classes, try to reduce &quot;</span>
+        <span class="s3">&quot;this to get a simpler (and so easier to use) class.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;R0902&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Too many instance attributes (%s/%s)&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-instance-attributes&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when class has too many instance attributes, try to reduce &quot;</span>
+        <span class="s3">&quot;this to get a simpler (and so easier to use) class.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;R0903&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Too few public methods (%s/%s)&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-few-public-methods&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when class has too few public methods, so be sure it's &quot;</span>
+        <span class="s3">&quot;really worth it.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;R0904&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Too many public methods (%s/%s)&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-public-methods&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when class has too many public methods, try to reduce &quot;</span>
+        <span class="s3">&quot;this to get a simpler (and so easier to use) class.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;R0911&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Too many return statements (%s/%s)&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-return-statements&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a function or method has too many return statement, &quot;</span>
+        <span class="s3">&quot;making it hard to follow.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;R0912&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Too many branches (%s/%s)&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-branches&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a function or method has too many branches, &quot;</span>
+        <span class="s3">&quot;making it hard to follow.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;R0913&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Too many arguments (%s/%s)&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-arguments&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a function or method takes too many arguments.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;R0914&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Too many local variables (%s/%s)&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-locals&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a function or method has too many local variables.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;R0915&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Too many statements (%s/%s)&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-statements&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a function or method has too many statements. You &quot;</span>
+        <span class="s3">&quot;should then split it in smaller functions / methods.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;R0916&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Too many boolean expressions in if statement (%s/%s)&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-boolean-expressions&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when an if statement contains too many boolean expressions.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+<span class="s1">}</span>
+<span class="s1">SPECIAL_OBJ = re.compile(</span><span class="s3">&quot;^_{2}[a-z]+_{2}$&quot;</span><span class="s1">)</span>
+<span class="s1">DATACLASSES_DECORATORS = frozenset({</span><span class="s3">&quot;dataclass&quot;</span><span class="s1">, </span><span class="s3">&quot;attrs&quot;</span><span class="s1">})</span>
+<span class="s1">DATACLASS_IMPORT = </span><span class="s3">&quot;dataclasses&quot;</span>
+<span class="s1">TYPING_NAMEDTUPLE = </span><span class="s3">&quot;typing.NamedTuple&quot;</span>
+<span class="s1">TYPING_TYPEDDICT = </span><span class="s3">&quot;typing.TypedDict&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">_is_exempt_from_public_methods(node: astroid.ClassDef) -&gt; bool:</span>
+    <span class="s0">&quot;&quot;&quot;Check if a class is exempt from too-few-public-methods&quot;&quot;&quot;</span>
+
+    <span class="s0"># If it's a typing.Namedtuple, typing.TypedDict or an Enum</span>
+    <span class="s2">for </span><span class="s1">ancestor </span><span class="s2">in </span><span class="s1">node.ancestors():</span>
+        <span class="s2">if </span><span class="s1">ancestor.name == </span><span class="s3">&quot;Enum&quot; </span><span class="s2">and </span><span class="s1">ancestor.root().name == </span><span class="s3">&quot;enum&quot;</span><span class="s1">:</span>
+            <span class="s2">return True</span>
+        <span class="s2">if </span><span class="s1">ancestor.qname() </span><span class="s2">in </span><span class="s1">(TYPING_NAMEDTUPLE, TYPING_TYPEDDICT):</span>
+            <span class="s2">return True</span>
+
+    <span class="s0"># Or if it's a dataclass</span>
+    <span class="s2">if not </span><span class="s1">node.decorators:</span>
+        <span class="s2">return False</span>
+
+    <span class="s1">root_locals = set(node.root().locals)</span>
+    <span class="s2">for </span><span class="s1">decorator </span><span class="s2">in </span><span class="s1">node.decorators.nodes:</span>
+        <span class="s2">if </span><span class="s1">isinstance(decorator, astroid.Call):</span>
+            <span class="s1">decorator = decorator.func</span>
+        <span class="s2">if not </span><span class="s1">isinstance(decorator, (astroid.Name, astroid.Attribute)):</span>
+            <span class="s2">continue</span>
+        <span class="s2">if </span><span class="s1">isinstance(decorator, astroid.Name):</span>
+            <span class="s1">name = decorator.name</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">name = decorator.attrname</span>
+        <span class="s2">if </span><span class="s1">name </span><span class="s2">in </span><span class="s1">DATACLASSES_DECORATORS </span><span class="s2">and </span><span class="s1">(</span>
+            <span class="s1">root_locals.intersection(DATACLASSES_DECORATORS)</span>
+            <span class="s2">or </span><span class="s1">DATACLASS_IMPORT </span><span class="s2">in </span><span class="s1">root_locals</span>
+        <span class="s1">):</span>
+            <span class="s2">return True</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">_count_boolean_expressions(bool_op):</span>
+    <span class="s0">&quot;&quot;&quot;Counts the number of boolean expressions in BoolOp `bool_op` (recursive) 
+ 
+    example: a and (b or c or (d and e)) ==&gt; 5 boolean expressions 
+    &quot;&quot;&quot;</span>
+    <span class="s1">nb_bool_expr = </span><span class="s4">0</span>
+    <span class="s2">for </span><span class="s1">bool_expr </span><span class="s2">in </span><span class="s1">bool_op.get_children():</span>
+        <span class="s2">if </span><span class="s1">isinstance(bool_expr, astroid.BoolOp):</span>
+            <span class="s1">nb_bool_expr += _count_boolean_expressions(bool_expr)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">nb_bool_expr += </span><span class="s4">1</span>
+    <span class="s2">return </span><span class="s1">nb_bool_expr</span>
+
+
+<span class="s2">def </span><span class="s1">_count_methods_in_class(node):</span>
+    <span class="s1">all_methods = sum(</span><span class="s4">1 </span><span class="s2">for </span><span class="s1">method </span><span class="s2">in </span><span class="s1">node.methods() </span><span class="s2">if not </span><span class="s1">method.name.startswith(</span><span class="s3">&quot;_&quot;</span><span class="s1">))</span>
+    <span class="s0"># Special methods count towards the number of public methods,</span>
+    <span class="s0"># but don't count towards there being too many methods.</span>
+    <span class="s2">for </span><span class="s1">method </span><span class="s2">in </span><span class="s1">node.mymethods():</span>
+        <span class="s2">if </span><span class="s1">SPECIAL_OBJ.search(method.name) </span><span class="s2">and </span><span class="s1">method.name != </span><span class="s3">&quot;__init__&quot;</span><span class="s1">:</span>
+            <span class="s1">all_methods += </span><span class="s4">1</span>
+    <span class="s2">return </span><span class="s1">all_methods</span>
+
+
+<span class="s2">class </span><span class="s1">MisdesignChecker(BaseChecker):</span>
+    <span class="s0">&quot;&quot;&quot;checks for sign of poor/misdesign: 
+    * number of methods, attributes, local variables... 
+    * size, complexity of functions, methods 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__implements__ = (IAstroidChecker,)</span>
+
+    <span class="s0"># configuration section name</span>
+    <span class="s1">name = </span><span class="s3">&quot;design&quot;</span>
+    <span class="s0"># messages</span>
+    <span class="s1">msgs = MSGS</span>
+    <span class="s1">priority = -</span><span class="s4">2</span>
+    <span class="s0"># configuration options</span>
+    <span class="s1">options = (</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;max-args&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s4">5</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;int&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Maximum number of arguments for function / method.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;max-locals&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s4">15</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;int&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Maximum number of locals for function / method body.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;max-returns&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s4">6</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;int&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Maximum number of return / yield for function / &quot;</span>
+                <span class="s3">&quot;method body.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;max-branches&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s4">12</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;int&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Maximum number of branch for function / method body.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;max-statements&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s4">50</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;int&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Maximum number of statements in function / method body.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;max-parents&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s4">7</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;num&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Maximum number of parents for a class (see R0901).&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;max-attributes&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s4">7</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;num&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Maximum number of attributes for a class </span><span class="s5">\ 
+</span><span class="s3">(see R0902).&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;min-public-methods&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s4">2</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;num&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Minimum number of public methods for a class </span><span class="s5">\ 
+</span><span class="s3">(see R0903).&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;max-public-methods&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s4">20</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;num&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Maximum number of public methods for a class </span><span class="s5">\ 
+</span><span class="s3">(see R0904).&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;max-bool-expr&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s4">5</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;num&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Maximum number of boolean expressions in an if &quot;</span>
+                <span class="s3">&quot;statement (see R0916).&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, linter=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">BaseChecker.__init__(self, linter)</span>
+        <span class="s1">self.stats = </span><span class="s2">None</span>
+        <span class="s1">self._returns = </span><span class="s2">None</span>
+        <span class="s1">self._branches = </span><span class="s2">None</span>
+        <span class="s1">self._stmts = </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">open(self):</span>
+        <span class="s0">&quot;&quot;&quot;initialize visit variables&quot;&quot;&quot;</span>
+        <span class="s1">self.stats = self.linter.add_stats()</span>
+        <span class="s1">self._returns = []</span>
+        <span class="s1">self._branches = defaultdict(int)</span>
+        <span class="s1">self._stmts = []</span>
+
+    <span class="s2">def </span><span class="s1">_inc_all_stmts(self, amount):</span>
+        <span class="s2">for </span><span class="s1">i </span><span class="s2">in </span><span class="s1">range(len(self._stmts)):</span>
+            <span class="s1">self._stmts[i] += amount</span>
+
+    <span class="s1">@astroid.decorators.cachedproperty</span>
+    <span class="s2">def </span><span class="s1">_ignored_argument_names(self):</span>
+        <span class="s2">return </span><span class="s1">utils.get_global_option(self, </span><span class="s3">&quot;ignored-argument-names&quot;</span><span class="s1">, default=</span><span class="s2">None</span><span class="s1">)</span>
+
+    <span class="s1">@check_messages(</span>
+        <span class="s3">&quot;too-many-ancestors&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-instance-attributes&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-few-public-methods&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-public-methods&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_classdef(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;check size of inheritance hierarchy and number of instance attributes&quot;&quot;&quot;</span>
+        <span class="s1">nb_parents = len(list(node.ancestors()))</span>
+        <span class="s2">if </span><span class="s1">nb_parents &gt; self.config.max_parents:</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;too-many-ancestors&quot;</span><span class="s1">,</span>
+                <span class="s1">node=node,</span>
+                <span class="s1">args=(nb_parents, self.config.max_parents),</span>
+            <span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">len(node.instance_attrs) &gt; self.config.max_attributes:</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;too-many-instance-attributes&quot;</span><span class="s1">,</span>
+                <span class="s1">node=node,</span>
+                <span class="s1">args=(len(node.instance_attrs), self.config.max_attributes),</span>
+            <span class="s1">)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;too-few-public-methods&quot;</span><span class="s1">, </span><span class="s3">&quot;too-many-public-methods&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">leave_classdef(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;check number of public methods&quot;&quot;&quot;</span>
+        <span class="s1">my_methods = sum(</span>
+            <span class="s4">1 </span><span class="s2">for </span><span class="s1">method </span><span class="s2">in </span><span class="s1">node.mymethods() </span><span class="s2">if not </span><span class="s1">method.name.startswith(</span><span class="s3">&quot;_&quot;</span><span class="s1">)</span>
+        <span class="s1">)</span>
+
+        <span class="s0"># Does the class contain less than n public methods ?</span>
+        <span class="s0"># This checks only the methods defined in the current class,</span>
+        <span class="s0"># since the user might not have control over the classes</span>
+        <span class="s0"># from the ancestors. It avoids some false positives</span>
+        <span class="s0"># for classes such as unittest.TestCase, which provides</span>
+        <span class="s0"># a lot of assert methods. It doesn't make sense to warn</span>
+        <span class="s0"># when the user subclasses TestCase to add his own tests.</span>
+        <span class="s2">if </span><span class="s1">my_methods &gt; self.config.max_public_methods:</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;too-many-public-methods&quot;</span><span class="s1">,</span>
+                <span class="s1">node=node,</span>
+                <span class="s1">args=(my_methods, self.config.max_public_methods),</span>
+            <span class="s1">)</span>
+
+        <span class="s0"># Stop here for exception, metaclass, interface classes and other</span>
+        <span class="s0"># classes for which we don't need to count the methods.</span>
+        <span class="s2">if </span><span class="s1">node.type != </span><span class="s3">&quot;class&quot; </span><span class="s2">or </span><span class="s1">_is_exempt_from_public_methods(node):</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># Does the class contain more than n public methods ?</span>
+        <span class="s0"># This checks all the methods defined by ancestors and</span>
+        <span class="s0"># by the current class.</span>
+        <span class="s1">all_methods = _count_methods_in_class(node)</span>
+        <span class="s2">if </span><span class="s1">all_methods &lt; self.config.min_public_methods:</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;too-few-public-methods&quot;</span><span class="s1">,</span>
+                <span class="s1">node=node,</span>
+                <span class="s1">args=(all_methods, self.config.min_public_methods),</span>
+            <span class="s1">)</span>
+
+    <span class="s1">@check_messages(</span>
+        <span class="s3">&quot;too-many-return-statements&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-branches&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-arguments&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-locals&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-statements&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;keyword-arg-before-vararg&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_functiondef(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;check function name, docstring, arguments, redefinition, 
+        variable names, max locals 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># init branch and returns counters</span>
+        <span class="s1">self._returns.append(</span><span class="s4">0</span><span class="s1">)</span>
+        <span class="s0"># check number of arguments</span>
+        <span class="s1">args = node.args.args</span>
+        <span class="s1">ignored_argument_names = self._ignored_argument_names</span>
+        <span class="s2">if </span><span class="s1">args </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">ignored_args_num = </span><span class="s4">0</span>
+            <span class="s2">if </span><span class="s1">ignored_argument_names:</span>
+                <span class="s1">ignored_args_num = sum(</span>
+                    <span class="s4">1 </span><span class="s2">for </span><span class="s1">arg </span><span class="s2">in </span><span class="s1">args </span><span class="s2">if </span><span class="s1">ignored_argument_names.match(arg.name)</span>
+                <span class="s1">)</span>
+
+            <span class="s1">argnum = len(args) - ignored_args_num</span>
+            <span class="s2">if </span><span class="s1">argnum &gt; self.config.max_args:</span>
+                <span class="s1">self.add_message(</span>
+                    <span class="s3">&quot;too-many-arguments&quot;</span><span class="s1">,</span>
+                    <span class="s1">node=node,</span>
+                    <span class="s1">args=(len(args), self.config.max_args),</span>
+                <span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">ignored_args_num = </span><span class="s4">0</span>
+        <span class="s0"># check number of local variables</span>
+        <span class="s1">locnum = len(node.locals) - ignored_args_num</span>
+        <span class="s2">if </span><span class="s1">locnum &gt; self.config.max_locals:</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;too-many-locals&quot;</span><span class="s1">, node=node, args=(locnum, self.config.max_locals)</span>
+            <span class="s1">)</span>
+        <span class="s0"># init new statements counter</span>
+        <span class="s1">self._stmts.append(</span><span class="s4">1</span><span class="s1">)</span>
+
+    <span class="s1">visit_asyncfunctiondef = visit_functiondef</span>
+
+    <span class="s1">@check_messages(</span>
+        <span class="s3">&quot;too-many-return-statements&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-branches&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-arguments&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-locals&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;too-many-statements&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">leave_functiondef(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;most of the work is done here on close: 
+        checks for max returns, branch, return in __init__ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">returns = self._returns.pop()</span>
+        <span class="s2">if </span><span class="s1">returns &gt; self.config.max_returns:</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;too-many-return-statements&quot;</span><span class="s1">,</span>
+                <span class="s1">node=node,</span>
+                <span class="s1">args=(returns, self.config.max_returns),</span>
+            <span class="s1">)</span>
+        <span class="s1">branches = self._branches[node]</span>
+        <span class="s2">if </span><span class="s1">branches &gt; self.config.max_branches:</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;too-many-branches&quot;</span><span class="s1">,</span>
+                <span class="s1">node=node,</span>
+                <span class="s1">args=(branches, self.config.max_branches),</span>
+            <span class="s1">)</span>
+        <span class="s0"># check number of statements</span>
+        <span class="s1">stmts = self._stmts.pop()</span>
+        <span class="s2">if </span><span class="s1">stmts &gt; self.config.max_statements:</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;too-many-statements&quot;</span><span class="s1">,</span>
+                <span class="s1">node=node,</span>
+                <span class="s1">args=(stmts, self.config.max_statements),</span>
+            <span class="s1">)</span>
+
+    <span class="s1">leave_asyncfunctiondef = leave_functiondef</span>
+
+    <span class="s2">def </span><span class="s1">visit_return(self, _):</span>
+        <span class="s0">&quot;&quot;&quot;count number of returns&quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">self._returns:</span>
+            <span class="s2">return  </span><span class="s0"># return outside function, reported by the base checker</span>
+        <span class="s1">self._returns[-</span><span class="s4">1</span><span class="s1">] += </span><span class="s4">1</span>
+
+    <span class="s2">def </span><span class="s1">visit_default(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;default visit method -&gt; increments the statements counter if 
+        necessary 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">node.is_statement:</span>
+            <span class="s1">self._inc_all_stmts(</span><span class="s4">1</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">visit_tryexcept(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;increments the branches counter&quot;&quot;&quot;</span>
+        <span class="s1">branches = len(node.handlers)</span>
+        <span class="s2">if </span><span class="s1">node.orelse:</span>
+            <span class="s1">branches += </span><span class="s4">1</span>
+        <span class="s1">self._inc_branch(node, branches)</span>
+        <span class="s1">self._inc_all_stmts(branches)</span>
+
+    <span class="s2">def </span><span class="s1">visit_tryfinally(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;increments the branches counter&quot;&quot;&quot;</span>
+        <span class="s1">self._inc_branch(node, </span><span class="s4">2</span><span class="s1">)</span>
+        <span class="s1">self._inc_all_stmts(</span><span class="s4">2</span><span class="s1">)</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;too-many-boolean-expressions&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_if(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;increments the branches counter and checks boolean expressions&quot;&quot;&quot;</span>
+        <span class="s1">self._check_boolean_expressions(node)</span>
+        <span class="s1">branches = </span><span class="s4">1</span>
+        <span class="s0"># don't double count If nodes coming from some 'elif'</span>
+        <span class="s2">if </span><span class="s1">node.orelse </span><span class="s2">and </span><span class="s1">(</span>
+            <span class="s1">len(node.orelse) &gt; </span><span class="s4">1 </span><span class="s2">or not </span><span class="s1">isinstance(node.orelse[</span><span class="s4">0</span><span class="s1">], astroid.If)</span>
+        <span class="s1">):</span>
+            <span class="s1">branches += </span><span class="s4">1</span>
+        <span class="s1">self._inc_branch(node, branches)</span>
+        <span class="s1">self._inc_all_stmts(branches)</span>
+
+    <span class="s2">def </span><span class="s1">_check_boolean_expressions(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Go through &quot;if&quot; node `node` and counts its boolean expressions 
+ 
+        if the &quot;if&quot; node test is a BoolOp node 
+        &quot;&quot;&quot;</span>
+        <span class="s1">condition = node.test</span>
+        <span class="s2">if not </span><span class="s1">isinstance(condition, astroid.BoolOp):</span>
+            <span class="s2">return</span>
+        <span class="s1">nb_bool_expr = _count_boolean_expressions(condition)</span>
+        <span class="s2">if </span><span class="s1">nb_bool_expr &gt; self.config.max_bool_expr:</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;too-many-boolean-expressions&quot;</span><span class="s1">,</span>
+                <span class="s1">node=condition,</span>
+                <span class="s1">args=(nb_bool_expr, self.config.max_bool_expr),</span>
+            <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">visit_while(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;increments the branches counter&quot;&quot;&quot;</span>
+        <span class="s1">branches = </span><span class="s4">1</span>
+        <span class="s2">if </span><span class="s1">node.orelse:</span>
+            <span class="s1">branches += </span><span class="s4">1</span>
+        <span class="s1">self._inc_branch(node, branches)</span>
+
+    <span class="s1">visit_for = visit_while</span>
+
+    <span class="s2">def </span><span class="s1">_inc_branch(self, node, branchesnum=</span><span class="s4">1</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;increments the branches counter&quot;&quot;&quot;</span>
+        <span class="s1">self._branches[node.scope()] += branchesnum</span>
+
+
+<span class="s2">def </span><span class="s1">register(linter):</span>
+    <span class="s0">&quot;&quot;&quot;required method to auto register this checker&quot;&quot;&quot;</span>
+    <span class="s1">linter.register_checker(MisdesignChecker(linter))</span>
+</pre>
+</body>
+</html>

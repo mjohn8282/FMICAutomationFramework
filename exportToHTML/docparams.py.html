@@ -1,0 +1,649 @@
+<html>
+<head>
+<title>docparams.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+docparams.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2014-2015 Bruno Daniel &lt;bruno.daniel@blue-yonder.com&gt;</span>
+<span class="s0"># Copyright (c) 2015-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016-2019 Ashley Whetter &lt;ashley@awhetter.co.uk&gt;</span>
+<span class="s0"># Copyright (c) 2016 Glenn Matthews &lt;glenn@e-dad.net&gt;</span>
+<span class="s0"># Copyright (c) 2016 Glenn Matthews &lt;glmatthe@cisco.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Moises Lopez &lt;moylop260@vauxoo.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Ville Skyttä &lt;ville.skytta@iki.fi&gt;</span>
+<span class="s0"># Copyright (c) 2017 John Paraskevopoulos &lt;io.paraskev@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018, 2020 Anthony Sottile &lt;asottile@umich.edu&gt;</span>
+<span class="s0"># Copyright (c) 2018 Jim Robertson &lt;jrobertson98atx@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Sushobhit &lt;31987769+sushobhit27@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Adam Dangoor &lt;adamdangoor@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019, 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Hugo van Kemenade &lt;hugovk@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Luigi &lt;luigi.cristofolini@q-ctrl.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Damien Baty &lt;damien.baty@polyconseil.fr&gt;</span>
+<span class="s0"># Copyright (c) 2021 Logan Miller &lt;14319179+komodo472@users.noreply.github.com&gt;</span>
+
+<span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;Pylint plugin for checking in Sphinx, Google, or Numpy style docstrings 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">re</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+
+<span class="s2">from </span><span class="s1">pylint.checkers </span><span class="s2">import </span><span class="s1">BaseChecker</span>
+<span class="s2">from </span><span class="s1">pylint.checkers </span><span class="s2">import </span><span class="s1">utils </span><span class="s2">as </span><span class="s1">checker_utils</span>
+<span class="s2">from </span><span class="s1">pylint.extensions </span><span class="s2">import </span><span class="s1">_check_docs_utils </span><span class="s2">as </span><span class="s1">utils</span>
+<span class="s2">from </span><span class="s1">pylint.interfaces </span><span class="s2">import </span><span class="s1">IAstroidChecker</span>
+<span class="s2">from </span><span class="s1">pylint.utils </span><span class="s2">import </span><span class="s1">get_global_option</span>
+
+
+<span class="s2">class </span><span class="s1">DocstringParameterChecker(BaseChecker):</span>
+    <span class="s0">&quot;&quot;&quot;Checker for Sphinx, Google, or Numpy style docstrings 
+ 
+    * Check that all function, method and constructor parameters are mentioned 
+      in the params and types part of the docstring.  Constructor parameters 
+      can be documented in either the class docstring or ``__init__`` docstring, 
+      but not both. 
+    * Check that there are no naming inconsistencies between the signature and 
+      the documentation, i.e. also report documented parameters that are missing 
+      in the signature. This is important to find cases where parameters are 
+      renamed only in the code, not in the documentation. 
+    * Check that all explicitly raised exceptions in a function are documented 
+      in the function docstring. Caught exceptions are ignored. 
+ 
+    Activate this checker by adding the line:: 
+ 
+        load-plugins=pylint.extensions.docparams 
+ 
+    to the ``MASTER`` section of your ``.pylintrc``. 
+ 
+    :param linter: linter object 
+    :type linter: :class:`pylint.lint.PyLinter` 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__implements__ = IAstroidChecker</span>
+
+    <span class="s1">name = </span><span class="s3">&quot;parameter_documentation&quot;</span>
+    <span class="s1">msgs = {</span>
+        <span class="s3">&quot;W9005&quot;</span><span class="s1">: (</span>
+            <span class="s3">'&quot;%s&quot; has constructor parameters documented in class and __init__'</span><span class="s1">,</span>
+            <span class="s3">&quot;multiple-constructor-doc&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Please remove parameter declarations in the class or constructor.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W9006&quot;</span><span class="s1">: (</span>
+            <span class="s3">'&quot;%s&quot; not documented as being raised'</span><span class="s1">,</span>
+            <span class="s3">&quot;missing-raises-doc&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Please document exceptions for all raised exception types.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W9008&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Redundant returns documentation&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;redundant-returns-doc&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Please remove the return/rtype documentation from this method.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W9010&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Redundant yields documentation&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;redundant-yields-doc&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Please remove the yields documentation from this method.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W9011&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Missing return documentation&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;missing-return-doc&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Please add documentation about what this method returns.&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span><span class="s3">&quot;old_names&quot;</span><span class="s1">: [(</span><span class="s3">&quot;W9007&quot;</span><span class="s1">, </span><span class="s3">&quot;old-missing-returns-doc&quot;</span><span class="s1">)]},</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W9012&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Missing return type documentation&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;missing-return-type-doc&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Please document the type returned by this method.&quot;</span><span class="s1">,</span>
+            <span class="s0"># we can't use the same old_name for two different warnings</span>
+            <span class="s0"># {'old_names': [('W9007', 'missing-returns-doc')]},</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W9013&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Missing yield documentation&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;missing-yield-doc&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Please add documentation about what this generator yields.&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span><span class="s3">&quot;old_names&quot;</span><span class="s1">: [(</span><span class="s3">&quot;W9009&quot;</span><span class="s1">, </span><span class="s3">&quot;old-missing-yields-doc&quot;</span><span class="s1">)]},</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W9014&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Missing yield type documentation&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;missing-yield-type-doc&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Please document the type yielded by this method.&quot;</span><span class="s1">,</span>
+            <span class="s0"># we can't use the same old_name for two different warnings</span>
+            <span class="s0"># {'old_names': [('W9009', 'missing-yields-doc')]},</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W9015&quot;</span><span class="s1">: (</span>
+            <span class="s3">'&quot;%s&quot; missing in parameter documentation'</span><span class="s1">,</span>
+            <span class="s3">&quot;missing-param-doc&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Please add parameter declarations for all parameters.&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span><span class="s3">&quot;old_names&quot;</span><span class="s1">: [(</span><span class="s3">&quot;W9003&quot;</span><span class="s1">, </span><span class="s3">&quot;old-missing-param-doc&quot;</span><span class="s1">)]},</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W9016&quot;</span><span class="s1">: (</span>
+            <span class="s3">'&quot;%s&quot; missing in parameter type documentation'</span><span class="s1">,</span>
+            <span class="s3">&quot;missing-type-doc&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Please add parameter type declarations for all parameters.&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span><span class="s3">&quot;old_names&quot;</span><span class="s1">: [(</span><span class="s3">&quot;W9004&quot;</span><span class="s1">, </span><span class="s3">&quot;old-missing-type-doc&quot;</span><span class="s1">)]},</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W9017&quot;</span><span class="s1">: (</span>
+            <span class="s3">'&quot;%s&quot; differing in parameter documentation'</span><span class="s1">,</span>
+            <span class="s3">&quot;differing-param-doc&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Please check parameter names in declarations.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W9018&quot;</span><span class="s1">: (</span>
+            <span class="s3">'&quot;%s&quot; differing in parameter type documentation'</span><span class="s1">,</span>
+            <span class="s3">&quot;differing-type-doc&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Please check parameter names in type declarations.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W9019&quot;</span><span class="s1">: (</span>
+            <span class="s3">'&quot;%s&quot; useless ignored parameter documentation'</span><span class="s1">,</span>
+            <span class="s3">&quot;useless-param-doc&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Please remove the ignored parameter documentation.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;W9020&quot;</span><span class="s1">: (</span>
+            <span class="s3">'&quot;%s&quot; useless ignored parameter type documentation'</span><span class="s1">,</span>
+            <span class="s3">&quot;useless-type-doc&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Please remove the ignored parameter type documentation.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+    <span class="s1">}</span>
+
+    <span class="s1">options = (</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;accept-no-param-doc&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;yn&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;y or n&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Whether to accept totally missing parameter &quot;</span>
+                <span class="s3">&quot;documentation in the docstring of a function that has &quot;</span>
+                <span class="s3">&quot;parameters.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;accept-no-raise-doc&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;yn&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;y or n&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Whether to accept totally missing raises &quot;</span>
+                <span class="s3">&quot;documentation in the docstring of a function that &quot;</span>
+                <span class="s3">&quot;raises an exception.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;accept-no-return-doc&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;yn&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;y or n&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Whether to accept totally missing return &quot;</span>
+                <span class="s3">&quot;documentation in the docstring of a function that &quot;</span>
+                <span class="s3">&quot;returns a statement.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;accept-no-yields-doc&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;yn&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;y or n&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Whether to accept totally missing yields &quot;</span>
+                <span class="s3">&quot;documentation in the docstring of a generator.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;default-docstring-type&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;choice&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s3">&quot;default&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;choices&quot;</span><span class="s1">: list(utils.DOCSTRING_TYPES),</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;If the docstring type cannot be guessed &quot;</span>
+                <span class="s3">&quot;the specified docstring type will be used.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+
+    <span class="s1">priority = -</span><span class="s4">2</span>
+
+    <span class="s1">constructor_names = {</span><span class="s3">&quot;__init__&quot;</span><span class="s1">, </span><span class="s3">&quot;__new__&quot;</span><span class="s1">}</span>
+    <span class="s1">not_needed_param_in_docstring = {</span><span class="s3">&quot;self&quot;</span><span class="s1">, </span><span class="s3">&quot;cls&quot;</span><span class="s1">}</span>
+
+    <span class="s2">def </span><span class="s1">visit_functiondef(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Called for function and method definitions (def). 
+ 
+        :param node: Node for a function or method definition in the AST 
+        :type node: :class:`astroid.scoped_nodes.Function` 
+        &quot;&quot;&quot;</span>
+        <span class="s1">node_doc = utils.docstringify(node.doc, self.config.default_docstring_type)</span>
+
+        <span class="s0"># skip functions that match the 'no-docstring-rgx' config option</span>
+        <span class="s1">no_docstring_rgx = get_global_option(self, </span><span class="s3">&quot;no-docstring-rgx&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">no_docstring_rgx </span><span class="s2">and </span><span class="s1">re.match(no_docstring_rgx, node.name):</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># skip functions smaller than 'docstring-min-length'</span>
+        <span class="s1">lines = checker_utils.get_node_last_lineno(node) - node.lineno</span>
+        <span class="s1">max_lines = get_global_option(self, </span><span class="s3">&quot;docstring-min-length&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">max_lines &gt; -</span><span class="s4">1 </span><span class="s2">and </span><span class="s1">lines &lt; max_lines:</span>
+            <span class="s2">return</span>
+
+        <span class="s1">self.check_functiondef_params(node, node_doc)</span>
+        <span class="s1">self.check_functiondef_returns(node, node_doc)</span>
+        <span class="s1">self.check_functiondef_yields(node, node_doc)</span>
+
+    <span class="s2">def </span><span class="s1">check_functiondef_params(self, node, node_doc):</span>
+        <span class="s1">node_allow_no_param = </span><span class="s2">None</span>
+        <span class="s2">if </span><span class="s1">node.name </span><span class="s2">in </span><span class="s1">self.constructor_names:</span>
+            <span class="s1">class_node = checker_utils.node_frame_class(node)</span>
+            <span class="s2">if </span><span class="s1">class_node </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s1">class_doc = utils.docstringify(</span>
+                    <span class="s1">class_node.doc, self.config.default_docstring_type</span>
+                <span class="s1">)</span>
+                <span class="s1">self.check_single_constructor_params(class_doc, node_doc, class_node)</span>
+
+                <span class="s0"># __init__ or class docstrings can have no parameters documented</span>
+                <span class="s0"># as long as the other documents them.</span>
+                <span class="s1">node_allow_no_param = (</span>
+                    <span class="s1">class_doc.has_params()</span>
+                    <span class="s2">or </span><span class="s1">class_doc.params_documented_elsewhere()</span>
+                    <span class="s2">or None</span>
+                <span class="s1">)</span>
+                <span class="s1">class_allow_no_param = (</span>
+                    <span class="s1">node_doc.has_params()</span>
+                    <span class="s2">or </span><span class="s1">node_doc.params_documented_elsewhere()</span>
+                    <span class="s2">or None</span>
+                <span class="s1">)</span>
+
+                <span class="s1">self.check_arguments_in_docstring(</span>
+                    <span class="s1">class_doc, node.args, class_node, class_allow_no_param</span>
+                <span class="s1">)</span>
+
+        <span class="s1">self.check_arguments_in_docstring(</span>
+            <span class="s1">node_doc, node.args, node, node_allow_no_param</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">check_functiondef_returns(self, node, node_doc):</span>
+        <span class="s2">if </span><span class="s1">(</span><span class="s2">not </span><span class="s1">node_doc.supports_yields </span><span class="s2">and </span><span class="s1">node.is_generator()) </span><span class="s2">or </span><span class="s1">node.is_abstract():</span>
+            <span class="s2">return</span>
+
+        <span class="s1">return_nodes = node.nodes_of_class(astroid.Return)</span>
+        <span class="s2">if </span><span class="s1">(node_doc.has_returns() </span><span class="s2">or </span><span class="s1">node_doc.has_rtype()) </span><span class="s2">and not </span><span class="s1">any(</span>
+            <span class="s1">utils.returns_something(ret_node) </span><span class="s2">for </span><span class="s1">ret_node </span><span class="s2">in </span><span class="s1">return_nodes</span>
+        <span class="s1">):</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;redundant-returns-doc&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s2">def </span><span class="s1">check_functiondef_yields(self, node, node_doc):</span>
+        <span class="s2">if not </span><span class="s1">node_doc.supports_yields </span><span class="s2">or </span><span class="s1">node.is_abstract():</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">node_doc.has_yields() </span><span class="s2">or </span><span class="s1">node_doc.has_yields_type()</span>
+        <span class="s1">) </span><span class="s2">and not </span><span class="s1">node.is_generator():</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;redundant-yields-doc&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s2">def </span><span class="s1">visit_raise(self, node):</span>
+        <span class="s1">func_node = node.frame()</span>
+        <span class="s2">if not </span><span class="s1">isinstance(func_node, astroid.FunctionDef):</span>
+            <span class="s2">return</span>
+
+        <span class="s1">expected_excs = utils.possible_exc_types(node)</span>
+
+        <span class="s2">if not </span><span class="s1">expected_excs:</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if not </span><span class="s1">func_node.doc:</span>
+            <span class="s0"># If this is a property setter,</span>
+            <span class="s0"># the property should have the docstring instead.</span>
+            <span class="s1">property_ = utils.get_setters_property(func_node)</span>
+            <span class="s2">if </span><span class="s1">property_:</span>
+                <span class="s1">func_node = property_</span>
+
+        <span class="s1">doc = utils.docstringify(func_node.doc, self.config.default_docstring_type)</span>
+        <span class="s2">if not </span><span class="s1">doc.is_valid():</span>
+            <span class="s2">if </span><span class="s1">doc.doc:</span>
+                <span class="s1">self._handle_no_raise_doc(expected_excs, func_node)</span>
+            <span class="s2">return</span>
+
+        <span class="s1">found_excs_full_names = doc.exceptions()</span>
+
+        <span class="s0"># Extract just the class name, e.g. &quot;error&quot; from &quot;re.error&quot;</span>
+        <span class="s1">found_excs_class_names = {exc.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">)[-</span><span class="s4">1</span><span class="s1">] </span><span class="s2">for </span><span class="s1">exc </span><span class="s2">in </span><span class="s1">found_excs_full_names}</span>
+        <span class="s1">missing_excs = expected_excs - found_excs_class_names</span>
+        <span class="s1">self._add_raise_message(missing_excs, func_node)</span>
+
+    <span class="s2">def </span><span class="s1">visit_return(self, node):</span>
+        <span class="s2">if not </span><span class="s1">utils.returns_something(node):</span>
+            <span class="s2">return</span>
+
+        <span class="s1">func_node = node.frame()</span>
+        <span class="s2">if not </span><span class="s1">isinstance(func_node, astroid.FunctionDef):</span>
+            <span class="s2">return</span>
+
+        <span class="s1">doc = utils.docstringify(func_node.doc, self.config.default_docstring_type)</span>
+        <span class="s2">if not </span><span class="s1">doc.is_valid() </span><span class="s2">and </span><span class="s1">self.config.accept_no_return_doc:</span>
+            <span class="s2">return</span>
+
+        <span class="s1">is_property = checker_utils.decorated_with_property(func_node)</span>
+
+        <span class="s2">if not </span><span class="s1">(doc.has_returns() </span><span class="s2">or </span><span class="s1">(doc.has_property_returns() </span><span class="s2">and </span><span class="s1">is_property)):</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;missing-return-doc&quot;</span><span class="s1">, node=func_node)</span>
+
+        <span class="s2">if </span><span class="s1">func_node.returns:</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if not </span><span class="s1">(doc.has_rtype() </span><span class="s2">or </span><span class="s1">(doc.has_property_type() </span><span class="s2">and </span><span class="s1">is_property)):</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;missing-return-type-doc&quot;</span><span class="s1">, node=func_node)</span>
+
+    <span class="s2">def </span><span class="s1">visit_yield(self, node):</span>
+        <span class="s1">func_node = node.frame()</span>
+        <span class="s2">if not </span><span class="s1">isinstance(func_node, astroid.FunctionDef):</span>
+            <span class="s2">return</span>
+
+        <span class="s1">doc = utils.docstringify(func_node.doc, self.config.default_docstring_type)</span>
+        <span class="s2">if not </span><span class="s1">doc.is_valid() </span><span class="s2">and </span><span class="s1">self.config.accept_no_yields_doc:</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">doc.supports_yields:</span>
+            <span class="s1">doc_has_yields = doc.has_yields()</span>
+            <span class="s1">doc_has_yields_type = doc.has_yields_type()</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">doc_has_yields = doc.has_returns()</span>
+            <span class="s1">doc_has_yields_type = doc.has_rtype()</span>
+
+        <span class="s2">if not </span><span class="s1">doc_has_yields:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;missing-yield-doc&quot;</span><span class="s1">, node=func_node)</span>
+
+        <span class="s2">if not </span><span class="s1">(doc_has_yields_type </span><span class="s2">or </span><span class="s1">func_node.returns):</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;missing-yield-type-doc&quot;</span><span class="s1">, node=func_node)</span>
+
+    <span class="s2">def </span><span class="s1">visit_yieldfrom(self, node):</span>
+        <span class="s1">self.visit_yield(node)</span>
+
+    <span class="s2">def </span><span class="s1">_compare_missing_args(</span>
+        <span class="s1">self,</span>
+        <span class="s1">found_argument_names,</span>
+        <span class="s1">message_id,</span>
+        <span class="s1">not_needed_names,</span>
+        <span class="s1">expected_argument_names,</span>
+        <span class="s1">warning_node,</span>
+    <span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Compare the found argument names with the expected ones and 
+        generate a message if there are arguments missing. 
+ 
+        :param found_argument_names: argument names found in the docstring 
+        :type found_argument_names: set 
+ 
+        :param message_id: pylint message id 
+        :type message_id: str 
+ 
+        :param not_needed_names: names that may be omitted 
+        :type not_needed_names: set 
+ 
+        :param expected_argument_names: Expected argument names 
+        :type expected_argument_names: set 
+ 
+        :param warning_node: The node to be analyzed 
+        :type warning_node: :class:`astroid.scoped_nodes.Node` 
+        &quot;&quot;&quot;</span>
+        <span class="s1">missing_argument_names = (</span>
+            <span class="s1">expected_argument_names - found_argument_names</span>
+        <span class="s1">) - not_needed_names</span>
+        <span class="s2">if </span><span class="s1">missing_argument_names:</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s1">message_id,</span>
+                <span class="s1">args=(</span><span class="s3">&quot;, &quot;</span><span class="s1">.join(sorted(missing_argument_names)),),</span>
+                <span class="s1">node=warning_node,</span>
+            <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_compare_different_args(</span>
+        <span class="s1">self,</span>
+        <span class="s1">found_argument_names,</span>
+        <span class="s1">message_id,</span>
+        <span class="s1">not_needed_names,</span>
+        <span class="s1">expected_argument_names,</span>
+        <span class="s1">warning_node,</span>
+    <span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Compare the found argument names with the expected ones and 
+        generate a message if there are extra arguments found. 
+ 
+        :param found_argument_names: argument names found in the docstring 
+        :type found_argument_names: set 
+ 
+        :param message_id: pylint message id 
+        :type message_id: str 
+ 
+        :param not_needed_names: names that may be omitted 
+        :type not_needed_names: set 
+ 
+        :param expected_argument_names: Expected argument names 
+        :type expected_argument_names: set 
+ 
+        :param warning_node: The node to be analyzed 
+        :type warning_node: :class:`astroid.scoped_nodes.Node` 
+        &quot;&quot;&quot;</span>
+        <span class="s1">differing_argument_names = (</span>
+            <span class="s1">(expected_argument_names ^ found_argument_names)</span>
+            <span class="s1">- not_needed_names</span>
+            <span class="s1">- expected_argument_names</span>
+        <span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">differing_argument_names:</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s1">message_id,</span>
+                <span class="s1">args=(</span><span class="s3">&quot;, &quot;</span><span class="s1">.join(sorted(differing_argument_names)),),</span>
+                <span class="s1">node=warning_node,</span>
+            <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_compare_ignored_args(</span>
+        <span class="s1">self,</span>
+        <span class="s1">found_argument_names,</span>
+        <span class="s1">message_id,</span>
+        <span class="s1">ignored_argument_names,</span>
+        <span class="s1">warning_node,</span>
+    <span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Compare the found argument names with the ignored ones and 
+        generate a message if there are ignored arguments found. 
+ 
+        :param found_argument_names: argument names found in the docstring 
+        :type found_argument_names: set 
+ 
+        :param message_id: pylint message id 
+        :type message_id: str 
+ 
+        :param ignored_argument_names: Expected argument names 
+        :type ignored_argument_names: set 
+ 
+        :param warning_node: The node to be analyzed 
+        :type warning_node: :class:`astroid.scoped_nodes.Node` 
+        &quot;&quot;&quot;</span>
+        <span class="s1">existing_ignored_argument_names = ignored_argument_names &amp; found_argument_names</span>
+
+        <span class="s2">if </span><span class="s1">existing_ignored_argument_names:</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s1">message_id,</span>
+                <span class="s1">args=(</span><span class="s3">&quot;, &quot;</span><span class="s1">.join(sorted(existing_ignored_argument_names)),),</span>
+                <span class="s1">node=warning_node,</span>
+            <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">check_arguments_in_docstring(</span>
+        <span class="s1">self, doc, arguments_node, warning_node, accept_no_param_doc=</span><span class="s2">None</span>
+    <span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Check that all parameters in a function, method or class constructor 
+        on the one hand and the parameters mentioned in the parameter 
+        documentation (e.g. the Sphinx tags 'param' and 'type') on the other 
+        hand are consistent with each other. 
+ 
+        * Undocumented parameters except 'self' are noticed. 
+        * Undocumented parameter types except for 'self' and the ``*&lt;args&gt;`` 
+          and ``**&lt;kwargs&gt;`` parameters are noticed. 
+        * Parameters mentioned in the parameter documentation that don't or no 
+          longer exist in the function parameter list are noticed. 
+        * If the text &quot;For the parameters, see&quot; or &quot;For the other parameters, 
+          see&quot; (ignoring additional whitespace) is mentioned in the docstring, 
+          missing parameter documentation is tolerated. 
+        * If there's no Sphinx style, Google style or NumPy style parameter 
+          documentation at all, i.e. ``:param`` is never mentioned etc., the 
+          checker assumes that the parameters are documented in another format 
+          and the absence is tolerated. 
+ 
+        :param doc: Docstring for the function, method or class. 
+        :type doc: :class:`Docstring` 
+ 
+        :param arguments_node: Arguments node for the function, method or 
+            class constructor. 
+        :type arguments_node: :class:`astroid.scoped_nodes.Arguments` 
+ 
+        :param warning_node: The node to assign the warnings to 
+        :type warning_node: :class:`astroid.scoped_nodes.Node` 
+ 
+        :param accept_no_param_doc: Whether or not to allow no parameters 
+            to be documented. 
+            If None then this value is read from the configuration. 
+        :type accept_no_param_doc: bool or None 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># Tolerate missing param or type declarations if there is a link to</span>
+        <span class="s0"># another method carrying the same name.</span>
+        <span class="s2">if not </span><span class="s1">doc.doc:</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">accept_no_param_doc </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">accept_no_param_doc = self.config.accept_no_param_doc</span>
+        <span class="s1">tolerate_missing_params = doc.params_documented_elsewhere()</span>
+
+        <span class="s0"># Collect the function arguments.</span>
+        <span class="s1">expected_argument_names = {arg.name </span><span class="s2">for </span><span class="s1">arg </span><span class="s2">in </span><span class="s1">arguments_node.args}</span>
+        <span class="s1">expected_argument_names.update(arg.name </span><span class="s2">for </span><span class="s1">arg </span><span class="s2">in </span><span class="s1">arguments_node.kwonlyargs)</span>
+        <span class="s1">not_needed_type_in_docstring = self.not_needed_param_in_docstring.copy()</span>
+
+        <span class="s1">expected_but_ignored_argument_names = set()</span>
+        <span class="s1">ignored_argument_names = get_global_option(self, </span><span class="s3">&quot;ignored-argument-names&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">ignored_argument_names:</span>
+            <span class="s1">expected_but_ignored_argument_names = {</span>
+                <span class="s1">arg</span>
+                <span class="s2">for </span><span class="s1">arg </span><span class="s2">in </span><span class="s1">expected_argument_names</span>
+                <span class="s2">if </span><span class="s1">ignored_argument_names.match(arg)</span>
+            <span class="s1">}</span>
+
+        <span class="s2">if </span><span class="s1">arguments_node.vararg </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">expected_argument_names.add(arguments_node.vararg)</span>
+            <span class="s1">not_needed_type_in_docstring.add(arguments_node.vararg)</span>
+        <span class="s2">if </span><span class="s1">arguments_node.kwarg </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">expected_argument_names.add(arguments_node.kwarg)</span>
+            <span class="s1">not_needed_type_in_docstring.add(arguments_node.kwarg)</span>
+        <span class="s1">params_with_doc, params_with_type = doc.match_param_docs()</span>
+
+        <span class="s0"># Tolerate no parameter documentation at all.</span>
+        <span class="s2">if not </span><span class="s1">params_with_doc </span><span class="s2">and not </span><span class="s1">params_with_type </span><span class="s2">and </span><span class="s1">accept_no_param_doc:</span>
+            <span class="s1">tolerate_missing_params = </span><span class="s2">True</span>
+
+        <span class="s2">if not </span><span class="s1">tolerate_missing_params:</span>
+            <span class="s1">self._compare_missing_args(</span>
+                <span class="s1">params_with_doc,</span>
+                <span class="s3">&quot;missing-param-doc&quot;</span><span class="s1">,</span>
+                <span class="s1">self.not_needed_param_in_docstring</span>
+                <span class="s1">| expected_but_ignored_argument_names,</span>
+                <span class="s1">expected_argument_names,</span>
+                <span class="s1">warning_node,</span>
+            <span class="s1">)</span>
+
+        <span class="s2">for </span><span class="s1">index, arg_name </span><span class="s2">in </span><span class="s1">enumerate(arguments_node.args):</span>
+            <span class="s2">if </span><span class="s1">arguments_node.annotations[index]:</span>
+                <span class="s1">params_with_type.add(arg_name.name)</span>
+        <span class="s2">for </span><span class="s1">index, arg_name </span><span class="s2">in </span><span class="s1">enumerate(arguments_node.kwonlyargs):</span>
+            <span class="s2">if </span><span class="s1">arguments_node.kwonlyargs_annotations[index]:</span>
+                <span class="s1">params_with_type.add(arg_name.name)</span>
+
+        <span class="s2">if not </span><span class="s1">tolerate_missing_params:</span>
+            <span class="s1">self._compare_missing_args(</span>
+                <span class="s1">params_with_type,</span>
+                <span class="s3">&quot;missing-type-doc&quot;</span><span class="s1">,</span>
+                <span class="s1">not_needed_type_in_docstring | expected_but_ignored_argument_names,</span>
+                <span class="s1">expected_argument_names,</span>
+                <span class="s1">warning_node,</span>
+            <span class="s1">)</span>
+
+        <span class="s1">self._compare_different_args(</span>
+            <span class="s1">params_with_doc,</span>
+            <span class="s3">&quot;differing-param-doc&quot;</span><span class="s1">,</span>
+            <span class="s1">self.not_needed_param_in_docstring,</span>
+            <span class="s1">expected_argument_names,</span>
+            <span class="s1">warning_node,</span>
+        <span class="s1">)</span>
+        <span class="s1">self._compare_different_args(</span>
+            <span class="s1">params_with_type,</span>
+            <span class="s3">&quot;differing-type-doc&quot;</span><span class="s1">,</span>
+            <span class="s1">not_needed_type_in_docstring,</span>
+            <span class="s1">expected_argument_names,</span>
+            <span class="s1">warning_node,</span>
+        <span class="s1">)</span>
+        <span class="s1">self._compare_ignored_args(</span>
+            <span class="s1">params_with_doc,</span>
+            <span class="s3">&quot;useless-param-doc&quot;</span><span class="s1">,</span>
+            <span class="s1">expected_but_ignored_argument_names,</span>
+            <span class="s1">warning_node,</span>
+        <span class="s1">)</span>
+        <span class="s1">self._compare_ignored_args(</span>
+            <span class="s1">params_with_type,</span>
+            <span class="s3">&quot;useless-type-doc&quot;</span><span class="s1">,</span>
+            <span class="s1">expected_but_ignored_argument_names,</span>
+            <span class="s1">warning_node,</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">check_single_constructor_params(self, class_doc, init_doc, class_node):</span>
+        <span class="s2">if </span><span class="s1">class_doc.has_params() </span><span class="s2">and </span><span class="s1">init_doc.has_params():</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;multiple-constructor-doc&quot;</span><span class="s1">, args=(class_node.name,), node=class_node</span>
+            <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_handle_no_raise_doc(self, excs, node):</span>
+        <span class="s2">if </span><span class="s1">self.config.accept_no_raise_doc:</span>
+            <span class="s2">return</span>
+
+        <span class="s1">self._add_raise_message(excs, node)</span>
+
+    <span class="s2">def </span><span class="s1">_add_raise_message(self, missing_excs, node):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Adds a message on :param:`node` for the missing exception type. 
+ 
+        :param missing_excs: A list of missing exception types. 
+        :type missing_excs: set(str) 
+ 
+        :param node: The node show the message on. 
+        :type node: astroid.node_classes.NodeNG 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">node.is_abstract():</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">missing_excs.remove(</span><span class="s3">&quot;NotImplementedError&quot;</span><span class="s1">)</span>
+            <span class="s2">except </span><span class="s1">KeyError:</span>
+                <span class="s2">pass</span>
+
+        <span class="s2">if not </span><span class="s1">missing_excs:</span>
+            <span class="s2">return</span>
+
+        <span class="s1">self.add_message(</span>
+            <span class="s3">&quot;missing-raises-doc&quot;</span><span class="s1">, args=(</span><span class="s3">&quot;, &quot;</span><span class="s1">.join(sorted(missing_excs)),), node=node</span>
+        <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">register(linter):</span>
+    <span class="s0">&quot;&quot;&quot;Required method to auto register this checker. 
+ 
+    :param linter: Main interface object for Pylint plugins 
+    :type linter: Pylint object 
+    &quot;&quot;&quot;</span>
+    <span class="s1">linter.register_checker(DocstringParameterChecker(linter))</span>
+</pre>
+</body>
+</html>

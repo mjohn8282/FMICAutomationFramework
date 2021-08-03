@@ -1,0 +1,735 @@
+<html>
+<head>
+<title>text.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+text.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">unicode</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Alias,</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">NoneSet,</span>
+    <span class="s1">Sequence,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">MinMax,</span>
+    <span class="s1">Integer</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">HexBinary,</span>
+    <span class="s1">TextPoint,</span>
+    <span class="s1">Coordinate,</span>
+    <span class="s1">ExtensionList,</span>
+    <span class="s1">Relation,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">NestedInteger,</span>
+    <span class="s1">NestedString,</span>
+    <span class="s1">NestedText,</span>
+    <span class="s1">NestedValue,</span>
+    <span class="s1">EmptyTag</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">DRAWING_NS</span>
+
+
+<span class="s0">from </span><span class="s1">.colors </span><span class="s0">import </span><span class="s1">ColorChoiceDescriptor</span>
+<span class="s0">from </span><span class="s1">.effect </span><span class="s0">import </span><span class="s1">*</span>
+<span class="s0">from </span><span class="s1">.fill </span><span class="s0">import </span><span class="s1">*</span>
+<span class="s0">from </span><span class="s1">.geometry </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">LineProperties,</span>
+    <span class="s1">Color,</span>
+    <span class="s1">Scene3D</span>
+<span class="s1">)</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">ExtensionList </span><span class="s0">as </span><span class="s1">OfficeArtExtensionList</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">NestedBool</span>
+
+
+<span class="s0">class </span><span class="s1">EmbeddedWAVAudioFile(Serialisable):</span>
+
+    <span class="s1">name = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">name=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.name = name</span>
+
+
+<span class="s0">class </span><span class="s1">Hyperlink(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;hlinkClick&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">invalidUrl = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">action = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">tgtFrame = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">tooltip = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">history = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">highlightClick = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">endSnd = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">snd = Typed(expected_type=EmbeddedWAVAudioFile, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=OfficeArtExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">id = Relation(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'snd'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">invalidUrl=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">action=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">tgtFrame=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">tooltip=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">history=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">highlightClick=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">endSnd=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">snd=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">id=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.invalidUrl = invalidUrl</span>
+        <span class="s1">self.action = action</span>
+        <span class="s1">self.tgtFrame = tgtFrame</span>
+        <span class="s1">self.tooltip = tooltip</span>
+        <span class="s1">self.history = history</span>
+        <span class="s1">self.highlightClick = highlightClick</span>
+        <span class="s1">self.endSnd = endSnd</span>
+        <span class="s1">self.snd = snd</span>
+        <span class="s1">self.id = id</span>
+
+
+<span class="s0">class </span><span class="s1">Font(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;latin&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">typeface = String()</span>
+    <span class="s1">panose = HexBinary(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">pitchFamily = MinMax(min=</span><span class="s4">0</span><span class="s1">, max=</span><span class="s4">52</span><span class="s1">, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">charset = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">typeface=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">panose=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pitchFamily=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">charset=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.typeface = typeface</span>
+        <span class="s1">self.panose = panose</span>
+        <span class="s1">self.pitchFamily = pitchFamily</span>
+        <span class="s1">self.charset = charset</span>
+
+
+<span class="s0">class </span><span class="s1">CharacterProperties(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;defRPr&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">kumimoji = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lang = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">altLang = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">sz = MinMax(allow_none=</span><span class="s0">True</span><span class="s1">, min=</span><span class="s4">100</span><span class="s1">, max=</span><span class="s4">400000</span><span class="s1">) </span><span class="s2"># 100ths of a point</span>
+    <span class="s1">b = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">i = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">u = NoneSet(values=([</span><span class="s3">'words'</span><span class="s1">, </span><span class="s3">'sng'</span><span class="s1">, </span><span class="s3">'dbl'</span><span class="s1">, </span><span class="s3">'heavy'</span><span class="s1">, </span><span class="s3">'dotted'</span><span class="s1">,</span>
+                         <span class="s3">'dottedHeavy'</span><span class="s1">, </span><span class="s3">'dash'</span><span class="s1">, </span><span class="s3">'dashHeavy'</span><span class="s1">, </span><span class="s3">'dashLong'</span><span class="s1">, </span><span class="s3">'dashLongHeavy'</span><span class="s1">,</span>
+                         <span class="s3">'dotDash'</span><span class="s1">, </span><span class="s3">'dotDashHeavy'</span><span class="s1">, </span><span class="s3">'dotDotDash'</span><span class="s1">, </span><span class="s3">'dotDotDashHeavy'</span><span class="s1">, </span><span class="s3">'wavy'</span><span class="s1">,</span>
+                         <span class="s3">'wavyHeavy'</span><span class="s1">, </span><span class="s3">'wavyDbl'</span><span class="s1">]))</span>
+    <span class="s1">strike = NoneSet(values=([</span><span class="s3">'noStrike'</span><span class="s1">, </span><span class="s3">'sngStrike'</span><span class="s1">, </span><span class="s3">'dblStrike'</span><span class="s1">]))</span>
+    <span class="s1">kern = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">cap = NoneSet(values=([</span><span class="s3">'small'</span><span class="s1">, </span><span class="s3">'all'</span><span class="s1">]))</span>
+    <span class="s1">spc = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">normalizeH = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">baseline = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noProof = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">dirty = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">err = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">smtClean = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">smtId = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">bmk = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">ln = Typed(expected_type=LineProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">highlight = Typed(expected_type=Color, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">latin = Typed(expected_type=Font, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">ea = Typed(expected_type=Font, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">cs = Typed(expected_type=Font, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">sym = Typed(expected_type=Font, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">hlinkClick = Typed(expected_type=Hyperlink, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">hlinkMouseOver = Typed(expected_type=Hyperlink, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">rtl = NestedBool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=OfficeArtExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s2"># uses element group EG_FillProperties</span>
+    <span class="s1">noFill = EmptyTag(namespace=DRAWING_NS)</span>
+    <span class="s1">solidFill = ColorChoiceDescriptor()</span>
+    <span class="s1">gradFill = Typed(expected_type=GradientFillProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">blipFill = Typed(expected_type=BlipFillProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">pattFill = Typed(expected_type=PatternFillProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">grpFill = EmptyTag(namespace=DRAWING_NS)</span>
+    <span class="s2"># uses element group EG_EffectProperties</span>
+    <span class="s1">effectLst = Typed(expected_type=EffectList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">effectDag = Typed(expected_type=EffectContainer, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s2"># uses element group EG_TextUnderlineLine</span>
+    <span class="s1">uLnTx = EmptyTag()</span>
+    <span class="s1">uLn = Typed(expected_type=LineProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s2"># uses element group EG_TextUnderlineFill</span>
+    <span class="s1">uFillTx = EmptyTag()</span>
+    <span class="s1">uFill = EmptyTag()</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'ln'</span><span class="s1">, </span><span class="s3">'noFill'</span><span class="s1">, </span><span class="s3">'solidFill'</span><span class="s1">, </span><span class="s3">'gradFill'</span><span class="s1">, </span><span class="s3">'blipFill'</span><span class="s1">,</span>
+                    <span class="s3">'pattFill'</span><span class="s1">, </span><span class="s3">'grpFill'</span><span class="s1">, </span><span class="s3">'effectLst'</span><span class="s1">, </span><span class="s3">'effectDag'</span><span class="s1">, </span><span class="s3">'highlight'</span><span class="s1">,</span><span class="s3">'uLnTx'</span><span class="s1">,</span>
+                    <span class="s3">'uLn'</span><span class="s1">, </span><span class="s3">'uFillTx'</span><span class="s1">, </span><span class="s3">'uFill'</span><span class="s1">, </span><span class="s3">'latin'</span><span class="s1">, </span><span class="s3">'ea'</span><span class="s1">, </span><span class="s3">'cs'</span><span class="s1">, </span><span class="s3">'sym'</span><span class="s1">, </span><span class="s3">'hlinkClick'</span><span class="s1">,</span>
+                    <span class="s3">'hlinkMouseOver'</span><span class="s1">, </span><span class="s3">'rtl'</span><span class="s1">, )</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">kumimoji=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lang=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">altLang=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sz=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">b=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">i=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">u=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">strike=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">kern=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">cap=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spc=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">normalizeH=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">baseline=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noProof=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dirty=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">err=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">smtClean=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">smtId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">bmk=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">ln=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">highlight=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">latin=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">ea=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">cs=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sym=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">hlinkClick=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">hlinkMouseOver=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rtl=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noFill=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">solidFill=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">gradFill=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">blipFill=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pattFill=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">grpFill=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">effectLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">effectDag=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">uLnTx=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">uLn=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">uFillTx=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">uFill=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.kumimoji = kumimoji</span>
+        <span class="s1">self.lang = lang</span>
+        <span class="s1">self.altLang = altLang</span>
+        <span class="s1">self.sz = sz</span>
+        <span class="s1">self.b = b</span>
+        <span class="s1">self.i = i</span>
+        <span class="s1">self.u = u</span>
+        <span class="s1">self.strike = strike</span>
+        <span class="s1">self.kern = kern</span>
+        <span class="s1">self.cap = cap</span>
+        <span class="s1">self.spc = spc</span>
+        <span class="s1">self.normalizeH = normalizeH</span>
+        <span class="s1">self.baseline = baseline</span>
+        <span class="s1">self.noProof = noProof</span>
+        <span class="s1">self.dirty = dirty</span>
+        <span class="s1">self.err = err</span>
+        <span class="s1">self.smtClean = smtClean</span>
+        <span class="s1">self.smtId = smtId</span>
+        <span class="s1">self.bmk = bmk</span>
+        <span class="s1">self.ln = ln</span>
+        <span class="s1">self.highlight = highlight</span>
+        <span class="s1">self.latin = latin</span>
+        <span class="s1">self.ea = ea</span>
+        <span class="s1">self.cs = cs</span>
+        <span class="s1">self.sym = sym</span>
+        <span class="s1">self.hlinkClick = hlinkClick</span>
+        <span class="s1">self.hlinkMouseOver = hlinkMouseOver</span>
+        <span class="s1">self.rtl = rtl</span>
+        <span class="s1">self.noFill = noFill</span>
+        <span class="s1">self.solidFill = solidFill</span>
+        <span class="s1">self.gradFill = gradFill</span>
+        <span class="s1">self.blipFill = blipFill</span>
+        <span class="s1">self.pattFill = pattFill</span>
+        <span class="s1">self.grpFill = grpFill</span>
+        <span class="s1">self.effectLst = effectLst</span>
+        <span class="s1">self.effectDag = effectDag</span>
+        <span class="s1">self.uLnTx = uLnTx</span>
+        <span class="s1">self.uLn = uLn</span>
+        <span class="s1">self.uFillTx = uFillTx</span>
+        <span class="s1">self.uFill = uFill</span>
+
+
+<span class="s0">class </span><span class="s1">TabStop(Serialisable):</span>
+
+    <span class="s1">pos = Typed(expected_type=Coordinate, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">algn = Typed(expected_type=Set(values=([</span><span class="s3">'l'</span><span class="s1">, </span><span class="s3">'ctr'</span><span class="s1">, </span><span class="s3">'r'</span><span class="s1">, </span><span class="s3">'dec'</span><span class="s1">])))</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">pos=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">algn=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.pos = pos</span>
+        <span class="s1">self.algn = algn</span>
+
+
+<span class="s0">class </span><span class="s1">TabStopList(Serialisable):</span>
+
+    <span class="s1">tab = Typed(expected_type=TabStop, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">tab=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.tab = tab</span>
+
+
+<span class="s0">class </span><span class="s1">Spacing(Serialisable):</span>
+
+    <span class="s1">spcPct = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">spcPts = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'spcPct'</span><span class="s1">, </span><span class="s3">'spcPts'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">spcPct=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spcPts=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.spcPct = spcPct</span>
+        <span class="s1">self.spcPts = spcPts</span>
+
+
+<span class="s0">class </span><span class="s1">AutonumberBullet(Serialisable):</span>
+
+    <span class="s1">type = Set(values=([</span><span class="s3">'alphaLcParenBoth'</span><span class="s1">, </span><span class="s3">'alphaUcParenBoth'</span><span class="s1">,</span>
+                        <span class="s3">'alphaLcParenR'</span><span class="s1">, </span><span class="s3">'alphaUcParenR'</span><span class="s1">, </span><span class="s3">'alphaLcPeriod'</span><span class="s1">, </span><span class="s3">'alphaUcPeriod'</span><span class="s1">,</span>
+                        <span class="s3">'arabicParenBoth'</span><span class="s1">, </span><span class="s3">'arabicParenR'</span><span class="s1">, </span><span class="s3">'arabicPeriod'</span><span class="s1">, </span><span class="s3">'arabicPlain'</span><span class="s1">,</span>
+                        <span class="s3">'romanLcParenBoth'</span><span class="s1">, </span><span class="s3">'romanUcParenBoth'</span><span class="s1">, </span><span class="s3">'romanLcParenR'</span><span class="s1">, </span><span class="s3">'romanUcParenR'</span><span class="s1">,</span>
+                        <span class="s3">'romanLcPeriod'</span><span class="s1">, </span><span class="s3">'romanUcPeriod'</span><span class="s1">, </span><span class="s3">'circleNumDbPlain'</span><span class="s1">,</span>
+                        <span class="s3">'circleNumWdBlackPlain'</span><span class="s1">, </span><span class="s3">'circleNumWdWhitePlain'</span><span class="s1">, </span><span class="s3">'arabicDbPeriod'</span><span class="s1">,</span>
+                        <span class="s3">'arabicDbPlain'</span><span class="s1">, </span><span class="s3">'ea1ChsPeriod'</span><span class="s1">, </span><span class="s3">'ea1ChsPlain'</span><span class="s1">, </span><span class="s3">'ea1ChtPeriod'</span><span class="s1">,</span>
+                        <span class="s3">'ea1ChtPlain'</span><span class="s1">, </span><span class="s3">'ea1JpnChsDbPeriod'</span><span class="s1">, </span><span class="s3">'ea1JpnKorPlain'</span><span class="s1">, </span><span class="s3">'ea1JpnKorPeriod'</span><span class="s1">,</span>
+                        <span class="s3">'arabic1Minus'</span><span class="s1">, </span><span class="s3">'arabic2Minus'</span><span class="s1">, </span><span class="s3">'hebrew2Minus'</span><span class="s1">, </span><span class="s3">'thaiAlphaPeriod'</span><span class="s1">,</span>
+                        <span class="s3">'thaiAlphaParenR'</span><span class="s1">, </span><span class="s3">'thaiAlphaParenBoth'</span><span class="s1">, </span><span class="s3">'thaiNumPeriod'</span><span class="s1">,</span>
+                        <span class="s3">'thaiNumParenR'</span><span class="s1">, </span><span class="s3">'thaiNumParenBoth'</span><span class="s1">, </span><span class="s3">'hindiAlphaPeriod'</span><span class="s1">,</span>
+                        <span class="s3">'hindiNumPeriod'</span><span class="s1">, </span><span class="s3">'hindiNumParenR'</span><span class="s1">, </span><span class="s3">'hindiAlpha1Period'</span><span class="s1">]))</span>
+    <span class="s1">startAt = Integer()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">type=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">startAt=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.type = type</span>
+        <span class="s1">self.startAt = startAt</span>
+
+
+<span class="s0">class </span><span class="s1">ParagraphProperties(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;pPr&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">marL = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">marR = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lvl = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">indent = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">algn = NoneSet(values=([</span><span class="s3">'l'</span><span class="s1">, </span><span class="s3">'ctr'</span><span class="s1">, </span><span class="s3">'r'</span><span class="s1">, </span><span class="s3">'just'</span><span class="s1">, </span><span class="s3">'justLow'</span><span class="s1">, </span><span class="s3">'dist'</span><span class="s1">, </span><span class="s3">'thaiDist'</span><span class="s1">]))</span>
+    <span class="s1">defTabSz = Integer(expected_type=Coordinate, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">rtl = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">eaLnBrk = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">fontAlgn = NoneSet(values=([</span><span class="s3">'auto'</span><span class="s1">, </span><span class="s3">'t'</span><span class="s1">, </span><span class="s3">'ctr'</span><span class="s1">, </span><span class="s3">'base'</span><span class="s1">, </span><span class="s3">'b'</span><span class="s1">]))</span>
+    <span class="s1">latinLnBrk = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">hangingPunct = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s2"># uses element group EG_TextBulletColor</span>
+    <span class="s2"># uses element group EG_TextBulletSize</span>
+    <span class="s2"># uses element group EG_TextBulletTypeface</span>
+    <span class="s2"># uses element group EG_TextBullet</span>
+    <span class="s1">lnSpc = Typed(expected_type=Spacing, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">spcBef = Typed(expected_type=Spacing, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">spcAft = Typed(expected_type=Spacing, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">tabLst = Typed(expected_type=TabStopList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">defRPr = Typed(expected_type=CharacterProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=OfficeArtExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">buClrTx = EmptyTag()</span>
+    <span class="s1">buClr = Typed(expected_type=Color, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">buSzTx = EmptyTag()</span>
+    <span class="s1">buSzPct = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">buSzPts = NestedInteger(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">buFontTx = EmptyTag()</span>
+    <span class="s1">buFont = Typed(expected_type=Font, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">buNone = EmptyTag()</span>
+    <span class="s1">buAutoNum = EmptyTag()</span>
+    <span class="s1">buChar = NestedValue(expected_type=unicode, attribute=</span><span class="s3">&quot;char&quot;</span><span class="s1">, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">buBlip = NestedValue(expected_type=Blip, attribute=</span><span class="s3">&quot;blip&quot;</span><span class="s1">, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'lnSpc'</span><span class="s1">, </span><span class="s3">'spcBef'</span><span class="s1">, </span><span class="s3">'spcAft'</span><span class="s1">, </span><span class="s3">'tabLst'</span><span class="s1">, </span><span class="s3">'defRPr'</span><span class="s1">,</span>
+                    <span class="s3">'buClrTx'</span><span class="s1">, </span><span class="s3">'buClr'</span><span class="s1">, </span><span class="s3">'buSzTx'</span><span class="s1">, </span><span class="s3">'buSzPct'</span><span class="s1">, </span><span class="s3">'buSzPts'</span><span class="s1">, </span><span class="s3">'buFontTx'</span><span class="s1">, </span><span class="s3">'buFont'</span><span class="s1">,</span>
+                    <span class="s3">'buNone'</span><span class="s1">, </span><span class="s3">'buAutoNum'</span><span class="s1">, </span><span class="s3">'buChar'</span><span class="s1">, </span><span class="s3">'buBlip'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">marL=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">marR=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lvl=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">indent=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">algn=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">defTabSz=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rtl=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">eaLnBrk=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fontAlgn=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">latinLnBrk=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">hangingPunct=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lnSpc=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spcBef=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spcAft=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">tabLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">defRPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">buClrTx=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">buClr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">buSzTx=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">buSzPct=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">buSzPts=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">buFontTx=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">buFont=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">buNone=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">buAutoNum=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">buChar=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">buBlip=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.marL = marL</span>
+        <span class="s1">self.marR = marR</span>
+        <span class="s1">self.lvl = lvl</span>
+        <span class="s1">self.indent = indent</span>
+        <span class="s1">self.algn = algn</span>
+        <span class="s1">self.defTabSz = defTabSz</span>
+        <span class="s1">self.rtl = rtl</span>
+        <span class="s1">self.eaLnBrk = eaLnBrk</span>
+        <span class="s1">self.fontAlgn = fontAlgn</span>
+        <span class="s1">self.latinLnBrk = latinLnBrk</span>
+        <span class="s1">self.hangingPunct = hangingPunct</span>
+        <span class="s1">self.lnSpc = lnSpc</span>
+        <span class="s1">self.spcBef = spcBef</span>
+        <span class="s1">self.spcAft = spcAft</span>
+        <span class="s1">self.tabLst = tabLst</span>
+        <span class="s1">self.defRPr = defRPr</span>
+        <span class="s1">self.buClrTx = buClrTx</span>
+        <span class="s1">self.buClr = buClr</span>
+        <span class="s1">self.buSzTx = buSzTx</span>
+        <span class="s1">self.buSzPct = buSzPct</span>
+        <span class="s1">self.buSzPts = buSzPts</span>
+        <span class="s1">self.buFontTx = buFontTx</span>
+        <span class="s1">self.buFont = buFont</span>
+        <span class="s1">self.buNone = buNone</span>
+        <span class="s1">self.buAutoNum = buAutoNum</span>
+        <span class="s1">self.buChar = buChar</span>
+        <span class="s1">self.buBlip = buBlip</span>
+        <span class="s1">self.defRPr = defRPr</span>
+
+
+<span class="s0">class </span><span class="s1">ListStyle(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;lstStyle&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">defPPr = Typed(expected_type=ParagraphProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lvl1pPr = Typed(expected_type=ParagraphProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lvl2pPr = Typed(expected_type=ParagraphProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lvl3pPr = Typed(expected_type=ParagraphProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lvl4pPr = Typed(expected_type=ParagraphProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lvl5pPr = Typed(expected_type=ParagraphProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lvl6pPr = Typed(expected_type=ParagraphProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lvl7pPr = Typed(expected_type=ParagraphProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lvl8pPr = Typed(expected_type=ParagraphProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">lvl9pPr = Typed(expected_type=ParagraphProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=OfficeArtExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">&quot;defPPr&quot;</span><span class="s1">, </span><span class="s3">&quot;lvl1pPr&quot;</span><span class="s1">, </span><span class="s3">&quot;lvl2pPr&quot;</span><span class="s1">, </span><span class="s3">&quot;lvl3pPr&quot;</span><span class="s1">, </span><span class="s3">&quot;lvl4pPr&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;lvl5pPr&quot;</span><span class="s1">, </span><span class="s3">&quot;lvl6pPr&quot;</span><span class="s1">, </span><span class="s3">&quot;lvl7pPr&quot;</span><span class="s1">, </span><span class="s3">&quot;lvl8pPr&quot;</span><span class="s1">, </span><span class="s3">&quot;lvl9pPr&quot;</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">defPPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lvl1pPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lvl2pPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lvl3pPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lvl4pPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lvl5pPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lvl6pPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lvl7pPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lvl8pPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lvl9pPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.defPPr = defPPr</span>
+        <span class="s1">self.lvl1pPr = lvl1pPr</span>
+        <span class="s1">self.lvl2pPr = lvl2pPr</span>
+        <span class="s1">self.lvl3pPr = lvl3pPr</span>
+        <span class="s1">self.lvl4pPr = lvl4pPr</span>
+        <span class="s1">self.lvl5pPr = lvl5pPr</span>
+        <span class="s1">self.lvl6pPr = lvl6pPr</span>
+        <span class="s1">self.lvl7pPr = lvl7pPr</span>
+        <span class="s1">self.lvl8pPr = lvl8pPr</span>
+        <span class="s1">self.lvl9pPr = lvl9pPr</span>
+
+
+<span class="s0">class </span><span class="s1">RegularTextRun(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;r&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">rPr = Typed(expected_type=CharacterProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">properties = Alias(</span><span class="s3">&quot;rPr&quot;</span><span class="s1">)</span>
+    <span class="s1">t = NestedText(expected_type=unicode)</span>
+    <span class="s1">value = Alias(</span><span class="s3">&quot;t&quot;</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'rPr'</span><span class="s1">, </span><span class="s3">'t'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">rPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">t=</span><span class="s3">&quot;&quot;</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.rPr = rPr</span>
+        <span class="s1">self.t = t</span>
+
+
+<span class="s0">class </span><span class="s1">LineBreak(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;br&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">rPr = Typed(expected_type=CharacterProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'rPr'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">rPr=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.rPr = rPr</span>
+
+
+<span class="s0">class </span><span class="s1">TextField(Serialisable):</span>
+
+    <span class="s1">id = String()</span>
+    <span class="s1">type = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">rPr = Typed(expected_type=CharacterProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">pPr = Typed(expected_type=ParagraphProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">t = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'rPr'</span><span class="s1">, </span><span class="s3">'pPr'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">id=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">type=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">t=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.id = id</span>
+        <span class="s1">self.type = type</span>
+        <span class="s1">self.rPr = rPr</span>
+        <span class="s1">self.pPr = pPr</span>
+        <span class="s1">self.t = t</span>
+
+
+<span class="s0">class </span><span class="s1">Paragraph(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;p&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s2"># uses element group EG_TextRun</span>
+    <span class="s1">pPr = Typed(expected_type=ParagraphProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">properties = Alias(</span><span class="s3">&quot;pPr&quot;</span><span class="s1">)</span>
+    <span class="s1">endParaRPr = Typed(expected_type=CharacterProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">r = Sequence(expected_type=RegularTextRun)</span>
+    <span class="s1">text = Alias(</span><span class="s3">'r'</span><span class="s1">)</span>
+    <span class="s1">br = Typed(expected_type=LineBreak, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">fld = Typed(expected_type=TextField, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'pPr'</span><span class="s1">, </span><span class="s3">'r'</span><span class="s1">, </span><span class="s3">'br'</span><span class="s1">, </span><span class="s3">'fld'</span><span class="s1">, </span><span class="s3">'endParaRPr'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">pPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">endParaRPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">r=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">br=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fld=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.pPr = pPr</span>
+        <span class="s1">self.endParaRPr = endParaRPr</span>
+        <span class="s0">if </span><span class="s1">r </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">r = [RegularTextRun()]</span>
+        <span class="s1">self.r = r</span>
+        <span class="s1">self.br = br</span>
+        <span class="s1">self.fld = fld</span>
+
+
+<span class="s0">class </span><span class="s1">GeomGuide(Serialisable):</span>
+
+    <span class="s1">name = String(())</span>
+    <span class="s1">fmla = String(())</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">name=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fmla=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.fmla = fmla</span>
+
+
+<span class="s0">class </span><span class="s1">GeomGuideList(Serialisable):</span>
+
+    <span class="s1">gd = Sequence(expected_type=GeomGuide, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">gd=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.gd = gd</span>
+
+
+<span class="s0">class </span><span class="s1">PresetTextShape(Serialisable):</span>
+
+    <span class="s1">prst = Typed(expected_type=Set(values=(</span>
+        <span class="s1">[</span><span class="s3">'textNoShape'</span><span class="s1">, </span><span class="s3">'textPlain'</span><span class="s1">,</span><span class="s3">'textStop'</span><span class="s1">, </span><span class="s3">'textTriangle'</span><span class="s1">, </span><span class="s3">'textTriangleInverted'</span><span class="s1">, </span><span class="s3">'textChevron'</span><span class="s1">,</span>
+         <span class="s3">'textChevronInverted'</span><span class="s1">, </span><span class="s3">'textRingInside'</span><span class="s1">, </span><span class="s3">'textRingOutside'</span><span class="s1">, </span><span class="s3">'textArchUp'</span><span class="s1">,</span>
+         <span class="s3">'textArchDown'</span><span class="s1">, </span><span class="s3">'textCircle'</span><span class="s1">, </span><span class="s3">'textButton'</span><span class="s1">, </span><span class="s3">'textArchUpPour'</span><span class="s1">,</span>
+         <span class="s3">'textArchDownPour'</span><span class="s1">, </span><span class="s3">'textCirclePour'</span><span class="s1">, </span><span class="s3">'textButtonPour'</span><span class="s1">, </span><span class="s3">'textCurveUp'</span><span class="s1">,</span>
+         <span class="s3">'textCurveDown'</span><span class="s1">, </span><span class="s3">'textCanUp'</span><span class="s1">, </span><span class="s3">'textCanDown'</span><span class="s1">, </span><span class="s3">'textWave1'</span><span class="s1">, </span><span class="s3">'textWave2'</span><span class="s1">,</span>
+         <span class="s3">'textDoubleWave1'</span><span class="s1">, </span><span class="s3">'textWave4'</span><span class="s1">, </span><span class="s3">'textInflate'</span><span class="s1">, </span><span class="s3">'textDeflate'</span><span class="s1">,</span>
+         <span class="s3">'textInflateBottom'</span><span class="s1">, </span><span class="s3">'textDeflateBottom'</span><span class="s1">, </span><span class="s3">'textInflateTop'</span><span class="s1">,</span>
+         <span class="s3">'textDeflateTop'</span><span class="s1">, </span><span class="s3">'textDeflateInflate'</span><span class="s1">, </span><span class="s3">'textDeflateInflateDeflate'</span><span class="s1">,</span>
+         <span class="s3">'textFadeRight'</span><span class="s1">, </span><span class="s3">'textFadeLeft'</span><span class="s1">, </span><span class="s3">'textFadeUp'</span><span class="s1">, </span><span class="s3">'textFadeDown'</span><span class="s1">,</span>
+         <span class="s3">'textSlantUp'</span><span class="s1">, </span><span class="s3">'textSlantDown'</span><span class="s1">, </span><span class="s3">'textCascadeUp'</span><span class="s1">, </span><span class="s3">'textCascadeDown'</span>
+         <span class="s1">]</span>
+    <span class="s1">)))</span>
+    <span class="s1">avLst = Typed(expected_type=GeomGuideList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">prst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">avLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.prst = prst</span>
+        <span class="s1">self.avLst = avLst</span>
+
+
+<span class="s0">class </span><span class="s1">TextNormalAutofit(Serialisable):</span>
+
+    <span class="s1">fontScale = Integer()</span>
+    <span class="s1">lnSpcReduction = Integer()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">fontScale=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lnSpcReduction=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.fontScale = fontScale</span>
+        <span class="s1">self.lnSpcReduction = lnSpcReduction</span>
+
+
+<span class="s0">class </span><span class="s1">RichTextProperties(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;bodyPr&quot;</span>
+    <span class="s1">namespace = DRAWING_NS</span>
+
+    <span class="s1">rot = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">spcFirstLastPara = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">vertOverflow = NoneSet(values=([</span><span class="s3">'overflow'</span><span class="s1">, </span><span class="s3">'ellipsis'</span><span class="s1">, </span><span class="s3">'clip'</span><span class="s1">]))</span>
+    <span class="s1">horzOverflow = NoneSet(values=([</span><span class="s3">'overflow'</span><span class="s1">, </span><span class="s3">'clip'</span><span class="s1">]))</span>
+    <span class="s1">vert = NoneSet(values=([</span><span class="s3">'horz'</span><span class="s1">, </span><span class="s3">'vert'</span><span class="s1">, </span><span class="s3">'vert270'</span><span class="s1">, </span><span class="s3">'wordArtVert'</span><span class="s1">,</span>
+                            <span class="s3">'eaVert'</span><span class="s1">, </span><span class="s3">'mongolianVert'</span><span class="s1">, </span><span class="s3">'wordArtVertRtl'</span><span class="s1">]))</span>
+    <span class="s1">wrap = NoneSet(values=([</span><span class="s3">'none'</span><span class="s1">, </span><span class="s3">'square'</span><span class="s1">]))</span>
+    <span class="s1">lIns = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">tIns = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">rIns = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">bIns = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">numCol = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">spcCol = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">rtlCol = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">fromWordArt = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">anchor = NoneSet(values=([</span><span class="s3">'t'</span><span class="s1">, </span><span class="s3">'ctr'</span><span class="s1">, </span><span class="s3">'b'</span><span class="s1">, </span><span class="s3">'just'</span><span class="s1">, </span><span class="s3">'dist'</span><span class="s1">]))</span>
+    <span class="s1">anchorCtr = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">forceAA = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">upright = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">compatLnSpc = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">prstTxWarp = Typed(expected_type=PresetTextShape, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">scene3d = Typed(expected_type=Scene3D, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=OfficeArtExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">noAutofit = EmptyTag()</span>
+    <span class="s1">normAutofit = EmptyTag()</span>
+    <span class="s1">spAutoFit = EmptyTag()</span>
+    <span class="s1">flatTx = NestedInteger(attribute=</span><span class="s3">&quot;z&quot;</span><span class="s1">, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'prstTxWarp'</span><span class="s1">, </span><span class="s3">'scene3d'</span><span class="s1">, </span><span class="s3">'noAutofit'</span><span class="s1">, </span><span class="s3">'normAutofit'</span><span class="s1">, </span><span class="s3">'spAutoFit'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">rot=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spcFirstLastPara=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">vertOverflow=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">horzOverflow=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">vert=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">wrap=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lIns=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">tIns=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rIns=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">bIns=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">numCol=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spcCol=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rtlCol=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fromWordArt=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">anchor=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">anchorCtr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">forceAA=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">upright=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">compatLnSpc=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">prstTxWarp=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">scene3d=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noAutofit=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">normAutofit=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spAutoFit=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">flatTx=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.rot = rot</span>
+        <span class="s1">self.spcFirstLastPara = spcFirstLastPara</span>
+        <span class="s1">self.vertOverflow = vertOverflow</span>
+        <span class="s1">self.horzOverflow = horzOverflow</span>
+        <span class="s1">self.vert = vert</span>
+        <span class="s1">self.wrap = wrap</span>
+        <span class="s1">self.lIns = lIns</span>
+        <span class="s1">self.tIns = tIns</span>
+        <span class="s1">self.rIns = rIns</span>
+        <span class="s1">self.bIns = bIns</span>
+        <span class="s1">self.numCol = numCol</span>
+        <span class="s1">self.spcCol = spcCol</span>
+        <span class="s1">self.rtlCol = rtlCol</span>
+        <span class="s1">self.fromWordArt = fromWordArt</span>
+        <span class="s1">self.anchor = anchor</span>
+        <span class="s1">self.anchorCtr = anchorCtr</span>
+        <span class="s1">self.forceAA = forceAA</span>
+        <span class="s1">self.upright = upright</span>
+        <span class="s1">self.compatLnSpc = compatLnSpc</span>
+        <span class="s1">self.prstTxWarp = prstTxWarp</span>
+        <span class="s1">self.scene3d = scene3d</span>
+        <span class="s1">self.noAutofit = noAutofit</span>
+        <span class="s1">self.normAutofit = normAutofit</span>
+        <span class="s1">self.spAutoFit = spAutoFit</span>
+        <span class="s1">self.flatTx = flatTx</span>
+</pre>
+</body>
+</html>

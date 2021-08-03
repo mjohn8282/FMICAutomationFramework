@@ -1,0 +1,165 @@
+<html>
+<head>
+<title>connector.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+connector.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Alias,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">ExtensionList </span><span class="s0">as </span><span class="s1">OfficeArtExtensionList</span>
+<span class="s0">from </span><span class="s1">openpyexcel.chart.shapes </span><span class="s0">import </span><span class="s1">GraphicalProperties</span>
+<span class="s0">from </span><span class="s1">openpyexcel.chart.text </span><span class="s0">import </span><span class="s1">RichText</span>
+
+<span class="s0">from </span><span class="s1">.properties </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">NonVisualDrawingProps,</span>
+    <span class="s1">NonVisualDrawingShapeProps,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">.geometry </span><span class="s0">import </span><span class="s1">ShapeStyle</span>
+
+<span class="s0">class </span><span class="s1">Connection(Serialisable):</span>
+
+    <span class="s1">id = Integer()</span>
+    <span class="s1">idx = Integer()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">id=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">idx=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.id = id</span>
+        <span class="s1">self.idx = idx</span>
+
+
+<span class="s0">class </span><span class="s1">ConnectorLocking(Serialisable):</span>
+
+    <span class="s1">extLst = Typed(expected_type=OfficeArtExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.extLst = extLst</span>
+
+
+<span class="s0">class </span><span class="s1">NonVisualConnectorProperties(Serialisable):</span>
+
+    <span class="s1">cxnSpLocks = Typed(expected_type=ConnectorLocking, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">stCxn = Typed(expected_type=Connection, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">endCxn = Typed(expected_type=Connection, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=OfficeArtExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">cxnSpLocks=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">stCxn=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">endCxn=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.cxnSpLocks = cxnSpLocks</span>
+        <span class="s1">self.stCxn = stCxn</span>
+        <span class="s1">self.endCxn = endCxn</span>
+        <span class="s1">self.extLst = extLst</span>
+
+
+<span class="s0">class </span><span class="s1">ConnectorNonVisual(Serialisable):</span>
+
+    <span class="s1">cNvPr = Typed(expected_type=NonVisualDrawingProps, )</span>
+    <span class="s1">cNvCxnSpPr = Typed(expected_type=NonVisualConnectorProperties, )</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">&quot;cNvPr&quot;</span><span class="s1">, </span><span class="s3">&quot;cNvCxnSpPr&quot;</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">cNvPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">cNvCxnSpPr=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.cNvPr = cNvPr</span>
+        <span class="s1">self.cNvCxnSpPr = cNvCxnSpPr</span>
+
+
+<span class="s0">class </span><span class="s1">ConnectorShape(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;cxnSp&quot;</span>
+
+    <span class="s1">nvCxnSpPr = Typed(expected_type=ConnectorNonVisual)</span>
+    <span class="s1">spPr = Typed(expected_type=GraphicalProperties)</span>
+    <span class="s1">style = Typed(expected_type=ShapeStyle, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">macro = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">fPublished = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">nvCxnSpPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">style=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">macro=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fPublished=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.nvCxnSpPr = nvCxnSpPr</span>
+        <span class="s1">self.spPr = spPr</span>
+        <span class="s1">self.style = style</span>
+        <span class="s1">self.macro = macro</span>
+        <span class="s1">self.fPublished = fPublished</span>
+
+
+<span class="s0">class </span><span class="s1">ShapeMeta(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;nvSpPr&quot;</span>
+
+    <span class="s1">cNvPr = Typed(expected_type=NonVisualDrawingProps)</span>
+    <span class="s1">cNvSpPr = Typed(expected_type=NonVisualDrawingShapeProps)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, cNvPr=</span><span class="s0">None</span><span class="s1">, cNvSpPr=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">self.cNvPr = cNvPr</span>
+        <span class="s1">self.cNvSpPr = cNvSpPr</span>
+
+
+<span class="s0">class </span><span class="s1">Shape(Serialisable):</span>
+
+    <span class="s1">macro = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">textlink = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">fPublished = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">fLocksText = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">nvSpPr = Typed(expected_type=ShapeMeta, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">meta = Alias(</span><span class="s3">&quot;nvSpPr&quot;</span><span class="s1">)</span>
+    <span class="s1">spPr = Typed(expected_type=GraphicalProperties)</span>
+    <span class="s1">graphicalProperties = Alias(</span><span class="s3">&quot;spPr&quot;</span><span class="s1">)</span>
+    <span class="s1">style = Typed(expected_type=ShapeStyle, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">txBody = Typed(expected_type=RichText, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">macro=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">textlink=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fPublished=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fLocksText=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">nvSpPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">spPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">style=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">txBody=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.macro = macro</span>
+        <span class="s1">self.textlink = textlink</span>
+        <span class="s1">self.fPublished = fPublished</span>
+        <span class="s1">self.fLocksText = fLocksText</span>
+        <span class="s1">self.nvSpPr = nvSpPr</span>
+        <span class="s1">self.spPr = spPr</span>
+        <span class="s1">self.style = style</span>
+        <span class="s1">self.txBody = txBody</span>
+</pre>
+</body>
+</html>

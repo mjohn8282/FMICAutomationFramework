@@ -1,0 +1,590 @@
+<html>
+<head>
+<title>parse.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+.s5 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+parse.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot;Defines parsing functions used by isort for parsing import definitions&quot;&quot;&quot;</span>
+<span class="s2">from </span><span class="s1">collections </span><span class="s2">import </span><span class="s1">OrderedDict, defaultdict</span>
+<span class="s2">from </span><span class="s1">functools </span><span class="s2">import </span><span class="s1">partial</span>
+<span class="s2">from </span><span class="s1">itertools </span><span class="s2">import </span><span class="s1">chain</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">TYPE_CHECKING, Any, Dict, List, NamedTuple, Optional, Tuple</span>
+<span class="s2">from </span><span class="s1">warnings </span><span class="s2">import </span><span class="s1">warn</span>
+
+<span class="s2">from </span><span class="s1">. </span><span class="s2">import </span><span class="s1">place</span>
+<span class="s2">from </span><span class="s1">.comments </span><span class="s2">import </span><span class="s1">parse </span><span class="s2">as </span><span class="s1">parse_comments</span>
+<span class="s2">from </span><span class="s1">.deprecated.finders </span><span class="s2">import </span><span class="s1">FindersManager</span>
+<span class="s2">from </span><span class="s1">.exceptions </span><span class="s2">import </span><span class="s1">MissingSection</span>
+<span class="s2">from </span><span class="s1">.settings </span><span class="s2">import </span><span class="s1">DEFAULT_CONFIG, Config</span>
+
+<span class="s2">if </span><span class="s1">TYPE_CHECKING:</span>
+    <span class="s2">from </span><span class="s1">mypy_extensions </span><span class="s2">import </span><span class="s1">TypedDict</span>
+
+    <span class="s1">CommentsAboveDict = TypedDict(</span>
+        <span class="s3">&quot;CommentsAboveDict&quot;</span><span class="s1">, {</span><span class="s3">&quot;straight&quot;</span><span class="s1">: Dict[str, Any], </span><span class="s3">&quot;from&quot;</span><span class="s1">: Dict[str, Any]}</span>
+    <span class="s1">)</span>
+
+    <span class="s1">CommentsDict = TypedDict(</span>
+        <span class="s3">&quot;CommentsDict&quot;</span><span class="s1">,</span>
+        <span class="s1">{</span>
+            <span class="s3">&quot;from&quot;</span><span class="s1">: Dict[str, Any],</span>
+            <span class="s3">&quot;straight&quot;</span><span class="s1">: Dict[str, Any],</span>
+            <span class="s3">&quot;nested&quot;</span><span class="s1">: Dict[str, Any],</span>
+            <span class="s3">&quot;above&quot;</span><span class="s1">: CommentsAboveDict,</span>
+        <span class="s1">},</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_infer_line_separator(contents: str) -&gt; str:</span>
+    <span class="s2">if </span><span class="s3">&quot;</span><span class="s4">\r\n</span><span class="s3">&quot; </span><span class="s2">in </span><span class="s1">contents:</span>
+        <span class="s2">return </span><span class="s3">&quot;</span><span class="s4">\r\n</span><span class="s3">&quot;</span>
+    <span class="s2">if </span><span class="s3">&quot;</span><span class="s4">\r</span><span class="s3">&quot; </span><span class="s2">in </span><span class="s1">contents:</span>
+        <span class="s2">return </span><span class="s3">&quot;</span><span class="s4">\r</span><span class="s3">&quot;</span>
+    <span class="s2">return </span><span class="s3">&quot;</span><span class="s4">\n</span><span class="s3">&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">_normalize_line(raw_line: str) -&gt; Tuple[str, str]:</span>
+    <span class="s0">&quot;&quot;&quot;Normalizes import related statements in the provided line. 
+ 
+    Returns (normalized_line: str, raw_line: str) 
+    &quot;&quot;&quot;</span>
+    <span class="s1">line = raw_line.replace(</span><span class="s3">&quot;from.import &quot;</span><span class="s1">, </span><span class="s3">&quot;from . import &quot;</span><span class="s1">)</span>
+    <span class="s1">line = line.replace(</span><span class="s3">&quot;from.cimport &quot;</span><span class="s1">, </span><span class="s3">&quot;from . cimport &quot;</span><span class="s1">)</span>
+    <span class="s1">line = line.replace(</span><span class="s3">&quot;import*&quot;</span><span class="s1">, </span><span class="s3">&quot;import *&quot;</span><span class="s1">)</span>
+    <span class="s1">line = line.replace(</span><span class="s3">&quot; .import &quot;</span><span class="s1">, </span><span class="s3">&quot; . import &quot;</span><span class="s1">)</span>
+    <span class="s1">line = line.replace(</span><span class="s3">&quot; .cimport &quot;</span><span class="s1">, </span><span class="s3">&quot; . cimport &quot;</span><span class="s1">)</span>
+    <span class="s1">line = line.replace(</span><span class="s3">&quot;</span><span class="s4">\t</span><span class="s3">&quot;</span><span class="s1">, </span><span class="s3">&quot; &quot;</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">(line, raw_line)</span>
+
+
+<span class="s2">def </span><span class="s1">import_type(line: str, config: Config = DEFAULT_CONFIG) -&gt; Optional[str]:</span>
+    <span class="s0">&quot;&quot;&quot;If the current line is an import line it will return its type (from or straight)&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">config.honor_noqa </span><span class="s2">and </span><span class="s1">line.lower().rstrip().endswith(</span><span class="s3">&quot;noqa&quot;</span><span class="s1">):</span>
+        <span class="s2">return None</span>
+    <span class="s2">if </span><span class="s3">&quot;isort:skip&quot; </span><span class="s2">in </span><span class="s1">line </span><span class="s2">or </span><span class="s3">&quot;isort: skip&quot; </span><span class="s2">in </span><span class="s1">line </span><span class="s2">or </span><span class="s3">&quot;isort: split&quot; </span><span class="s2">in </span><span class="s1">line:</span>
+        <span class="s2">return None</span>
+    <span class="s2">if </span><span class="s1">line.startswith((</span><span class="s3">&quot;import &quot;</span><span class="s1">, </span><span class="s3">&quot;cimport &quot;</span><span class="s1">)):</span>
+        <span class="s2">return </span><span class="s3">&quot;straight&quot;</span>
+    <span class="s2">if </span><span class="s1">line.startswith(</span><span class="s3">&quot;from &quot;</span><span class="s1">):</span>
+        <span class="s2">return </span><span class="s3">&quot;from&quot;</span>
+    <span class="s2">return None</span>
+
+
+<span class="s2">def </span><span class="s1">_strip_syntax(import_string: str) -&gt; str:</span>
+    <span class="s1">import_string = import_string.replace(</span><span class="s3">&quot;_import&quot;</span><span class="s1">, </span><span class="s3">&quot;[[i]]&quot;</span><span class="s1">)</span>
+    <span class="s1">import_string = import_string.replace(</span><span class="s3">&quot;_cimport&quot;</span><span class="s1">, </span><span class="s3">&quot;[[ci]]&quot;</span><span class="s1">)</span>
+    <span class="s2">for </span><span class="s1">remove_syntax </span><span class="s2">in </span><span class="s1">[</span><span class="s3">&quot;</span><span class="s4">\\</span><span class="s3">&quot;</span><span class="s1">, </span><span class="s3">&quot;(&quot;</span><span class="s1">, </span><span class="s3">&quot;)&quot;</span><span class="s1">, </span><span class="s3">&quot;,&quot;</span><span class="s1">]:</span>
+        <span class="s1">import_string = import_string.replace(remove_syntax, </span><span class="s3">&quot; &quot;</span><span class="s1">)</span>
+    <span class="s1">import_list = import_string.split()</span>
+    <span class="s2">for </span><span class="s1">key </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;from&quot;</span><span class="s1">, </span><span class="s3">&quot;import&quot;</span><span class="s1">, </span><span class="s3">&quot;cimport&quot;</span><span class="s1">):</span>
+        <span class="s2">if </span><span class="s1">key </span><span class="s2">in </span><span class="s1">import_list:</span>
+            <span class="s1">import_list.remove(key)</span>
+    <span class="s1">import_string = </span><span class="s3">&quot; &quot;</span><span class="s1">.join(import_list)</span>
+    <span class="s1">import_string = import_string.replace(</span><span class="s3">&quot;[[i]]&quot;</span><span class="s1">, </span><span class="s3">&quot;_import&quot;</span><span class="s1">)</span>
+    <span class="s1">import_string = import_string.replace(</span><span class="s3">&quot;[[ci]]&quot;</span><span class="s1">, </span><span class="s3">&quot;_cimport&quot;</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">import_string.replace(</span><span class="s3">&quot;{ &quot;</span><span class="s1">, </span><span class="s3">&quot;{|&quot;</span><span class="s1">).replace(</span><span class="s3">&quot; }&quot;</span><span class="s1">, </span><span class="s3">&quot;|}&quot;</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">skip_line(</span>
+    <span class="s1">line: str,</span>
+    <span class="s1">in_quote: str,</span>
+    <span class="s1">index: int,</span>
+    <span class="s1">section_comments: Tuple[str, ...],</span>
+    <span class="s1">needs_import: bool = </span><span class="s2">True</span><span class="s1">,</span>
+<span class="s1">) -&gt; Tuple[bool, str]:</span>
+    <span class="s0">&quot;&quot;&quot;Determine if a given line should be skipped. 
+ 
+    Returns back a tuple containing: 
+ 
+    (skip_line: bool, 
+     in_quote: str,) 
+    &quot;&quot;&quot;</span>
+    <span class="s1">should_skip = bool(in_quote)</span>
+    <span class="s2">if </span><span class="s3">'&quot;' </span><span class="s2">in </span><span class="s1">line </span><span class="s2">or </span><span class="s3">&quot;'&quot; </span><span class="s2">in </span><span class="s1">line:</span>
+        <span class="s1">char_index = </span><span class="s5">0</span>
+        <span class="s2">while </span><span class="s1">char_index &lt; len(line):</span>
+            <span class="s2">if </span><span class="s1">line[char_index] == </span><span class="s3">&quot;</span><span class="s4">\\</span><span class="s3">&quot;</span><span class="s1">:</span>
+                <span class="s1">char_index += </span><span class="s5">1</span>
+            <span class="s2">elif </span><span class="s1">in_quote:</span>
+                <span class="s2">if </span><span class="s1">line[char_index : char_index + len(in_quote)] == in_quote:</span>
+                    <span class="s1">in_quote = </span><span class="s3">&quot;&quot;</span>
+            <span class="s2">elif </span><span class="s1">line[char_index] </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;'&quot;</span><span class="s1">, </span><span class="s3">'&quot;'</span><span class="s1">):</span>
+                <span class="s1">long_quote = line[char_index : char_index + </span><span class="s5">3</span><span class="s1">]</span>
+                <span class="s2">if </span><span class="s1">long_quote </span><span class="s2">in </span><span class="s1">(</span><span class="s3">'&quot;&quot;&quot;'</span><span class="s1">, </span><span class="s3">&quot;'''&quot;</span><span class="s1">):</span>
+                    <span class="s1">in_quote = long_quote</span>
+                    <span class="s1">char_index += </span><span class="s5">2</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">in_quote = line[char_index]</span>
+            <span class="s2">elif </span><span class="s1">line[char_index] == </span><span class="s3">&quot;#&quot;</span><span class="s1">:</span>
+                <span class="s2">break</span>
+            <span class="s1">char_index += </span><span class="s5">1</span>
+
+    <span class="s2">if </span><span class="s3">&quot;;&quot; </span><span class="s2">in </span><span class="s1">line.split(</span><span class="s3">&quot;#&quot;</span><span class="s1">)[</span><span class="s5">0</span><span class="s1">] </span><span class="s2">and </span><span class="s1">needs_import:</span>
+        <span class="s2">for </span><span class="s1">part </span><span class="s2">in </span><span class="s1">(part.strip() </span><span class="s2">for </span><span class="s1">part </span><span class="s2">in </span><span class="s1">line.split(</span><span class="s3">&quot;;&quot;</span><span class="s1">)):</span>
+            <span class="s2">if </span><span class="s1">(</span>
+                <span class="s1">part</span>
+                <span class="s2">and not </span><span class="s1">part.startswith(</span><span class="s3">&quot;from &quot;</span><span class="s1">)</span>
+                <span class="s2">and not </span><span class="s1">part.startswith((</span><span class="s3">&quot;import &quot;</span><span class="s1">, </span><span class="s3">&quot;cimport &quot;</span><span class="s1">))</span>
+            <span class="s1">):</span>
+                <span class="s1">should_skip = </span><span class="s2">True</span>
+
+    <span class="s2">return </span><span class="s1">(bool(should_skip </span><span class="s2">or </span><span class="s1">in_quote), in_quote)</span>
+
+
+<span class="s2">class </span><span class="s1">ParsedContent(NamedTuple):</span>
+    <span class="s1">in_lines: List[str]</span>
+    <span class="s1">lines_without_imports: List[str]</span>
+    <span class="s1">import_index: int</span>
+    <span class="s1">place_imports: Dict[str, List[str]]</span>
+    <span class="s1">import_placements: Dict[str, str]</span>
+    <span class="s1">as_map: Dict[str, Dict[str, List[str]]]</span>
+    <span class="s1">imports: Dict[str, Dict[str, Any]]</span>
+    <span class="s1">categorized_comments: </span><span class="s3">&quot;CommentsDict&quot;</span>
+    <span class="s1">change_count: int</span>
+    <span class="s1">original_line_count: int</span>
+    <span class="s1">line_separator: str</span>
+    <span class="s1">sections: Any</span>
+    <span class="s1">verbose_output: List[str]</span>
+
+
+<span class="s2">def </span><span class="s1">file_contents(contents: str, config: Config = DEFAULT_CONFIG) -&gt; ParsedContent:</span>
+    <span class="s0">&quot;&quot;&quot;Parses a python file taking out and categorizing imports.&quot;&quot;&quot;</span>
+    <span class="s1">line_separator: str = config.line_ending </span><span class="s2">or </span><span class="s1">_infer_line_separator(contents)</span>
+    <span class="s1">in_lines = contents.splitlines()</span>
+    <span class="s2">if </span><span class="s1">contents </span><span class="s2">and </span><span class="s1">contents[-</span><span class="s5">1</span><span class="s1">] </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;</span><span class="s4">\n</span><span class="s3">&quot;</span><span class="s1">, </span><span class="s3">&quot;</span><span class="s4">\r</span><span class="s3">&quot;</span><span class="s1">):</span>
+        <span class="s1">in_lines.append(</span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+
+    <span class="s1">out_lines = []</span>
+    <span class="s1">original_line_count = len(in_lines)</span>
+    <span class="s2">if </span><span class="s1">config.old_finders:</span>
+        <span class="s1">finder = FindersManager(config=config).find</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">finder = partial(place.module, config=config)</span>
+
+    <span class="s1">line_count = len(in_lines)</span>
+
+    <span class="s1">place_imports: Dict[str, List[str]] = {}</span>
+    <span class="s1">import_placements: Dict[str, str] = {}</span>
+    <span class="s1">as_map: Dict[str, Dict[str, List[str]]] = {</span>
+        <span class="s3">&quot;straight&quot;</span><span class="s1">: defaultdict(list),</span>
+        <span class="s3">&quot;from&quot;</span><span class="s1">: defaultdict(list),</span>
+    <span class="s1">}</span>
+    <span class="s1">imports: OrderedDict[str, Dict[str, Any]] = OrderedDict()</span>
+    <span class="s1">verbose_output: List[str] = []</span>
+
+    <span class="s2">for </span><span class="s1">section </span><span class="s2">in </span><span class="s1">chain(config.sections, config.forced_separate):</span>
+        <span class="s1">imports[section] = {</span><span class="s3">&quot;straight&quot;</span><span class="s1">: OrderedDict(), </span><span class="s3">&quot;from&quot;</span><span class="s1">: OrderedDict()}</span>
+    <span class="s1">categorized_comments: CommentsDict = {</span>
+        <span class="s3">&quot;from&quot;</span><span class="s1">: {},</span>
+        <span class="s3">&quot;straight&quot;</span><span class="s1">: {},</span>
+        <span class="s3">&quot;nested&quot;</span><span class="s1">: {},</span>
+        <span class="s3">&quot;above&quot;</span><span class="s1">: {</span><span class="s3">&quot;straight&quot;</span><span class="s1">: {}, </span><span class="s3">&quot;from&quot;</span><span class="s1">: {}},</span>
+    <span class="s1">}</span>
+
+    <span class="s1">index = </span><span class="s5">0</span>
+    <span class="s1">import_index = -</span><span class="s5">1</span>
+    <span class="s1">in_quote = </span><span class="s3">&quot;&quot;</span>
+    <span class="s2">while </span><span class="s1">index &lt; line_count:</span>
+        <span class="s1">line = in_lines[index]</span>
+        <span class="s1">index += </span><span class="s5">1</span>
+        <span class="s1">statement_index = index</span>
+        <span class="s1">(skipping_line, in_quote) = skip_line(</span>
+            <span class="s1">line, in_quote=in_quote, index=index, section_comments=config.section_comments</span>
+        <span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">line </span><span class="s2">in </span><span class="s1">config.section_comments </span><span class="s2">and not </span><span class="s1">skipping_line:</span>
+            <span class="s2">if </span><span class="s1">import_index == -</span><span class="s5">1</span><span class="s1">:</span>
+                <span class="s1">import_index = index - </span><span class="s5">1</span>
+            <span class="s2">continue</span>
+
+        <span class="s2">if </span><span class="s3">&quot;isort:imports-&quot; </span><span class="s2">in </span><span class="s1">line </span><span class="s2">and </span><span class="s1">line.startswith(</span><span class="s3">&quot;#&quot;</span><span class="s1">):</span>
+            <span class="s1">section = line.split(</span><span class="s3">&quot;isort:imports-&quot;</span><span class="s1">)[-</span><span class="s5">1</span><span class="s1">].split()[</span><span class="s5">0</span><span class="s1">].upper()</span>
+            <span class="s1">place_imports[section] = []</span>
+            <span class="s1">import_placements[line] = section</span>
+        <span class="s2">elif </span><span class="s3">&quot;isort: imports-&quot; </span><span class="s2">in </span><span class="s1">line </span><span class="s2">and </span><span class="s1">line.startswith(</span><span class="s3">&quot;#&quot;</span><span class="s1">):</span>
+            <span class="s1">section = line.split(</span><span class="s3">&quot;isort: imports-&quot;</span><span class="s1">)[-</span><span class="s5">1</span><span class="s1">].split()[</span><span class="s5">0</span><span class="s1">].upper()</span>
+            <span class="s1">place_imports[section] = []</span>
+            <span class="s1">import_placements[line] = section</span>
+
+        <span class="s2">if </span><span class="s1">skipping_line:</span>
+            <span class="s1">out_lines.append(line)</span>
+            <span class="s2">continue</span>
+
+        <span class="s1">lstripped_line = line.lstrip()</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">config.float_to_top</span>
+            <span class="s2">and </span><span class="s1">import_index == -</span><span class="s5">1</span>
+            <span class="s2">and </span><span class="s1">line</span>
+            <span class="s2">and not </span><span class="s1">in_quote</span>
+            <span class="s2">and not </span><span class="s1">lstripped_line.startswith(</span><span class="s3">&quot;#&quot;</span><span class="s1">)</span>
+            <span class="s2">and not </span><span class="s1">lstripped_line.startswith(</span><span class="s3">&quot;'''&quot;</span><span class="s1">)</span>
+            <span class="s2">and not </span><span class="s1">lstripped_line.startswith(</span><span class="s3">'&quot;&quot;&quot;'</span><span class="s1">)</span>
+        <span class="s1">):</span>
+            <span class="s2">if not </span><span class="s1">lstripped_line.startswith(</span><span class="s3">&quot;import&quot;</span><span class="s1">) </span><span class="s2">and not </span><span class="s1">lstripped_line.startswith(</span><span class="s3">&quot;from&quot;</span><span class="s1">):</span>
+                <span class="s1">import_index = index - </span><span class="s5">1</span>
+                <span class="s2">while </span><span class="s1">import_index </span><span class="s2">and not </span><span class="s1">in_lines[import_index - </span><span class="s5">1</span><span class="s1">]:</span>
+                    <span class="s1">import_index -= </span><span class="s5">1</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">commentless = line.split(</span><span class="s3">&quot;#&quot;</span><span class="s1">, </span><span class="s5">1</span><span class="s1">)[</span><span class="s5">0</span><span class="s1">].strip()</span>
+                <span class="s2">if </span><span class="s1">(</span>
+                    <span class="s1">(</span><span class="s3">&quot;isort:skip&quot; </span><span class="s2">in </span><span class="s1">line </span><span class="s2">or </span><span class="s3">&quot;isort: skip&quot; </span><span class="s2">in </span><span class="s1">line)</span>
+                    <span class="s2">and </span><span class="s3">&quot;(&quot; </span><span class="s2">in </span><span class="s1">commentless</span>
+                    <span class="s2">and </span><span class="s3">&quot;)&quot; </span><span class="s2">not in </span><span class="s1">commentless</span>
+                <span class="s1">):</span>
+                    <span class="s1">import_index = index</span>
+
+                    <span class="s1">starting_line = line</span>
+                    <span class="s2">while </span><span class="s3">&quot;isort:skip&quot; </span><span class="s2">in </span><span class="s1">starting_line </span><span class="s2">or </span><span class="s3">&quot;isort: skip&quot; </span><span class="s2">in </span><span class="s1">starting_line:</span>
+                        <span class="s1">commentless = starting_line.split(</span><span class="s3">&quot;#&quot;</span><span class="s1">, </span><span class="s5">1</span><span class="s1">)[</span><span class="s5">0</span><span class="s1">]</span>
+                        <span class="s2">if </span><span class="s1">(</span>
+                            <span class="s3">&quot;(&quot; </span><span class="s2">in </span><span class="s1">commentless</span>
+                            <span class="s2">and not </span><span class="s1">commentless.rstrip().endswith(</span><span class="s3">&quot;)&quot;</span><span class="s1">)</span>
+                            <span class="s2">and </span><span class="s1">import_index &lt; line_count</span>
+                        <span class="s1">):</span>
+
+                            <span class="s2">while </span><span class="s1">import_index &lt; line_count </span><span class="s2">and not </span><span class="s1">commentless.rstrip().endswith(</span>
+                                <span class="s3">&quot;)&quot;</span>
+                            <span class="s1">):</span>
+                                <span class="s1">commentless = in_lines[import_index].split(</span><span class="s3">&quot;#&quot;</span><span class="s1">, </span><span class="s5">1</span><span class="s1">)[</span><span class="s5">0</span><span class="s1">]</span>
+                                <span class="s1">import_index += </span><span class="s5">1</span>
+                        <span class="s2">else</span><span class="s1">:</span>
+                            <span class="s1">import_index += </span><span class="s5">1</span>
+
+                        <span class="s2">if </span><span class="s1">import_index &gt;= line_count:</span>
+                            <span class="s2">break</span>
+
+                        <span class="s1">starting_line = in_lines[import_index]</span>
+
+        <span class="s1">line, *end_of_line_comment = line.split(</span><span class="s3">&quot;#&quot;</span><span class="s1">, </span><span class="s5">1</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s3">&quot;;&quot; </span><span class="s2">in </span><span class="s1">line:</span>
+            <span class="s1">statements = [line.strip() </span><span class="s2">for </span><span class="s1">line </span><span class="s2">in </span><span class="s1">line.split(</span><span class="s3">&quot;;&quot;</span><span class="s1">)]</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">statements = [line]</span>
+        <span class="s2">if </span><span class="s1">end_of_line_comment:</span>
+            <span class="s1">statements[-</span><span class="s5">1</span><span class="s1">] = </span><span class="s3">f&quot;</span><span class="s4">{</span><span class="s1">statements[-</span><span class="s5">1</span><span class="s1">]</span><span class="s4">}</span><span class="s3">#</span><span class="s4">{</span><span class="s1">end_of_line_comment[</span><span class="s5">0</span><span class="s1">]</span><span class="s4">}</span><span class="s3">&quot;</span>
+
+        <span class="s2">for </span><span class="s1">statement </span><span class="s2">in </span><span class="s1">statements:</span>
+            <span class="s1">line, raw_line = _normalize_line(statement)</span>
+            <span class="s1">type_of_import = import_type(line, config) </span><span class="s2">or </span><span class="s3">&quot;&quot;</span>
+            <span class="s1">raw_lines = [raw_line]</span>
+            <span class="s2">if not </span><span class="s1">type_of_import:</span>
+                <span class="s1">out_lines.append(raw_line)</span>
+                <span class="s2">continue</span>
+
+            <span class="s2">if </span><span class="s1">import_index == -</span><span class="s5">1</span><span class="s1">:</span>
+                <span class="s1">import_index = index - </span><span class="s5">1</span>
+            <span class="s1">nested_comments = {}</span>
+            <span class="s1">import_string, comment = parse_comments(line)</span>
+            <span class="s1">comments = [comment] </span><span class="s2">if </span><span class="s1">comment </span><span class="s2">else </span><span class="s1">[]</span>
+            <span class="s1">line_parts = [part </span><span class="s2">for </span><span class="s1">part </span><span class="s2">in </span><span class="s1">_strip_syntax(import_string).strip().split(</span><span class="s3">&quot; &quot;</span><span class="s1">) </span><span class="s2">if </span><span class="s1">part]</span>
+            <span class="s2">if </span><span class="s1">type_of_import == </span><span class="s3">&quot;from&quot; </span><span class="s2">and </span><span class="s1">len(line_parts) == </span><span class="s5">2 </span><span class="s2">and </span><span class="s1">comments:</span>
+                <span class="s1">nested_comments[line_parts[-</span><span class="s5">1</span><span class="s1">]] = comments[</span><span class="s5">0</span><span class="s1">]</span>
+
+            <span class="s2">if </span><span class="s3">&quot;(&quot; </span><span class="s2">in </span><span class="s1">line.split(</span><span class="s3">&quot;#&quot;</span><span class="s1">, </span><span class="s5">1</span><span class="s1">)[</span><span class="s5">0</span><span class="s1">] </span><span class="s2">and </span><span class="s1">index &lt; line_count:</span>
+                <span class="s2">while not </span><span class="s1">line.split(</span><span class="s3">&quot;#&quot;</span><span class="s1">)[</span><span class="s5">0</span><span class="s1">].strip().endswith(</span><span class="s3">&quot;)&quot;</span><span class="s1">) </span><span class="s2">and </span><span class="s1">index &lt; line_count:</span>
+                    <span class="s1">line, new_comment = parse_comments(in_lines[index])</span>
+                    <span class="s1">index += </span><span class="s5">1</span>
+                    <span class="s2">if </span><span class="s1">new_comment:</span>
+                        <span class="s1">comments.append(new_comment)</span>
+                    <span class="s1">stripped_line = _strip_syntax(line).strip()</span>
+                    <span class="s2">if </span><span class="s1">(</span>
+                        <span class="s1">type_of_import == </span><span class="s3">&quot;from&quot;</span>
+                        <span class="s2">and </span><span class="s1">stripped_line</span>
+                        <span class="s2">and </span><span class="s3">&quot; &quot; </span><span class="s2">not in </span><span class="s1">stripped_line.replace(</span><span class="s3">&quot; as &quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+                        <span class="s2">and </span><span class="s1">new_comment</span>
+                    <span class="s1">):</span>
+                        <span class="s1">nested_comments[stripped_line] = comments[-</span><span class="s5">1</span><span class="s1">]</span>
+                    <span class="s1">import_string += line_separator + line</span>
+                    <span class="s1">raw_lines.append(line)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">while </span><span class="s1">line.strip().endswith(</span><span class="s3">&quot;</span><span class="s4">\\</span><span class="s3">&quot;</span><span class="s1">):</span>
+                    <span class="s1">line, new_comment = parse_comments(in_lines[index])</span>
+                    <span class="s1">index += </span><span class="s5">1</span>
+                    <span class="s2">if </span><span class="s1">new_comment:</span>
+                        <span class="s1">comments.append(new_comment)</span>
+
+                    <span class="s0"># Still need to check for parentheses after an escaped line</span>
+                    <span class="s2">if </span><span class="s1">(</span>
+                        <span class="s3">&quot;(&quot; </span><span class="s2">in </span><span class="s1">line.split(</span><span class="s3">&quot;#&quot;</span><span class="s1">)[</span><span class="s5">0</span><span class="s1">]</span>
+                        <span class="s2">and </span><span class="s3">&quot;)&quot; </span><span class="s2">not in </span><span class="s1">line.split(</span><span class="s3">&quot;#&quot;</span><span class="s1">)[</span><span class="s5">0</span><span class="s1">]</span>
+                        <span class="s2">and </span><span class="s1">index &lt; line_count</span>
+                    <span class="s1">):</span>
+                        <span class="s1">stripped_line = _strip_syntax(line).strip()</span>
+                        <span class="s2">if </span><span class="s1">(</span>
+                            <span class="s1">type_of_import == </span><span class="s3">&quot;from&quot;</span>
+                            <span class="s2">and </span><span class="s1">stripped_line</span>
+                            <span class="s2">and </span><span class="s3">&quot; &quot; </span><span class="s2">not in </span><span class="s1">stripped_line.replace(</span><span class="s3">&quot; as &quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+                            <span class="s2">and </span><span class="s1">new_comment</span>
+                        <span class="s1">):</span>
+                            <span class="s1">nested_comments[stripped_line] = comments[-</span><span class="s5">1</span><span class="s1">]</span>
+                        <span class="s1">import_string += line_separator + line</span>
+                        <span class="s1">raw_lines.append(line)</span>
+
+                        <span class="s2">while not </span><span class="s1">line.split(</span><span class="s3">&quot;#&quot;</span><span class="s1">)[</span><span class="s5">0</span><span class="s1">].strip().endswith(</span><span class="s3">&quot;)&quot;</span><span class="s1">) </span><span class="s2">and </span><span class="s1">index &lt; line_count:</span>
+                            <span class="s1">line, new_comment = parse_comments(in_lines[index])</span>
+                            <span class="s1">index += </span><span class="s5">1</span>
+                            <span class="s2">if </span><span class="s1">new_comment:</span>
+                                <span class="s1">comments.append(new_comment)</span>
+                            <span class="s1">stripped_line = _strip_syntax(line).strip()</span>
+                            <span class="s2">if </span><span class="s1">(</span>
+                                <span class="s1">type_of_import == </span><span class="s3">&quot;from&quot;</span>
+                                <span class="s2">and </span><span class="s1">stripped_line</span>
+                                <span class="s2">and </span><span class="s3">&quot; &quot; </span><span class="s2">not in </span><span class="s1">stripped_line.replace(</span><span class="s3">&quot; as &quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+                                <span class="s2">and </span><span class="s1">new_comment</span>
+                            <span class="s1">):</span>
+                                <span class="s1">nested_comments[stripped_line] = comments[-</span><span class="s5">1</span><span class="s1">]</span>
+                            <span class="s1">import_string += line_separator + line</span>
+                            <span class="s1">raw_lines.append(line)</span>
+
+                    <span class="s1">stripped_line = _strip_syntax(line).strip()</span>
+                    <span class="s2">if </span><span class="s1">(</span>
+                        <span class="s1">type_of_import == </span><span class="s3">&quot;from&quot;</span>
+                        <span class="s2">and </span><span class="s1">stripped_line</span>
+                        <span class="s2">and </span><span class="s3">&quot; &quot; </span><span class="s2">not in </span><span class="s1">stripped_line.replace(</span><span class="s3">&quot; as &quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+                        <span class="s2">and </span><span class="s1">new_comment</span>
+                    <span class="s1">):</span>
+                        <span class="s1">nested_comments[stripped_line] = comments[-</span><span class="s5">1</span><span class="s1">]</span>
+                    <span class="s2">if </span><span class="s1">import_string.strip().endswith(</span>
+                        <span class="s1">(</span><span class="s3">&quot; import&quot;</span><span class="s1">, </span><span class="s3">&quot; cimport&quot;</span><span class="s1">)</span>
+                    <span class="s1">) </span><span class="s2">or </span><span class="s1">line.strip().startswith((</span><span class="s3">&quot;import &quot;</span><span class="s1">, </span><span class="s3">&quot;cimport &quot;</span><span class="s1">)):</span>
+                        <span class="s1">import_string += line_separator + line</span>
+                    <span class="s2">else</span><span class="s1">:</span>
+                        <span class="s1">import_string = import_string.rstrip().rstrip(</span><span class="s3">&quot;</span><span class="s4">\\</span><span class="s3">&quot;</span><span class="s1">) + </span><span class="s3">&quot; &quot; </span><span class="s1">+ line.lstrip()</span>
+
+            <span class="s2">if </span><span class="s1">type_of_import == </span><span class="s3">&quot;from&quot;</span><span class="s1">:</span>
+                <span class="s1">cimports: bool</span>
+                <span class="s1">import_string = (</span>
+                    <span class="s1">import_string.replace(</span><span class="s3">&quot;import(&quot;</span><span class="s1">, </span><span class="s3">&quot;import (&quot;</span><span class="s1">)</span>
+                    <span class="s1">.replace(</span><span class="s3">&quot;</span><span class="s4">\\</span><span class="s3">&quot;</span><span class="s1">, </span><span class="s3">&quot; &quot;</span><span class="s1">)</span>
+                    <span class="s1">.replace(</span><span class="s3">&quot;</span><span class="s4">\n</span><span class="s3">&quot;</span><span class="s1">, </span><span class="s3">&quot; &quot;</span><span class="s1">)</span>
+                <span class="s1">)</span>
+                <span class="s2">if </span><span class="s3">&quot;import &quot; </span><span class="s2">not in </span><span class="s1">import_string:</span>
+                    <span class="s1">out_lines.extend(raw_lines)</span>
+                    <span class="s2">continue</span>
+
+                <span class="s2">if </span><span class="s3">&quot; cimport &quot; </span><span class="s2">in </span><span class="s1">import_string:</span>
+                    <span class="s1">parts = import_string.split(</span><span class="s3">&quot; cimport &quot;</span><span class="s1">)</span>
+                    <span class="s1">cimports = </span><span class="s2">True</span>
+
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">parts = import_string.split(</span><span class="s3">&quot; import &quot;</span><span class="s1">)</span>
+                    <span class="s1">cimports = </span><span class="s2">False</span>
+
+                <span class="s1">from_import = parts[</span><span class="s5">0</span><span class="s1">].split(</span><span class="s3">&quot; &quot;</span><span class="s1">)</span>
+                <span class="s1">import_string = (</span><span class="s3">&quot; cimport &quot; </span><span class="s2">if </span><span class="s1">cimports </span><span class="s2">else </span><span class="s3">&quot; import &quot;</span><span class="s1">).join(</span>
+                    <span class="s1">[from_import[</span><span class="s5">0</span><span class="s1">] + </span><span class="s3">&quot; &quot; </span><span class="s1">+ </span><span class="s3">&quot;&quot;</span><span class="s1">.join(from_import[</span><span class="s5">1</span><span class="s1">:])] + parts[</span><span class="s5">1</span><span class="s1">:]</span>
+                <span class="s1">)</span>
+
+            <span class="s1">just_imports = [</span>
+                <span class="s1">item.replace(</span><span class="s3">&quot;{|&quot;</span><span class="s1">, </span><span class="s3">&quot;{ &quot;</span><span class="s1">).replace(</span><span class="s3">&quot;|}&quot;</span><span class="s1">, </span><span class="s3">&quot; }&quot;</span><span class="s1">)</span>
+                <span class="s2">for </span><span class="s1">item </span><span class="s2">in </span><span class="s1">_strip_syntax(import_string).split()</span>
+            <span class="s1">]</span>
+
+            <span class="s1">attach_comments_to: Optional[List[Any]] = </span><span class="s2">None</span>
+            <span class="s1">direct_imports = just_imports[</span><span class="s5">1</span><span class="s1">:]</span>
+            <span class="s1">straight_import = </span><span class="s2">True</span>
+            <span class="s1">top_level_module = </span><span class="s3">&quot;&quot;</span>
+            <span class="s2">if </span><span class="s3">&quot;as&quot; </span><span class="s2">in </span><span class="s1">just_imports </span><span class="s2">and </span><span class="s1">(just_imports.index(</span><span class="s3">&quot;as&quot;</span><span class="s1">) + </span><span class="s5">1</span><span class="s1">) &lt; len(just_imports):</span>
+                <span class="s1">straight_import = </span><span class="s2">False</span>
+                <span class="s2">while </span><span class="s3">&quot;as&quot; </span><span class="s2">in </span><span class="s1">just_imports:</span>
+                    <span class="s1">nested_module = </span><span class="s2">None</span>
+                    <span class="s1">as_index = just_imports.index(</span><span class="s3">&quot;as&quot;</span><span class="s1">)</span>
+                    <span class="s2">if </span><span class="s1">type_of_import == </span><span class="s3">&quot;from&quot;</span><span class="s1">:</span>
+                        <span class="s1">nested_module = just_imports[as_index - </span><span class="s5">1</span><span class="s1">]</span>
+                        <span class="s1">top_level_module = just_imports[</span><span class="s5">0</span><span class="s1">]</span>
+                        <span class="s1">module = top_level_module + </span><span class="s3">&quot;.&quot; </span><span class="s1">+ nested_module</span>
+                        <span class="s1">as_name = just_imports[as_index + </span><span class="s5">1</span><span class="s1">]</span>
+                        <span class="s1">direct_imports.remove(nested_module)</span>
+                        <span class="s1">direct_imports.remove(as_name)</span>
+                        <span class="s1">direct_imports.remove(</span><span class="s3">&quot;as&quot;</span><span class="s1">)</span>
+                        <span class="s2">if </span><span class="s1">nested_module == as_name </span><span class="s2">and </span><span class="s1">config.remove_redundant_aliases:</span>
+                            <span class="s2">pass</span>
+                        <span class="s2">elif </span><span class="s1">as_name </span><span class="s2">not in </span><span class="s1">as_map[</span><span class="s3">&quot;from&quot;</span><span class="s1">][module]:</span>
+                            <span class="s1">as_map[</span><span class="s3">&quot;from&quot;</span><span class="s1">][module].append(as_name)</span>
+
+                        <span class="s1">full_name = </span><span class="s3">f&quot;</span><span class="s4">{</span><span class="s1">nested_module</span><span class="s4">} </span><span class="s3">as </span><span class="s4">{</span><span class="s1">as_name</span><span class="s4">}</span><span class="s3">&quot;</span>
+                        <span class="s1">associated_comment = nested_comments.get(full_name)</span>
+                        <span class="s2">if </span><span class="s1">associated_comment:</span>
+                            <span class="s1">categorized_comments[</span><span class="s3">&quot;nested&quot;</span><span class="s1">].setdefault(top_level_module, {})[</span>
+                                <span class="s1">full_name</span>
+                            <span class="s1">] = associated_comment</span>
+                            <span class="s2">if </span><span class="s1">associated_comment </span><span class="s2">in </span><span class="s1">comments:</span>
+                                <span class="s1">comments.pop(comments.index(associated_comment))</span>
+                    <span class="s2">else</span><span class="s1">:</span>
+                        <span class="s1">module = just_imports[as_index - </span><span class="s5">1</span><span class="s1">]</span>
+                        <span class="s1">as_name = just_imports[as_index + </span><span class="s5">1</span><span class="s1">]</span>
+                        <span class="s2">if </span><span class="s1">module == as_name </span><span class="s2">and </span><span class="s1">config.remove_redundant_aliases:</span>
+                            <span class="s2">pass</span>
+                        <span class="s2">elif </span><span class="s1">as_name </span><span class="s2">not in </span><span class="s1">as_map[</span><span class="s3">&quot;straight&quot;</span><span class="s1">][module]:</span>
+                            <span class="s1">as_map[</span><span class="s3">&quot;straight&quot;</span><span class="s1">][module].append(as_name)</span>
+
+                    <span class="s2">if </span><span class="s1">comments </span><span class="s2">and </span><span class="s1">attach_comments_to </span><span class="s2">is None</span><span class="s1">:</span>
+                        <span class="s2">if </span><span class="s1">nested_module </span><span class="s2">and </span><span class="s1">config.combine_as_imports:</span>
+                            <span class="s1">attach_comments_to = categorized_comments[</span><span class="s3">&quot;from&quot;</span><span class="s1">].setdefault(</span>
+                                <span class="s3">f&quot;</span><span class="s4">{</span><span class="s1">top_level_module</span><span class="s4">}</span><span class="s3">.__combined_as__&quot;</span><span class="s1">, []</span>
+                            <span class="s1">)</span>
+                        <span class="s2">else</span><span class="s1">:</span>
+                            <span class="s2">if </span><span class="s1">type_of_import == </span><span class="s3">&quot;from&quot; </span><span class="s2">or </span><span class="s1">(</span>
+                                <span class="s1">config.remove_redundant_aliases </span><span class="s2">and </span><span class="s1">as_name == module.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">)[-</span><span class="s5">1</span><span class="s1">]</span>
+                            <span class="s1">):</span>
+                                <span class="s1">attach_comments_to = categorized_comments[</span><span class="s3">&quot;straight&quot;</span><span class="s1">].setdefault(</span>
+                                    <span class="s1">module, []</span>
+                                <span class="s1">)</span>
+                            <span class="s2">else</span><span class="s1">:</span>
+                                <span class="s1">attach_comments_to = categorized_comments[</span><span class="s3">&quot;straight&quot;</span><span class="s1">].setdefault(</span>
+                                    <span class="s3">f&quot;</span><span class="s4">{</span><span class="s1">module</span><span class="s4">} </span><span class="s3">as </span><span class="s4">{</span><span class="s1">as_name</span><span class="s4">}</span><span class="s3">&quot;</span><span class="s1">, []</span>
+                                <span class="s1">)</span>
+                    <span class="s2">del </span><span class="s1">just_imports[as_index : as_index + </span><span class="s5">2</span><span class="s1">]</span>
+
+            <span class="s2">if </span><span class="s1">type_of_import == </span><span class="s3">&quot;from&quot;</span><span class="s1">:</span>
+                <span class="s1">import_from = just_imports.pop(</span><span class="s5">0</span><span class="s1">)</span>
+                <span class="s1">placed_module = finder(import_from)</span>
+                <span class="s2">if </span><span class="s1">config.verbose </span><span class="s2">and not </span><span class="s1">config.only_modified:</span>
+                    <span class="s1">print(</span><span class="s3">f&quot;from-type place_module for </span><span class="s4">{</span><span class="s1">import_from</span><span class="s4">} </span><span class="s3">returned </span><span class="s4">{</span><span class="s1">placed_module</span><span class="s4">}</span><span class="s3">&quot;</span><span class="s1">)</span>
+
+                <span class="s2">elif </span><span class="s1">config.verbose:</span>
+                    <span class="s1">verbose_output.append(</span>
+                        <span class="s3">f&quot;from-type place_module for </span><span class="s4">{</span><span class="s1">import_from</span><span class="s4">} </span><span class="s3">returned </span><span class="s4">{</span><span class="s1">placed_module</span><span class="s4">}</span><span class="s3">&quot;</span>
+                    <span class="s1">)</span>
+                <span class="s2">if </span><span class="s1">placed_module == </span><span class="s3">&quot;&quot;</span><span class="s1">:</span>
+                    <span class="s1">warn(</span>
+                        <span class="s3">f&quot;could not place module </span><span class="s4">{</span><span class="s1">import_from</span><span class="s4">} </span><span class="s3">of line </span><span class="s4">{</span><span class="s1">line</span><span class="s4">} </span><span class="s3">--&quot;</span>
+                        <span class="s3">&quot; Do you need to define a default section?&quot;</span>
+                    <span class="s1">)</span>
+                <span class="s1">root = imports[placed_module][type_of_import]  </span><span class="s0"># type: ignore</span>
+                <span class="s2">for </span><span class="s1">import_name </span><span class="s2">in </span><span class="s1">just_imports:</span>
+                    <span class="s1">associated_comment = nested_comments.get(import_name)</span>
+                    <span class="s2">if </span><span class="s1">associated_comment:</span>
+                        <span class="s1">categorized_comments[</span><span class="s3">&quot;nested&quot;</span><span class="s1">].setdefault(import_from, {})[</span>
+                            <span class="s1">import_name</span>
+                        <span class="s1">] = associated_comment</span>
+                        <span class="s2">if </span><span class="s1">associated_comment </span><span class="s2">in </span><span class="s1">comments:</span>
+                            <span class="s1">comments.pop(comments.index(associated_comment))</span>
+
+                <span class="s2">if </span><span class="s1">comments </span><span class="s2">and </span><span class="s1">attach_comments_to </span><span class="s2">is None</span><span class="s1">:</span>
+                    <span class="s1">attach_comments_to = categorized_comments[</span><span class="s3">&quot;from&quot;</span><span class="s1">].setdefault(import_from, [])</span>
+
+                <span class="s2">if </span><span class="s1">len(out_lines) &gt; max(import_index, </span><span class="s5">1</span><span class="s1">) - </span><span class="s5">1</span><span class="s1">:</span>
+                    <span class="s1">last = out_lines[-</span><span class="s5">1</span><span class="s1">].rstrip() </span><span class="s2">if </span><span class="s1">out_lines </span><span class="s2">else </span><span class="s3">&quot;&quot;</span>
+                    <span class="s2">while </span><span class="s1">(</span>
+                        <span class="s1">last.startswith(</span><span class="s3">&quot;#&quot;</span><span class="s1">)</span>
+                        <span class="s2">and not </span><span class="s1">last.endswith(</span><span class="s3">'&quot;&quot;&quot;'</span><span class="s1">)</span>
+                        <span class="s2">and not </span><span class="s1">last.endswith(</span><span class="s3">&quot;'''&quot;</span><span class="s1">)</span>
+                        <span class="s2">and </span><span class="s3">&quot;isort:imports-&quot; </span><span class="s2">not in </span><span class="s1">last</span>
+                        <span class="s2">and </span><span class="s3">&quot;isort: imports-&quot; </span><span class="s2">not in </span><span class="s1">last</span>
+                        <span class="s2">and not </span><span class="s1">config.treat_all_comments_as_code</span>
+                        <span class="s2">and not </span><span class="s1">last.strip() </span><span class="s2">in </span><span class="s1">config.treat_comments_as_code</span>
+                    <span class="s1">):</span>
+                        <span class="s1">categorized_comments[</span><span class="s3">&quot;above&quot;</span><span class="s1">][</span><span class="s3">&quot;from&quot;</span><span class="s1">].setdefault(import_from, []).insert(</span>
+                            <span class="s5">0</span><span class="s1">, out_lines.pop(-</span><span class="s5">1</span><span class="s1">)</span>
+                        <span class="s1">)</span>
+                        <span class="s2">if </span><span class="s1">out_lines:</span>
+                            <span class="s1">last = out_lines[-</span><span class="s5">1</span><span class="s1">].rstrip()</span>
+                        <span class="s2">else</span><span class="s1">:</span>
+                            <span class="s1">last = </span><span class="s3">&quot;&quot;</span>
+                    <span class="s2">if </span><span class="s1">statement_index - </span><span class="s5">1 </span><span class="s1">== import_index:  </span><span class="s0"># pragma: no cover</span>
+                        <span class="s1">import_index -= len(</span>
+                            <span class="s1">categorized_comments[</span><span class="s3">&quot;above&quot;</span><span class="s1">][</span><span class="s3">&quot;from&quot;</span><span class="s1">].get(import_from, [])</span>
+                        <span class="s1">)</span>
+
+                <span class="s2">if </span><span class="s1">import_from </span><span class="s2">not in </span><span class="s1">root:</span>
+                    <span class="s1">root[import_from] = OrderedDict(</span>
+                        <span class="s1">(module, module </span><span class="s2">in </span><span class="s1">direct_imports) </span><span class="s2">for </span><span class="s1">module </span><span class="s2">in </span><span class="s1">just_imports</span>
+                    <span class="s1">)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">root[import_from].update(</span>
+                        <span class="s1">(module, root[import_from].get(module, </span><span class="s2">False</span><span class="s1">) </span><span class="s2">or </span><span class="s1">module </span><span class="s2">in </span><span class="s1">direct_imports)</span>
+                        <span class="s2">for </span><span class="s1">module </span><span class="s2">in </span><span class="s1">just_imports</span>
+                    <span class="s1">)</span>
+
+                <span class="s2">if </span><span class="s1">comments </span><span class="s2">and </span><span class="s1">attach_comments_to </span><span class="s2">is not None</span><span class="s1">:</span>
+                    <span class="s1">attach_comments_to.extend(comments)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">if </span><span class="s1">comments </span><span class="s2">and </span><span class="s1">attach_comments_to </span><span class="s2">is not None</span><span class="s1">:</span>
+                    <span class="s1">attach_comments_to.extend(comments)</span>
+                    <span class="s1">comments = []</span>
+
+                <span class="s2">for </span><span class="s1">module </span><span class="s2">in </span><span class="s1">just_imports:</span>
+                    <span class="s2">if </span><span class="s1">comments:</span>
+                        <span class="s1">categorized_comments[</span><span class="s3">&quot;straight&quot;</span><span class="s1">][module] = comments</span>
+                        <span class="s1">comments = []</span>
+
+                    <span class="s2">if </span><span class="s1">len(out_lines) &gt; max(import_index, +</span><span class="s5">1</span><span class="s1">, </span><span class="s5">1</span><span class="s1">) - </span><span class="s5">1</span><span class="s1">:</span>
+
+                        <span class="s1">last = out_lines[-</span><span class="s5">1</span><span class="s1">].rstrip() </span><span class="s2">if </span><span class="s1">out_lines </span><span class="s2">else </span><span class="s3">&quot;&quot;</span>
+                        <span class="s2">while </span><span class="s1">(</span>
+                            <span class="s1">last.startswith(</span><span class="s3">&quot;#&quot;</span><span class="s1">)</span>
+                            <span class="s2">and not </span><span class="s1">last.endswith(</span><span class="s3">'&quot;&quot;&quot;'</span><span class="s1">)</span>
+                            <span class="s2">and not </span><span class="s1">last.endswith(</span><span class="s3">&quot;'''&quot;</span><span class="s1">)</span>
+                            <span class="s2">and </span><span class="s3">&quot;isort:imports-&quot; </span><span class="s2">not in </span><span class="s1">last</span>
+                            <span class="s2">and </span><span class="s3">&quot;isort: imports-&quot; </span><span class="s2">not in </span><span class="s1">last</span>
+                            <span class="s2">and not </span><span class="s1">config.treat_all_comments_as_code</span>
+                            <span class="s2">and not </span><span class="s1">last.strip() </span><span class="s2">in </span><span class="s1">config.treat_comments_as_code</span>
+                        <span class="s1">):</span>
+                            <span class="s1">categorized_comments[</span><span class="s3">&quot;above&quot;</span><span class="s1">][</span><span class="s3">&quot;straight&quot;</span><span class="s1">].setdefault(module, []).insert(</span>
+                                <span class="s5">0</span><span class="s1">, out_lines.pop(-</span><span class="s5">1</span><span class="s1">)</span>
+                            <span class="s1">)</span>
+                            <span class="s2">if </span><span class="s1">out_lines:</span>
+                                <span class="s1">last = out_lines[-</span><span class="s5">1</span><span class="s1">].rstrip()</span>
+                            <span class="s2">else</span><span class="s1">:</span>
+                                <span class="s1">last = </span><span class="s3">&quot;&quot;</span>
+                        <span class="s2">if </span><span class="s1">index - </span><span class="s5">1 </span><span class="s1">== import_index:</span>
+                            <span class="s1">import_index -= len(</span>
+                                <span class="s1">categorized_comments[</span><span class="s3">&quot;above&quot;</span><span class="s1">][</span><span class="s3">&quot;straight&quot;</span><span class="s1">].get(module, [])</span>
+                            <span class="s1">)</span>
+                    <span class="s1">placed_module = finder(module)</span>
+                    <span class="s2">if </span><span class="s1">config.verbose </span><span class="s2">and not </span><span class="s1">config.only_modified:</span>
+                        <span class="s1">print(</span><span class="s3">f&quot;else-type place_module for </span><span class="s4">{</span><span class="s1">module</span><span class="s4">} </span><span class="s3">returned </span><span class="s4">{</span><span class="s1">placed_module</span><span class="s4">}</span><span class="s3">&quot;</span><span class="s1">)</span>
+
+                    <span class="s2">elif </span><span class="s1">config.verbose:</span>
+                        <span class="s1">verbose_output.append(</span>
+                            <span class="s3">f&quot;else-type place_module for </span><span class="s4">{</span><span class="s1">module</span><span class="s4">} </span><span class="s3">returned </span><span class="s4">{</span><span class="s1">placed_module</span><span class="s4">}</span><span class="s3">&quot;</span>
+                        <span class="s1">)</span>
+                    <span class="s2">if </span><span class="s1">placed_module == </span><span class="s3">&quot;&quot;</span><span class="s1">:</span>
+                        <span class="s1">warn(</span>
+                            <span class="s3">f&quot;could not place module </span><span class="s4">{</span><span class="s1">module</span><span class="s4">} </span><span class="s3">of line </span><span class="s4">{</span><span class="s1">line</span><span class="s4">} </span><span class="s3">--&quot;</span>
+                            <span class="s3">&quot; Do you need to define a default section?&quot;</span>
+                        <span class="s1">)</span>
+                        <span class="s1">imports.setdefault(</span><span class="s3">&quot;&quot;</span><span class="s1">, {</span><span class="s3">&quot;straight&quot;</span><span class="s1">: OrderedDict(), </span><span class="s3">&quot;from&quot;</span><span class="s1">: OrderedDict()})</span>
+
+                    <span class="s2">if </span><span class="s1">placed_module </span><span class="s2">and </span><span class="s1">placed_module </span><span class="s2">not in </span><span class="s1">imports:</span>
+                        <span class="s2">raise </span><span class="s1">MissingSection(import_module=module, section=placed_module)</span>
+
+                    <span class="s1">straight_import |= imports[placed_module][type_of_import].get(  </span><span class="s0"># type: ignore</span>
+                        <span class="s1">module, </span><span class="s2">False</span>
+                    <span class="s1">)</span>
+                    <span class="s1">imports[placed_module][type_of_import][module] = straight_import  </span><span class="s0"># type: ignore</span>
+
+    <span class="s1">change_count = len(out_lines) - original_line_count</span>
+
+    <span class="s2">return </span><span class="s1">ParsedContent(</span>
+        <span class="s1">in_lines=in_lines,</span>
+        <span class="s1">lines_without_imports=out_lines,</span>
+        <span class="s1">import_index=import_index,</span>
+        <span class="s1">place_imports=place_imports,</span>
+        <span class="s1">import_placements=import_placements,</span>
+        <span class="s1">as_map=as_map,</span>
+        <span class="s1">imports=imports,</span>
+        <span class="s1">categorized_comments=categorized_comments,</span>
+        <span class="s1">change_count=change_count,</span>
+        <span class="s1">original_line_count=original_line_count,</span>
+        <span class="s1">line_separator=line_separator,</span>
+        <span class="s1">sections=config.sections,</span>
+        <span class="s1">verbose_output=verbose_output,</span>
+    <span class="s1">)</span>
+</pre>
+</body>
+</html>

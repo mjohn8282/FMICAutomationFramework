@@ -1,0 +1,17 @@
+<html>
+<head>
+<title>pytest-cov.pth</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #abb2bf;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+pytest-cov.pth</font>
+</center></td></tr></table>
+<pre><span class="s0">import os, sys;exec('if \'COV_CORE_SOURCE\' in os.environ:\n try:\n  from pytest_cov.embed import init\n  init()\n except Exception as exc:\n  sys.stderr.write(\n   &quot;pytest-cov: Failed to setup subprocess coverage. &quot;\n   &quot;Environ: {0!r} &quot;\n   &quot;Exception: {1!r}\\n&quot;.format(\n    dict((k, v) for k, v in os.environ.items() if k.startswith(\'COV_CORE\')),\n    exc\n   )\n  )\n')</span></pre>
+</body>
+</html>

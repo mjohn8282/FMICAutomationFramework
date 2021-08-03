@@ -1,0 +1,1075 @@
+<html>
+<head>
+<title>decoder.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #d19a66;}
+.s3 { color: #5c6370;}
+.s4 { color: #98c379;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+decoder.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">datetime</span>
+<span class="s0">import </span><span class="s1">io</span>
+<span class="s0">import </span><span class="s1">re</span>
+<span class="s0">import </span><span class="s1">sys</span>
+<span class="s0">from </span><span class="s1">os </span><span class="s0">import </span><span class="s1">linesep</span>
+
+<span class="s0">from </span><span class="s1">.tz </span><span class="s0">import </span><span class="s1">TomlTz</span>
+
+<span class="s0">if </span><span class="s1">sys.version_info &lt; (</span><span class="s2">3</span><span class="s1">,):</span>
+    <span class="s1">_range = xrange  </span><span class="s3"># noqa: F821</span>
+<span class="s0">else</span><span class="s1">:</span>
+    <span class="s1">unicode = str</span>
+    <span class="s1">_range = range</span>
+    <span class="s1">basestring = str</span>
+    <span class="s1">unichr = chr</span>
+
+
+<span class="s0">def </span><span class="s1">_detect_pathlib_path(p):</span>
+    <span class="s0">if </span><span class="s1">(</span><span class="s2">3</span><span class="s1">, </span><span class="s2">4</span><span class="s1">) &lt;= sys.version_info:</span>
+        <span class="s0">import </span><span class="s1">pathlib</span>
+
+        <span class="s0">if </span><span class="s1">isinstance(p, pathlib.PurePath):</span>
+            <span class="s0">return True</span>
+    <span class="s0">return False</span>
+
+
+<span class="s0">def </span><span class="s1">_ispath(p):</span>
+    <span class="s0">if </span><span class="s1">isinstance(p, (bytes, basestring)):</span>
+        <span class="s0">return True</span>
+    <span class="s0">return </span><span class="s1">_detect_pathlib_path(p)</span>
+
+
+<span class="s0">def </span><span class="s1">_getpath(p):</span>
+    <span class="s0">if </span><span class="s1">(</span><span class="s2">3</span><span class="s1">, </span><span class="s2">6</span><span class="s1">) &lt;= sys.version_info:</span>
+        <span class="s0">import </span><span class="s1">os</span>
+
+        <span class="s0">return </span><span class="s1">os.fspath(p)</span>
+    <span class="s0">if </span><span class="s1">_detect_pathlib_path(p):</span>
+        <span class="s0">return </span><span class="s1">str(p)</span>
+    <span class="s0">return </span><span class="s1">p</span>
+
+
+<span class="s0">try</span><span class="s1">:</span>
+    <span class="s1">FNFError = FileNotFoundError</span>
+<span class="s0">except </span><span class="s1">NameError:</span>
+    <span class="s1">FNFError = IOError</span>
+
+
+<span class="s1">TIME_RE = re.compile(</span><span class="s4">r&quot;([0-9]{2}):([0-9]{2}):([0-9]{2})(\.([0-9]{3,6}))?&quot;</span><span class="s1">)</span>
+
+
+<span class="s0">class </span><span class="s1">TomlDecodeError(ValueError):</span>
+    <span class="s3">&quot;&quot;&quot;Base toml Exception / Error.&quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, msg, doc, pos):</span>
+        <span class="s1">lineno = doc.count(</span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">, </span><span class="s2">0</span><span class="s1">, pos) + </span><span class="s2">1</span>
+        <span class="s1">colno = pos - doc.rfind(</span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">, </span><span class="s2">0</span><span class="s1">, pos)</span>
+        <span class="s1">emsg = </span><span class="s4">&quot;{} (line {} column {} char {})&quot;</span><span class="s1">.format(msg, lineno, colno, pos)</span>
+        <span class="s1">ValueError.__init__(self, emsg)</span>
+        <span class="s1">self.msg = msg</span>
+        <span class="s1">self.doc = doc</span>
+        <span class="s1">self.pos = pos</span>
+        <span class="s1">self.lineno = lineno</span>
+        <span class="s1">self.colno = colno</span>
+
+
+<span class="s3"># Matches a TOML number, which allows underscores for readability</span>
+<span class="s1">_number_with_underscores = re.compile(</span><span class="s4">&quot;([0-9])(_([0-9]))*&quot;</span><span class="s1">)</span>
+
+
+<span class="s0">class </span><span class="s1">CommentValue(object):</span>
+    <span class="s0">def </span><span class="s1">__init__(self, val, comment, beginline, _dict):</span>
+        <span class="s1">self.val = val</span>
+        <span class="s1">separator = </span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot; </span><span class="s0">if </span><span class="s1">beginline </span><span class="s0">else </span><span class="s4">&quot; &quot;</span>
+        <span class="s1">self.comment = separator + comment</span>
+        <span class="s1">self._dict = _dict</span>
+
+    <span class="s0">def </span><span class="s1">__getitem__(self, key):</span>
+        <span class="s0">return </span><span class="s1">self.val[key]</span>
+
+    <span class="s0">def </span><span class="s1">__setitem__(self, key, value):</span>
+        <span class="s1">self.val[key] = value</span>
+
+    <span class="s0">def </span><span class="s1">dump(self, dump_value_func):</span>
+        <span class="s1">retstr = dump_value_func(self.val)</span>
+        <span class="s0">if </span><span class="s1">isinstance(self.val, self._dict):</span>
+            <span class="s0">return </span><span class="s1">self.comment + </span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot; </span><span class="s1">+ unicode(retstr)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">unicode(retstr) + self.comment</span>
+
+
+<span class="s0">def </span><span class="s1">_strictly_valid_num(n):</span>
+    <span class="s1">n = n.strip()</span>
+    <span class="s0">if not </span><span class="s1">n:</span>
+        <span class="s0">return False</span>
+    <span class="s0">if </span><span class="s1">n[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;_&quot;</span><span class="s1">:</span>
+        <span class="s0">return False</span>
+    <span class="s0">if </span><span class="s1">n[-</span><span class="s2">1</span><span class="s1">] == </span><span class="s4">&quot;_&quot;</span><span class="s1">:</span>
+        <span class="s0">return False</span>
+    <span class="s0">if </span><span class="s4">&quot;_.&quot; </span><span class="s0">in </span><span class="s1">n </span><span class="s0">or </span><span class="s4">&quot;._&quot; </span><span class="s0">in </span><span class="s1">n:</span>
+        <span class="s0">return False</span>
+    <span class="s0">if </span><span class="s1">len(n) == </span><span class="s2">1</span><span class="s1">:</span>
+        <span class="s0">return True</span>
+    <span class="s0">if </span><span class="s1">n[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;0&quot; </span><span class="s0">and </span><span class="s1">n[</span><span class="s2">1</span><span class="s1">] </span><span class="s0">not in </span><span class="s1">[</span><span class="s4">&quot;.&quot;</span><span class="s1">, </span><span class="s4">&quot;o&quot;</span><span class="s1">, </span><span class="s4">&quot;b&quot;</span><span class="s1">, </span><span class="s4">&quot;x&quot;</span><span class="s1">]:</span>
+        <span class="s0">return False</span>
+    <span class="s0">if </span><span class="s1">n[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;+&quot; </span><span class="s0">or </span><span class="s1">n[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;-&quot;</span><span class="s1">:</span>
+        <span class="s1">n = n[</span><span class="s2">1</span><span class="s1">:]</span>
+        <span class="s0">if </span><span class="s1">len(n) &gt; </span><span class="s2">1 </span><span class="s0">and </span><span class="s1">n[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;0&quot; </span><span class="s0">and </span><span class="s1">n[</span><span class="s2">1</span><span class="s1">] != </span><span class="s4">&quot;.&quot;</span><span class="s1">:</span>
+            <span class="s0">return False</span>
+    <span class="s0">if </span><span class="s4">&quot;__&quot; </span><span class="s0">in </span><span class="s1">n:</span>
+        <span class="s0">return False</span>
+    <span class="s0">return True</span>
+
+
+<span class="s0">def </span><span class="s1">load(f, _dict=dict, decoder=</span><span class="s0">None</span><span class="s1">):</span>
+    <span class="s3">&quot;&quot;&quot;Parses named file or files as toml and returns a dictionary 
+ 
+    Args: 
+        f: Path to the file to open, array of files to read into single dict 
+           or a file descriptor 
+        _dict: (optional) Specifies the class of the returned toml dictionary 
+        decoder: The decoder to use 
+ 
+    Returns: 
+        Parsed toml file represented as a dictionary 
+ 
+    Raises: 
+        TypeError -- When f is invalid type 
+        TomlDecodeError: Error while decoding toml 
+        IOError / FileNotFoundError -- When an array with no valid (existing) 
+        (Python 2 / Python 3)          file paths is passed 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">if </span><span class="s1">_ispath(f):</span>
+        <span class="s0">with </span><span class="s1">io.open(_getpath(f), encoding=</span><span class="s4">&quot;utf-8&quot;</span><span class="s1">) </span><span class="s0">as </span><span class="s1">ffile:</span>
+            <span class="s0">return </span><span class="s1">loads(ffile.read(), _dict, decoder)</span>
+    <span class="s0">elif </span><span class="s1">isinstance(f, list):</span>
+        <span class="s0">from </span><span class="s1">os </span><span class="s0">import </span><span class="s1">path </span><span class="s0">as </span><span class="s1">op</span>
+        <span class="s0">from </span><span class="s1">warnings </span><span class="s0">import </span><span class="s1">warn</span>
+
+        <span class="s0">if not </span><span class="s1">[path </span><span class="s0">for </span><span class="s1">path </span><span class="s0">in </span><span class="s1">f </span><span class="s0">if </span><span class="s1">op.exists(path)]:</span>
+            <span class="s1">error_msg = </span><span class="s4">&quot;Load expects a list to contain filenames only.&quot;</span>
+            <span class="s1">error_msg += linesep</span>
+            <span class="s1">error_msg += </span><span class="s4">&quot;The list needs to contain the path of at least one &quot; &quot;existing file.&quot;</span>
+            <span class="s0">raise </span><span class="s1">FNFError(error_msg)</span>
+        <span class="s0">if </span><span class="s1">decoder </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">decoder = TomlDecoder(_dict)</span>
+        <span class="s1">d = decoder.get_empty_table()</span>
+        <span class="s0">for </span><span class="s1">l </span><span class="s0">in </span><span class="s1">f:  </span><span class="s3"># noqa: E741</span>
+            <span class="s0">if </span><span class="s1">op.exists(l):</span>
+                <span class="s1">d.update(load(l, _dict, decoder))</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">warn(</span><span class="s4">&quot;Non-existent filename in list with at least one valid &quot; &quot;filename&quot;</span><span class="s1">)</span>
+        <span class="s0">return </span><span class="s1">d</span>
+    <span class="s0">else</span><span class="s1">:</span>
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">loads(f.read(), _dict, decoder)</span>
+        <span class="s0">except </span><span class="s1">AttributeError:</span>
+            <span class="s0">raise </span><span class="s1">TypeError(</span><span class="s4">&quot;You can only load a file descriptor, filename or &quot; &quot;list&quot;</span><span class="s1">)</span>
+
+
+<span class="s1">_groupname_re = re.compile(</span><span class="s4">r&quot;^[A-Za-z0-9_-]+$&quot;</span><span class="s1">)</span>
+
+
+<span class="s0">def </span><span class="s1">loads(s, _dict=dict, decoder=</span><span class="s0">None</span><span class="s1">):</span>
+    <span class="s3">&quot;&quot;&quot;Parses string as toml 
+ 
+    Args: 
+        s: String to be parsed 
+        _dict: (optional) Specifies the class of the returned toml dictionary 
+ 
+    Returns: 
+        Parsed toml file represented as a dictionary 
+ 
+    Raises: 
+        TypeError: When a non-string is passed 
+        TomlDecodeError: Error while decoding toml 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">implicitgroups = []</span>
+    <span class="s0">if </span><span class="s1">decoder </span><span class="s0">is None</span><span class="s1">:</span>
+        <span class="s1">decoder = TomlDecoder(_dict)</span>
+    <span class="s1">retval = decoder.get_empty_table()</span>
+    <span class="s1">currentlevel = retval</span>
+    <span class="s0">if not </span><span class="s1">isinstance(s, basestring):</span>
+        <span class="s0">raise </span><span class="s1">TypeError(</span><span class="s4">&quot;Expecting something like a string&quot;</span><span class="s1">)</span>
+
+    <span class="s0">if not </span><span class="s1">isinstance(s, unicode):</span>
+        <span class="s1">s = s.decode(</span><span class="s4">&quot;utf8&quot;</span><span class="s1">)</span>
+
+    <span class="s1">original = s</span>
+    <span class="s1">sl = list(s)</span>
+    <span class="s1">openarr = </span><span class="s2">0</span>
+    <span class="s1">openstring = </span><span class="s0">False</span>
+    <span class="s1">openstrchar = </span><span class="s4">&quot;&quot;</span>
+    <span class="s1">multilinestr = </span><span class="s0">False</span>
+    <span class="s1">arrayoftables = </span><span class="s0">False</span>
+    <span class="s1">beginline = </span><span class="s0">True</span>
+    <span class="s1">keygroup = </span><span class="s0">False</span>
+    <span class="s1">dottedkey = </span><span class="s0">False</span>
+    <span class="s1">keyname = </span><span class="s2">0</span>
+    <span class="s1">key = </span><span class="s4">&quot;&quot;</span>
+    <span class="s1">prev_key = </span><span class="s4">&quot;&quot;</span>
+    <span class="s1">line_no = </span><span class="s2">1</span>
+
+    <span class="s0">for </span><span class="s1">i, item </span><span class="s0">in </span><span class="s1">enumerate(sl):</span>
+        <span class="s0">if </span><span class="s1">item == </span><span class="s4">&quot;</span><span class="s5">\r</span><span class="s4">&quot; </span><span class="s0">and </span><span class="s1">sl[i + </span><span class="s2">1</span><span class="s1">] == </span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">:</span>
+            <span class="s1">sl[i] = </span><span class="s4">&quot; &quot;</span>
+            <span class="s0">continue</span>
+        <span class="s0">if </span><span class="s1">keyname:</span>
+            <span class="s1">key += item</span>
+            <span class="s0">if </span><span class="s1">item == </span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">:</span>
+                <span class="s0">raise </span><span class="s1">TomlDecodeError(</span>
+                    <span class="s4">&quot;Key name found without value.&quot; &quot; Reached end of line.&quot;</span><span class="s1">, original, i</span>
+                <span class="s1">)</span>
+            <span class="s0">if </span><span class="s1">openstring:</span>
+                <span class="s0">if </span><span class="s1">item == openstrchar:</span>
+                    <span class="s1">oddbackslash = </span><span class="s0">False</span>
+                    <span class="s1">k = </span><span class="s2">1</span>
+                    <span class="s0">while </span><span class="s1">i &gt;= k </span><span class="s0">and </span><span class="s1">sl[i - k] == </span><span class="s4">&quot;</span><span class="s5">\\</span><span class="s4">&quot;</span><span class="s1">:</span>
+                        <span class="s1">oddbackslash = </span><span class="s0">not </span><span class="s1">oddbackslash</span>
+                        <span class="s1">k += </span><span class="s2">1</span>
+                    <span class="s0">if not </span><span class="s1">oddbackslash:</span>
+                        <span class="s1">keyname = </span><span class="s2">2</span>
+                        <span class="s1">openstring = </span><span class="s0">False</span>
+                        <span class="s1">openstrchar = </span><span class="s4">&quot;&quot;</span>
+                <span class="s0">continue</span>
+            <span class="s0">elif </span><span class="s1">keyname == </span><span class="s2">1</span><span class="s1">:</span>
+                <span class="s0">if </span><span class="s1">item.isspace():</span>
+                    <span class="s1">keyname = </span><span class="s2">2</span>
+                    <span class="s0">continue</span>
+                <span class="s0">elif </span><span class="s1">item == </span><span class="s4">&quot;.&quot;</span><span class="s1">:</span>
+                    <span class="s1">dottedkey = </span><span class="s0">True</span>
+                    <span class="s0">continue</span>
+                <span class="s0">elif </span><span class="s1">item.isalnum() </span><span class="s0">or </span><span class="s1">item == </span><span class="s4">&quot;_&quot; </span><span class="s0">or </span><span class="s1">item == </span><span class="s4">&quot;-&quot;</span><span class="s1">:</span>
+                    <span class="s0">continue</span>
+                <span class="s0">elif </span><span class="s1">dottedkey </span><span class="s0">and </span><span class="s1">sl[i - </span><span class="s2">1</span><span class="s1">] == </span><span class="s4">&quot;.&quot; </span><span class="s0">and </span><span class="s1">(item == </span><span class="s4">'&quot;' </span><span class="s0">or </span><span class="s1">item == </span><span class="s4">&quot;'&quot;</span><span class="s1">):</span>
+                    <span class="s1">openstring = </span><span class="s0">True</span>
+                    <span class="s1">openstrchar = item</span>
+                    <span class="s0">continue</span>
+            <span class="s0">elif </span><span class="s1">keyname == </span><span class="s2">2</span><span class="s1">:</span>
+                <span class="s0">if </span><span class="s1">item.isspace():</span>
+                    <span class="s0">if </span><span class="s1">dottedkey:</span>
+                        <span class="s1">nextitem = sl[i + </span><span class="s2">1</span><span class="s1">]</span>
+                        <span class="s0">if not </span><span class="s1">nextitem.isspace() </span><span class="s0">and </span><span class="s1">nextitem != </span><span class="s4">&quot;.&quot;</span><span class="s1">:</span>
+                            <span class="s1">keyname = </span><span class="s2">1</span>
+                    <span class="s0">continue</span>
+                <span class="s0">if </span><span class="s1">item == </span><span class="s4">&quot;.&quot;</span><span class="s1">:</span>
+                    <span class="s1">dottedkey = </span><span class="s0">True</span>
+                    <span class="s1">nextitem = sl[i + </span><span class="s2">1</span><span class="s1">]</span>
+                    <span class="s0">if not </span><span class="s1">nextitem.isspace() </span><span class="s0">and </span><span class="s1">nextitem != </span><span class="s4">&quot;.&quot;</span><span class="s1">:</span>
+                        <span class="s1">keyname = </span><span class="s2">1</span>
+                    <span class="s0">continue</span>
+            <span class="s0">if </span><span class="s1">item == </span><span class="s4">&quot;=&quot;</span><span class="s1">:</span>
+                <span class="s1">keyname = </span><span class="s2">0</span>
+                <span class="s1">prev_key = key[:-</span><span class="s2">1</span><span class="s1">].rstrip()</span>
+                <span class="s1">key = </span><span class="s4">&quot;&quot;</span>
+                <span class="s1">dottedkey = </span><span class="s0">False</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s0">raise </span><span class="s1">TomlDecodeError(</span>
+                    <span class="s4">&quot;Found invalid character in key name: '&quot;</span>
+                    <span class="s1">+ item</span>
+                    <span class="s1">+ </span><span class="s4">&quot;'. Try quoting the key name.&quot;</span><span class="s1">,</span>
+                    <span class="s1">original,</span>
+                    <span class="s1">i,</span>
+                <span class="s1">)</span>
+        <span class="s0">if </span><span class="s1">item == </span><span class="s4">&quot;'&quot; </span><span class="s0">and </span><span class="s1">openstrchar != </span><span class="s4">'&quot;'</span><span class="s1">:</span>
+            <span class="s1">k = </span><span class="s2">1</span>
+            <span class="s0">try</span><span class="s1">:</span>
+                <span class="s0">while </span><span class="s1">sl[i - k] == </span><span class="s4">&quot;'&quot;</span><span class="s1">:</span>
+                    <span class="s1">k += </span><span class="s2">1</span>
+                    <span class="s0">if </span><span class="s1">k == </span><span class="s2">3</span><span class="s1">:</span>
+                        <span class="s0">break</span>
+            <span class="s0">except </span><span class="s1">IndexError:</span>
+                <span class="s0">pass</span>
+            <span class="s0">if </span><span class="s1">k == </span><span class="s2">3</span><span class="s1">:</span>
+                <span class="s1">multilinestr = </span><span class="s0">not </span><span class="s1">multilinestr</span>
+                <span class="s1">openstring = multilinestr</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">openstring = </span><span class="s0">not </span><span class="s1">openstring</span>
+            <span class="s0">if </span><span class="s1">openstring:</span>
+                <span class="s1">openstrchar = </span><span class="s4">&quot;'&quot;</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">openstrchar = </span><span class="s4">&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">item == </span><span class="s4">'&quot;' </span><span class="s0">and </span><span class="s1">openstrchar != </span><span class="s4">&quot;'&quot;</span><span class="s1">:</span>
+            <span class="s1">oddbackslash = </span><span class="s0">False</span>
+            <span class="s1">k = </span><span class="s2">1</span>
+            <span class="s1">tripquote = </span><span class="s0">False</span>
+            <span class="s0">try</span><span class="s1">:</span>
+                <span class="s0">while </span><span class="s1">sl[i - k] == </span><span class="s4">'&quot;'</span><span class="s1">:</span>
+                    <span class="s1">k += </span><span class="s2">1</span>
+                    <span class="s0">if </span><span class="s1">k == </span><span class="s2">3</span><span class="s1">:</span>
+                        <span class="s1">tripquote = </span><span class="s0">True</span>
+                        <span class="s0">break</span>
+                <span class="s0">if </span><span class="s1">k == </span><span class="s2">1 </span><span class="s0">or </span><span class="s1">(k == </span><span class="s2">3 </span><span class="s0">and </span><span class="s1">tripquote):</span>
+                    <span class="s0">while </span><span class="s1">sl[i - k] == </span><span class="s4">&quot;</span><span class="s5">\\</span><span class="s4">&quot;</span><span class="s1">:</span>
+                        <span class="s1">oddbackslash = </span><span class="s0">not </span><span class="s1">oddbackslash</span>
+                        <span class="s1">k += </span><span class="s2">1</span>
+            <span class="s0">except </span><span class="s1">IndexError:</span>
+                <span class="s0">pass</span>
+            <span class="s0">if not </span><span class="s1">oddbackslash:</span>
+                <span class="s0">if </span><span class="s1">tripquote:</span>
+                    <span class="s1">multilinestr = </span><span class="s0">not </span><span class="s1">multilinestr</span>
+                    <span class="s1">openstring = multilinestr</span>
+                <span class="s0">else</span><span class="s1">:</span>
+                    <span class="s1">openstring = </span><span class="s0">not </span><span class="s1">openstring</span>
+            <span class="s0">if </span><span class="s1">openstring:</span>
+                <span class="s1">openstrchar = </span><span class="s4">'&quot;'</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">openstrchar = </span><span class="s4">&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">item == </span><span class="s4">&quot;#&quot; </span><span class="s0">and </span><span class="s1">(</span><span class="s0">not </span><span class="s1">openstring </span><span class="s0">and not </span><span class="s1">keygroup </span><span class="s0">and not </span><span class="s1">arrayoftables):</span>
+            <span class="s1">j = i</span>
+            <span class="s1">comment = </span><span class="s4">&quot;&quot;</span>
+            <span class="s0">try</span><span class="s1">:</span>
+                <span class="s0">while </span><span class="s1">sl[j] != </span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">:</span>
+                    <span class="s1">comment += s[j]</span>
+                    <span class="s1">sl[j] = </span><span class="s4">&quot; &quot;</span>
+                    <span class="s1">j += </span><span class="s2">1</span>
+            <span class="s0">except </span><span class="s1">IndexError:</span>
+                <span class="s0">break</span>
+            <span class="s0">if not </span><span class="s1">openarr:</span>
+                <span class="s1">decoder.preserve_comment(line_no, prev_key, comment, beginline)</span>
+        <span class="s0">if </span><span class="s1">item == </span><span class="s4">&quot;[&quot; </span><span class="s0">and </span><span class="s1">(</span><span class="s0">not </span><span class="s1">openstring </span><span class="s0">and not </span><span class="s1">keygroup </span><span class="s0">and not </span><span class="s1">arrayoftables):</span>
+            <span class="s0">if </span><span class="s1">beginline:</span>
+                <span class="s0">if </span><span class="s1">len(sl) &gt; i + </span><span class="s2">1 </span><span class="s0">and </span><span class="s1">sl[i + </span><span class="s2">1</span><span class="s1">] == </span><span class="s4">&quot;[&quot;</span><span class="s1">:</span>
+                    <span class="s1">arrayoftables = </span><span class="s0">True</span>
+                <span class="s0">else</span><span class="s1">:</span>
+                    <span class="s1">keygroup = </span><span class="s0">True</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">openarr += </span><span class="s2">1</span>
+        <span class="s0">if </span><span class="s1">item == </span><span class="s4">&quot;]&quot; </span><span class="s0">and not </span><span class="s1">openstring:</span>
+            <span class="s0">if </span><span class="s1">keygroup:</span>
+                <span class="s1">keygroup = </span><span class="s0">False</span>
+            <span class="s0">elif </span><span class="s1">arrayoftables:</span>
+                <span class="s0">if </span><span class="s1">sl[i - </span><span class="s2">1</span><span class="s1">] == </span><span class="s4">&quot;]&quot;</span><span class="s1">:</span>
+                    <span class="s1">arrayoftables = </span><span class="s0">False</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">openarr -= </span><span class="s2">1</span>
+        <span class="s0">if </span><span class="s1">item == </span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">:</span>
+            <span class="s0">if </span><span class="s1">openstring </span><span class="s0">or </span><span class="s1">multilinestr:</span>
+                <span class="s0">if not </span><span class="s1">multilinestr:</span>
+                    <span class="s0">raise </span><span class="s1">TomlDecodeError(</span><span class="s4">&quot;Unbalanced quotes&quot;</span><span class="s1">, original, i)</span>
+                <span class="s0">if </span><span class="s1">(sl[i - </span><span class="s2">1</span><span class="s1">] == </span><span class="s4">&quot;'&quot; </span><span class="s0">or </span><span class="s1">sl[i - </span><span class="s2">1</span><span class="s1">] == </span><span class="s4">'&quot;'</span><span class="s1">) </span><span class="s0">and </span><span class="s1">(sl[i - </span><span class="s2">2</span><span class="s1">] == sl[i - </span><span class="s2">1</span><span class="s1">]):</span>
+                    <span class="s1">sl[i] = sl[i - </span><span class="s2">1</span><span class="s1">]</span>
+                    <span class="s0">if </span><span class="s1">sl[i - </span><span class="s2">3</span><span class="s1">] == sl[i - </span><span class="s2">1</span><span class="s1">]:</span>
+                        <span class="s1">sl[i - </span><span class="s2">3</span><span class="s1">] = </span><span class="s4">&quot; &quot;</span>
+            <span class="s0">elif </span><span class="s1">openarr:</span>
+                <span class="s1">sl[i] = </span><span class="s4">&quot; &quot;</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">beginline = </span><span class="s0">True</span>
+            <span class="s1">line_no += </span><span class="s2">1</span>
+        <span class="s0">elif </span><span class="s1">beginline </span><span class="s0">and </span><span class="s1">sl[i] != </span><span class="s4">&quot; &quot; </span><span class="s0">and </span><span class="s1">sl[i] != </span><span class="s4">&quot;</span><span class="s5">\t</span><span class="s4">&quot;</span><span class="s1">:</span>
+            <span class="s1">beginline = </span><span class="s0">False</span>
+            <span class="s0">if not </span><span class="s1">keygroup </span><span class="s0">and not </span><span class="s1">arrayoftables:</span>
+                <span class="s0">if </span><span class="s1">sl[i] == </span><span class="s4">&quot;=&quot;</span><span class="s1">:</span>
+                    <span class="s0">raise </span><span class="s1">TomlDecodeError(</span><span class="s4">&quot;Found empty keyname. &quot;</span><span class="s1">, original, i)</span>
+                <span class="s1">keyname = </span><span class="s2">1</span>
+                <span class="s1">key += item</span>
+    <span class="s0">if </span><span class="s1">keyname:</span>
+        <span class="s0">raise </span><span class="s1">TomlDecodeError(</span>
+            <span class="s4">&quot;Key name found without value.&quot; &quot; Reached end of file.&quot;</span><span class="s1">, original, len(s)</span>
+        <span class="s1">)</span>
+    <span class="s0">if </span><span class="s1">openstring:  </span><span class="s3"># reached EOF and have an unterminated string</span>
+        <span class="s0">raise </span><span class="s1">TomlDecodeError(</span>
+            <span class="s4">&quot;Unterminated string found.&quot; &quot; Reached end of file.&quot;</span><span class="s1">, original, len(s)</span>
+        <span class="s1">)</span>
+    <span class="s1">s = </span><span class="s4">&quot;&quot;</span><span class="s1">.join(sl)</span>
+    <span class="s1">s = s.split(</span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">)</span>
+    <span class="s1">multikey = </span><span class="s0">None</span>
+    <span class="s1">multilinestr = </span><span class="s4">&quot;&quot;</span>
+    <span class="s1">multibackslash = </span><span class="s0">False</span>
+    <span class="s1">pos = </span><span class="s2">0</span>
+    <span class="s0">for </span><span class="s1">idx, line </span><span class="s0">in </span><span class="s1">enumerate(s):</span>
+        <span class="s0">if </span><span class="s1">idx &gt; </span><span class="s2">0</span><span class="s1">:</span>
+            <span class="s1">pos += len(s[idx - </span><span class="s2">1</span><span class="s1">]) + </span><span class="s2">1</span>
+
+        <span class="s1">decoder.embed_comments(idx, currentlevel)</span>
+
+        <span class="s0">if not </span><span class="s1">multilinestr </span><span class="s0">or </span><span class="s1">multibackslash </span><span class="s0">or </span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot; </span><span class="s0">not in </span><span class="s1">multilinestr:</span>
+            <span class="s1">line = line.strip()</span>
+        <span class="s0">if </span><span class="s1">line == </span><span class="s4">&quot;&quot; </span><span class="s0">and </span><span class="s1">(</span><span class="s0">not </span><span class="s1">multikey </span><span class="s0">or </span><span class="s1">multibackslash):</span>
+            <span class="s0">continue</span>
+        <span class="s0">if </span><span class="s1">multikey:</span>
+            <span class="s0">if </span><span class="s1">multibackslash:</span>
+                <span class="s1">multilinestr += line</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">multilinestr += line</span>
+            <span class="s1">multibackslash = </span><span class="s0">False</span>
+            <span class="s1">closed = </span><span class="s0">False</span>
+            <span class="s0">if </span><span class="s1">multilinestr[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;[&quot;</span><span class="s1">:</span>
+                <span class="s1">closed = line[-</span><span class="s2">1</span><span class="s1">] == </span><span class="s4">&quot;]&quot;</span>
+            <span class="s0">elif </span><span class="s1">len(line) &gt; </span><span class="s2">2</span><span class="s1">:</span>
+                <span class="s1">closed = (</span>
+                    <span class="s1">line[-</span><span class="s2">1</span><span class="s1">] == multilinestr[</span><span class="s2">0</span><span class="s1">]</span>
+                    <span class="s0">and </span><span class="s1">line[-</span><span class="s2">2</span><span class="s1">] == multilinestr[</span><span class="s2">0</span><span class="s1">]</span>
+                    <span class="s0">and </span><span class="s1">line[-</span><span class="s2">3</span><span class="s1">] == multilinestr[</span><span class="s2">0</span><span class="s1">]</span>
+                <span class="s1">)</span>
+            <span class="s0">if </span><span class="s1">closed:</span>
+                <span class="s0">try</span><span class="s1">:</span>
+                    <span class="s1">value, vtype = decoder.load_value(multilinestr)</span>
+                <span class="s0">except </span><span class="s1">ValueError </span><span class="s0">as </span><span class="s1">err:</span>
+                    <span class="s0">raise </span><span class="s1">TomlDecodeError(str(err), original, pos)</span>
+                <span class="s1">currentlevel[multikey] = value</span>
+                <span class="s1">multikey = </span><span class="s0">None</span>
+                <span class="s1">multilinestr = </span><span class="s4">&quot;&quot;</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">k = len(multilinestr) - </span><span class="s2">1</span>
+                <span class="s0">while </span><span class="s1">k &gt; -</span><span class="s2">1 </span><span class="s0">and </span><span class="s1">multilinestr[k] == </span><span class="s4">&quot;</span><span class="s5">\\</span><span class="s4">&quot;</span><span class="s1">:</span>
+                    <span class="s1">multibackslash = </span><span class="s0">not </span><span class="s1">multibackslash</span>
+                    <span class="s1">k -= </span><span class="s2">1</span>
+                <span class="s0">if </span><span class="s1">multibackslash:</span>
+                    <span class="s1">multilinestr = multilinestr[:-</span><span class="s2">1</span><span class="s1">]</span>
+                <span class="s0">else</span><span class="s1">:</span>
+                    <span class="s1">multilinestr += </span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span>
+            <span class="s0">continue</span>
+        <span class="s0">if </span><span class="s1">line[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;[&quot;</span><span class="s1">:</span>
+            <span class="s1">arrayoftables = </span><span class="s0">False</span>
+            <span class="s0">if </span><span class="s1">len(line) == </span><span class="s2">1</span><span class="s1">:</span>
+                <span class="s0">raise </span><span class="s1">TomlDecodeError(</span>
+                    <span class="s4">&quot;Opening key group bracket on line by &quot; &quot;itself.&quot;</span><span class="s1">, original, pos</span>
+                <span class="s1">)</span>
+            <span class="s0">if </span><span class="s1">line[</span><span class="s2">1</span><span class="s1">] == </span><span class="s4">&quot;[&quot;</span><span class="s1">:</span>
+                <span class="s1">arrayoftables = </span><span class="s0">True</span>
+                <span class="s1">line = line[</span><span class="s2">2</span><span class="s1">:]</span>
+                <span class="s1">splitstr = </span><span class="s4">&quot;]]&quot;</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">line = line[</span><span class="s2">1</span><span class="s1">:]</span>
+                <span class="s1">splitstr = </span><span class="s4">&quot;]&quot;</span>
+            <span class="s1">i = </span><span class="s2">1</span>
+            <span class="s1">quotesplits = decoder._get_split_on_quotes(line)</span>
+            <span class="s1">quoted = </span><span class="s0">False</span>
+            <span class="s0">for </span><span class="s1">quotesplit </span><span class="s0">in </span><span class="s1">quotesplits:</span>
+                <span class="s0">if not </span><span class="s1">quoted </span><span class="s0">and </span><span class="s1">splitstr </span><span class="s0">in </span><span class="s1">quotesplit:</span>
+                    <span class="s0">break</span>
+                <span class="s1">i += quotesplit.count(splitstr)</span>
+                <span class="s1">quoted = </span><span class="s0">not </span><span class="s1">quoted</span>
+            <span class="s1">line = line.split(splitstr, i)</span>
+            <span class="s0">if </span><span class="s1">len(line) &lt; i + </span><span class="s2">1 </span><span class="s0">or </span><span class="s1">line[-</span><span class="s2">1</span><span class="s1">].strip() != </span><span class="s4">&quot;&quot;</span><span class="s1">:</span>
+                <span class="s0">raise </span><span class="s1">TomlDecodeError(</span><span class="s4">&quot;Key group not on a line by itself.&quot;</span><span class="s1">, original, pos)</span>
+            <span class="s1">groups = splitstr.join(line[:-</span><span class="s2">1</span><span class="s1">]).split(</span><span class="s4">&quot;.&quot;</span><span class="s1">)</span>
+            <span class="s1">i = </span><span class="s2">0</span>
+            <span class="s0">while </span><span class="s1">i &lt; len(groups):</span>
+                <span class="s1">groups[i] = groups[i].strip()</span>
+                <span class="s0">if </span><span class="s1">len(groups[i]) &gt; </span><span class="s2">0 </span><span class="s0">and </span><span class="s1">(groups[i][</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">'&quot;' </span><span class="s0">or </span><span class="s1">groups[i][</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;'&quot;</span><span class="s1">):</span>
+                    <span class="s1">groupstr = groups[i]</span>
+                    <span class="s1">j = i + </span><span class="s2">1</span>
+                    <span class="s0">while not </span><span class="s1">groupstr[</span><span class="s2">0</span><span class="s1">] == groupstr[-</span><span class="s2">1</span><span class="s1">]:</span>
+                        <span class="s1">j += </span><span class="s2">1</span>
+                        <span class="s0">if </span><span class="s1">j &gt; len(groups) + </span><span class="s2">2</span><span class="s1">:</span>
+                            <span class="s0">raise </span><span class="s1">TomlDecodeError(</span>
+                                <span class="s4">&quot;Invalid group name '&quot; </span><span class="s1">+ groupstr + </span><span class="s4">&quot;' Something &quot; </span><span class="s1">+ </span><span class="s4">&quot;went wrong.&quot;</span><span class="s1">,</span>
+                                <span class="s1">original,</span>
+                                <span class="s1">pos,</span>
+                            <span class="s1">)</span>
+                        <span class="s1">groupstr = </span><span class="s4">&quot;.&quot;</span><span class="s1">.join(groups[i:j]).strip()</span>
+                    <span class="s1">groups[i] = groupstr[</span><span class="s2">1</span><span class="s1">:-</span><span class="s2">1</span><span class="s1">]</span>
+                    <span class="s1">groups[i + </span><span class="s2">1 </span><span class="s1">: j] = []</span>
+                <span class="s0">else</span><span class="s1">:</span>
+                    <span class="s0">if not </span><span class="s1">_groupname_re.match(groups[i]):</span>
+                        <span class="s0">raise </span><span class="s1">TomlDecodeError(</span>
+                            <span class="s4">&quot;Invalid group name '&quot; </span><span class="s1">+ groups[i] + </span><span class="s4">&quot;'. Try quoting it.&quot;</span><span class="s1">, original, pos</span>
+                        <span class="s1">)</span>
+                <span class="s1">i += </span><span class="s2">1</span>
+            <span class="s1">currentlevel = retval</span>
+            <span class="s0">for </span><span class="s1">i </span><span class="s0">in </span><span class="s1">_range(len(groups)):</span>
+                <span class="s1">group = groups[i]</span>
+                <span class="s0">if </span><span class="s1">group == </span><span class="s4">&quot;&quot;</span><span class="s1">:</span>
+                    <span class="s0">raise </span><span class="s1">TomlDecodeError(</span>
+                        <span class="s4">&quot;Can't have a keygroup with an empty &quot; &quot;name&quot;</span><span class="s1">, original, pos</span>
+                    <span class="s1">)</span>
+                <span class="s0">try</span><span class="s1">:</span>
+                    <span class="s1">currentlevel[group]</span>
+                    <span class="s0">if </span><span class="s1">i == len(groups) - </span><span class="s2">1</span><span class="s1">:</span>
+                        <span class="s0">if </span><span class="s1">group </span><span class="s0">in </span><span class="s1">implicitgroups:</span>
+                            <span class="s1">implicitgroups.remove(group)</span>
+                            <span class="s0">if </span><span class="s1">arrayoftables:</span>
+                                <span class="s0">raise </span><span class="s1">TomlDecodeError(</span>
+                                    <span class="s4">&quot;An implicitly defined &quot; &quot;table can't be an array&quot;</span><span class="s1">,</span>
+                                    <span class="s1">original,</span>
+                                    <span class="s1">pos,</span>
+                                <span class="s1">)</span>
+                        <span class="s0">elif </span><span class="s1">arrayoftables:</span>
+                            <span class="s1">currentlevel[group].append(decoder.get_empty_table())</span>
+                        <span class="s0">else</span><span class="s1">:</span>
+                            <span class="s0">raise </span><span class="s1">TomlDecodeError(</span>
+                                <span class="s4">&quot;What? &quot; </span><span class="s1">+ group + </span><span class="s4">&quot; already exists?&quot; </span><span class="s1">+ str(currentlevel),</span>
+                                <span class="s1">original,</span>
+                                <span class="s1">pos,</span>
+                            <span class="s1">)</span>
+                <span class="s0">except </span><span class="s1">TypeError:</span>
+                    <span class="s1">currentlevel = currentlevel[-</span><span class="s2">1</span><span class="s1">]</span>
+                    <span class="s0">if </span><span class="s1">group </span><span class="s0">not in </span><span class="s1">currentlevel:</span>
+                        <span class="s1">currentlevel[group] = decoder.get_empty_table()</span>
+                        <span class="s0">if </span><span class="s1">i == len(groups) - </span><span class="s2">1 </span><span class="s0">and </span><span class="s1">arrayoftables:</span>
+                            <span class="s1">currentlevel[group] = [decoder.get_empty_table()]</span>
+                <span class="s0">except </span><span class="s1">KeyError:</span>
+                    <span class="s0">if </span><span class="s1">i != len(groups) - </span><span class="s2">1</span><span class="s1">:</span>
+                        <span class="s1">implicitgroups.append(group)</span>
+                    <span class="s1">currentlevel[group] = decoder.get_empty_table()</span>
+                    <span class="s0">if </span><span class="s1">i == len(groups) - </span><span class="s2">1 </span><span class="s0">and </span><span class="s1">arrayoftables:</span>
+                        <span class="s1">currentlevel[group] = [decoder.get_empty_table()]</span>
+                <span class="s1">currentlevel = currentlevel[group]</span>
+                <span class="s0">if </span><span class="s1">arrayoftables:</span>
+                    <span class="s0">try</span><span class="s1">:</span>
+                        <span class="s1">currentlevel = currentlevel[-</span><span class="s2">1</span><span class="s1">]</span>
+                    <span class="s0">except </span><span class="s1">KeyError:</span>
+                        <span class="s0">pass</span>
+        <span class="s0">elif </span><span class="s1">line[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;{&quot;</span><span class="s1">:</span>
+            <span class="s0">if </span><span class="s1">line[-</span><span class="s2">1</span><span class="s1">] != </span><span class="s4">&quot;}&quot;</span><span class="s1">:</span>
+                <span class="s0">raise </span><span class="s1">TomlDecodeError(</span>
+                    <span class="s4">&quot;Line breaks are not allowed in inline&quot; &quot;objects&quot;</span><span class="s1">, original, pos</span>
+                <span class="s1">)</span>
+            <span class="s0">try</span><span class="s1">:</span>
+                <span class="s1">decoder.load_inline_object(line, currentlevel, multikey, multibackslash)</span>
+            <span class="s0">except </span><span class="s1">ValueError </span><span class="s0">as </span><span class="s1">err:</span>
+                <span class="s0">raise </span><span class="s1">TomlDecodeError(str(err), original, pos)</span>
+        <span class="s0">elif </span><span class="s4">&quot;=&quot; </span><span class="s0">in </span><span class="s1">line:</span>
+            <span class="s0">try</span><span class="s1">:</span>
+                <span class="s1">ret = decoder.load_line(line, currentlevel, multikey, multibackslash)</span>
+            <span class="s0">except </span><span class="s1">ValueError </span><span class="s0">as </span><span class="s1">err:</span>
+                <span class="s0">raise </span><span class="s1">TomlDecodeError(str(err), original, pos)</span>
+            <span class="s0">if </span><span class="s1">ret </span><span class="s0">is not None</span><span class="s1">:</span>
+                <span class="s1">multikey, multilinestr, multibackslash = ret</span>
+    <span class="s0">return </span><span class="s1">retval</span>
+
+
+<span class="s0">def </span><span class="s1">_load_date(val):</span>
+    <span class="s1">microsecond = </span><span class="s2">0</span>
+    <span class="s1">tz = </span><span class="s0">None</span>
+    <span class="s0">try</span><span class="s1">:</span>
+        <span class="s0">if </span><span class="s1">len(val) &gt; </span><span class="s2">19</span><span class="s1">:</span>
+            <span class="s0">if </span><span class="s1">val[</span><span class="s2">19</span><span class="s1">] == </span><span class="s4">&quot;.&quot;</span><span class="s1">:</span>
+                <span class="s0">if </span><span class="s1">val[-</span><span class="s2">1</span><span class="s1">].upper() == </span><span class="s4">&quot;Z&quot;</span><span class="s1">:</span>
+                    <span class="s1">subsecondval = val[</span><span class="s2">20</span><span class="s1">:-</span><span class="s2">1</span><span class="s1">]</span>
+                    <span class="s1">tzval = </span><span class="s4">&quot;Z&quot;</span>
+                <span class="s0">else</span><span class="s1">:</span>
+                    <span class="s1">subsecondvalandtz = val[</span><span class="s2">20</span><span class="s1">:]</span>
+                    <span class="s0">if </span><span class="s4">&quot;+&quot; </span><span class="s0">in </span><span class="s1">subsecondvalandtz:</span>
+                        <span class="s1">splitpoint = subsecondvalandtz.index(</span><span class="s4">&quot;+&quot;</span><span class="s1">)</span>
+                        <span class="s1">subsecondval = subsecondvalandtz[:splitpoint]</span>
+                        <span class="s1">tzval = subsecondvalandtz[splitpoint:]</span>
+                    <span class="s0">elif </span><span class="s4">&quot;-&quot; </span><span class="s0">in </span><span class="s1">subsecondvalandtz:</span>
+                        <span class="s1">splitpoint = subsecondvalandtz.index(</span><span class="s4">&quot;-&quot;</span><span class="s1">)</span>
+                        <span class="s1">subsecondval = subsecondvalandtz[:splitpoint]</span>
+                        <span class="s1">tzval = subsecondvalandtz[splitpoint:]</span>
+                    <span class="s0">else</span><span class="s1">:</span>
+                        <span class="s1">tzval = </span><span class="s0">None</span>
+                        <span class="s1">subsecondval = subsecondvalandtz</span>
+                <span class="s0">if </span><span class="s1">tzval </span><span class="s0">is not None</span><span class="s1">:</span>
+                    <span class="s1">tz = TomlTz(tzval)</span>
+                <span class="s1">microsecond = int(int(subsecondval) * (</span><span class="s2">10 </span><span class="s1">** (</span><span class="s2">6 </span><span class="s1">- len(subsecondval))))</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">tz = TomlTz(val[</span><span class="s2">19</span><span class="s1">:])</span>
+    <span class="s0">except </span><span class="s1">ValueError:</span>
+        <span class="s1">tz = </span><span class="s0">None</span>
+    <span class="s0">if </span><span class="s4">&quot;-&quot; </span><span class="s0">not in </span><span class="s1">val[</span><span class="s2">1</span><span class="s1">:]:</span>
+        <span class="s0">return None</span>
+    <span class="s0">try</span><span class="s1">:</span>
+        <span class="s0">if </span><span class="s1">len(val) == </span><span class="s2">10</span><span class="s1">:</span>
+            <span class="s1">d = datetime.date(int(val[:</span><span class="s2">4</span><span class="s1">]), int(val[</span><span class="s2">5</span><span class="s1">:</span><span class="s2">7</span><span class="s1">]), int(val[</span><span class="s2">8</span><span class="s1">:</span><span class="s2">10</span><span class="s1">]))</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">d = datetime.datetime(</span>
+                <span class="s1">int(val[:</span><span class="s2">4</span><span class="s1">]),</span>
+                <span class="s1">int(val[</span><span class="s2">5</span><span class="s1">:</span><span class="s2">7</span><span class="s1">]),</span>
+                <span class="s1">int(val[</span><span class="s2">8</span><span class="s1">:</span><span class="s2">10</span><span class="s1">]),</span>
+                <span class="s1">int(val[</span><span class="s2">11</span><span class="s1">:</span><span class="s2">13</span><span class="s1">]),</span>
+                <span class="s1">int(val[</span><span class="s2">14</span><span class="s1">:</span><span class="s2">16</span><span class="s1">]),</span>
+                <span class="s1">int(val[</span><span class="s2">17</span><span class="s1">:</span><span class="s2">19</span><span class="s1">]),</span>
+                <span class="s1">microsecond,</span>
+                <span class="s1">tz,</span>
+            <span class="s1">)</span>
+    <span class="s0">except </span><span class="s1">ValueError:</span>
+        <span class="s0">return None</span>
+    <span class="s0">return </span><span class="s1">d</span>
+
+
+<span class="s0">def </span><span class="s1">_load_unicode_escapes(v, hexbytes, prefix):</span>
+    <span class="s1">skip = </span><span class="s0">False</span>
+    <span class="s1">i = len(v) - </span><span class="s2">1</span>
+    <span class="s0">while </span><span class="s1">i &gt; -</span><span class="s2">1 </span><span class="s0">and </span><span class="s1">v[i] == </span><span class="s4">&quot;</span><span class="s5">\\</span><span class="s4">&quot;</span><span class="s1">:</span>
+        <span class="s1">skip = </span><span class="s0">not </span><span class="s1">skip</span>
+        <span class="s1">i -= </span><span class="s2">1</span>
+    <span class="s0">for </span><span class="s1">hx </span><span class="s0">in </span><span class="s1">hexbytes:</span>
+        <span class="s0">if </span><span class="s1">skip:</span>
+            <span class="s1">skip = </span><span class="s0">False</span>
+            <span class="s1">i = len(hx) - </span><span class="s2">1</span>
+            <span class="s0">while </span><span class="s1">i &gt; -</span><span class="s2">1 </span><span class="s0">and </span><span class="s1">hx[i] == </span><span class="s4">&quot;</span><span class="s5">\\</span><span class="s4">&quot;</span><span class="s1">:</span>
+                <span class="s1">skip = </span><span class="s0">not </span><span class="s1">skip</span>
+                <span class="s1">i -= </span><span class="s2">1</span>
+            <span class="s1">v += prefix</span>
+            <span class="s1">v += hx</span>
+            <span class="s0">continue</span>
+        <span class="s1">hxb = </span><span class="s4">&quot;&quot;</span>
+        <span class="s1">i = </span><span class="s2">0</span>
+        <span class="s1">hxblen = </span><span class="s2">4</span>
+        <span class="s0">if </span><span class="s1">prefix == </span><span class="s4">&quot;</span><span class="s5">\\</span><span class="s4">U&quot;</span><span class="s1">:</span>
+            <span class="s1">hxblen = </span><span class="s2">8</span>
+        <span class="s1">hxb = </span><span class="s4">&quot;&quot;</span><span class="s1">.join(hx[i : i + hxblen]).lower()</span>
+        <span class="s0">if </span><span class="s1">hxb.strip(</span><span class="s4">&quot;0123456789abcdef&quot;</span><span class="s1">):</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;Invalid escape sequence: &quot; </span><span class="s1">+ hxb)</span>
+        <span class="s0">if </span><span class="s1">hxb[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;d&quot; </span><span class="s0">and </span><span class="s1">hxb[</span><span class="s2">1</span><span class="s1">].strip(</span><span class="s4">&quot;01234567&quot;</span><span class="s1">):</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span>
+                <span class="s4">&quot;Invalid escape sequence: &quot; </span><span class="s1">+ hxb + </span><span class="s4">&quot;. Only scalar unicode points are allowed.&quot;</span>
+            <span class="s1">)</span>
+        <span class="s1">v += unichr(int(hxb, </span><span class="s2">16</span><span class="s1">))</span>
+        <span class="s1">v += unicode(hx[len(hxb) :])</span>
+    <span class="s0">return </span><span class="s1">v</span>
+
+
+<span class="s3"># Unescape TOML string values.</span>
+
+<span class="s3"># content after the \</span>
+<span class="s1">_escapes = [</span><span class="s4">&quot;0&quot;</span><span class="s1">, </span><span class="s4">&quot;b&quot;</span><span class="s1">, </span><span class="s4">&quot;f&quot;</span><span class="s1">, </span><span class="s4">&quot;n&quot;</span><span class="s1">, </span><span class="s4">&quot;r&quot;</span><span class="s1">, </span><span class="s4">&quot;t&quot;</span><span class="s1">, </span><span class="s4">'&quot;'</span><span class="s1">]</span>
+<span class="s3"># What it should be replaced by</span>
+<span class="s1">_escapedchars = [</span><span class="s4">&quot;</span><span class="s5">\0</span><span class="s4">&quot;</span><span class="s1">, </span><span class="s4">&quot;</span><span class="s5">\b</span><span class="s4">&quot;</span><span class="s1">, </span><span class="s4">&quot;</span><span class="s5">\f</span><span class="s4">&quot;</span><span class="s1">, </span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span><span class="s1">, </span><span class="s4">&quot;</span><span class="s5">\r</span><span class="s4">&quot;</span><span class="s1">, </span><span class="s4">&quot;</span><span class="s5">\t</span><span class="s4">&quot;</span><span class="s1">, </span><span class="s4">'&quot;'</span><span class="s1">]</span>
+<span class="s3"># Used for substitution</span>
+<span class="s1">_escape_to_escapedchars = dict(zip(_escapes, _escapedchars))</span>
+
+
+<span class="s0">def </span><span class="s1">_unescape(v):</span>
+    <span class="s3">&quot;&quot;&quot;Unescape characters in a TOML string.&quot;&quot;&quot;</span>
+    <span class="s1">i = </span><span class="s2">0</span>
+    <span class="s1">backslash = </span><span class="s0">False</span>
+    <span class="s0">while </span><span class="s1">i &lt; len(v):</span>
+        <span class="s0">if </span><span class="s1">backslash:</span>
+            <span class="s1">backslash = </span><span class="s0">False</span>
+            <span class="s0">if </span><span class="s1">v[i] </span><span class="s0">in </span><span class="s1">_escapes:</span>
+                <span class="s1">v = v[: i - </span><span class="s2">1</span><span class="s1">] + _escape_to_escapedchars[v[i]] + v[i + </span><span class="s2">1 </span><span class="s1">:]</span>
+            <span class="s0">elif </span><span class="s1">v[i] == </span><span class="s4">&quot;</span><span class="s5">\\</span><span class="s4">&quot;</span><span class="s1">:</span>
+                <span class="s1">v = v[: i - </span><span class="s2">1</span><span class="s1">] + v[i:]</span>
+            <span class="s0">elif </span><span class="s1">v[i] == </span><span class="s4">&quot;u&quot; </span><span class="s0">or </span><span class="s1">v[i] == </span><span class="s4">&quot;U&quot;</span><span class="s1">:</span>
+                <span class="s1">i += </span><span class="s2">1</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;Reserved escape sequence used&quot;</span><span class="s1">)</span>
+            <span class="s0">continue</span>
+        <span class="s0">elif </span><span class="s1">v[i] == </span><span class="s4">&quot;</span><span class="s5">\\</span><span class="s4">&quot;</span><span class="s1">:</span>
+            <span class="s1">backslash = </span><span class="s0">True</span>
+        <span class="s1">i += </span><span class="s2">1</span>
+    <span class="s0">return </span><span class="s1">v</span>
+
+
+<span class="s0">class </span><span class="s1">InlineTableDict(object):</span>
+    <span class="s3">&quot;&quot;&quot;Sentinel subclass of dict for inline tables.&quot;&quot;&quot;</span>
+
+
+<span class="s0">class </span><span class="s1">TomlDecoder(object):</span>
+    <span class="s0">def </span><span class="s1">__init__(self, _dict=dict):</span>
+        <span class="s1">self._dict = _dict</span>
+
+    <span class="s0">def </span><span class="s1">get_empty_table(self):</span>
+        <span class="s0">return </span><span class="s1">self._dict()</span>
+
+    <span class="s0">def </span><span class="s1">get_empty_inline_table(self):</span>
+        <span class="s0">class </span><span class="s1">DynamicInlineTableDict(self._dict, InlineTableDict):</span>
+            <span class="s3">&quot;&quot;&quot;Concrete sentinel subclass for inline tables. 
+            It is a subclass of _dict which is passed in dynamically at load 
+            time 
+ 
+            It is also a subclass of InlineTableDict 
+            &quot;&quot;&quot;</span>
+
+        <span class="s0">return </span><span class="s1">DynamicInlineTableDict()</span>
+
+    <span class="s0">def </span><span class="s1">load_inline_object(self, line, currentlevel, multikey=</span><span class="s0">False</span><span class="s1">, multibackslash=</span><span class="s0">False</span><span class="s1">):</span>
+        <span class="s1">candidate_groups = line[</span><span class="s2">1</span><span class="s1">:-</span><span class="s2">1</span><span class="s1">].split(</span><span class="s4">&quot;,&quot;</span><span class="s1">)</span>
+        <span class="s1">groups = []</span>
+        <span class="s0">if </span><span class="s1">len(candidate_groups) == </span><span class="s2">1 </span><span class="s0">and not </span><span class="s1">candidate_groups[</span><span class="s2">0</span><span class="s1">].strip():</span>
+            <span class="s1">candidate_groups.pop()</span>
+        <span class="s0">while </span><span class="s1">len(candidate_groups) &gt; </span><span class="s2">0</span><span class="s1">:</span>
+            <span class="s1">candidate_group = candidate_groups.pop(</span><span class="s2">0</span><span class="s1">)</span>
+            <span class="s0">try</span><span class="s1">:</span>
+                <span class="s1">_, value = candidate_group.split(</span><span class="s4">&quot;=&quot;</span><span class="s1">, </span><span class="s2">1</span><span class="s1">)</span>
+            <span class="s0">except </span><span class="s1">ValueError:</span>
+                <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;Invalid inline table encountered&quot;</span><span class="s1">)</span>
+            <span class="s1">value = value.strip()</span>
+            <span class="s0">if </span><span class="s1">(value[</span><span class="s2">0</span><span class="s1">] == value[-</span><span class="s2">1</span><span class="s1">] </span><span class="s0">and </span><span class="s1">value[</span><span class="s2">0</span><span class="s1">] </span><span class="s0">in </span><span class="s1">(</span><span class="s4">'&quot;'</span><span class="s1">, </span><span class="s4">&quot;'&quot;</span><span class="s1">)) </span><span class="s0">or </span><span class="s1">(</span>
+                <span class="s1">value[</span><span class="s2">0</span><span class="s1">] </span><span class="s0">in </span><span class="s4">&quot;-0123456789&quot;</span>
+                <span class="s0">or </span><span class="s1">value </span><span class="s0">in </span><span class="s1">(</span><span class="s4">&quot;true&quot;</span><span class="s1">, </span><span class="s4">&quot;false&quot;</span><span class="s1">)</span>
+                <span class="s0">or </span><span class="s1">(value[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;[&quot; </span><span class="s0">and </span><span class="s1">value[-</span><span class="s2">1</span><span class="s1">] == </span><span class="s4">&quot;]&quot;</span><span class="s1">)</span>
+                <span class="s0">or </span><span class="s1">(value[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;{&quot; </span><span class="s0">and </span><span class="s1">value[-</span><span class="s2">1</span><span class="s1">] == </span><span class="s4">&quot;}&quot;</span><span class="s1">)</span>
+            <span class="s1">):</span>
+                <span class="s1">groups.append(candidate_group)</span>
+            <span class="s0">elif </span><span class="s1">len(candidate_groups) &gt; </span><span class="s2">0</span><span class="s1">:</span>
+                <span class="s1">candidate_groups[</span><span class="s2">0</span><span class="s1">] = candidate_group + </span><span class="s4">&quot;,&quot; </span><span class="s1">+ candidate_groups[</span><span class="s2">0</span><span class="s1">]</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;Invalid inline table value encountered&quot;</span><span class="s1">)</span>
+        <span class="s0">for </span><span class="s1">group </span><span class="s0">in </span><span class="s1">groups:</span>
+            <span class="s1">status = self.load_line(group, currentlevel, multikey, multibackslash)</span>
+            <span class="s0">if </span><span class="s1">status </span><span class="s0">is not None</span><span class="s1">:</span>
+                <span class="s0">break</span>
+
+    <span class="s0">def </span><span class="s1">_get_split_on_quotes(self, line):</span>
+        <span class="s1">doublequotesplits = line.split(</span><span class="s4">'&quot;'</span><span class="s1">)</span>
+        <span class="s1">quoted = </span><span class="s0">False</span>
+        <span class="s1">quotesplits = []</span>
+        <span class="s0">if </span><span class="s1">len(doublequotesplits) &gt; </span><span class="s2">1 </span><span class="s0">and </span><span class="s4">&quot;'&quot; </span><span class="s0">in </span><span class="s1">doublequotesplits[</span><span class="s2">0</span><span class="s1">]:</span>
+            <span class="s1">singlequotesplits = doublequotesplits[</span><span class="s2">0</span><span class="s1">].split(</span><span class="s4">&quot;'&quot;</span><span class="s1">)</span>
+            <span class="s1">doublequotesplits = doublequotesplits[</span><span class="s2">1</span><span class="s1">:]</span>
+            <span class="s0">while </span><span class="s1">len(singlequotesplits) % </span><span class="s2">2 </span><span class="s1">== </span><span class="s2">0 </span><span class="s0">and </span><span class="s1">len(doublequotesplits):</span>
+                <span class="s1">singlequotesplits[-</span><span class="s2">1</span><span class="s1">] += </span><span class="s4">'&quot;' </span><span class="s1">+ doublequotesplits[</span><span class="s2">0</span><span class="s1">]</span>
+                <span class="s1">doublequotesplits = doublequotesplits[</span><span class="s2">1</span><span class="s1">:]</span>
+                <span class="s0">if </span><span class="s4">&quot;'&quot; </span><span class="s0">in </span><span class="s1">singlequotesplits[-</span><span class="s2">1</span><span class="s1">]:</span>
+                    <span class="s1">singlequotesplits = singlequotesplits[:-</span><span class="s2">1</span><span class="s1">] + singlequotesplits[-</span><span class="s2">1</span><span class="s1">].split(</span><span class="s4">&quot;'&quot;</span><span class="s1">)</span>
+            <span class="s1">quotesplits += singlequotesplits</span>
+        <span class="s0">for </span><span class="s1">doublequotesplit </span><span class="s0">in </span><span class="s1">doublequotesplits:</span>
+            <span class="s0">if </span><span class="s1">quoted:</span>
+                <span class="s1">quotesplits.append(doublequotesplit)</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">quotesplits += doublequotesplit.split(</span><span class="s4">&quot;'&quot;</span><span class="s1">)</span>
+                <span class="s1">quoted = </span><span class="s0">not </span><span class="s1">quoted</span>
+        <span class="s0">return </span><span class="s1">quotesplits</span>
+
+    <span class="s0">def </span><span class="s1">load_line(self, line, currentlevel, multikey, multibackslash):</span>
+        <span class="s1">i = </span><span class="s2">1</span>
+        <span class="s1">quotesplits = self._get_split_on_quotes(line)</span>
+        <span class="s1">quoted = </span><span class="s0">False</span>
+        <span class="s0">for </span><span class="s1">quotesplit </span><span class="s0">in </span><span class="s1">quotesplits:</span>
+            <span class="s0">if not </span><span class="s1">quoted </span><span class="s0">and </span><span class="s4">&quot;=&quot; </span><span class="s0">in </span><span class="s1">quotesplit:</span>
+                <span class="s0">break</span>
+            <span class="s1">i += quotesplit.count(</span><span class="s4">&quot;=&quot;</span><span class="s1">)</span>
+            <span class="s1">quoted = </span><span class="s0">not </span><span class="s1">quoted</span>
+        <span class="s1">pair = line.split(</span><span class="s4">&quot;=&quot;</span><span class="s1">, i)</span>
+        <span class="s1">strictly_valid = _strictly_valid_num(pair[-</span><span class="s2">1</span><span class="s1">])</span>
+        <span class="s0">if </span><span class="s1">_number_with_underscores.match(pair[-</span><span class="s2">1</span><span class="s1">]):</span>
+            <span class="s1">pair[-</span><span class="s2">1</span><span class="s1">] = pair[-</span><span class="s2">1</span><span class="s1">].replace(</span><span class="s4">&quot;_&quot;</span><span class="s1">, </span><span class="s4">&quot;&quot;</span><span class="s1">)</span>
+        <span class="s0">while </span><span class="s1">len(pair[-</span><span class="s2">1</span><span class="s1">]) </span><span class="s0">and </span><span class="s1">(</span>
+            <span class="s1">pair[-</span><span class="s2">1</span><span class="s1">][</span><span class="s2">0</span><span class="s1">] != </span><span class="s4">&quot; &quot;</span>
+            <span class="s0">and </span><span class="s1">pair[-</span><span class="s2">1</span><span class="s1">][</span><span class="s2">0</span><span class="s1">] != </span><span class="s4">&quot;</span><span class="s5">\t</span><span class="s4">&quot;</span>
+            <span class="s0">and </span><span class="s1">pair[-</span><span class="s2">1</span><span class="s1">][</span><span class="s2">0</span><span class="s1">] != </span><span class="s4">&quot;'&quot;</span>
+            <span class="s0">and </span><span class="s1">pair[-</span><span class="s2">1</span><span class="s1">][</span><span class="s2">0</span><span class="s1">] != </span><span class="s4">'&quot;'</span>
+            <span class="s0">and </span><span class="s1">pair[-</span><span class="s2">1</span><span class="s1">][</span><span class="s2">0</span><span class="s1">] != </span><span class="s4">&quot;[&quot;</span>
+            <span class="s0">and </span><span class="s1">pair[-</span><span class="s2">1</span><span class="s1">][</span><span class="s2">0</span><span class="s1">] != </span><span class="s4">&quot;{&quot;</span>
+            <span class="s0">and </span><span class="s1">pair[-</span><span class="s2">1</span><span class="s1">].strip() != </span><span class="s4">&quot;true&quot;</span>
+            <span class="s0">and </span><span class="s1">pair[-</span><span class="s2">1</span><span class="s1">].strip() != </span><span class="s4">&quot;false&quot;</span>
+        <span class="s1">):</span>
+            <span class="s0">try</span><span class="s1">:</span>
+                <span class="s1">float(pair[-</span><span class="s2">1</span><span class="s1">])</span>
+                <span class="s0">break</span>
+            <span class="s0">except </span><span class="s1">ValueError:</span>
+                <span class="s0">pass</span>
+            <span class="s0">if </span><span class="s1">_load_date(pair[-</span><span class="s2">1</span><span class="s1">]) </span><span class="s0">is not None</span><span class="s1">:</span>
+                <span class="s0">break</span>
+            <span class="s0">if </span><span class="s1">TIME_RE.match(pair[-</span><span class="s2">1</span><span class="s1">]):</span>
+                <span class="s0">break</span>
+            <span class="s1">i += </span><span class="s2">1</span>
+            <span class="s1">prev_val = pair[-</span><span class="s2">1</span><span class="s1">]</span>
+            <span class="s1">pair = line.split(</span><span class="s4">&quot;=&quot;</span><span class="s1">, i)</span>
+            <span class="s0">if </span><span class="s1">prev_val == pair[-</span><span class="s2">1</span><span class="s1">]:</span>
+                <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;Invalid date or number&quot;</span><span class="s1">)</span>
+            <span class="s0">if </span><span class="s1">strictly_valid:</span>
+                <span class="s1">strictly_valid = _strictly_valid_num(pair[-</span><span class="s2">1</span><span class="s1">])</span>
+        <span class="s1">pair = [</span><span class="s4">&quot;=&quot;</span><span class="s1">.join(pair[:-</span><span class="s2">1</span><span class="s1">]).strip(), pair[-</span><span class="s2">1</span><span class="s1">].strip()]</span>
+        <span class="s0">if </span><span class="s4">&quot;.&quot; </span><span class="s0">in </span><span class="s1">pair[</span><span class="s2">0</span><span class="s1">]:</span>
+            <span class="s0">if </span><span class="s4">'&quot;' </span><span class="s0">in </span><span class="s1">pair[</span><span class="s2">0</span><span class="s1">] </span><span class="s0">or </span><span class="s4">&quot;'&quot; </span><span class="s0">in </span><span class="s1">pair[</span><span class="s2">0</span><span class="s1">]:</span>
+                <span class="s1">quotesplits = self._get_split_on_quotes(pair[</span><span class="s2">0</span><span class="s1">])</span>
+                <span class="s1">quoted = </span><span class="s0">False</span>
+                <span class="s1">levels = []</span>
+                <span class="s0">for </span><span class="s1">quotesplit </span><span class="s0">in </span><span class="s1">quotesplits:</span>
+                    <span class="s0">if </span><span class="s1">quoted:</span>
+                        <span class="s1">levels.append(quotesplit)</span>
+                    <span class="s0">else</span><span class="s1">:</span>
+                        <span class="s1">levels += [level.strip() </span><span class="s0">for </span><span class="s1">level </span><span class="s0">in </span><span class="s1">quotesplit.split(</span><span class="s4">&quot;.&quot;</span><span class="s1">)]</span>
+                    <span class="s1">quoted = </span><span class="s0">not </span><span class="s1">quoted</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">levels = pair[</span><span class="s2">0</span><span class="s1">].split(</span><span class="s4">&quot;.&quot;</span><span class="s1">)</span>
+            <span class="s0">while </span><span class="s1">levels[-</span><span class="s2">1</span><span class="s1">] == </span><span class="s4">&quot;&quot;</span><span class="s1">:</span>
+                <span class="s1">levels = levels[:-</span><span class="s2">1</span><span class="s1">]</span>
+            <span class="s0">for </span><span class="s1">level </span><span class="s0">in </span><span class="s1">levels[:-</span><span class="s2">1</span><span class="s1">]:</span>
+                <span class="s0">if </span><span class="s1">level == </span><span class="s4">&quot;&quot;</span><span class="s1">:</span>
+                    <span class="s0">continue</span>
+                <span class="s0">if </span><span class="s1">level </span><span class="s0">not in </span><span class="s1">currentlevel:</span>
+                    <span class="s1">currentlevel[level] = self.get_empty_table()</span>
+                <span class="s1">currentlevel = currentlevel[level]</span>
+            <span class="s1">pair[</span><span class="s2">0</span><span class="s1">] = levels[-</span><span class="s2">1</span><span class="s1">].strip()</span>
+        <span class="s0">elif </span><span class="s1">(pair[</span><span class="s2">0</span><span class="s1">][</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">'&quot;' </span><span class="s0">or </span><span class="s1">pair[</span><span class="s2">0</span><span class="s1">][</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;'&quot;</span><span class="s1">) </span><span class="s0">and </span><span class="s1">(pair[</span><span class="s2">0</span><span class="s1">][-</span><span class="s2">1</span><span class="s1">] == pair[</span><span class="s2">0</span><span class="s1">][</span><span class="s2">0</span><span class="s1">]):</span>
+            <span class="s1">pair[</span><span class="s2">0</span><span class="s1">] = _unescape(pair[</span><span class="s2">0</span><span class="s1">][</span><span class="s2">1</span><span class="s1">:-</span><span class="s2">1</span><span class="s1">])</span>
+        <span class="s1">k, koffset = self._load_line_multiline_str(pair[</span><span class="s2">1</span><span class="s1">])</span>
+        <span class="s0">if </span><span class="s1">k &gt; -</span><span class="s2">1</span><span class="s1">:</span>
+            <span class="s0">while </span><span class="s1">k &gt; -</span><span class="s2">1 </span><span class="s0">and </span><span class="s1">pair[</span><span class="s2">1</span><span class="s1">][k + koffset] == </span><span class="s4">&quot;</span><span class="s5">\\</span><span class="s4">&quot;</span><span class="s1">:</span>
+                <span class="s1">multibackslash = </span><span class="s0">not </span><span class="s1">multibackslash</span>
+                <span class="s1">k -= </span><span class="s2">1</span>
+            <span class="s0">if </span><span class="s1">multibackslash:</span>
+                <span class="s1">multilinestr = pair[</span><span class="s2">1</span><span class="s1">][:-</span><span class="s2">1</span><span class="s1">]</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">multilinestr = pair[</span><span class="s2">1</span><span class="s1">] + </span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">&quot;</span>
+            <span class="s1">multikey = pair[</span><span class="s2">0</span><span class="s1">]</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">value, vtype = self.load_value(pair[</span><span class="s2">1</span><span class="s1">], strictly_valid)</span>
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s1">currentlevel[pair[</span><span class="s2">0</span><span class="s1">]]</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;Duplicate keys!&quot;</span><span class="s1">)</span>
+        <span class="s0">except </span><span class="s1">TypeError:</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;Duplicate keys!&quot;</span><span class="s1">)</span>
+        <span class="s0">except </span><span class="s1">KeyError:</span>
+            <span class="s0">if </span><span class="s1">multikey:</span>
+                <span class="s0">return </span><span class="s1">multikey, multilinestr, multibackslash</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">currentlevel[pair[</span><span class="s2">0</span><span class="s1">]] = value</span>
+
+    <span class="s0">def </span><span class="s1">_load_line_multiline_str(self, p):</span>
+        <span class="s1">poffset = </span><span class="s2">0</span>
+        <span class="s0">if </span><span class="s1">len(p) &lt; </span><span class="s2">3</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">-</span><span class="s2">1</span><span class="s1">, poffset</span>
+        <span class="s0">if </span><span class="s1">p[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;[&quot; </span><span class="s0">and </span><span class="s1">(p.strip()[-</span><span class="s2">1</span><span class="s1">] != </span><span class="s4">&quot;]&quot; </span><span class="s0">and </span><span class="s1">self._load_array_isstrarray(p)):</span>
+            <span class="s1">newp = p[</span><span class="s2">1</span><span class="s1">:].strip().split(</span><span class="s4">&quot;,&quot;</span><span class="s1">)</span>
+            <span class="s0">while </span><span class="s1">len(newp) &gt; </span><span class="s2">1 </span><span class="s0">and </span><span class="s1">newp[-</span><span class="s2">1</span><span class="s1">][</span><span class="s2">0</span><span class="s1">] != </span><span class="s4">'&quot;' </span><span class="s0">and </span><span class="s1">newp[-</span><span class="s2">1</span><span class="s1">][</span><span class="s2">0</span><span class="s1">] != </span><span class="s4">&quot;'&quot;</span><span class="s1">:</span>
+                <span class="s1">newp = newp[:-</span><span class="s2">2</span><span class="s1">] + [newp[-</span><span class="s2">2</span><span class="s1">] + </span><span class="s4">&quot;,&quot; </span><span class="s1">+ newp[-</span><span class="s2">1</span><span class="s1">]]</span>
+            <span class="s1">newp = newp[-</span><span class="s2">1</span><span class="s1">]</span>
+            <span class="s1">poffset = len(p) - len(newp)</span>
+            <span class="s1">p = newp</span>
+        <span class="s0">if </span><span class="s1">p[</span><span class="s2">0</span><span class="s1">] != </span><span class="s4">'&quot;' </span><span class="s0">and </span><span class="s1">p[</span><span class="s2">0</span><span class="s1">] != </span><span class="s4">&quot;'&quot;</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">-</span><span class="s2">1</span><span class="s1">, poffset</span>
+        <span class="s0">if </span><span class="s1">p[</span><span class="s2">1</span><span class="s1">] != p[</span><span class="s2">0</span><span class="s1">] </span><span class="s0">or </span><span class="s1">p[</span><span class="s2">2</span><span class="s1">] != p[</span><span class="s2">0</span><span class="s1">]:</span>
+            <span class="s0">return </span><span class="s1">-</span><span class="s2">1</span><span class="s1">, poffset</span>
+        <span class="s0">if </span><span class="s1">len(p) &gt; </span><span class="s2">5 </span><span class="s0">and </span><span class="s1">p[-</span><span class="s2">1</span><span class="s1">] == p[</span><span class="s2">0</span><span class="s1">] </span><span class="s0">and </span><span class="s1">p[-</span><span class="s2">2</span><span class="s1">] == p[</span><span class="s2">0</span><span class="s1">] </span><span class="s0">and </span><span class="s1">p[-</span><span class="s2">3</span><span class="s1">] == p[</span><span class="s2">0</span><span class="s1">]:</span>
+            <span class="s0">return </span><span class="s1">-</span><span class="s2">1</span><span class="s1">, poffset</span>
+        <span class="s0">return </span><span class="s1">len(p) - </span><span class="s2">1</span><span class="s1">, poffset</span>
+
+    <span class="s0">def </span><span class="s1">load_value(self, v, strictly_valid=</span><span class="s0">True</span><span class="s1">):</span>
+        <span class="s0">if not </span><span class="s1">v:</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;Empty value is invalid&quot;</span><span class="s1">)</span>
+        <span class="s0">if </span><span class="s1">v == </span><span class="s4">&quot;true&quot;</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">(</span><span class="s0">True</span><span class="s1">, </span><span class="s4">&quot;bool&quot;</span><span class="s1">)</span>
+        <span class="s0">elif </span><span class="s1">v == </span><span class="s4">&quot;false&quot;</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">(</span><span class="s0">False</span><span class="s1">, </span><span class="s4">&quot;bool&quot;</span><span class="s1">)</span>
+        <span class="s0">elif </span><span class="s1">v[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">'&quot;' </span><span class="s0">or </span><span class="s1">v[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;'&quot;</span><span class="s1">:</span>
+            <span class="s1">quotechar = v[</span><span class="s2">0</span><span class="s1">]</span>
+            <span class="s1">testv = v[</span><span class="s2">1</span><span class="s1">:].split(quotechar)</span>
+            <span class="s1">triplequote = </span><span class="s0">False</span>
+            <span class="s1">triplequotecount = </span><span class="s2">0</span>
+            <span class="s0">if </span><span class="s1">len(testv) &gt; </span><span class="s2">1 </span><span class="s0">and </span><span class="s1">testv[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;&quot; </span><span class="s0">and </span><span class="s1">testv[</span><span class="s2">1</span><span class="s1">] == </span><span class="s4">&quot;&quot;</span><span class="s1">:</span>
+                <span class="s1">testv = testv[</span><span class="s2">2</span><span class="s1">:]</span>
+                <span class="s1">triplequote = </span><span class="s0">True</span>
+            <span class="s1">closed = </span><span class="s0">False</span>
+            <span class="s0">for </span><span class="s1">tv </span><span class="s0">in </span><span class="s1">testv:</span>
+                <span class="s0">if </span><span class="s1">tv == </span><span class="s4">&quot;&quot;</span><span class="s1">:</span>
+                    <span class="s0">if </span><span class="s1">triplequote:</span>
+                        <span class="s1">triplequotecount += </span><span class="s2">1</span>
+                    <span class="s0">else</span><span class="s1">:</span>
+                        <span class="s1">closed = </span><span class="s0">True</span>
+                <span class="s0">else</span><span class="s1">:</span>
+                    <span class="s1">oddbackslash = </span><span class="s0">False</span>
+                    <span class="s0">try</span><span class="s1">:</span>
+                        <span class="s1">i = -</span><span class="s2">1</span>
+                        <span class="s1">j = tv[i]</span>
+                        <span class="s0">while </span><span class="s1">j == </span><span class="s4">&quot;</span><span class="s5">\\</span><span class="s4">&quot;</span><span class="s1">:</span>
+                            <span class="s1">oddbackslash = </span><span class="s0">not </span><span class="s1">oddbackslash</span>
+                            <span class="s1">i -= </span><span class="s2">1</span>
+                            <span class="s1">j = tv[i]</span>
+                    <span class="s0">except </span><span class="s1">IndexError:</span>
+                        <span class="s0">pass</span>
+                    <span class="s0">if not </span><span class="s1">oddbackslash:</span>
+                        <span class="s0">if </span><span class="s1">closed:</span>
+                            <span class="s0">raise </span><span class="s1">ValueError(</span>
+                                <span class="s4">&quot;Found tokens after a closed &quot; </span><span class="s1">+ </span><span class="s4">&quot;string. Invalid TOML.&quot;</span>
+                            <span class="s1">)</span>
+                        <span class="s0">else</span><span class="s1">:</span>
+                            <span class="s0">if not </span><span class="s1">triplequote </span><span class="s0">or </span><span class="s1">triplequotecount &gt; </span><span class="s2">1</span><span class="s1">:</span>
+                                <span class="s1">closed = </span><span class="s0">True</span>
+                            <span class="s0">else</span><span class="s1">:</span>
+                                <span class="s1">triplequotecount = </span><span class="s2">0</span>
+            <span class="s0">if </span><span class="s1">quotechar == </span><span class="s4">'&quot;'</span><span class="s1">:</span>
+                <span class="s1">escapeseqs = v.split(</span><span class="s4">&quot;</span><span class="s5">\\</span><span class="s4">&quot;</span><span class="s1">)[</span><span class="s2">1</span><span class="s1">:]</span>
+                <span class="s1">backslash = </span><span class="s0">False</span>
+                <span class="s0">for </span><span class="s1">i </span><span class="s0">in </span><span class="s1">escapeseqs:</span>
+                    <span class="s0">if </span><span class="s1">i == </span><span class="s4">&quot;&quot;</span><span class="s1">:</span>
+                        <span class="s1">backslash = </span><span class="s0">not </span><span class="s1">backslash</span>
+                    <span class="s0">else</span><span class="s1">:</span>
+                        <span class="s0">if </span><span class="s1">i[</span><span class="s2">0</span><span class="s1">] </span><span class="s0">not in </span><span class="s1">_escapes </span><span class="s0">and </span><span class="s1">(i[</span><span class="s2">0</span><span class="s1">] != </span><span class="s4">&quot;u&quot; </span><span class="s0">and </span><span class="s1">i[</span><span class="s2">0</span><span class="s1">] != </span><span class="s4">&quot;U&quot; </span><span class="s0">and not </span><span class="s1">backslash):</span>
+                            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;Reserved escape sequence used&quot;</span><span class="s1">)</span>
+                        <span class="s0">if </span><span class="s1">backslash:</span>
+                            <span class="s1">backslash = </span><span class="s0">False</span>
+                <span class="s0">for </span><span class="s1">prefix </span><span class="s0">in </span><span class="s1">[</span><span class="s4">&quot;</span><span class="s5">\\</span><span class="s4">u&quot;</span><span class="s1">, </span><span class="s4">&quot;</span><span class="s5">\\</span><span class="s4">U&quot;</span><span class="s1">]:</span>
+                    <span class="s0">if </span><span class="s1">prefix </span><span class="s0">in </span><span class="s1">v:</span>
+                        <span class="s1">hexbytes = v.split(prefix)</span>
+                        <span class="s1">v = _load_unicode_escapes(hexbytes[</span><span class="s2">0</span><span class="s1">], hexbytes[</span><span class="s2">1</span><span class="s1">:], prefix)</span>
+                <span class="s1">v = _unescape(v)</span>
+            <span class="s0">if </span><span class="s1">len(v) &gt; </span><span class="s2">1 </span><span class="s0">and </span><span class="s1">v[</span><span class="s2">1</span><span class="s1">] == quotechar </span><span class="s0">and </span><span class="s1">(len(v) &lt; </span><span class="s2">3 </span><span class="s0">or </span><span class="s1">v[</span><span class="s2">1</span><span class="s1">] == v[</span><span class="s2">2</span><span class="s1">]):</span>
+                <span class="s1">v = v[</span><span class="s2">2</span><span class="s1">:-</span><span class="s2">2</span><span class="s1">]</span>
+            <span class="s0">return </span><span class="s1">(v[</span><span class="s2">1</span><span class="s1">:-</span><span class="s2">1</span><span class="s1">], </span><span class="s4">&quot;str&quot;</span><span class="s1">)</span>
+        <span class="s0">elif </span><span class="s1">v[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;[&quot;</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">(self.load_array(v), </span><span class="s4">&quot;array&quot;</span><span class="s1">)</span>
+        <span class="s0">elif </span><span class="s1">v[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;{&quot;</span><span class="s1">:</span>
+            <span class="s1">inline_object = self.get_empty_inline_table()</span>
+            <span class="s1">self.load_inline_object(v, inline_object)</span>
+            <span class="s0">return </span><span class="s1">(inline_object, </span><span class="s4">&quot;inline_object&quot;</span><span class="s1">)</span>
+        <span class="s0">elif </span><span class="s1">TIME_RE.match(v):</span>
+            <span class="s1">h, m, s, _, ms = TIME_RE.match(v).groups()</span>
+            <span class="s1">time = datetime.time(int(h), int(m), int(s), int(ms) </span><span class="s0">if </span><span class="s1">ms </span><span class="s0">else </span><span class="s2">0</span><span class="s1">)</span>
+            <span class="s0">return </span><span class="s1">(time, </span><span class="s4">&quot;time&quot;</span><span class="s1">)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">parsed_date = _load_date(v)</span>
+            <span class="s0">if </span><span class="s1">parsed_date </span><span class="s0">is not None</span><span class="s1">:</span>
+                <span class="s0">return </span><span class="s1">(parsed_date, </span><span class="s4">&quot;date&quot;</span><span class="s1">)</span>
+            <span class="s0">if not </span><span class="s1">strictly_valid:</span>
+                <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;Weirdness with leading zeroes or &quot; &quot;underscores in your number.&quot;</span><span class="s1">)</span>
+            <span class="s1">itype = </span><span class="s4">&quot;int&quot;</span>
+            <span class="s1">neg = </span><span class="s0">False</span>
+            <span class="s0">if </span><span class="s1">v[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;-&quot;</span><span class="s1">:</span>
+                <span class="s1">neg = </span><span class="s0">True</span>
+                <span class="s1">v = v[</span><span class="s2">1</span><span class="s1">:]</span>
+            <span class="s0">elif </span><span class="s1">v[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;+&quot;</span><span class="s1">:</span>
+                <span class="s1">v = v[</span><span class="s2">1</span><span class="s1">:]</span>
+            <span class="s1">v = v.replace(</span><span class="s4">&quot;_&quot;</span><span class="s1">, </span><span class="s4">&quot;&quot;</span><span class="s1">)</span>
+            <span class="s1">lowerv = v.lower()</span>
+            <span class="s0">if </span><span class="s4">&quot;.&quot; </span><span class="s0">in </span><span class="s1">v </span><span class="s0">or </span><span class="s1">(</span><span class="s4">&quot;x&quot; </span><span class="s0">not in </span><span class="s1">v </span><span class="s0">and </span><span class="s1">(</span><span class="s4">&quot;e&quot; </span><span class="s0">in </span><span class="s1">v </span><span class="s0">or </span><span class="s4">&quot;E&quot; </span><span class="s0">in </span><span class="s1">v)):</span>
+                <span class="s0">if </span><span class="s4">&quot;.&quot; </span><span class="s0">in </span><span class="s1">v </span><span class="s0">and </span><span class="s1">v.split(</span><span class="s4">&quot;.&quot;</span><span class="s1">, </span><span class="s2">1</span><span class="s1">)[</span><span class="s2">1</span><span class="s1">] == </span><span class="s4">&quot;&quot;</span><span class="s1">:</span>
+                    <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;This float is missing digits after &quot; &quot;the point&quot;</span><span class="s1">)</span>
+                <span class="s0">if </span><span class="s1">v[</span><span class="s2">0</span><span class="s1">] </span><span class="s0">not in </span><span class="s4">&quot;0123456789&quot;</span><span class="s1">:</span>
+                    <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;This float doesn't have a leading &quot; &quot;digit&quot;</span><span class="s1">)</span>
+                <span class="s1">v = float(v)</span>
+                <span class="s1">itype = </span><span class="s4">&quot;float&quot;</span>
+            <span class="s0">elif </span><span class="s1">len(lowerv) == </span><span class="s2">3 </span><span class="s0">and </span><span class="s1">(lowerv == </span><span class="s4">&quot;inf&quot; </span><span class="s0">or </span><span class="s1">lowerv == </span><span class="s4">&quot;nan&quot;</span><span class="s1">):</span>
+                <span class="s1">v = float(v)</span>
+                <span class="s1">itype = </span><span class="s4">&quot;float&quot;</span>
+            <span class="s0">if </span><span class="s1">itype == </span><span class="s4">&quot;int&quot;</span><span class="s1">:</span>
+                <span class="s1">v = int(v, </span><span class="s2">0</span><span class="s1">)</span>
+            <span class="s0">if </span><span class="s1">neg:</span>
+                <span class="s0">return </span><span class="s1">(</span><span class="s2">0 </span><span class="s1">- v, itype)</span>
+            <span class="s0">return </span><span class="s1">(v, itype)</span>
+
+    <span class="s0">def </span><span class="s1">bounded_string(self, s):</span>
+        <span class="s0">if </span><span class="s1">len(s) == </span><span class="s2">0</span><span class="s1">:</span>
+            <span class="s0">return True</span>
+        <span class="s0">if </span><span class="s1">s[-</span><span class="s2">1</span><span class="s1">] != s[</span><span class="s2">0</span><span class="s1">]:</span>
+            <span class="s0">return False</span>
+        <span class="s1">i = -</span><span class="s2">2</span>
+        <span class="s1">backslash = </span><span class="s0">False</span>
+        <span class="s0">while </span><span class="s1">len(s) + i &gt; </span><span class="s2">0</span><span class="s1">:</span>
+            <span class="s0">if </span><span class="s1">s[i] == </span><span class="s4">&quot;</span><span class="s5">\\</span><span class="s4">&quot;</span><span class="s1">:</span>
+                <span class="s1">backslash = </span><span class="s0">not </span><span class="s1">backslash</span>
+                <span class="s1">i -= </span><span class="s2">1</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s0">break</span>
+        <span class="s0">return not </span><span class="s1">backslash</span>
+
+    <span class="s0">def </span><span class="s1">_load_array_isstrarray(self, a):</span>
+        <span class="s1">a = a[</span><span class="s2">1</span><span class="s1">:-</span><span class="s2">1</span><span class="s1">].strip()</span>
+        <span class="s0">if </span><span class="s1">a != </span><span class="s4">&quot;&quot; </span><span class="s0">and </span><span class="s1">(a[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">'&quot;' </span><span class="s0">or </span><span class="s1">a[</span><span class="s2">0</span><span class="s1">] == </span><span class="s4">&quot;'&quot;</span><span class="s1">):</span>
+            <span class="s0">return True</span>
+        <span class="s0">return False</span>
+
+    <span class="s0">def </span><span class="s1">load_array(self, a):</span>
+        <span class="s1">atype = </span><span class="s0">None</span>
+        <span class="s1">retval = []</span>
+        <span class="s1">a = a.strip()</span>
+        <span class="s0">if </span><span class="s4">&quot;[&quot; </span><span class="s0">not in </span><span class="s1">a[</span><span class="s2">1</span><span class="s1">:-</span><span class="s2">1</span><span class="s1">] </span><span class="s0">or </span><span class="s4">&quot;&quot; </span><span class="s1">!= a[</span><span class="s2">1</span><span class="s1">:-</span><span class="s2">1</span><span class="s1">].split(</span><span class="s4">&quot;[&quot;</span><span class="s1">)[</span><span class="s2">0</span><span class="s1">].strip():</span>
+            <span class="s1">strarray = self._load_array_isstrarray(a)</span>
+            <span class="s0">if not </span><span class="s1">a[</span><span class="s2">1</span><span class="s1">:-</span><span class="s2">1</span><span class="s1">].strip().startswith(</span><span class="s4">&quot;{&quot;</span><span class="s1">):</span>
+                <span class="s1">a = a[</span><span class="s2">1</span><span class="s1">:-</span><span class="s2">1</span><span class="s1">].split(</span><span class="s4">&quot;,&quot;</span><span class="s1">)</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s3"># a is an inline object, we must find the matching parenthesis</span>
+                <span class="s3"># to define groups</span>
+                <span class="s1">new_a = []</span>
+                <span class="s1">start_group_index = </span><span class="s2">1</span>
+                <span class="s1">end_group_index = </span><span class="s2">2</span>
+                <span class="s1">open_bracket_count = </span><span class="s2">1 </span><span class="s0">if </span><span class="s1">a[start_group_index] == </span><span class="s4">&quot;{&quot; </span><span class="s0">else </span><span class="s2">0</span>
+                <span class="s1">in_str = </span><span class="s0">False</span>
+                <span class="s0">while </span><span class="s1">end_group_index &lt; len(a[</span><span class="s2">1</span><span class="s1">:]):</span>
+                    <span class="s0">if </span><span class="s1">a[end_group_index] == </span><span class="s4">'&quot;' </span><span class="s0">or </span><span class="s1">a[end_group_index] == </span><span class="s4">&quot;'&quot;</span><span class="s1">:</span>
+                        <span class="s0">if </span><span class="s1">in_str:</span>
+                            <span class="s1">backslash_index = end_group_index - </span><span class="s2">1</span>
+                            <span class="s0">while </span><span class="s1">backslash_index &gt; -</span><span class="s2">1 </span><span class="s0">and </span><span class="s1">a[backslash_index] == </span><span class="s4">&quot;</span><span class="s5">\\</span><span class="s4">&quot;</span><span class="s1">:</span>
+                                <span class="s1">in_str = </span><span class="s0">not </span><span class="s1">in_str</span>
+                                <span class="s1">backslash_index -= </span><span class="s2">1</span>
+                        <span class="s1">in_str = </span><span class="s0">not </span><span class="s1">in_str</span>
+                    <span class="s0">if not </span><span class="s1">in_str </span><span class="s0">and </span><span class="s1">a[end_group_index] == </span><span class="s4">&quot;{&quot;</span><span class="s1">:</span>
+                        <span class="s1">open_bracket_count += </span><span class="s2">1</span>
+                    <span class="s0">if </span><span class="s1">in_str </span><span class="s0">or </span><span class="s1">a[end_group_index] != </span><span class="s4">&quot;}&quot;</span><span class="s1">:</span>
+                        <span class="s1">end_group_index += </span><span class="s2">1</span>
+                        <span class="s0">continue</span>
+                    <span class="s0">elif </span><span class="s1">a[end_group_index] == </span><span class="s4">&quot;}&quot; </span><span class="s0">and </span><span class="s1">open_bracket_count &gt; </span><span class="s2">1</span><span class="s1">:</span>
+                        <span class="s1">open_bracket_count -= </span><span class="s2">1</span>
+                        <span class="s1">end_group_index += </span><span class="s2">1</span>
+                        <span class="s0">continue</span>
+
+                    <span class="s3"># Increase end_group_index by 1 to get the closing bracket</span>
+                    <span class="s1">end_group_index += </span><span class="s2">1</span>
+
+                    <span class="s1">new_a.append(a[start_group_index:end_group_index])</span>
+
+                    <span class="s3"># The next start index is at least after the closing</span>
+                    <span class="s3"># bracket, a closing bracket can be followed by a comma</span>
+                    <span class="s3"># since we are in an array.</span>
+                    <span class="s1">start_group_index = end_group_index + </span><span class="s2">1</span>
+                    <span class="s0">while </span><span class="s1">start_group_index &lt; len(a[</span><span class="s2">1</span><span class="s1">:]) </span><span class="s0">and </span><span class="s1">a[start_group_index] != </span><span class="s4">&quot;{&quot;</span><span class="s1">:</span>
+                        <span class="s1">start_group_index += </span><span class="s2">1</span>
+                    <span class="s1">end_group_index = start_group_index + </span><span class="s2">1</span>
+                <span class="s1">a = new_a</span>
+            <span class="s1">b = </span><span class="s2">0</span>
+            <span class="s0">if </span><span class="s1">strarray:</span>
+                <span class="s0">while </span><span class="s1">b &lt; len(a) - </span><span class="s2">1</span><span class="s1">:</span>
+                    <span class="s1">ab = a[b].strip()</span>
+                    <span class="s0">while not </span><span class="s1">self.bounded_string(ab) </span><span class="s0">or </span><span class="s1">(</span>
+                        <span class="s1">len(ab) &gt; </span><span class="s2">2</span>
+                        <span class="s0">and </span><span class="s1">ab[</span><span class="s2">0</span><span class="s1">] == ab[</span><span class="s2">1</span><span class="s1">] == ab[</span><span class="s2">2</span><span class="s1">]</span>
+                        <span class="s0">and </span><span class="s1">ab[-</span><span class="s2">2</span><span class="s1">] != ab[</span><span class="s2">0</span><span class="s1">]</span>
+                        <span class="s0">and </span><span class="s1">ab[-</span><span class="s2">3</span><span class="s1">] != ab[</span><span class="s2">0</span><span class="s1">]</span>
+                    <span class="s1">):</span>
+                        <span class="s1">a[b] = a[b] + </span><span class="s4">&quot;,&quot; </span><span class="s1">+ a[b + </span><span class="s2">1</span><span class="s1">]</span>
+                        <span class="s1">ab = a[b].strip()</span>
+                        <span class="s0">if </span><span class="s1">b &lt; len(a) - </span><span class="s2">2</span><span class="s1">:</span>
+                            <span class="s1">a = a[: b + </span><span class="s2">1</span><span class="s1">] + a[b + </span><span class="s2">2 </span><span class="s1">:]</span>
+                        <span class="s0">else</span><span class="s1">:</span>
+                            <span class="s1">a = a[: b + </span><span class="s2">1</span><span class="s1">]</span>
+                    <span class="s1">b += </span><span class="s2">1</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">al = list(a[</span><span class="s2">1</span><span class="s1">:-</span><span class="s2">1</span><span class="s1">])</span>
+            <span class="s1">a = []</span>
+            <span class="s1">openarr = </span><span class="s2">0</span>
+            <span class="s1">j = </span><span class="s2">0</span>
+            <span class="s0">for </span><span class="s1">i </span><span class="s0">in </span><span class="s1">_range(len(al)):</span>
+                <span class="s0">if </span><span class="s1">al[i] == </span><span class="s4">&quot;[&quot;</span><span class="s1">:</span>
+                    <span class="s1">openarr += </span><span class="s2">1</span>
+                <span class="s0">elif </span><span class="s1">al[i] == </span><span class="s4">&quot;]&quot;</span><span class="s1">:</span>
+                    <span class="s1">openarr -= </span><span class="s2">1</span>
+                <span class="s0">elif </span><span class="s1">al[i] == </span><span class="s4">&quot;,&quot; </span><span class="s0">and not </span><span class="s1">openarr:</span>
+                    <span class="s1">a.append(</span><span class="s4">&quot;&quot;</span><span class="s1">.join(al[j:i]))</span>
+                    <span class="s1">j = i + </span><span class="s2">1</span>
+            <span class="s1">a.append(</span><span class="s4">&quot;&quot;</span><span class="s1">.join(al[j:]))</span>
+        <span class="s0">for </span><span class="s1">i </span><span class="s0">in </span><span class="s1">_range(len(a)):</span>
+            <span class="s1">a[i] = a[i].strip()</span>
+            <span class="s0">if </span><span class="s1">a[i] != </span><span class="s4">&quot;&quot;</span><span class="s1">:</span>
+                <span class="s1">nval, ntype = self.load_value(a[i])</span>
+                <span class="s0">if </span><span class="s1">atype:</span>
+                    <span class="s0">if </span><span class="s1">ntype != atype:</span>
+                        <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;Not a homogeneous array&quot;</span><span class="s1">)</span>
+                <span class="s0">else</span><span class="s1">:</span>
+                    <span class="s1">atype = ntype</span>
+                <span class="s1">retval.append(nval)</span>
+        <span class="s0">return </span><span class="s1">retval</span>
+
+    <span class="s0">def </span><span class="s1">preserve_comment(self, line_no, key, comment, beginline):</span>
+        <span class="s0">pass</span>
+
+    <span class="s0">def </span><span class="s1">embed_comments(self, idx, currentlevel):</span>
+        <span class="s0">pass</span>
+
+
+<span class="s0">class </span><span class="s1">TomlPreserveCommentDecoder(TomlDecoder):</span>
+    <span class="s0">def </span><span class="s1">__init__(self, _dict=dict):</span>
+        <span class="s1">self.saved_comments = {}</span>
+        <span class="s1">super(TomlPreserveCommentDecoder, self).__init__(_dict)</span>
+
+    <span class="s0">def </span><span class="s1">preserve_comment(self, line_no, key, comment, beginline):</span>
+        <span class="s1">self.saved_comments[line_no] = (key, comment, beginline)</span>
+
+    <span class="s0">def </span><span class="s1">embed_comments(self, idx, currentlevel):</span>
+        <span class="s0">if </span><span class="s1">idx </span><span class="s0">not in </span><span class="s1">self.saved_comments:</span>
+            <span class="s0">return</span>
+
+        <span class="s1">key, comment, beginline = self.saved_comments[idx]</span>
+        <span class="s1">currentlevel[key] = CommentValue(currentlevel[key], comment, beginline, self._dict)</span>
+</pre>
+</body>
+</html>

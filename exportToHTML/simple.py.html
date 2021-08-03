@@ -1,0 +1,292 @@
+<html>
+<head>
+<title>simple.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+simple.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">operator</span>
+
+<span class="s0">from </span><span class="s1">.compat </span><span class="s0">import </span><span class="s1">PY2</span>
+<span class="s0">from </span><span class="s1">.compat </span><span class="s0">import </span><span class="s1">PY3</span>
+<span class="s0">from </span><span class="s1">.compat </span><span class="s0">import </span><span class="s1">string_types</span>
+<span class="s0">from </span><span class="s1">.compat </span><span class="s0">import </span><span class="s1">with_metaclass</span>
+<span class="s0">from </span><span class="s1">.utils </span><span class="s0">import </span><span class="s1">await_</span>
+<span class="s0">from </span><span class="s1">.utils </span><span class="s0">import </span><span class="s1">cached_property</span>
+<span class="s0">from </span><span class="s1">.utils </span><span class="s0">import </span><span class="s1">identity</span>
+
+
+<span class="s0">def </span><span class="s1">make_proxy_method(code):</span>
+    <span class="s0">def </span><span class="s1">proxy_wrapper(self, *args):</span>
+        <span class="s0">return </span><span class="s1">code(self.__wrapped__, *args)</span>
+
+    <span class="s0">return </span><span class="s1">proxy_wrapper</span>
+
+
+<span class="s0">class </span><span class="s1">_ProxyMethods(object):</span>
+    <span class="s2"># We use properties to override the values of __module__ and</span>
+    <span class="s2"># __doc__. If we add these in ObjectProxy, the derived class</span>
+    <span class="s2"># __dict__ will still be setup to have string variants of these</span>
+    <span class="s2"># attributes and the rules of descriptors means that they appear to</span>
+    <span class="s2"># take precedence over the properties in the base class. To avoid</span>
+    <span class="s2"># that, we copy the properties into the derived class type itself</span>
+    <span class="s2"># via a meta class. In that way the properties will always take</span>
+    <span class="s2"># precedence.</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">__module__(self):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__.__module__</span>
+
+    <span class="s1">@__module__.setter</span>
+    <span class="s0">def </span><span class="s1">__module__(self, value):</span>
+        <span class="s1">self.__wrapped__.__module__ = value</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">__doc__(self):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__.__doc__</span>
+
+    <span class="s1">@__doc__.setter</span>
+    <span class="s0">def </span><span class="s1">__doc__(self, value):</span>
+        <span class="s1">self.__wrapped__.__doc__ = value</span>
+
+    <span class="s2"># Need to also propagate the special __weakref__ attribute for case</span>
+    <span class="s2"># where decorating classes which will define this. If do not define</span>
+    <span class="s2"># it and use a function like inspect.getmembers() on a decorator</span>
+    <span class="s2"># class it will fail. This can't be in the derived classes.</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">__weakref__(self):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__.__weakref__</span>
+
+
+<span class="s0">class </span><span class="s1">_ProxyMetaType(type):</span>
+    <span class="s0">def </span><span class="s1">__new__(cls, name, bases, dictionary):</span>
+        <span class="s2"># Copy our special properties into the class so that they</span>
+        <span class="s2"># always take precedence over attributes of the same name added</span>
+        <span class="s2"># during construction of a derived class. This is to save</span>
+        <span class="s2"># duplicating the implementation for them in all derived classes.</span>
+
+        <span class="s1">dictionary.update(vars(_ProxyMethods))</span>
+        <span class="s1">dictionary.pop(</span><span class="s3">'__dict__'</span><span class="s1">)</span>
+
+        <span class="s0">return </span><span class="s1">type.__new__(cls, name, bases, dictionary)</span>
+
+
+<span class="s0">class </span><span class="s1">Proxy(with_metaclass(_ProxyMetaType)):</span>
+    <span class="s1">__factory__ = </span><span class="s0">None</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, factory):</span>
+        <span class="s1">self.__dict__[</span><span class="s3">'__factory__'</span><span class="s1">] = factory</span>
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">__resolved__(self):</span>
+        <span class="s0">return </span><span class="s3">'__wrapped__' </span><span class="s0">in </span><span class="s1">self.__dict__</span>
+
+    <span class="s1">@cached_property</span>
+    <span class="s0">def </span><span class="s1">__wrapped__(self):</span>
+        <span class="s1">self = self.__dict__</span>
+        <span class="s0">if </span><span class="s3">'__factory__' </span><span class="s0">in </span><span class="s1">self:</span>
+            <span class="s1">factory = self[</span><span class="s3">'__factory__'</span><span class="s1">]</span>
+            <span class="s0">return </span><span class="s1">factory()</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;Proxy hasn't been initiated: __factory__ is missing.&quot;</span><span class="s1">)</span>
+
+    <span class="s1">__name__ = property(make_proxy_method(operator.attrgetter(</span><span class="s3">'__name__'</span><span class="s1">)))</span>
+    <span class="s1">__class__ = property(make_proxy_method(operator.attrgetter(</span><span class="s3">'__class__'</span><span class="s1">)))</span>
+    <span class="s1">__annotations__ = property(make_proxy_method(operator.attrgetter(</span><span class="s3">'__anotations__'</span><span class="s1">)))</span>
+    <span class="s1">__dir__ = make_proxy_method(dir)</span>
+    <span class="s1">__str__ = make_proxy_method(str)</span>
+
+    <span class="s0">if </span><span class="s1">PY3:</span>
+        <span class="s1">__bytes__ = make_proxy_method(bytes)</span>
+
+    <span class="s0">def </span><span class="s1">__repr__(self, __getattr__=object.__getattribute__):</span>
+        <span class="s0">if </span><span class="s3">'__wrapped__' </span><span class="s0">in </span><span class="s1">self.__dict__:</span>
+            <span class="s0">return </span><span class="s3">'&lt;{} at 0x{:x} wrapping {!r} at 0x{:x} with factory {!r}&gt;'</span><span class="s1">.format(</span>
+                <span class="s1">type(self).__name__, id(self),</span>
+                <span class="s1">self.__wrapped__, id(self.__wrapped__),</span>
+                <span class="s1">self.__factory__</span>
+            <span class="s1">)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s3">'&lt;{} at 0x{:x} with factory {!r}&gt;'</span><span class="s1">.format(</span>
+                <span class="s1">type(self).__name__, id(self),</span>
+                <span class="s1">self.__factory__</span>
+            <span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__fspath__(self):</span>
+        <span class="s1">wrapped = self.__wrapped__</span>
+        <span class="s0">if </span><span class="s1">isinstance(wrapped, string_types):</span>
+            <span class="s0">return </span><span class="s1">wrapped</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">fspath = getattr(wrapped, </span><span class="s3">'__fspath__'</span><span class="s1">, </span><span class="s0">None</span><span class="s1">)</span>
+            <span class="s0">if </span><span class="s1">fspath </span><span class="s0">is None</span><span class="s1">:</span>
+                <span class="s0">return </span><span class="s1">wrapped</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s0">return </span><span class="s1">fspath()</span>
+
+    <span class="s1">__reversed__ = make_proxy_method(reversed)</span>
+
+    <span class="s0">if </span><span class="s1">PY3:</span>
+        <span class="s1">__round__ = make_proxy_method(round)</span>
+
+    <span class="s1">__lt__ = make_proxy_method(operator.lt)</span>
+    <span class="s1">__le__ = make_proxy_method(operator.le)</span>
+    <span class="s1">__eq__ = make_proxy_method(operator.eq)</span>
+    <span class="s1">__ne__ = make_proxy_method(operator.ne)</span>
+    <span class="s1">__gt__ = make_proxy_method(operator.gt)</span>
+    <span class="s1">__ge__ = make_proxy_method(operator.ge)</span>
+    <span class="s1">__hash__ = make_proxy_method(hash)</span>
+    <span class="s1">__nonzero__ = make_proxy_method(bool)</span>
+    <span class="s1">__bool__ = make_proxy_method(bool)</span>
+
+    <span class="s0">def </span><span class="s1">__setattr__(self, name, value):</span>
+        <span class="s0">if </span><span class="s1">hasattr(type(self), name):</span>
+            <span class="s1">self.__dict__[name] = value</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">setattr(self.__wrapped__, name, value)</span>
+
+    <span class="s0">def </span><span class="s1">__getattr__(self, name):</span>
+        <span class="s0">if </span><span class="s1">name </span><span class="s0">in </span><span class="s1">(</span><span class="s3">'__wrapped__'</span><span class="s1">, </span><span class="s3">'__factory__'</span><span class="s1">):</span>
+            <span class="s0">raise </span><span class="s1">AttributeError(name)</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">getattr(self.__wrapped__, name)</span>
+
+    <span class="s0">def </span><span class="s1">__delattr__(self, name):</span>
+        <span class="s0">if </span><span class="s1">hasattr(type(self), name):</span>
+            <span class="s0">del </span><span class="s1">self.__dict__[name]</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">delattr(self.__wrapped__, name)</span>
+
+    <span class="s1">__add__ = make_proxy_method(operator.add)</span>
+    <span class="s1">__sub__ = make_proxy_method(operator.sub)</span>
+    <span class="s1">__mul__ = make_proxy_method(operator.mul)</span>
+    <span class="s1">__div__ = make_proxy_method(operator.div </span><span class="s0">if </span><span class="s1">PY2 </span><span class="s0">else </span><span class="s1">operator.truediv)</span>
+    <span class="s1">__truediv__ = make_proxy_method(operator.truediv)</span>
+    <span class="s1">__floordiv__ = make_proxy_method(operator.floordiv)</span>
+    <span class="s1">__mod__ = make_proxy_method(operator.mod)</span>
+    <span class="s1">__divmod__ = make_proxy_method(divmod)</span>
+    <span class="s1">__pow__ = make_proxy_method(pow)</span>
+    <span class="s1">__lshift__ = make_proxy_method(operator.lshift)</span>
+    <span class="s1">__rshift__ = make_proxy_method(operator.rshift)</span>
+    <span class="s1">__and__ = make_proxy_method(operator.and_)</span>
+    <span class="s1">__xor__ = make_proxy_method(operator.xor)</span>
+    <span class="s1">__or__ = make_proxy_method(operator.or_)</span>
+
+    <span class="s0">def </span><span class="s1">__radd__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other + self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__rsub__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other - self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__rmul__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other * self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__rdiv__(self, other):</span>
+        <span class="s0">return </span><span class="s1">operator.div(other, self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__rtruediv__(self, other):</span>
+        <span class="s0">return </span><span class="s1">operator.truediv(other, self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__rfloordiv__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other // self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__rmod__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other % self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__rdivmod__(self, other):</span>
+        <span class="s0">return </span><span class="s1">divmod(other, self.__wrapped__)</span>
+
+    <span class="s0">def </span><span class="s1">__rpow__(self, other, *args):</span>
+        <span class="s0">return </span><span class="s1">pow(other, self.__wrapped__, *args)</span>
+
+    <span class="s0">def </span><span class="s1">__rlshift__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other &lt;&lt; self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__rrshift__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other &gt;&gt; self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__rand__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other &amp; self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__rxor__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other ^ self.__wrapped__</span>
+
+    <span class="s0">def </span><span class="s1">__ror__(self, other):</span>
+        <span class="s0">return </span><span class="s1">other | self.__wrapped__</span>
+
+    <span class="s1">__iadd__ = make_proxy_method(operator.iadd)</span>
+    <span class="s1">__isub__ = make_proxy_method(operator.isub)</span>
+    <span class="s1">__imul__ = make_proxy_method(operator.imul)</span>
+    <span class="s1">__idiv__ = make_proxy_method(operator.idiv </span><span class="s0">if </span><span class="s1">PY2 </span><span class="s0">else </span><span class="s1">operator.itruediv)</span>
+    <span class="s1">__itruediv__ = make_proxy_method(operator.itruediv)</span>
+    <span class="s1">__ifloordiv__ = make_proxy_method(operator.ifloordiv)</span>
+    <span class="s1">__imod__ = make_proxy_method(operator.imod)</span>
+    <span class="s1">__ipow__ = make_proxy_method(operator.ipow)</span>
+    <span class="s1">__ilshift__ = make_proxy_method(operator.ilshift)</span>
+    <span class="s1">__irshift__ = make_proxy_method(operator.irshift)</span>
+    <span class="s1">__iand__ = make_proxy_method(operator.iand)</span>
+    <span class="s1">__ixor__ = make_proxy_method(operator.ixor)</span>
+    <span class="s1">__ior__ = make_proxy_method(operator.ior)</span>
+    <span class="s1">__neg__ = make_proxy_method(operator.neg)</span>
+    <span class="s1">__pos__ = make_proxy_method(operator.pos)</span>
+    <span class="s1">__abs__ = make_proxy_method(operator.abs)</span>
+    <span class="s1">__invert__ = make_proxy_method(operator.invert)</span>
+
+    <span class="s1">__int__ = make_proxy_method(int)</span>
+
+    <span class="s0">if </span><span class="s1">PY2:</span>
+        <span class="s1">__long__ = make_proxy_method(long)  </span><span class="s2"># noqa</span>
+
+    <span class="s1">__float__ = make_proxy_method(float)</span>
+    <span class="s1">__oct__ = make_proxy_method(oct)</span>
+    <span class="s1">__hex__ = make_proxy_method(hex)</span>
+    <span class="s1">__index__ = make_proxy_method(operator.index)</span>
+    <span class="s1">__len__ = make_proxy_method(len)</span>
+    <span class="s1">__contains__ = make_proxy_method(operator.contains)</span>
+    <span class="s1">__getitem__ = make_proxy_method(operator.getitem)</span>
+    <span class="s1">__setitem__ = make_proxy_method(operator.setitem)</span>
+    <span class="s1">__delitem__ = make_proxy_method(operator.delitem)</span>
+
+    <span class="s0">if </span><span class="s1">PY2:</span>
+        <span class="s1">__getslice__ = make_proxy_method(operator.getslice)</span>
+        <span class="s1">__setslice__ = make_proxy_method(operator.setslice)</span>
+        <span class="s1">__delslice__ = make_proxy_method(operator.delslice)</span>
+
+    <span class="s0">def </span><span class="s1">__enter__(self):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__.__enter__()</span>
+
+    <span class="s0">def </span><span class="s1">__exit__(self, *args, **kwargs):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__.__exit__(*args, **kwargs)</span>
+
+    <span class="s1">__iter__ = make_proxy_method(iter)</span>
+
+    <span class="s0">def </span><span class="s1">__call__(self, *args, **kwargs):</span>
+        <span class="s0">return </span><span class="s1">self.__wrapped__(*args, **kwargs)</span>
+
+    <span class="s0">def </span><span class="s1">__reduce__(self):</span>
+        <span class="s0">return </span><span class="s1">identity, (self.__wrapped__,)</span>
+
+    <span class="s0">def </span><span class="s1">__reduce_ex__(self, protocol):</span>
+        <span class="s0">return </span><span class="s1">identity, (self.__wrapped__,)</span>
+
+    <span class="s0">if </span><span class="s1">await_:</span>
+        <span class="s0">from </span><span class="s1">.utils </span><span class="s0">import </span><span class="s1">__aenter__</span>
+        <span class="s0">from </span><span class="s1">.utils </span><span class="s0">import </span><span class="s1">__aexit__</span>
+        <span class="s0">from </span><span class="s1">.utils </span><span class="s0">import </span><span class="s1">__aiter__</span>
+        <span class="s0">from </span><span class="s1">.utils </span><span class="s0">import </span><span class="s1">__anext__</span>
+        <span class="s0">from </span><span class="s1">.utils </span><span class="s0">import </span><span class="s1">__await__</span>
+
+        <span class="s1">__aiter__, __anext__, __await__, __aenter__, __aexit__  </span><span class="s2"># noqa</span>
+</pre>
+</body>
+</html>

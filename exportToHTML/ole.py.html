@@ -1,0 +1,153 @@
+<html>
+<head>
+<title>ole.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+ole.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2010-2021 openpyxl</span>
+
+<span class="s2">from </span><span class="s1">openpyxl.descriptors.serialisable </span><span class="s2">import </span><span class="s1">Serialisable</span>
+<span class="s2">from </span><span class="s1">openpyxl.descriptors </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">Sequence,</span>
+<span class="s1">)</span>
+
+<span class="s2">from </span><span class="s1">openpyxl.drawing.spreadsheet_drawing </span><span class="s2">import </span><span class="s1">AnchorMarker</span>
+<span class="s2">from </span><span class="s1">openpyxl.xml.constants </span><span class="s2">import </span><span class="s1">SHEET_DRAWING_NS</span>
+
+
+<span class="s2">class </span><span class="s1">ObjectAnchor(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;anchor&quot;</span>
+
+    <span class="s1">_from = Typed(expected_type=AnchorMarker, namespace=SHEET_DRAWING_NS)</span>
+    <span class="s1">to = Typed(expected_type=AnchorMarker, namespace=SHEET_DRAWING_NS)</span>
+    <span class="s1">moveWithCells = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">sizeWithCells = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">z_order = Integer(allow_none=</span><span class="s2">True</span><span class="s1">, hyphenated=</span><span class="s2">True</span><span class="s1">)</span>
+
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">_from=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">to=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">moveWithCells=</span><span class="s2">False</span><span class="s1">,</span>
+                 <span class="s1">sizeWithCells=</span><span class="s2">False</span><span class="s1">,</span>
+                 <span class="s1">z_order=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self._from = _from</span>
+        <span class="s1">self.to = to</span>
+        <span class="s1">self.moveWithCells = moveWithCells</span>
+        <span class="s1">self.sizeWithCells = sizeWithCells</span>
+        <span class="s1">self.z_order = z_order</span>
+
+
+<span class="s2">class </span><span class="s1">ObjectPr(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;objectPr&quot;</span>
+
+    <span class="s1">anchor = Typed(expected_type=ObjectAnchor, )</span>
+    <span class="s1">locked = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">defaultSize = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">_print = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">disabled = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">uiObject = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">autoFill = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">autoLine = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">autoPict = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">macro = String()</span>
+    <span class="s1">altText = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">dde = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'anchor'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">anchor=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">locked=</span><span class="s2">True</span><span class="s1">,</span>
+                 <span class="s1">defaultSize=</span><span class="s2">True</span><span class="s1">,</span>
+                 <span class="s1">_print=</span><span class="s2">True</span><span class="s1">,</span>
+                 <span class="s1">disabled=</span><span class="s2">False</span><span class="s1">,</span>
+                 <span class="s1">uiObject=</span><span class="s2">False</span><span class="s1">,</span>
+                 <span class="s1">autoFill=</span><span class="s2">True</span><span class="s1">,</span>
+                 <span class="s1">autoLine=</span><span class="s2">True</span><span class="s1">,</span>
+                 <span class="s1">autoPict=</span><span class="s2">True</span><span class="s1">,</span>
+                 <span class="s1">macro=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">altText=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">dde=</span><span class="s2">False</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.anchor = anchor</span>
+        <span class="s1">self.locked = locked</span>
+        <span class="s1">self.defaultSize = defaultSize</span>
+        <span class="s1">self._print = _print</span>
+        <span class="s1">self.disabled = disabled</span>
+        <span class="s1">self.uiObject = uiObject</span>
+        <span class="s1">self.autoFill = autoFill</span>
+        <span class="s1">self.autoLine = autoLine</span>
+        <span class="s1">self.autoPict = autoPict</span>
+        <span class="s1">self.macro = macro</span>
+        <span class="s1">self.altText = altText</span>
+        <span class="s1">self.dde = dde</span>
+
+
+<span class="s2">class </span><span class="s1">OleObject(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;oleObject&quot;</span>
+
+    <span class="s1">objectPr = Typed(expected_type=ObjectPr, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">progId = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">dvAspect = Set(values=([</span><span class="s3">'DVASPECT_CONTENT'</span><span class="s1">, </span><span class="s3">'DVASPECT_ICON'</span><span class="s1">]))</span>
+    <span class="s1">link = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">oleUpdate = Set(values=([</span><span class="s3">'OLEUPDATE_ALWAYS'</span><span class="s1">, </span><span class="s3">'OLEUPDATE_ONCALL'</span><span class="s1">]))</span>
+    <span class="s1">autoLoad = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">shapeId = Integer()</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'objectPr'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">objectPr=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">progId=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">dvAspect=</span><span class="s3">'DVASPECT_CONTENT'</span><span class="s1">,</span>
+                 <span class="s1">link=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">oleUpdate=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">autoLoad=</span><span class="s2">False</span><span class="s1">,</span>
+                 <span class="s1">shapeId=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.objectPr = objectPr</span>
+        <span class="s1">self.progId = progId</span>
+        <span class="s1">self.dvAspect = dvAspect</span>
+        <span class="s1">self.link = link</span>
+        <span class="s1">self.oleUpdate = oleUpdate</span>
+        <span class="s1">self.autoLoad = autoLoad</span>
+        <span class="s1">self.shapeId = shapeId</span>
+
+
+<span class="s2">class </span><span class="s1">OleObjects(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;oleObjects&quot;</span>
+
+    <span class="s1">oleObject = Sequence(expected_type=OleObject)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'oleObject'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">oleObject=(),</span>
+                <span class="s1">):</span>
+        <span class="s1">self.oleObject = oleObject</span>
+
+</pre>
+</body>
+</html>

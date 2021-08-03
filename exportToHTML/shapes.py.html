@@ -1,0 +1,110 @@
+<html>
+<head>
+<title>shapes.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+shapes.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Alias</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">EmptyTag</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.drawing.colors </span><span class="s0">import </span><span class="s1">ColorChoiceDescriptor</span>
+<span class="s0">from </span><span class="s1">openpyexcel.drawing.fill </span><span class="s0">import </span><span class="s1">*</span>
+<span class="s0">from </span><span class="s1">openpyexcel.drawing.line </span><span class="s0">import </span><span class="s1">LineProperties</span>
+<span class="s0">from </span><span class="s1">openpyexcel.drawing.geometry </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Shape3D,</span>
+    <span class="s1">Scene3D,</span>
+    <span class="s1">Transform2D,</span>
+    <span class="s1">CustomGeometry2D,</span>
+    <span class="s1">PresetGeometry2D,</span>
+<span class="s1">)</span>
+
+
+<span class="s0">class </span><span class="s1">GraphicalProperties(Serialisable):</span>
+
+    <span class="s2">&quot;&quot;&quot; 
+    Somewhat vaguely 21.2.2.197 says this: 
+ 
+    This element specifies the formatting for the parent chart element. The 
+    custGeom, prstGeom, scene3d, and xfrm elements are not supported. The 
+    bwMode attribute is not supported. 
+ 
+    This doesn't leave much. And the element is used in different places. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;spPr&quot;</span>
+
+    <span class="s1">bwMode = NoneSet(values=([</span><span class="s3">'clr'</span><span class="s1">, </span><span class="s3">'auto'</span><span class="s1">, </span><span class="s3">'gray'</span><span class="s1">, </span><span class="s3">'ltGray'</span><span class="s1">, </span><span class="s3">'invGray'</span><span class="s1">,</span>
+                          <span class="s3">'grayWhite'</span><span class="s1">, </span><span class="s3">'blackGray'</span><span class="s1">, </span><span class="s3">'blackWhite'</span><span class="s1">, </span><span class="s3">'black'</span><span class="s1">, </span><span class="s3">'white'</span><span class="s1">, </span><span class="s3">'hidden'</span><span class="s1">]</span>
+                         <span class="s1">)</span>
+                 <span class="s1">)</span>
+
+    <span class="s1">xfrm = Typed(expected_type=Transform2D, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">transform = Alias(</span><span class="s3">'xfrm'</span><span class="s1">)</span>
+    <span class="s1">custGeom = Typed(expected_type=CustomGeometry2D, allow_none=</span><span class="s0">True</span><span class="s1">) </span><span class="s2"># either or</span>
+    <span class="s1">prstGeom = Typed(expected_type=PresetGeometry2D, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s2"># fills one of</span>
+    <span class="s1">noFill = EmptyTag(namespace=DRAWING_NS)</span>
+    <span class="s1">solidFill = ColorChoiceDescriptor()</span>
+    <span class="s1">gradFill = Typed(expected_type=GradientFillProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">pattFill = Typed(expected_type=PatternFillProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">ln = Typed(expected_type=LineProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">line = Alias(</span><span class="s3">'ln'</span><span class="s1">)</span>
+    <span class="s1">scene3d = Typed(expected_type=Scene3D, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">sp3d = Typed(expected_type=Shape3D, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">shape3D = Alias(</span><span class="s3">'sp3d'</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=OfficeArtExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'xfrm'</span><span class="s1">, </span><span class="s3">'prstGeom'</span><span class="s1">, </span><span class="s3">'noFill'</span><span class="s1">, </span><span class="s3">'solidFill'</span><span class="s1">, </span><span class="s3">'gradFill'</span><span class="s1">, </span><span class="s3">'pattFill'</span><span class="s1">,</span>
+                    <span class="s3">'ln'</span><span class="s1">, </span><span class="s3">'scene3d'</span><span class="s1">, </span><span class="s3">'sp3d'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">bwMode=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">xfrm=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">noFill=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">solidFill=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">gradFill=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pattFill=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">ln=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">scene3d=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">custGeom=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">prstGeom=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sp3d=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.bwMode = bwMode</span>
+        <span class="s1">self.xfrm = xfrm</span>
+        <span class="s1">self.noFill = noFill</span>
+        <span class="s1">self.solidFill = solidFill</span>
+        <span class="s1">self.gradFill = gradFill</span>
+        <span class="s1">self.pattFill = pattFill</span>
+        <span class="s0">if </span><span class="s1">ln </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">ln = LineProperties()</span>
+        <span class="s1">self.ln = ln</span>
+        <span class="s1">self.custGeom = custGeom</span>
+        <span class="s1">self.prstGeom = prstGeom</span>
+        <span class="s1">self.scene3d = scene3d</span>
+        <span class="s1">self.sp3d = sp3d</span>
+</pre>
+</body>
+</html>

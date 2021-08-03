@@ -1,0 +1,229 @@
+<html>
+<head>
+<title>datavalidation.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+datavalidation.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">collections </span><span class="s0">import </span><span class="s1">defaultdict</span>
+<span class="s0">from </span><span class="s1">itertools </span><span class="s0">import </span><span class="s1">chain</span>
+<span class="s0">from </span><span class="s1">operator </span><span class="s0">import </span><span class="s1">itemgetter</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">NoneSet,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Sequence,</span>
+    <span class="s1">Alias,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Convertible,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">NestedText</span>
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">safe_string,</span>
+    <span class="s1">unicode,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.utils </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">rows_from_range,</span>
+    <span class="s1">coordinate_to_tuple,</span>
+    <span class="s1">get_column_letter,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.cell </span><span class="s0">import </span><span class="s1">Cell</span>
+
+
+<span class="s0">def </span><span class="s1">collapse_cell_addresses(cells, input_ranges=()):</span>
+    <span class="s2">&quot;&quot;&quot; Collapse a collection of cell co-ordinates down into an optimal 
+        range or collection of ranges. 
+ 
+        E.g. Cells A1, A2, A3, B1, B2 and B3 should have the data-validation 
+        object applied, attempt to collapse down to a single range, A1:B3. 
+ 
+        Currently only collapsing contiguous vertical ranges (i.e. above 
+        example results in A1:A3 B1:B3). 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">ranges = list(input_ranges)</span>
+
+    <span class="s2"># convert cell into row, col tuple</span>
+    <span class="s1">raw_coords = (coordinate_to_tuple(cell) </span><span class="s0">for </span><span class="s1">cell </span><span class="s0">in </span><span class="s1">cells)</span>
+
+    <span class="s2"># group by column in order</span>
+    <span class="s1">grouped_coords = defaultdict(list)</span>
+    <span class="s0">for </span><span class="s1">row, col </span><span class="s0">in </span><span class="s1">sorted(raw_coords, key=itemgetter(</span><span class="s3">1</span><span class="s1">)):</span>
+        <span class="s1">grouped_coords[col].append(row)</span>
+
+    <span class="s2"># create range string from first and last row in column</span>
+    <span class="s0">for </span><span class="s1">col, cells </span><span class="s0">in </span><span class="s1">grouped_coords.items():</span>
+        <span class="s1">col = get_column_letter(col)</span>
+        <span class="s1">fmt = </span><span class="s4">&quot;{0}{1}:{2}{3}&quot;</span>
+        <span class="s0">if </span><span class="s1">len(cells) == </span><span class="s3">1</span><span class="s1">:</span>
+            <span class="s1">fmt = </span><span class="s4">&quot;{0}{1}&quot;</span>
+        <span class="s1">r = fmt.format(col, min(cells), col, max(cells))</span>
+        <span class="s1">ranges.append(r)</span>
+
+    <span class="s0">return </span><span class="s4">&quot; &quot;</span><span class="s1">.join(ranges)</span>
+
+
+<span class="s0">def </span><span class="s1">expand_cell_ranges(range_string):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Expand cell ranges to a sequence of addresses. 
+    Reverse of collapse_cell_addresses 
+    Eg. converts &quot;A1:A2 B1:B2&quot; to (A1, A2, B1, B2) 
+    &quot;&quot;&quot;</span>
+    <span class="s1">cells = []</span>
+    <span class="s0">for </span><span class="s1">rs </span><span class="s0">in </span><span class="s1">range_string.split():</span>
+        <span class="s1">cells.extend(rows_from_range(rs))</span>
+    <span class="s0">return </span><span class="s1">set(chain.from_iterable(cells))</span>
+
+
+<span class="s0">from </span><span class="s1">.cell_range </span><span class="s0">import </span><span class="s1">MultiCellRange</span>
+
+
+<span class="s0">class </span><span class="s1">DataValidation(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s4">&quot;dataValidation&quot;</span>
+
+    <span class="s1">sqref = Convertible(expected_type=MultiCellRange)</span>
+    <span class="s1">cells = Alias(</span><span class="s4">&quot;sqref&quot;</span><span class="s1">)</span>
+    <span class="s1">ranges = Alias(</span><span class="s4">&quot;sqref&quot;</span><span class="s1">)</span>
+
+    <span class="s1">showErrorMessage = Bool()</span>
+    <span class="s1">showDropDown = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">hide_drop_down = Alias(</span><span class="s4">'showDropDown'</span><span class="s1">)</span>
+    <span class="s1">showInputMessage = Bool()</span>
+    <span class="s1">showErrorMessage = Bool()</span>
+    <span class="s1">allowBlank = Bool()</span>
+    <span class="s1">allow_blank = Alias(</span><span class="s4">'allowBlank'</span><span class="s1">)</span>
+
+    <span class="s1">errorTitle = String(allow_none = </span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">error = String(allow_none = </span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">promptTitle = String(allow_none = </span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">prompt = String(allow_none = </span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">formula1 = NestedText(allow_none=</span><span class="s0">True</span><span class="s1">, expected_type=unicode)</span>
+    <span class="s1">formula2 = NestedText(allow_none=</span><span class="s0">True</span><span class="s1">, expected_type=unicode)</span>
+
+    <span class="s1">type = NoneSet(values=(</span><span class="s4">&quot;whole&quot;</span><span class="s1">, </span><span class="s4">&quot;decimal&quot;</span><span class="s1">, </span><span class="s4">&quot;list&quot;</span><span class="s1">, </span><span class="s4">&quot;date&quot;</span><span class="s1">, </span><span class="s4">&quot;time&quot;</span><span class="s1">,</span>
+                           <span class="s4">&quot;textLength&quot;</span><span class="s1">, </span><span class="s4">&quot;custom&quot;</span><span class="s1">))</span>
+    <span class="s1">errorStyle = NoneSet(values=(</span><span class="s4">&quot;stop&quot;</span><span class="s1">, </span><span class="s4">&quot;warning&quot;</span><span class="s1">, </span><span class="s4">&quot;information&quot;</span><span class="s1">))</span>
+    <span class="s1">imeMode = NoneSet(values=(</span><span class="s4">&quot;noControl&quot;</span><span class="s1">, </span><span class="s4">&quot;off&quot;</span><span class="s1">, </span><span class="s4">&quot;on&quot;</span><span class="s1">, </span><span class="s4">&quot;disabled&quot;</span><span class="s1">,</span>
+                              <span class="s4">&quot;hiragana&quot;</span><span class="s1">, </span><span class="s4">&quot;fullKatakana&quot;</span><span class="s1">, </span><span class="s4">&quot;halfKatakana&quot;</span><span class="s1">, </span><span class="s4">&quot;fullAlpha&quot;</span><span class="s1">,</span><span class="s4">&quot;halfAlpha&quot;</span><span class="s1">,</span>
+                              <span class="s4">&quot;fullHangul&quot;</span><span class="s1">, </span><span class="s4">&quot;halfHangul&quot;</span><span class="s1">))</span>
+    <span class="s1">operator = NoneSet(values=(</span><span class="s4">&quot;between&quot;</span><span class="s1">, </span><span class="s4">&quot;notBetween&quot;</span><span class="s1">, </span><span class="s4">&quot;equal&quot;</span><span class="s1">, </span><span class="s4">&quot;notEqual&quot;</span><span class="s1">,</span>
+                               <span class="s4">&quot;lessThan&quot;</span><span class="s1">, </span><span class="s4">&quot;lessThanOrEqual&quot;</span><span class="s1">, </span><span class="s4">&quot;greaterThan&quot;</span><span class="s1">, </span><span class="s4">&quot;greaterThanOrEqual&quot;</span><span class="s1">))</span>
+    <span class="s1">validation_type = Alias(</span><span class="s4">'type'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">type=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">formula1=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">formula2=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">allow_blank=</span><span class="s0">False</span><span class="s1">,</span>
+                 <span class="s1">showErrorMessage=</span><span class="s0">True</span><span class="s1">,</span>
+                 <span class="s1">showInputMessage=</span><span class="s0">True</span><span class="s1">,</span>
+                 <span class="s1">showDropDown=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">allowBlank=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sqref=(),</span>
+                 <span class="s1">promptTitle=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">errorStyle=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">error=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">prompt=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">errorTitle=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">imeMode=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">operator=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.sqref = sqref</span>
+        <span class="s1">self.showDropDown = showDropDown</span>
+        <span class="s1">self.imeMode = imeMode</span>
+        <span class="s1">self.operator = operator</span>
+        <span class="s1">self.formula1 = formula1</span>
+        <span class="s1">self.formula2 = formula2</span>
+        <span class="s0">if </span><span class="s1">allow_blank </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">allowBlank = allow_blank</span>
+        <span class="s1">self.allowBlank = allowBlank</span>
+        <span class="s1">self.showErrorMessage = showErrorMessage</span>
+        <span class="s1">self.showInputMessage = showInputMessage</span>
+        <span class="s1">self.type = type</span>
+        <span class="s1">self.promptTitle = promptTitle</span>
+        <span class="s1">self.errorStyle = errorStyle</span>
+        <span class="s1">self.error = error</span>
+        <span class="s1">self.prompt = prompt</span>
+        <span class="s1">self.errorTitle = errorTitle</span>
+
+
+    <span class="s0">def </span><span class="s1">add(self, cell):</span>
+        <span class="s2">&quot;&quot;&quot;Adds a cell or cell coordinate to this validator&quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">hasattr(cell, </span><span class="s4">&quot;coordinate&quot;</span><span class="s1">):</span>
+            <span class="s1">cell = cell.coordinate</span>
+        <span class="s1">self.sqref += cell</span>
+
+
+    <span class="s0">def </span><span class="s1">__contains__(self, cell):</span>
+        <span class="s0">if </span><span class="s1">hasattr(cell, </span><span class="s4">&quot;coordinate&quot;</span><span class="s1">):</span>
+            <span class="s1">cell = cell.coordinate</span>
+        <span class="s0">return </span><span class="s1">cell </span><span class="s0">in </span><span class="s1">self.sqref</span>
+
+
+<span class="s0">class </span><span class="s1">DataValidationList(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s4">&quot;dataValidations&quot;</span>
+
+    <span class="s1">disablePrompts = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">xWindow = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">yWindow = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">dataValidation = Sequence(expected_type=DataValidation)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s4">'dataValidation'</span><span class="s1">,)</span>
+    <span class="s1">__attrs__ = (</span><span class="s4">'disablePrompts'</span><span class="s1">, </span><span class="s4">'xWindow'</span><span class="s1">, </span><span class="s4">'yWindow'</span><span class="s1">, </span><span class="s4">'count'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">disablePrompts=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">xWindow=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">yWindow=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">count=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dataValidation=(),</span>
+                <span class="s1">):</span>
+        <span class="s1">self.disablePrompts = disablePrompts</span>
+        <span class="s1">self.xWindow = xWindow</span>
+        <span class="s1">self.yWindow = yWindow</span>
+        <span class="s1">self.dataValidation = dataValidation</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">count(self):</span>
+        <span class="s0">return </span><span class="s1">len(self)</span>
+
+
+    <span class="s0">def </span><span class="s1">__len__(self):</span>
+        <span class="s0">return </span><span class="s1">len(self.dataValidation)</span>
+
+
+    <span class="s0">def </span><span class="s1">append(self, dv):</span>
+        <span class="s1">self.dataValidation.append(dv)</span>
+
+
+    <span class="s0">def </span><span class="s1">to_tree(self, tagname=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Need to skip validations that have no cell ranges 
+        &quot;&quot;&quot;</span>
+        <span class="s1">ranges = self.dataValidation </span><span class="s2"># copy</span>
+        <span class="s1">self.dataValidation = [r </span><span class="s0">for </span><span class="s1">r </span><span class="s0">in </span><span class="s1">self.dataValidation </span><span class="s0">if </span><span class="s1">bool(r.sqref)]</span>
+        <span class="s1">xml = super(DataValidationList, self).to_tree(tagname)</span>
+        <span class="s1">self.dataValidation = ranges</span>
+        <span class="s0">return </span><span class="s1">xml</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<html>
+<head>
+<title>pivot.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+pivot.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2021 openpyxl</span>
+
+<span class="s0">from </span><span class="s1">openpyxl.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyxl.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Alias,</span>
+    <span class="s1">Typed,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyxl.descriptors.nested </span><span class="s0">import </span><span class="s1">NestedInteger, NestedText</span>
+<span class="s0">from </span><span class="s1">openpyxl.descriptors.excel </span><span class="s0">import </span><span class="s1">ExtensionList</span>
+
+<span class="s0">from </span><span class="s1">.label </span><span class="s0">import </span><span class="s1">DataLabel</span>
+<span class="s0">from </span><span class="s1">.marker </span><span class="s0">import </span><span class="s1">Marker</span>
+<span class="s0">from </span><span class="s1">.shapes </span><span class="s0">import </span><span class="s1">GraphicalProperties</span>
+<span class="s0">from </span><span class="s1">.text </span><span class="s0">import </span><span class="s1">RichText</span>
+
+
+<span class="s0">class </span><span class="s1">PivotSource(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;pivotSource&quot;</span>
+
+    <span class="s1">name = NestedText(expected_type=str)</span>
+    <span class="s1">fmtId = NestedInteger(expected_type=int)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'name'</span><span class="s1">, </span><span class="s3">'fmtId'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">name=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fmtId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.fmtId = fmtId</span>
+
+
+<span class="s0">class </span><span class="s1">PivotFormat(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;pivotFmt&quot;</span>
+
+    <span class="s1">idx = NestedInteger(nested=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">spPr = Typed(expected_type=GraphicalProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">graphicalProperties = Alias(</span><span class="s3">&quot;spPr&quot;</span><span class="s1">)</span>
+    <span class="s1">txPr = Typed(expected_type=RichText, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">TextBody = Alias(</span><span class="s3">&quot;txPr&quot;</span><span class="s1">)</span>
+    <span class="s1">marker = Typed(expected_type=Marker, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">dLbl = Typed(expected_type=DataLabel, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">DataLabel = Alias(</span><span class="s3">&quot;dLbl&quot;</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'idx'</span><span class="s1">, </span><span class="s3">'spPr'</span><span class="s1">, </span><span class="s3">'txPr'</span><span class="s1">, </span><span class="s3">'marker'</span><span class="s1">, </span><span class="s3">'dLbl'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">idx=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">spPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">txPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">marker=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dLbl=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.idx = idx</span>
+        <span class="s1">self.spPr = spPr</span>
+        <span class="s1">self.txPr = txPr</span>
+        <span class="s1">self.marker = marker</span>
+        <span class="s1">self.dLbl = dLbl</span>
+</pre>
+</body>
+</html>

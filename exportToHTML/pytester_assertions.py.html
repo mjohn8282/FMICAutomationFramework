@@ -1,0 +1,87 @@
+<html>
+<head>
+<title>pytester_assertions.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+pytester_assertions.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot;Helper plugin for pytester; should not be loaded on its own.&quot;&quot;&quot;</span>
+<span class="s0"># This plugin contains assertions used by pytester. pytester cannot</span>
+<span class="s0"># contain them itself, since it is imported by the `pytest` module,</span>
+<span class="s0"># hence cannot be subject to assertion rewriting, which requires a</span>
+<span class="s0"># module to not be already imported.</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Dict</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Sequence</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Tuple</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Union</span>
+
+<span class="s2">from </span><span class="s1">_pytest.reports </span><span class="s2">import </span><span class="s1">CollectReport</span>
+<span class="s2">from </span><span class="s1">_pytest.reports </span><span class="s2">import </span><span class="s1">TestReport</span>
+
+
+<span class="s2">def </span><span class="s1">assertoutcome(</span>
+    <span class="s1">outcomes: Tuple[</span>
+        <span class="s1">Sequence[TestReport],</span>
+        <span class="s1">Sequence[Union[CollectReport, TestReport]],</span>
+        <span class="s1">Sequence[Union[CollectReport, TestReport]],</span>
+    <span class="s1">],</span>
+    <span class="s1">passed: int = </span><span class="s3">0</span><span class="s1">,</span>
+    <span class="s1">skipped: int = </span><span class="s3">0</span><span class="s1">,</span>
+    <span class="s1">failed: int = </span><span class="s3">0</span><span class="s1">,</span>
+<span class="s1">) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+    <span class="s1">__tracebackhide__ = </span><span class="s2">True</span>
+
+    <span class="s1">realpassed, realskipped, realfailed = outcomes</span>
+    <span class="s1">obtained = {</span>
+        <span class="s4">&quot;passed&quot;</span><span class="s1">: len(realpassed),</span>
+        <span class="s4">&quot;skipped&quot;</span><span class="s1">: len(realskipped),</span>
+        <span class="s4">&quot;failed&quot;</span><span class="s1">: len(realfailed),</span>
+    <span class="s1">}</span>
+    <span class="s1">expected = {</span><span class="s4">&quot;passed&quot;</span><span class="s1">: passed, </span><span class="s4">&quot;skipped&quot;</span><span class="s1">: skipped, </span><span class="s4">&quot;failed&quot;</span><span class="s1">: failed}</span>
+    <span class="s2">assert </span><span class="s1">obtained == expected, outcomes</span>
+
+
+<span class="s2">def </span><span class="s1">assert_outcomes(</span>
+    <span class="s1">outcomes: Dict[str, int],</span>
+    <span class="s1">passed: int = </span><span class="s3">0</span><span class="s1">,</span>
+    <span class="s1">skipped: int = </span><span class="s3">0</span><span class="s1">,</span>
+    <span class="s1">failed: int = </span><span class="s3">0</span><span class="s1">,</span>
+    <span class="s1">errors: int = </span><span class="s3">0</span><span class="s1">,</span>
+    <span class="s1">xpassed: int = </span><span class="s3">0</span><span class="s1">,</span>
+    <span class="s1">xfailed: int = </span><span class="s3">0</span><span class="s1">,</span>
+<span class="s1">) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+    <span class="s0">&quot;&quot;&quot;Assert that the specified outcomes appear with the respective 
+    numbers (0 means it didn't occur) in the text output from a test run.&quot;&quot;&quot;</span>
+    <span class="s1">__tracebackhide__ = </span><span class="s2">True</span>
+
+    <span class="s1">obtained = {</span>
+        <span class="s4">&quot;passed&quot;</span><span class="s1">: outcomes.get(</span><span class="s4">&quot;passed&quot;</span><span class="s1">, </span><span class="s3">0</span><span class="s1">),</span>
+        <span class="s4">&quot;skipped&quot;</span><span class="s1">: outcomes.get(</span><span class="s4">&quot;skipped&quot;</span><span class="s1">, </span><span class="s3">0</span><span class="s1">),</span>
+        <span class="s4">&quot;failed&quot;</span><span class="s1">: outcomes.get(</span><span class="s4">&quot;failed&quot;</span><span class="s1">, </span><span class="s3">0</span><span class="s1">),</span>
+        <span class="s4">&quot;errors&quot;</span><span class="s1">: outcomes.get(</span><span class="s4">&quot;errors&quot;</span><span class="s1">, </span><span class="s3">0</span><span class="s1">),</span>
+        <span class="s4">&quot;xpassed&quot;</span><span class="s1">: outcomes.get(</span><span class="s4">&quot;xpassed&quot;</span><span class="s1">, </span><span class="s3">0</span><span class="s1">),</span>
+        <span class="s4">&quot;xfailed&quot;</span><span class="s1">: outcomes.get(</span><span class="s4">&quot;xfailed&quot;</span><span class="s1">, </span><span class="s3">0</span><span class="s1">),</span>
+    <span class="s1">}</span>
+    <span class="s1">expected = {</span>
+        <span class="s4">&quot;passed&quot;</span><span class="s1">: passed,</span>
+        <span class="s4">&quot;skipped&quot;</span><span class="s1">: skipped,</span>
+        <span class="s4">&quot;failed&quot;</span><span class="s1">: failed,</span>
+        <span class="s4">&quot;errors&quot;</span><span class="s1">: errors,</span>
+        <span class="s4">&quot;xpassed&quot;</span><span class="s1">: xpassed,</span>
+        <span class="s4">&quot;xfailed&quot;</span><span class="s1">: xfailed,</span>
+    <span class="s1">}</span>
+    <span class="s2">assert </span><span class="s1">obtained == expected</span>
+</pre>
+</body>
+</html>

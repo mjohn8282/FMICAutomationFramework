@@ -1,0 +1,151 @@
+<html>
+<head>
+<title>nested.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+nested.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s3">&quot;&quot;&quot; 
+Generic serialisable classes 
+&quot;&quot;&quot;</span>
+<span class="s0">from </span><span class="s1">.base </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Convertible,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">Descriptor,</span>
+    <span class="s1">NoneSet,</span>
+    <span class="s1">MinMax,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">Float,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Text,</span>
+    <span class="s1">)</span>
+<span class="s0">from </span><span class="s1">.sequence </span><span class="s0">import </span><span class="s1">Sequence</span>
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">safe_string</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s0">import </span><span class="s1">Element, localname</span>
+
+
+<span class="s0">class </span><span class="s1">Nested(Descriptor):</span>
+
+    <span class="s1">nested = </span><span class="s0">True</span>
+    <span class="s1">attribute = </span><span class="s3">&quot;val&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s0">if </span><span class="s1">hasattr(value, </span><span class="s3">&quot;tag&quot;</span><span class="s1">):</span>
+            <span class="s1">tag = localname(value)</span>
+            <span class="s0">if </span><span class="s1">tag != self.name:</span>
+                <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;Tag does not match attribute&quot;</span><span class="s1">)</span>
+
+            <span class="s1">value = self.from_tree(value)</span>
+        <span class="s1">super(Nested, self).__set__(instance, value)</span>
+
+
+    <span class="s0">def </span><span class="s1">from_tree(self, node):</span>
+        <span class="s0">return </span><span class="s1">node.get(self.attribute)</span>
+
+
+    <span class="s0">def </span><span class="s1">to_tree(self, tagname=</span><span class="s0">None</span><span class="s1">, value=</span><span class="s0">None</span><span class="s1">, namespace=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">namespace = getattr(self, </span><span class="s3">&quot;namespace&quot;</span><span class="s1">, namespace)</span>
+        <span class="s0">if </span><span class="s1">value </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s0">if </span><span class="s1">namespace </span><span class="s0">is not None</span><span class="s1">:</span>
+                <span class="s1">tagname = </span><span class="s3">&quot;{%s}%s&quot; </span><span class="s1">% (namespace, tagname)</span>
+            <span class="s1">value = safe_string(value)</span>
+            <span class="s0">return </span><span class="s1">Element(tagname, {self.attribute:value})</span>
+
+
+<span class="s0">class </span><span class="s1">NestedValue(Nested, Convertible):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Nested tag storing the value on the 'val' attribute 
+    &quot;&quot;&quot;</span>
+    <span class="s0">pass</span>
+
+
+<span class="s0">class </span><span class="s1">NestedText(NestedValue):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Represents any nested tag with the value as the contents of the tag 
+    &quot;&quot;&quot;</span>
+
+
+    <span class="s0">def </span><span class="s1">from_tree(self, node):</span>
+        <span class="s0">return </span><span class="s1">node.text</span>
+
+
+    <span class="s0">def </span><span class="s1">to_tree(self, tagname=</span><span class="s0">None</span><span class="s1">, value=</span><span class="s0">None</span><span class="s1">, namespace=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">namespace = getattr(self, </span><span class="s3">&quot;namespace&quot;</span><span class="s1">, namespace)</span>
+        <span class="s0">if </span><span class="s1">value </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s0">if </span><span class="s1">namespace </span><span class="s0">is not None</span><span class="s1">:</span>
+                <span class="s1">tagname = </span><span class="s3">&quot;{%s}%s&quot; </span><span class="s1">% (namespace, tagname)</span>
+            <span class="s1">el = Element(tagname)</span>
+            <span class="s1">el.text = safe_string(value)</span>
+            <span class="s0">return </span><span class="s1">el</span>
+
+
+<span class="s0">class </span><span class="s1">NestedFloat(NestedValue, Float):</span>
+
+    <span class="s0">pass</span>
+
+
+<span class="s0">class </span><span class="s1">NestedInteger(NestedValue, Integer):</span>
+
+    <span class="s0">pass</span>
+
+
+<span class="s0">class </span><span class="s1">NestedString(NestedValue, String):</span>
+
+    <span class="s0">pass</span>
+
+
+<span class="s0">class </span><span class="s1">NestedBool(NestedValue, Bool):</span>
+
+
+    <span class="s0">def </span><span class="s1">from_tree(self, node):</span>
+        <span class="s0">return </span><span class="s1">node.get(</span><span class="s3">&quot;val&quot;</span><span class="s1">, </span><span class="s0">True</span><span class="s1">)</span>
+
+
+<span class="s0">class </span><span class="s1">NestedNoneSet(Nested, NoneSet):</span>
+
+    <span class="s0">pass</span>
+
+
+<span class="s0">class </span><span class="s1">NestedSet(Nested, Set):</span>
+
+    <span class="s0">pass</span>
+
+
+<span class="s0">class </span><span class="s1">NestedMinMax(Nested, MinMax):</span>
+
+    <span class="s0">pass</span>
+
+
+<span class="s0">class </span><span class="s1">EmptyTag(Nested, Bool):</span>
+
+    <span class="s2">&quot;&quot;&quot; 
+    Boolean if a tag exists or not. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">from_tree(self, node):</span>
+        <span class="s0">return True</span>
+
+
+    <span class="s0">def </span><span class="s1">to_tree(self, tagname=</span><span class="s0">None</span><span class="s1">, value=</span><span class="s0">None</span><span class="s1">, namespace=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s0">if </span><span class="s1">value:</span>
+            <span class="s1">namespace = getattr(self, </span><span class="s3">&quot;namespace&quot;</span><span class="s1">, namespace)</span>
+            <span class="s0">if </span><span class="s1">namespace </span><span class="s0">is not None</span><span class="s1">:</span>
+                <span class="s1">tagname = </span><span class="s3">&quot;{%s}%s&quot; </span><span class="s1">% (namespace, tagname)</span>
+            <span class="s0">return </span><span class="s1">Element(tagname)</span>
+</pre>
+</body>
+</html>

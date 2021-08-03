@@ -1,0 +1,84 @@
+<html>
+<head>
+<title>_tracing.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+_tracing.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+Tracing utils 
+&quot;&quot;&quot;</span>
+
+
+<span class="s2">class </span><span class="s1">TagTracer(object):</span>
+    <span class="s2">def </span><span class="s1">__init__(self):</span>
+        <span class="s1">self._tags2proc = {}</span>
+        <span class="s1">self._writer = </span><span class="s2">None</span>
+        <span class="s1">self.indent = </span><span class="s3">0</span>
+
+    <span class="s2">def </span><span class="s1">get(self, name):</span>
+        <span class="s2">return </span><span class="s1">TagTracerSub(self, (name,))</span>
+
+    <span class="s2">def </span><span class="s1">_format_message(self, tags, args):</span>
+        <span class="s2">if </span><span class="s1">isinstance(args[-</span><span class="s3">1</span><span class="s1">], dict):</span>
+            <span class="s1">extra = args[-</span><span class="s3">1</span><span class="s1">]</span>
+            <span class="s1">args = args[:-</span><span class="s3">1</span><span class="s1">]</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">extra = {}</span>
+
+        <span class="s1">content = </span><span class="s4">&quot; &quot;</span><span class="s1">.join(map(str, args))</span>
+        <span class="s1">indent = </span><span class="s4">&quot;  &quot; </span><span class="s1">* self.indent</span>
+
+        <span class="s1">lines = [</span><span class="s4">&quot;%s%s [%s]</span><span class="s5">\n</span><span class="s4">&quot; </span><span class="s1">% (indent, content, </span><span class="s4">&quot;:&quot;</span><span class="s1">.join(tags))]</span>
+
+        <span class="s2">for </span><span class="s1">name, value </span><span class="s2">in </span><span class="s1">extra.items():</span>
+            <span class="s1">lines.append(</span><span class="s4">&quot;%s    %s: %s</span><span class="s5">\n</span><span class="s4">&quot; </span><span class="s1">% (indent, name, value))</span>
+
+        <span class="s2">return </span><span class="s4">&quot;&quot;</span><span class="s1">.join(lines)</span>
+
+    <span class="s2">def </span><span class="s1">_processmessage(self, tags, args):</span>
+        <span class="s2">if </span><span class="s1">self._writer </span><span class="s2">is not None and </span><span class="s1">args:</span>
+            <span class="s1">self._writer(self._format_message(tags, args))</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">processor = self._tags2proc[tags]</span>
+        <span class="s2">except </span><span class="s1">KeyError:</span>
+            <span class="s2">pass</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">processor(tags, args)</span>
+
+    <span class="s2">def </span><span class="s1">setwriter(self, writer):</span>
+        <span class="s1">self._writer = writer</span>
+
+    <span class="s2">def </span><span class="s1">setprocessor(self, tags, processor):</span>
+        <span class="s2">if </span><span class="s1">isinstance(tags, str):</span>
+            <span class="s1">tags = tuple(tags.split(</span><span class="s4">&quot;:&quot;</span><span class="s1">))</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">assert </span><span class="s1">isinstance(tags, tuple)</span>
+        <span class="s1">self._tags2proc[tags] = processor</span>
+
+
+<span class="s2">class </span><span class="s1">TagTracerSub(object):</span>
+    <span class="s2">def </span><span class="s1">__init__(self, root, tags):</span>
+        <span class="s1">self.root = root</span>
+        <span class="s1">self.tags = tags</span>
+
+    <span class="s2">def </span><span class="s1">__call__(self, *args):</span>
+        <span class="s1">self.root._processmessage(self.tags, args)</span>
+
+    <span class="s2">def </span><span class="s1">get(self, name):</span>
+        <span class="s2">return </span><span class="s1">self.__class__(self.root, self.tags + (name,))</span>
+</pre>
+</body>
+</html>

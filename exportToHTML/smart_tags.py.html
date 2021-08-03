@@ -1,0 +1,77 @@
+<html>
+<head>
+<title>smart_tags.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+smart_tags.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Sequence,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">NoneSet,</span>
+
+<span class="s1">)</span>
+
+<span class="s0">class </span><span class="s1">SmartTag(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;smartTagType&quot;</span>
+
+    <span class="s1">namespaceUri = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">name = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">url = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">namespaceUri=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">name=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">url=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.namespaceUri = namespaceUri</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.url = url</span>
+
+
+<span class="s0">class </span><span class="s1">SmartTagList(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;smartTagTypes&quot;</span>
+
+    <span class="s1">smartTagType = Sequence(expected_type=SmartTag, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'smartTagType'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">smartTagType=(),</span>
+                <span class="s1">):</span>
+        <span class="s1">self.smartTagType = smartTagType</span>
+
+
+<span class="s0">class </span><span class="s1">SmartTagProperties(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;smartTagPr&quot;</span>
+
+    <span class="s1">embed = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">show = NoneSet(values=([</span><span class="s3">'all'</span><span class="s1">, </span><span class="s3">'noIndicator'</span><span class="s1">]))</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">embed=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">show=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.embed = embed</span>
+        <span class="s1">self.show = show</span>
+</pre>
+</body>
+</html>

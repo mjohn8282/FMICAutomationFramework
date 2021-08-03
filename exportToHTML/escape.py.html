@@ -1,0 +1,66 @@
+<html>
+<head>
+<title>escape.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+.s5 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+escape.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s3">&quot;&quot;&quot; 
+OOXML has non-standard escaping for characters &lt; </span><span class="s4">\031</span>
+<span class="s3">&quot;&quot;&quot;</span>
+
+<span class="s0">import </span><span class="s1">re</span>
+
+
+<span class="s0">def </span><span class="s1">escape(value):</span>
+    <span class="s2">r&quot;&quot;&quot; 
+    Convert ASCII &lt; 31 to OOXML: \n == _x + hex(ord(\n)) + _ 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">CHAR_REGEX = re.compile(</span><span class="s3">r&quot;[\001-\031]&quot;</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">_sub(match):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Callback to escape chars 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s3">&quot;_x{:0&gt;4x}_&quot;</span><span class="s1">.format(ord(match.group(</span><span class="s5">0</span><span class="s1">)))</span>
+
+    <span class="s0">return </span><span class="s1">CHAR_REGEX.sub(_sub, value)</span>
+
+
+<span class="s0">def </span><span class="s1">unescape(value):</span>
+    <span class="s2">r&quot;&quot;&quot; 
+    Convert escaped strings to ASCIII: _x000a_ == \n 
+    &quot;&quot;&quot;</span>
+
+
+    <span class="s1">ESCAPED_REGEX = re.compile(</span><span class="s3">&quot;_x([0-9A-Fa-f]{4})_&quot;</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">_sub(match):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Callback to unescape chars 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">chr(int(match.group(</span><span class="s5">1</span><span class="s1">), </span><span class="s5">16</span><span class="s1">))</span>
+
+    <span class="s0">if </span><span class="s3">&quot;_x&quot; </span><span class="s0">in </span><span class="s1">value:</span>
+        <span class="s1">value = ESCAPED_REGEX.sub(_sub, value)</span>
+
+    <span class="s0">return </span><span class="s1">value</span>
+</pre>
+</body>
+</html>

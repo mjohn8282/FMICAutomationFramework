@@ -1,0 +1,288 @@
+<html>
+<head>
+<title>write_only.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+write_only.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+
+<span class="s3">&quot;&quot;&quot;Write worksheets to xml representations in an optimized way&quot;&quot;&quot;</span>
+
+<span class="s0">import </span><span class="s1">atexit</span>
+<span class="s0">from </span><span class="s1">inspect </span><span class="s0">import </span><span class="s1">isgenerator</span>
+<span class="s0">import </span><span class="s1">os</span>
+<span class="s0">from </span><span class="s1">tempfile </span><span class="s0">import </span><span class="s1">NamedTemporaryFile</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.cell </span><span class="s0">import </span><span class="s1">Cell, WriteOnlyCell</span>
+<span class="s0">from </span><span class="s1">openpyexcel.drawing.spreadsheet_drawing </span><span class="s0">import </span><span class="s1">SpreadsheetDrawing</span>
+<span class="s0">from </span><span class="s1">openpyexcel.workbook.child </span><span class="s0">import </span><span class="s1">_WorkbookChild</span>
+<span class="s0">from </span><span class="s1">.worksheet </span><span class="s0">import </span><span class="s1">Worksheet</span>
+<span class="s0">from </span><span class="s1">.related </span><span class="s0">import </span><span class="s1">Related</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.utils.exceptions </span><span class="s0">import </span><span class="s1">WorkbookAlreadySaved</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.writer.etree_worksheet </span><span class="s0">import </span><span class="s1">write_cell</span>
+<span class="s0">from </span><span class="s1">openpyexcel.writer.worksheet </span><span class="s0">import </span><span class="s1">write_drawing, write_conditional_formatting</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">SHEET_MAIN_NS</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s0">import </span><span class="s1">xmlfile</span>
+
+<span class="s1">ALL_TEMP_FILES = []</span>
+
+
+<span class="s1">@atexit.register</span>
+<span class="s0">def </span><span class="s1">_openpyexcel_shutdown():</span>
+    <span class="s1">ALL_TEMP_FILES</span>
+    <span class="s0">for </span><span class="s1">path </span><span class="s0">in </span><span class="s1">ALL_TEMP_FILES:</span>
+        <span class="s0">if </span><span class="s1">os.path.exists(path):</span>
+            <span class="s1">os.remove(path)</span>
+
+
+<span class="s0">def </span><span class="s1">create_temporary_file(suffix=</span><span class="s3">''</span><span class="s1">):</span>
+    <span class="s1">fobj = NamedTemporaryFile(mode=</span><span class="s3">'w+'</span><span class="s1">, suffix=suffix,</span>
+                              <span class="s1">prefix=</span><span class="s3">'openpyexcel.'</span><span class="s1">, delete=</span><span class="s0">False</span><span class="s1">)</span>
+    <span class="s1">filename = fobj.name</span>
+    <span class="s1">fobj.close()</span>
+    <span class="s1">ALL_TEMP_FILES.append(filename)</span>
+    <span class="s0">return </span><span class="s1">filename</span>
+
+
+<span class="s0">class </span><span class="s1">WriteOnlyWorksheet(_WorkbookChild):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Streaming worksheet. Optimised to reduce memory by writing rows just in 
+    time. 
+    Cells can be styled and have comments Styles for rows and columns 
+    must be applied before writing cells 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__saved = </span><span class="s0">False</span>
+    <span class="s1">writer = </span><span class="s0">None</span>
+    <span class="s1">_rel_type = Worksheet._rel_type</span>
+    <span class="s1">_path = Worksheet._path</span>
+    <span class="s1">mime_type = Worksheet.mime_type</span>
+
+
+    <span class="s0">def </span><span class="s1">__init__(self, parent, title):</span>
+        <span class="s1">super(WriteOnlyWorksheet, self).__init__(parent, title)</span>
+        <span class="s1">self._max_col = </span><span class="s4">0</span>
+        <span class="s1">self._max_row = </span><span class="s4">0</span>
+        <span class="s1">self._fileobj_name = create_temporary_file()</span>
+
+        <span class="s2"># Methods from Worksheet</span>
+        <span class="s1">self._add_row = Worksheet._add_row.__get__(self)</span>
+        <span class="s1">self._add_column = Worksheet._add_column.__get__(self)</span>
+        <span class="s1">self.add_chart = Worksheet.add_chart.__get__(self)</span>
+        <span class="s1">self.add_image = Worksheet.add_image.__get__(self)</span>
+        <span class="s1">self.add_table = Worksheet.add_table.__get__(self)</span>
+
+        <span class="s1">setup = Worksheet._setup.__get__(self)</span>
+        <span class="s1">setup()</span>
+
+        <span class="s1">self.print_titles = Worksheet.print_titles.__get__(self)</span>
+        <span class="s1">self.sheet_view = Worksheet.sheet_view.__get__(self)</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">freeze_panes(self):</span>
+        <span class="s0">return </span><span class="s1">Worksheet.freeze_panes.__get__(self)</span>
+
+
+    <span class="s1">@freeze_panes.setter</span>
+    <span class="s0">def </span><span class="s1">freeze_panes(self, value):</span>
+        <span class="s1">Worksheet.freeze_panes.__set__(self, value)</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">print_title_cols(self):</span>
+        <span class="s0">return </span><span class="s1">Worksheet.print_title_cols.__get__(self)</span>
+
+
+    <span class="s1">@print_title_cols.setter</span>
+    <span class="s0">def </span><span class="s1">print_title_cols(self, value):</span>
+        <span class="s1">Worksheet.print_title_cols.__set__(self, value)</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">print_title_rows(self):</span>
+        <span class="s0">return </span><span class="s1">Worksheet.print_title_rows.__get__(self)</span>
+
+
+    <span class="s1">@print_title_rows.setter</span>
+    <span class="s0">def </span><span class="s1">print_title_rows(self, value):</span>
+        <span class="s1">Worksheet.print_title_rows.__set__(self, value)</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">print_area(self):</span>
+        <span class="s0">return </span><span class="s1">Worksheet.print_area.__get__(self)</span>
+
+
+    <span class="s1">@print_area.setter</span>
+    <span class="s0">def </span><span class="s1">print_area(self, value):</span>
+        <span class="s1">Worksheet.print_area.__set__(self, value)</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">filename(self):</span>
+        <span class="s0">return </span><span class="s1">self._fileobj_name</span>
+
+
+    <span class="s0">def </span><span class="s1">_write_header(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Generator that creates the XML file and the sheet header 
+        &quot;&quot;&quot;</span>
+
+        <span class="s0">with </span><span class="s1">xmlfile(self.filename) </span><span class="s0">as </span><span class="s1">xf:</span>
+            <span class="s0">with </span><span class="s1">xf.element(</span><span class="s3">&quot;worksheet&quot;</span><span class="s1">, xmlns=SHEET_MAIN_NS):</span>
+
+                <span class="s0">if </span><span class="s1">self.sheet_properties:</span>
+                    <span class="s1">pr = self.sheet_properties.to_tree()</span>
+
+                <span class="s1">xf.write(pr)</span>
+                <span class="s1">xf.write(self.views.to_tree())</span>
+
+                <span class="s1">cols = self.column_dimensions.to_tree()</span>
+
+                <span class="s1">self.sheet_format.outlineLevelCol = self.column_dimensions.max_outline</span>
+                <span class="s1">xf.write(self.sheet_format.to_tree())</span>
+
+                <span class="s0">if </span><span class="s1">cols </span><span class="s0">is not None</span><span class="s1">:</span>
+                    <span class="s1">xf.write(cols)</span>
+
+                <span class="s0">with </span><span class="s1">xf.element(</span><span class="s3">&quot;sheetData&quot;</span><span class="s1">):</span>
+                    <span class="s1">cell = WriteOnlyCell(self)</span>
+                    <span class="s0">try</span><span class="s1">:</span>
+                        <span class="s0">while True</span><span class="s1">:</span>
+                            <span class="s1">row = (</span><span class="s0">yield</span><span class="s1">)</span>
+                            <span class="s1">row_idx = self._max_row</span>
+                            <span class="s1">attrs = {</span><span class="s3">'r'</span><span class="s1">: </span><span class="s3">'%d' </span><span class="s1">% row_idx}</span>
+                            <span class="s0">if </span><span class="s1">row_idx </span><span class="s0">in </span><span class="s1">self.row_dimensions:</span>
+                                <span class="s1">dim = self.row_dimensions[row_idx]</span>
+                                <span class="s1">attrs.update(dict(dim))</span>
+
+                            <span class="s0">with </span><span class="s1">xf.element(</span><span class="s3">&quot;row&quot;</span><span class="s1">, attrs):</span>
+
+                                <span class="s0">for </span><span class="s1">col_idx, value </span><span class="s0">in </span><span class="s1">enumerate(row, </span><span class="s4">1</span><span class="s1">):</span>
+                                    <span class="s0">if </span><span class="s1">value </span><span class="s0">is None</span><span class="s1">:</span>
+                                        <span class="s0">continue</span>
+                                    <span class="s0">try</span><span class="s1">:</span>
+                                        <span class="s1">cell.value = value</span>
+                                    <span class="s0">except </span><span class="s1">ValueError:</span>
+                                        <span class="s0">if </span><span class="s1">isinstance(value, Cell):</span>
+                                            <span class="s1">cell = value</span>
+                                        <span class="s0">else</span><span class="s1">:</span>
+                                            <span class="s0">raise </span><span class="s1">ValueError</span>
+
+                                    <span class="s1">cell.col_idx = col_idx</span>
+                                    <span class="s1">cell.row = row_idx</span>
+
+                                    <span class="s1">styled = cell.has_style</span>
+                                    <span class="s1">write_cell(xf, self, cell, styled)</span>
+
+                                    <span class="s0">if </span><span class="s1">styled: </span><span class="s2"># styled cell or datetime</span>
+                                        <span class="s1">cell = WriteOnlyCell(self)</span>
+
+                    <span class="s0">except </span><span class="s1">GeneratorExit:</span>
+                        <span class="s0">pass</span>
+
+                <span class="s0">if </span><span class="s1">self.protection.sheet:</span>
+                    <span class="s1">xf.write(self.protection.to_tree())</span>
+
+                <span class="s0">if </span><span class="s1">self.auto_filter.ref:</span>
+                    <span class="s1">xf.write(self.auto_filter.to_tree())</span>
+
+                <span class="s0">if </span><span class="s1">self.sort_state.ref:</span>
+                    <span class="s1">xf.write(self.sort_state.to_tree())</span>
+
+                <span class="s0">if </span><span class="s1">self.conditional_formatting:</span>
+                    <span class="s1">cfs = write_conditional_formatting(self)</span>
+                    <span class="s0">for </span><span class="s1">cf </span><span class="s0">in </span><span class="s1">cfs:</span>
+                        <span class="s1">xf.write(cf)</span>
+
+                <span class="s0">if </span><span class="s1">self.data_validations.count:</span>
+                    <span class="s1">xf.write(self.data_validations.to_tree())</span>
+
+                <span class="s0">if </span><span class="s1">bool(self.HeaderFooter):</span>
+                    <span class="s1">xf.write(self.HeaderFooter.to_tree())</span>
+
+                <span class="s1">drawing = write_drawing(self)</span>
+                <span class="s0">if </span><span class="s1">drawing </span><span class="s0">is not None</span><span class="s1">:</span>
+                    <span class="s1">xf.write(drawing)</span>
+
+                <span class="s0">if </span><span class="s1">self._comments:</span>
+                    <span class="s1">legacyDrawing = Related(id=</span><span class="s3">&quot;anysvml&quot;</span><span class="s1">)</span>
+                    <span class="s1">xml = legacyDrawing.to_tree(</span><span class="s3">&quot;legacyDrawing&quot;</span><span class="s1">)</span>
+                    <span class="s1">xf.write(xml)</span>
+
+    <span class="s0">def </span><span class="s1">close(self):</span>
+        <span class="s0">if </span><span class="s1">self.__saved:</span>
+            <span class="s1">self._already_saved()</span>
+        <span class="s0">if </span><span class="s1">self.writer </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">self.writer = self._write_header()</span>
+            <span class="s1">next(self.writer)</span>
+        <span class="s1">self.writer.close()</span>
+        <span class="s1">self.__saved = </span><span class="s0">True</span>
+
+    <span class="s0">def </span><span class="s1">_cleanup(self):</span>
+        <span class="s1">os.remove(self.filename)</span>
+        <span class="s1">ALL_TEMP_FILES.remove(self.filename</span>
+                              <span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">append(self, row):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        :param row: iterable containing values to append 
+        :type row: iterable 
+        &quot;&quot;&quot;</span>
+
+        <span class="s0">if </span><span class="s1">(</span><span class="s0">not </span><span class="s1">isgenerator(row) </span><span class="s0">and</span>
+            <span class="s0">not </span><span class="s1">isinstance(row, (list, tuple, range))</span>
+            <span class="s1">):</span>
+            <span class="s1">self._invalid_row(row)</span>
+
+        <span class="s1">self._max_row += </span><span class="s4">1</span>
+
+        <span class="s0">if </span><span class="s1">self.writer </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">self.writer = self._write_header()</span>
+            <span class="s1">next(self.writer)</span>
+
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s1">self.writer.send(row)</span>
+        <span class="s0">except </span><span class="s1">StopIteration:</span>
+            <span class="s1">self._already_saved()</span>
+
+
+    <span class="s0">def </span><span class="s1">_already_saved(self):</span>
+        <span class="s0">raise </span><span class="s1">WorkbookAlreadySaved(</span><span class="s3">'Workbook has already been saved and cannot be modified or saved anymore.'</span><span class="s1">)</span>
+
+
+    <span class="s0">def </span><span class="s1">_invalid_row(self, iterable):</span>
+        <span class="s0">raise </span><span class="s1">TypeError(</span><span class="s3">'Value must be a list, tuple, range or a generator Supplied value is {0}'</span><span class="s1">.format(</span>
+            <span class="s1">type(iterable))</span>
+                        <span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">_write(self):</span>
+        <span class="s1">self._drawing = SpreadsheetDrawing()</span>
+        <span class="s1">self._drawing.charts = self._charts</span>
+        <span class="s1">self._drawing.images = self._images</span>
+        <span class="s0">if not </span><span class="s1">self.__saved:</span>
+            <span class="s1">self.close()</span>
+        <span class="s0">with </span><span class="s1">open(self.filename) </span><span class="s0">as </span><span class="s1">src:</span>
+            <span class="s1">out = src.read()</span>
+        <span class="s1">self._cleanup()</span>
+        <span class="s0">return </span><span class="s1">out</span>
+</pre>
+</body>
+</html>

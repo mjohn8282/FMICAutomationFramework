@@ -1,0 +1,65 @@
+<html>
+<head>
+<title>descriptors.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+descriptors.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">basestring</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">NestedMinMax</span>
+    <span class="s1">)</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">Typed</span>
+
+<span class="s0">from </span><span class="s1">.data_source </span><span class="s0">import </span><span class="s1">NumFmt</span>
+
+<span class="s3">&quot;&quot;&quot; 
+Utility descriptors for the chart module. 
+For convenience but also clarity. 
+&quot;&quot;&quot;</span>
+
+<span class="s0">class </span><span class="s1">NestedGapAmount(NestedMinMax):</span>
+
+    <span class="s1">allow_none = </span><span class="s0">True</span>
+    <span class="s1">min = </span><span class="s4">0</span>
+    <span class="s1">max = </span><span class="s4">500</span>
+
+
+<span class="s0">class </span><span class="s1">NestedOverlap(NestedMinMax):</span>
+
+    <span class="s1">allow_none = </span><span class="s0">True</span>
+    <span class="s1">min = -</span><span class="s4">100</span>
+    <span class="s1">max = </span><span class="s4">100</span>
+
+
+<span class="s0">class </span><span class="s1">NumberFormatDescriptor(Typed):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Allow direct assignment of format code 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">expected_type = NumFmt</span>
+    <span class="s1">allow_none = </span><span class="s0">True</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s0">if </span><span class="s1">isinstance(value, basestring):</span>
+            <span class="s1">value = NumFmt(value)</span>
+        <span class="s1">super(NumberFormatDescriptor, self).__set__(instance, value)</span>
+</pre>
+</body>
+</html>

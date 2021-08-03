@@ -1,0 +1,225 @@
+<html>
+<head>
+<title>rsync.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+rsync.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># -*- coding: utf-8 -*-</span>
+<span class="s0">&quot;&quot;&quot; 
+1:N rsync implemenation on top of execnet. 
+ 
+(c) 2006-2009, Armin Rigo, Holger Krekel, Maciej Fijalkowski 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">stat</span>
+<span class="s2">from </span><span class="s1">hashlib </span><span class="s2">import </span><span class="s1">md5</span>
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s2">from </span><span class="s1">queue </span><span class="s2">import </span><span class="s1">Queue</span>
+<span class="s2">except </span><span class="s1">ImportError:</span>
+    <span class="s2">from </span><span class="s1">Queue </span><span class="s2">import </span><span class="s1">Queue</span>
+
+<span class="s2">import </span><span class="s1">execnet.rsync_remote</span>
+
+
+<span class="s2">class </span><span class="s1">RSync(object):</span>
+    <span class="s0">&quot;&quot;&quot;This class allows to send a directory structure (recursively) 
+    to one or multiple remote filesystems. 
+ 
+    There is limited support for symlinks, which means that symlinks 
+    pointing to the sourcetree will be send &quot;as is&quot; while external 
+    symlinks will be just copied (regardless of existance of such 
+    a path on remote side). 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, sourcedir, callback=</span><span class="s2">None</span><span class="s1">, verbose=</span><span class="s2">True</span><span class="s1">):</span>
+        <span class="s1">self._sourcedir = str(sourcedir)</span>
+        <span class="s1">self._verbose = verbose</span>
+        <span class="s2">assert </span><span class="s1">callback </span><span class="s2">is None or </span><span class="s1">hasattr(callback, </span><span class="s3">&quot;__call__&quot;</span><span class="s1">)</span>
+        <span class="s1">self._callback = callback</span>
+        <span class="s1">self._channels = {}</span>
+        <span class="s1">self._receivequeue = Queue()</span>
+        <span class="s1">self._links = []</span>
+
+    <span class="s2">def </span><span class="s1">filter(self, path):</span>
+        <span class="s2">return True</span>
+
+    <span class="s2">def </span><span class="s1">_end_of_channel(self, channel):</span>
+        <span class="s2">if </span><span class="s1">channel </span><span class="s2">in </span><span class="s1">self._channels:</span>
+            <span class="s0"># too early!  we must have got an error</span>
+            <span class="s1">channel.waitclose()</span>
+            <span class="s0"># or else we raise one</span>
+            <span class="s2">raise </span><span class="s1">IOError(</span><span class="s3">&quot;connection unexpectedly closed: {} &quot;</span><span class="s1">.format(channel.gateway))</span>
+
+    <span class="s2">def </span><span class="s1">_process_link(self, channel):</span>
+        <span class="s2">for </span><span class="s1">link </span><span class="s2">in </span><span class="s1">self._links:</span>
+            <span class="s1">channel.send(link)</span>
+        <span class="s0"># completion marker, this host is done</span>
+        <span class="s1">channel.send(</span><span class="s4">42</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_done(self, channel):</span>
+        <span class="s0">&quot;&quot;&quot;Call all callbacks&quot;&quot;&quot;</span>
+        <span class="s1">finishedcallback = self._channels.pop(channel)</span>
+        <span class="s2">if </span><span class="s1">finishedcallback:</span>
+            <span class="s1">finishedcallback()</span>
+        <span class="s1">channel.waitclose()</span>
+
+    <span class="s2">def </span><span class="s1">_list_done(self, channel):</span>
+        <span class="s0"># sum up all to send</span>
+        <span class="s2">if </span><span class="s1">self._callback:</span>
+            <span class="s1">s = sum([self._paths[i] </span><span class="s2">for </span><span class="s1">i </span><span class="s2">in </span><span class="s1">self._to_send[channel]])</span>
+            <span class="s1">self._callback(</span><span class="s3">&quot;list&quot;</span><span class="s1">, s, channel)</span>
+
+    <span class="s2">def </span><span class="s1">_send_item(self, channel, data):</span>
+        <span class="s0">&quot;&quot;&quot;Send one item&quot;&quot;&quot;</span>
+        <span class="s1">modified_rel_path, checksum = data</span>
+        <span class="s1">modifiedpath = os.path.join(self._sourcedir, *modified_rel_path)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">f = open(modifiedpath, </span><span class="s3">&quot;rb&quot;</span><span class="s1">)</span>
+            <span class="s1">data = f.read()</span>
+        <span class="s2">except </span><span class="s1">IOError:</span>
+            <span class="s1">data = </span><span class="s2">None</span>
+
+        <span class="s0"># provide info to progress callback function</span>
+        <span class="s1">modified_rel_path = </span><span class="s3">&quot;/&quot;</span><span class="s1">.join(modified_rel_path)</span>
+        <span class="s2">if </span><span class="s1">data </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">self._paths[modified_rel_path] = len(data)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self._paths[modified_rel_path] = </span><span class="s4">0</span>
+        <span class="s2">if </span><span class="s1">channel </span><span class="s2">not in </span><span class="s1">self._to_send:</span>
+            <span class="s1">self._to_send[channel] = []</span>
+        <span class="s1">self._to_send[channel].append(modified_rel_path)</span>
+        <span class="s0"># print &quot;sending&quot;, modified_rel_path, data and len(data) or 0, checksum</span>
+
+        <span class="s2">if </span><span class="s1">data </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">f.close()</span>
+            <span class="s2">if </span><span class="s1">checksum </span><span class="s2">is not None and </span><span class="s1">checksum == md5(data).digest():</span>
+                <span class="s1">data = </span><span class="s2">None  </span><span class="s0"># not really modified</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">self._report_send_file(channel.gateway, modified_rel_path)</span>
+        <span class="s1">channel.send(data)</span>
+
+    <span class="s2">def </span><span class="s1">_report_send_file(self, gateway, modified_rel_path):</span>
+        <span class="s2">if </span><span class="s1">self._verbose:</span>
+            <span class="s1">print(</span><span class="s3">&quot;{} &lt;= {}&quot;</span><span class="s1">.format(gateway, modified_rel_path))</span>
+
+    <span class="s2">def </span><span class="s1">send(self, raises=</span><span class="s2">True</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Sends a sourcedir to all added targets. Flag indicates 
+        whether to raise an error or return in case of lack of 
+        targets 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">self._channels:</span>
+            <span class="s2">if </span><span class="s1">raises:</span>
+                <span class="s2">raise </span><span class="s1">IOError(</span>
+                    <span class="s3">&quot;no targets available, maybe you &quot; &quot;are trying call send() twice?&quot;</span>
+                <span class="s1">)</span>
+            <span class="s2">return</span>
+        <span class="s0"># normalize a trailing '/' away</span>
+        <span class="s1">self._sourcedir = os.path.dirname(os.path.join(self._sourcedir, </span><span class="s3">&quot;x&quot;</span><span class="s1">))</span>
+        <span class="s0"># send directory structure and file timestamps/sizes</span>
+        <span class="s1">self._send_directory_structure(self._sourcedir)</span>
+
+        <span class="s0"># paths and to_send are only used for doing</span>
+        <span class="s0"># progress-related callbacks</span>
+        <span class="s1">self._paths = {}</span>
+        <span class="s1">self._to_send = {}</span>
+
+        <span class="s0"># send modified file to clients</span>
+        <span class="s2">while </span><span class="s1">self._channels:</span>
+            <span class="s1">channel, req = self._receivequeue.get()</span>
+            <span class="s2">if </span><span class="s1">req </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s1">self._end_of_channel(channel)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">command, data = req</span>
+                <span class="s2">if </span><span class="s1">command == </span><span class="s3">&quot;links&quot;</span><span class="s1">:</span>
+                    <span class="s1">self._process_link(channel)</span>
+                <span class="s2">elif </span><span class="s1">command == </span><span class="s3">&quot;done&quot;</span><span class="s1">:</span>
+                    <span class="s1">self._done(channel)</span>
+                <span class="s2">elif </span><span class="s1">command == </span><span class="s3">&quot;ack&quot;</span><span class="s1">:</span>
+                    <span class="s2">if </span><span class="s1">self._callback:</span>
+                        <span class="s1">self._callback(</span><span class="s3">&quot;ack&quot;</span><span class="s1">, self._paths[data], channel)</span>
+                <span class="s2">elif </span><span class="s1">command == </span><span class="s3">&quot;list_done&quot;</span><span class="s1">:</span>
+                    <span class="s1">self._list_done(channel)</span>
+                <span class="s2">elif </span><span class="s1">command == </span><span class="s3">&quot;send&quot;</span><span class="s1">:</span>
+                    <span class="s1">self._send_item(channel, data)</span>
+                    <span class="s2">del </span><span class="s1">data</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s2">assert </span><span class="s3">&quot;Unknown command %s&quot; </span><span class="s1">% command</span>
+
+    <span class="s2">def </span><span class="s1">add_target(self, gateway, destdir, finishedcallback=</span><span class="s2">None</span><span class="s1">, **options):</span>
+        <span class="s0">&quot;&quot;&quot;Adds a remote target specified via a gateway 
+        and a remote destination directory. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">options:</span>
+            <span class="s2">assert </span><span class="s1">name </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;delete&quot;</span><span class="s1">,)</span>
+
+        <span class="s2">def </span><span class="s1">itemcallback(req):</span>
+            <span class="s1">self._receivequeue.put((channel, req))</span>
+
+        <span class="s1">channel = gateway.remote_exec(execnet.rsync_remote)</span>
+        <span class="s1">channel.reconfigure(py2str_as_py3str=</span><span class="s2">False</span><span class="s1">, py3str_as_py2str=</span><span class="s2">False</span><span class="s1">)</span>
+        <span class="s1">channel.setcallback(itemcallback, endmarker=</span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s1">channel.send((str(destdir), options))</span>
+        <span class="s1">self._channels[channel] = finishedcallback</span>
+
+    <span class="s2">def </span><span class="s1">_broadcast(self, msg):</span>
+        <span class="s2">for </span><span class="s1">channel </span><span class="s2">in </span><span class="s1">self._channels:</span>
+            <span class="s1">channel.send(msg)</span>
+
+    <span class="s2">def </span><span class="s1">_send_link(self, linktype, basename, linkpoint):</span>
+        <span class="s1">self._links.append((linktype, basename, linkpoint))</span>
+
+    <span class="s2">def </span><span class="s1">_send_directory(self, path):</span>
+        <span class="s0"># dir: send a list of entries</span>
+        <span class="s1">names = []</span>
+        <span class="s1">subpaths = []</span>
+        <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">os.listdir(path):</span>
+            <span class="s1">p = os.path.join(path, name)</span>
+            <span class="s2">if </span><span class="s1">self.filter(p):</span>
+                <span class="s1">names.append(name)</span>
+                <span class="s1">subpaths.append(p)</span>
+        <span class="s1">mode = os.lstat(path).st_mode</span>
+        <span class="s1">self._broadcast([mode] + names)</span>
+        <span class="s2">for </span><span class="s1">p </span><span class="s2">in </span><span class="s1">subpaths:</span>
+            <span class="s1">self._send_directory_structure(p)</span>
+
+    <span class="s2">def </span><span class="s1">_send_link_structure(self, path):</span>
+        <span class="s1">linkpoint = os.readlink(path)</span>
+        <span class="s1">basename = path[len(self._sourcedir) + </span><span class="s4">1 </span><span class="s1">:]</span>
+        <span class="s2">if </span><span class="s1">linkpoint.startswith(self._sourcedir):</span>
+            <span class="s1">self._send_link(</span><span class="s3">&quot;linkbase&quot;</span><span class="s1">, basename, linkpoint[len(self._sourcedir) + </span><span class="s4">1 </span><span class="s1">:])</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s0"># relative or absolute link, just send it</span>
+            <span class="s1">self._send_link(</span><span class="s3">&quot;link&quot;</span><span class="s1">, basename, linkpoint)</span>
+        <span class="s1">self._broadcast(</span><span class="s2">None</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_send_directory_structure(self, path):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">st = os.lstat(path)</span>
+        <span class="s2">except </span><span class="s1">OSError:</span>
+            <span class="s1">self._broadcast((</span><span class="s2">None</span><span class="s1">, </span><span class="s4">0</span><span class="s1">, </span><span class="s4">0</span><span class="s1">))</span>
+            <span class="s2">return</span>
+        <span class="s2">if </span><span class="s1">stat.S_ISREG(st.st_mode):</span>
+            <span class="s0"># regular file: send a mode/timestamp/size pair</span>
+            <span class="s1">self._broadcast((st.st_mode, st.st_mtime, st.st_size))</span>
+        <span class="s2">elif </span><span class="s1">stat.S_ISDIR(st.st_mode):</span>
+            <span class="s1">self._send_directory(path)</span>
+        <span class="s2">elif </span><span class="s1">stat.S_ISLNK(st.st_mode):</span>
+            <span class="s1">self._send_link_structure(path)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;cannot sync {!r}&quot;</span><span class="s1">.format(path))</span>
+</pre>
+</body>
+</html>

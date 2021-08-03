@@ -1,0 +1,343 @@
+<html>
+<head>
+<title>fields.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+fields.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s2">import </span><span class="s1">Serialisable</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">DateTime,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">Float,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Sequence,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s2">import </span><span class="s1">HexBinary</span>
+
+<span class="s2">class </span><span class="s1">Index(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;x&quot;</span>
+
+    <span class="s1">v = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">v=</span><span class="s4">0</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.v = v</span>
+
+
+<span class="s2">class </span><span class="s1">Tuple(Serialisable):</span>
+
+    <span class="s1">fld = Integer()</span>
+    <span class="s1">hier = Integer()</span>
+    <span class="s1">item = Integer()</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">fld=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">hier=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">item=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.fld = fld</span>
+        <span class="s1">self.hier = hier</span>
+        <span class="s1">self.item = item</span>
+
+
+<span class="s2">class </span><span class="s1">TupleList(Serialisable):</span>
+
+    <span class="s1">c = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">tpl = Typed(expected_type=Tuple, )</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'tpl'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">c=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">tpl=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.c = c</span>
+        <span class="s1">self.tpl = tpl</span>
+
+
+<span class="s2">class </span><span class="s1">Missing(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;m&quot;</span>
+
+    <span class="s1">tpls = Sequence(expected_type=TupleList)</span>
+    <span class="s1">x = Sequence(expected_type=Index)</span>
+    <span class="s1">u = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">f = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">c = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">cp = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">_in = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">bc = HexBinary(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">fc = HexBinary(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">i = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">un = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">st = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">b = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'tpls'</span><span class="s1">, </span><span class="s3">'x'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">tpls=(),</span>
+                 <span class="s1">x=(),</span>
+                 <span class="s1">u=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">f=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">c=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">cp=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">_in=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">bc=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">fc=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">i=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">un=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">st=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">b=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.tpls = tpls</span>
+        <span class="s1">self.x = x</span>
+        <span class="s1">self.u = u</span>
+        <span class="s1">self.f = f</span>
+        <span class="s1">self.c = c</span>
+        <span class="s1">self.cp = cp</span>
+        <span class="s1">self._in = _in</span>
+        <span class="s1">self.bc = bc</span>
+        <span class="s1">self.fc = fc</span>
+        <span class="s1">self.i = i</span>
+        <span class="s1">self.un = un</span>
+        <span class="s1">self.st = st</span>
+        <span class="s1">self.b = b</span>
+
+
+<span class="s2">class </span><span class="s1">Number(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;n&quot;</span>
+
+    <span class="s1">tpls = Sequence(expected_type=TupleList)</span>
+    <span class="s1">x = Sequence(expected_type=Index)</span>
+    <span class="s1">v = Float()</span>
+    <span class="s1">u = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">f = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">c = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">cp = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">_in = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">bc = HexBinary(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">fc = HexBinary(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">i = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">un = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">st = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">b = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'tpls'</span><span class="s1">, </span><span class="s3">'x'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">tpls=(),</span>
+                 <span class="s1">x=(),</span>
+                 <span class="s1">v=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">u=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">f=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">c=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">cp=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">_in=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">bc=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">fc=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">i=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">un=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">st=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">b=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.tpls = tpls</span>
+        <span class="s1">self.x = x</span>
+        <span class="s1">self.v = v</span>
+        <span class="s1">self.u = u</span>
+        <span class="s1">self.f = f</span>
+        <span class="s1">self.c = c</span>
+        <span class="s1">self.cp = cp</span>
+        <span class="s1">self._in = _in</span>
+        <span class="s1">self.bc = bc</span>
+        <span class="s1">self.fc = fc</span>
+        <span class="s1">self.i = i</span>
+        <span class="s1">self.un = un</span>
+        <span class="s1">self.st = st</span>
+        <span class="s1">self.b = b</span>
+
+
+<span class="s2">class </span><span class="s1">Error(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;e&quot;</span>
+
+    <span class="s1">tpls = Typed(expected_type=TupleList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">x = Sequence(expected_type=Index)</span>
+    <span class="s1">v = String()</span>
+    <span class="s1">u = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">f = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">c = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">cp = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">_in = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">bc = HexBinary(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">fc = HexBinary(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">i = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">un = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">st = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">b = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'tpls'</span><span class="s1">, </span><span class="s3">'x'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">tpls=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">x=(),</span>
+                 <span class="s1">v=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">u=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">f=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">c=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">cp=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">_in=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">bc=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">fc=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">i=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">un=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">st=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">b=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.tpls = tpls</span>
+        <span class="s1">self.x = x</span>
+        <span class="s1">self.v = v</span>
+        <span class="s1">self.u = u</span>
+        <span class="s1">self.f = f</span>
+        <span class="s1">self.c = c</span>
+        <span class="s1">self.cp = cp</span>
+        <span class="s1">self._in = _in</span>
+        <span class="s1">self.bc = bc</span>
+        <span class="s1">self.fc = fc</span>
+        <span class="s1">self.i = i</span>
+        <span class="s1">self.un = un</span>
+        <span class="s1">self.st = st</span>
+        <span class="s1">self.b = b</span>
+
+
+<span class="s2">class </span><span class="s1">Boolean(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;b&quot;</span>
+
+    <span class="s1">x = Sequence(expected_type=Index)</span>
+    <span class="s1">v = Bool()</span>
+    <span class="s1">u = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">f = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">c = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">cp = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'x'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">x=(),</span>
+                 <span class="s1">v=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">u=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">f=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">c=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">cp=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.x = x</span>
+        <span class="s1">self.v = v</span>
+        <span class="s1">self.u = u</span>
+        <span class="s1">self.f = f</span>
+        <span class="s1">self.c = c</span>
+        <span class="s1">self.cp = cp</span>
+
+
+<span class="s2">class </span><span class="s1">Text(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;s&quot;</span>
+
+    <span class="s1">tpls = Sequence(expected_type=TupleList)</span>
+    <span class="s1">x = Sequence(expected_type=Index)</span>
+    <span class="s1">v = String()</span>
+    <span class="s1">u = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">f = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">c = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">cp = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">_in = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">bc = HexBinary(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">fc = HexBinary(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">i = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">un = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">st = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">b = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'tpls'</span><span class="s1">, </span><span class="s3">'x'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">tpls=(),</span>
+                 <span class="s1">x=(),</span>
+                 <span class="s1">v=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">u=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">f=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">c=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">cp=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">_in=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">bc=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">fc=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">i=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">un=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">st=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">b=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.tpls = tpls</span>
+        <span class="s1">self.x = x</span>
+        <span class="s1">self.v = v</span>
+        <span class="s1">self.u = u</span>
+        <span class="s1">self.f = f</span>
+        <span class="s1">self.c = c</span>
+        <span class="s1">self.cp = cp</span>
+        <span class="s1">self._in = _in</span>
+        <span class="s1">self.bc = bc</span>
+        <span class="s1">self.fc = fc</span>
+        <span class="s1">self.i = i</span>
+        <span class="s1">self.un = un</span>
+        <span class="s1">self.st = st</span>
+        <span class="s1">self.b = b</span>
+
+
+<span class="s2">class </span><span class="s1">DateTimeField(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;d&quot;</span>
+
+    <span class="s1">x = Sequence(expected_type=Index)</span>
+    <span class="s1">v = DateTime()</span>
+    <span class="s1">u = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">f = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">c = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">cp = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'x'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">x=(),</span>
+                 <span class="s1">v=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">u=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">f=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">c=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">cp=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.x = x</span>
+        <span class="s1">self.v = v</span>
+        <span class="s1">self.u = u</span>
+        <span class="s1">self.f = f</span>
+        <span class="s1">self.c = c</span>
+        <span class="s1">self.cp = cp</span>
+</pre>
+</body>
+</html>

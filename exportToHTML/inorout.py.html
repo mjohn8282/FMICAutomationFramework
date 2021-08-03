@@ -1,0 +1,515 @@
+<html>
+<head>
+<title>inorout.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+inorout.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;Determining whether files are being measured/reported or not.&quot;&quot;&quot;</span>
+
+<span class="s0"># For finding the stdlib</span>
+<span class="s2">import </span><span class="s1">atexit</span>
+<span class="s2">import </span><span class="s1">inspect</span>
+<span class="s2">import </span><span class="s1">itertools</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">platform</span>
+<span class="s2">import </span><span class="s1">re</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">traceback</span>
+
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">env</span>
+<span class="s2">from </span><span class="s1">coverage.backward </span><span class="s2">import </span><span class="s1">code_object</span>
+<span class="s2">from </span><span class="s1">coverage.disposition </span><span class="s2">import </span><span class="s1">FileDisposition, disposition_init</span>
+<span class="s2">from </span><span class="s1">coverage.files </span><span class="s2">import </span><span class="s1">TreeMatcher, FnmatchMatcher, ModuleMatcher</span>
+<span class="s2">from </span><span class="s1">coverage.files </span><span class="s2">import </span><span class="s1">prep_patterns, find_python_files, canonical_filename</span>
+<span class="s2">from </span><span class="s1">coverage.misc </span><span class="s2">import </span><span class="s1">CoverageException</span>
+<span class="s2">from </span><span class="s1">coverage.python </span><span class="s2">import </span><span class="s1">source_for_file, source_for_morf</span>
+
+
+<span class="s0"># Pypy has some unusual stuff in the &quot;stdlib&quot;.  Consider those locations</span>
+<span class="s0"># when deciding where the stdlib is.  These modules are not used for anything,</span>
+<span class="s0"># they are modules importable from the pypy lib directories, so that we can</span>
+<span class="s0"># find those directories.</span>
+<span class="s1">_structseq = _pypy_irc_topic = </span><span class="s2">None</span>
+<span class="s2">if </span><span class="s1">env.PYPY:</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">import </span><span class="s1">_structseq</span>
+    <span class="s2">except </span><span class="s1">ImportError:</span>
+        <span class="s2">pass</span>
+
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">import </span><span class="s1">_pypy_irc_topic</span>
+    <span class="s2">except </span><span class="s1">ImportError:</span>
+        <span class="s2">pass</span>
+
+
+<span class="s2">def </span><span class="s1">canonical_path(morf, directory=</span><span class="s2">False</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Return the canonical path of the module or file `morf`. 
+ 
+    If the module is a package, then return its directory. If it is a 
+    module, then return its file, unless `directory` is True, in which 
+    case return its enclosing directory. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">morf_path = canonical_filename(source_for_morf(morf))</span>
+    <span class="s2">if </span><span class="s1">morf_path.endswith(</span><span class="s3">&quot;__init__.py&quot;</span><span class="s1">) </span><span class="s2">or </span><span class="s1">directory:</span>
+        <span class="s1">morf_path = os.path.split(morf_path)[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s2">return </span><span class="s1">morf_path</span>
+
+
+<span class="s2">def </span><span class="s1">name_for_module(filename, frame):</span>
+    <span class="s0">&quot;&quot;&quot;Get the name of the module for a filename and frame. 
+ 
+    For configurability's sake, we allow __main__ modules to be matched by 
+    their importable name. 
+ 
+    If loaded via runpy (aka -m), we can usually recover the &quot;original&quot; 
+    full dotted module name, otherwise, we resort to interpreting the 
+    file name to get the module's name.  In the case that the module name 
+    can't be determined, None is returned. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">module_globals = frame.f_globals </span><span class="s2">if </span><span class="s1">frame </span><span class="s2">is not None else </span><span class="s1">{}</span>
+    <span class="s2">if </span><span class="s1">module_globals </span><span class="s2">is None</span><span class="s1">:          </span><span class="s0"># pragma: only ironpython</span>
+        <span class="s0"># IronPython doesn't provide globals: https://github.com/IronLanguages/main/issues/1296</span>
+        <span class="s1">module_globals = {}</span>
+
+    <span class="s1">dunder_name = module_globals.get(</span><span class="s3">'__name__'</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+
+    <span class="s2">if </span><span class="s1">isinstance(dunder_name, str) </span><span class="s2">and </span><span class="s1">dunder_name != </span><span class="s3">'__main__'</span><span class="s1">:</span>
+        <span class="s0"># This is the usual case: an imported module.</span>
+        <span class="s2">return </span><span class="s1">dunder_name</span>
+
+    <span class="s1">loader = module_globals.get(</span><span class="s3">'__loader__'</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+    <span class="s2">for </span><span class="s1">attrname </span><span class="s2">in </span><span class="s1">(</span><span class="s3">'fullname'</span><span class="s1">, </span><span class="s3">'name'</span><span class="s1">):   </span><span class="s0"># attribute renamed in py3.2</span>
+        <span class="s2">if </span><span class="s1">hasattr(loader, attrname):</span>
+            <span class="s1">fullname = getattr(loader, attrname)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">continue</span>
+
+        <span class="s2">if </span><span class="s1">isinstance(fullname, str) </span><span class="s2">and </span><span class="s1">fullname != </span><span class="s3">'__main__'</span><span class="s1">:</span>
+            <span class="s0"># Module loaded via: runpy -m</span>
+            <span class="s2">return </span><span class="s1">fullname</span>
+
+    <span class="s0"># Script as first argument to Python command line.</span>
+    <span class="s1">inspectedname = inspect.getmodulename(filename)</span>
+    <span class="s2">if </span><span class="s1">inspectedname </span><span class="s2">is not None</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">inspectedname</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">dunder_name</span>
+
+
+<span class="s2">def </span><span class="s1">module_is_namespace(mod):</span>
+    <span class="s0">&quot;&quot;&quot;Is the module object `mod` a PEP420 namespace module?&quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">hasattr(mod, </span><span class="s3">'__path__'</span><span class="s1">) </span><span class="s2">and </span><span class="s1">getattr(mod, </span><span class="s3">'__file__'</span><span class="s1">, </span><span class="s2">None</span><span class="s1">) </span><span class="s2">is None</span>
+
+
+<span class="s2">def </span><span class="s1">module_has_file(mod):</span>
+    <span class="s0">&quot;&quot;&quot;Does the module object `mod` have an existing __file__ ?&quot;&quot;&quot;</span>
+    <span class="s1">mod__file__ = getattr(mod, </span><span class="s3">'__file__'</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">mod__file__ </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s2">return False</span>
+    <span class="s2">return </span><span class="s1">os.path.exists(mod__file__)</span>
+
+
+<span class="s2">class </span><span class="s1">InOrOut(object):</span>
+    <span class="s0">&quot;&quot;&quot;Machinery for determining what files to measure.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, warn, debug):</span>
+        <span class="s1">self.warn = warn</span>
+        <span class="s1">self.debug = debug</span>
+
+        <span class="s0"># The matchers for should_trace.</span>
+        <span class="s1">self.source_match = </span><span class="s2">None</span>
+        <span class="s1">self.source_pkgs_match = </span><span class="s2">None</span>
+        <span class="s1">self.pylib_paths = self.cover_paths = </span><span class="s2">None</span>
+        <span class="s1">self.pylib_match = self.cover_match = </span><span class="s2">None</span>
+        <span class="s1">self.include_match = self.omit_match = </span><span class="s2">None</span>
+        <span class="s1">self.plugins = []</span>
+        <span class="s1">self.disp_class = FileDisposition</span>
+
+        <span class="s0"># The source argument can be directories or package names.</span>
+        <span class="s1">self.source = []</span>
+        <span class="s1">self.source_pkgs = []</span>
+        <span class="s1">self.source_pkgs_unmatched = []</span>
+        <span class="s1">self.omit = self.include = </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">configure(self, config):</span>
+        <span class="s0">&quot;&quot;&quot;Apply the configuration to get ready for decision-time.&quot;&quot;&quot;</span>
+        <span class="s1">self.source_pkgs.extend(config.source_pkgs)</span>
+        <span class="s2">for </span><span class="s1">src </span><span class="s2">in </span><span class="s1">config.source </span><span class="s2">or </span><span class="s1">[]:</span>
+            <span class="s2">if </span><span class="s1">os.path.isdir(src):</span>
+                <span class="s1">self.source.append(canonical_filename(src))</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">self.source_pkgs.append(src)</span>
+        <span class="s1">self.source_pkgs_unmatched = self.source_pkgs[:]</span>
+
+        <span class="s1">self.omit = prep_patterns(config.run_omit)</span>
+        <span class="s1">self.include = prep_patterns(config.run_include)</span>
+
+        <span class="s0"># The directories for files considered &quot;installed with the interpreter&quot;.</span>
+        <span class="s1">self.pylib_paths = set()</span>
+        <span class="s2">if not </span><span class="s1">config.cover_pylib:</span>
+            <span class="s0"># Look at where some standard modules are located. That's the</span>
+            <span class="s0"># indication for &quot;installed with the interpreter&quot;. In some</span>
+            <span class="s0"># environments (virtualenv, for example), these modules may be</span>
+            <span class="s0"># spread across a few locations. Look at all the candidate modules</span>
+            <span class="s0"># we've imported, and take all the different ones.</span>
+            <span class="s2">for </span><span class="s1">m </span><span class="s2">in </span><span class="s1">(atexit, inspect, os, platform, _pypy_irc_topic, re, _structseq, traceback):</span>
+                <span class="s2">if </span><span class="s1">m </span><span class="s2">is not None and </span><span class="s1">hasattr(m, </span><span class="s3">&quot;__file__&quot;</span><span class="s1">):</span>
+                    <span class="s1">self.pylib_paths.add(canonical_path(m, directory=</span><span class="s2">True</span><span class="s1">))</span>
+
+            <span class="s2">if </span><span class="s1">_structseq </span><span class="s2">and not </span><span class="s1">hasattr(_structseq, </span><span class="s3">'__file__'</span><span class="s1">):</span>
+                <span class="s0"># PyPy 2.4 has no __file__ in the builtin modules, but the code</span>
+                <span class="s0"># objects still have the file names.  So dig into one to find</span>
+                <span class="s0"># the path to exclude.  The &quot;filename&quot; might be synthetic,</span>
+                <span class="s0"># don't be fooled by those.</span>
+                <span class="s1">structseq_file = code_object(_structseq.structseq_new).co_filename</span>
+                <span class="s2">if not </span><span class="s1">structseq_file.startswith(</span><span class="s3">&quot;&lt;&quot;</span><span class="s1">):</span>
+                    <span class="s1">self.pylib_paths.add(canonical_path(structseq_file))</span>
+
+        <span class="s0"># To avoid tracing the coverage.py code itself, we skip anything</span>
+        <span class="s0"># located where we are.</span>
+        <span class="s1">self.cover_paths = [canonical_path(__file__, directory=</span><span class="s2">True</span><span class="s1">)]</span>
+        <span class="s2">if </span><span class="s1">env.TESTING:</span>
+            <span class="s0"># Don't include our own test code.</span>
+            <span class="s1">self.cover_paths.append(os.path.join(self.cover_paths[</span><span class="s4">0</span><span class="s1">], </span><span class="s3">&quot;tests&quot;</span><span class="s1">))</span>
+
+            <span class="s0"># When testing, we use PyContracts, which should be considered</span>
+            <span class="s0"># part of coverage.py, and it uses six. Exclude those directories</span>
+            <span class="s0"># just as we exclude ourselves.</span>
+            <span class="s2">import </span><span class="s1">contracts</span>
+            <span class="s2">import </span><span class="s1">six</span>
+            <span class="s2">for </span><span class="s1">mod </span><span class="s2">in </span><span class="s1">[contracts, six]:</span>
+                <span class="s1">self.cover_paths.append(canonical_path(mod))</span>
+
+        <span class="s2">def </span><span class="s1">debug(msg):</span>
+            <span class="s2">if </span><span class="s1">self.debug:</span>
+                <span class="s1">self.debug.write(msg)</span>
+
+        <span class="s0"># Create the matchers we need for should_trace</span>
+        <span class="s2">if </span><span class="s1">self.source </span><span class="s2">or </span><span class="s1">self.source_pkgs:</span>
+            <span class="s1">against = []</span>
+            <span class="s2">if </span><span class="s1">self.source:</span>
+                <span class="s1">self.source_match = TreeMatcher(self.source)</span>
+                <span class="s1">against.append(</span><span class="s3">&quot;trees {!r}&quot;</span><span class="s1">.format(self.source_match))</span>
+            <span class="s2">if </span><span class="s1">self.source_pkgs:</span>
+                <span class="s1">self.source_pkgs_match = ModuleMatcher(self.source_pkgs)</span>
+                <span class="s1">against.append(</span><span class="s3">&quot;modules {!r}&quot;</span><span class="s1">.format(self.source_pkgs_match))</span>
+            <span class="s1">debug(</span><span class="s3">&quot;Source matching against &quot; </span><span class="s1">+ </span><span class="s3">&quot; and &quot;</span><span class="s1">.join(against))</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">self.cover_paths:</span>
+                <span class="s1">self.cover_match = TreeMatcher(self.cover_paths)</span>
+                <span class="s1">debug(</span><span class="s3">&quot;Coverage code matching: {!r}&quot;</span><span class="s1">.format(self.cover_match))</span>
+            <span class="s2">if </span><span class="s1">self.pylib_paths:</span>
+                <span class="s1">self.pylib_match = TreeMatcher(self.pylib_paths)</span>
+                <span class="s1">debug(</span><span class="s3">&quot;Python stdlib matching: {!r}&quot;</span><span class="s1">.format(self.pylib_match))</span>
+        <span class="s2">if </span><span class="s1">self.include:</span>
+            <span class="s1">self.include_match = FnmatchMatcher(self.include)</span>
+            <span class="s1">debug(</span><span class="s3">&quot;Include matching: {!r}&quot;</span><span class="s1">.format(self.include_match))</span>
+        <span class="s2">if </span><span class="s1">self.omit:</span>
+            <span class="s1">self.omit_match = FnmatchMatcher(self.omit)</span>
+            <span class="s1">debug(</span><span class="s3">&quot;Omit matching: {!r}&quot;</span><span class="s1">.format(self.omit_match))</span>
+
+    <span class="s2">def </span><span class="s1">should_trace(self, filename, frame=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Decide whether to trace execution in `filename`, with a reason. 
+ 
+        This function is called from the trace function.  As each new file name 
+        is encountered, this function determines whether it is traced or not. 
+ 
+        Returns a FileDisposition object. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">original_filename = filename</span>
+        <span class="s1">disp = disposition_init(self.disp_class, filename)</span>
+
+        <span class="s2">def </span><span class="s1">nope(disp, reason):</span>
+            <span class="s0">&quot;&quot;&quot;Simple helper to make it easy to return NO.&quot;&quot;&quot;</span>
+            <span class="s1">disp.trace = </span><span class="s2">False</span>
+            <span class="s1">disp.reason = reason</span>
+            <span class="s2">return </span><span class="s1">disp</span>
+
+        <span class="s2">if </span><span class="s1">frame </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s0"># Compiled Python files have two file names: frame.f_code.co_filename is</span>
+            <span class="s0"># the file name at the time the .pyc was compiled.  The second name is</span>
+            <span class="s0"># __file__, which is where the .pyc was actually loaded from.  Since</span>
+            <span class="s0"># .pyc files can be moved after compilation (for example, by being</span>
+            <span class="s0"># installed), we look for __file__ in the frame and prefer it to the</span>
+            <span class="s0"># co_filename value.</span>
+            <span class="s1">dunder_file = frame.f_globals </span><span class="s2">and </span><span class="s1">frame.f_globals.get(</span><span class="s3">'__file__'</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">dunder_file:</span>
+                <span class="s1">filename = source_for_file(dunder_file)</span>
+                <span class="s2">if </span><span class="s1">original_filename </span><span class="s2">and not </span><span class="s1">original_filename.startswith(</span><span class="s3">'&lt;'</span><span class="s1">):</span>
+                    <span class="s1">orig = os.path.basename(original_filename)</span>
+                    <span class="s2">if </span><span class="s1">orig != os.path.basename(filename):</span>
+                        <span class="s0"># Files shouldn't be renamed when moved. This happens when</span>
+                        <span class="s0"># exec'ing code.  If it seems like something is wrong with</span>
+                        <span class="s0"># the frame's file name, then just use the original.</span>
+                        <span class="s1">filename = original_filename</span>
+
+        <span class="s2">if not </span><span class="s1">filename:</span>
+            <span class="s0"># Empty string is pretty useless.</span>
+            <span class="s2">return </span><span class="s1">nope(disp, </span><span class="s3">&quot;empty string isn't a file name&quot;</span><span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">filename.startswith(</span><span class="s3">'memory:'</span><span class="s1">):</span>
+            <span class="s2">return </span><span class="s1">nope(disp, </span><span class="s3">&quot;memory isn't traceable&quot;</span><span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">filename.startswith(</span><span class="s3">'&lt;'</span><span class="s1">):</span>
+            <span class="s0"># Lots of non-file execution is represented with artificial</span>
+            <span class="s0"># file names like &quot;&lt;string&gt;&quot;, &quot;&lt;doctest readme.txt[0]&gt;&quot;, or</span>
+            <span class="s0"># &quot;&lt;exec_function&gt;&quot;.  Don't ever trace these executions, since we</span>
+            <span class="s0"># can't do anything with the data later anyway.</span>
+            <span class="s2">return </span><span class="s1">nope(disp, </span><span class="s3">&quot;not a real file name&quot;</span><span class="s1">)</span>
+
+        <span class="s0"># pyexpat does a dumb thing, calling the trace function explicitly from</span>
+        <span class="s0"># C code with a C file name.</span>
+        <span class="s2">if </span><span class="s1">re.search(</span><span class="s3">r&quot;[/\\]Modules[/\\]pyexpat.c&quot;</span><span class="s1">, filename):</span>
+            <span class="s2">return </span><span class="s1">nope(disp, </span><span class="s3">&quot;pyexpat lies about itself&quot;</span><span class="s1">)</span>
+
+        <span class="s0"># Jython reports the .class file to the tracer, use the source file.</span>
+        <span class="s2">if </span><span class="s1">filename.endswith(</span><span class="s3">&quot;$py.class&quot;</span><span class="s1">):</span>
+            <span class="s1">filename = filename[:-</span><span class="s4">9</span><span class="s1">] + </span><span class="s3">&quot;.py&quot;</span>
+
+        <span class="s1">canonical = canonical_filename(filename)</span>
+        <span class="s1">disp.canonical_filename = canonical</span>
+
+        <span class="s0"># Try the plugins, see if they have an opinion about the file.</span>
+        <span class="s1">plugin = </span><span class="s2">None</span>
+        <span class="s2">for </span><span class="s1">plugin </span><span class="s2">in </span><span class="s1">self.plugins.file_tracers:</span>
+            <span class="s2">if not </span><span class="s1">plugin._coverage_enabled:</span>
+                <span class="s2">continue</span>
+
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">file_tracer = plugin.file_tracer(canonical)</span>
+                <span class="s2">if </span><span class="s1">file_tracer </span><span class="s2">is not None</span><span class="s1">:</span>
+                    <span class="s1">file_tracer._coverage_plugin = plugin</span>
+                    <span class="s1">disp.trace = </span><span class="s2">True</span>
+                    <span class="s1">disp.file_tracer = file_tracer</span>
+                    <span class="s2">if </span><span class="s1">file_tracer.has_dynamic_source_filename():</span>
+                        <span class="s1">disp.has_dynamic_filename = </span><span class="s2">True</span>
+                    <span class="s2">else</span><span class="s1">:</span>
+                        <span class="s1">disp.source_filename = canonical_filename(</span>
+                            <span class="s1">file_tracer.source_filename()</span>
+                        <span class="s1">)</span>
+                    <span class="s2">break</span>
+            <span class="s2">except </span><span class="s1">Exception:</span>
+                <span class="s1">self.warn(</span>
+                    <span class="s3">&quot;Disabling plug-in %r due to an exception:&quot; </span><span class="s1">% (plugin._coverage_plugin_name)</span>
+                <span class="s1">)</span>
+                <span class="s1">traceback.print_exc()</span>
+                <span class="s1">plugin._coverage_enabled = </span><span class="s2">False</span>
+                <span class="s2">continue</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s0"># No plugin wanted it: it's Python.</span>
+            <span class="s1">disp.trace = </span><span class="s2">True</span>
+            <span class="s1">disp.source_filename = canonical</span>
+
+        <span class="s2">if not </span><span class="s1">disp.has_dynamic_filename:</span>
+            <span class="s2">if not </span><span class="s1">disp.source_filename:</span>
+                <span class="s2">raise </span><span class="s1">CoverageException(</span>
+                    <span class="s3">&quot;Plugin %r didn't set source_filename for %r&quot; </span><span class="s1">%</span>
+                    <span class="s1">(plugin, disp.original_filename)</span>
+                <span class="s1">)</span>
+            <span class="s1">reason = self.check_include_omit_etc(disp.source_filename, frame)</span>
+            <span class="s2">if </span><span class="s1">reason:</span>
+                <span class="s1">nope(disp, reason)</span>
+
+        <span class="s2">return </span><span class="s1">disp</span>
+
+    <span class="s2">def </span><span class="s1">check_include_omit_etc(self, filename, frame):</span>
+        <span class="s0">&quot;&quot;&quot;Check a file name against the include, omit, etc, rules. 
+ 
+        Returns a string or None.  String means, don't trace, and is the reason 
+        why.  None means no reason found to not trace. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">modulename = name_for_module(filename, frame)</span>
+
+        <span class="s0"># If the user specified source or include, then that's authoritative</span>
+        <span class="s0"># about the outer bound of what to measure and we don't have to apply</span>
+        <span class="s0"># any canned exclusions. If they didn't, then we have to exclude the</span>
+        <span class="s0"># stdlib and coverage.py directories.</span>
+        <span class="s2">if </span><span class="s1">self.source_match </span><span class="s2">or </span><span class="s1">self.source_pkgs_match:</span>
+            <span class="s1">extra = </span><span class="s3">&quot;&quot;</span>
+            <span class="s1">ok = </span><span class="s2">False</span>
+            <span class="s2">if </span><span class="s1">self.source_pkgs_match:</span>
+                <span class="s2">if </span><span class="s1">self.source_pkgs_match.match(modulename):</span>
+                    <span class="s1">ok = </span><span class="s2">True</span>
+                    <span class="s2">if </span><span class="s1">modulename </span><span class="s2">in </span><span class="s1">self.source_pkgs_unmatched:</span>
+                        <span class="s1">self.source_pkgs_unmatched.remove(modulename)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">extra = </span><span class="s3">&quot;module {!r} &quot;</span><span class="s1">.format(modulename)</span>
+            <span class="s2">if not </span><span class="s1">ok </span><span class="s2">and </span><span class="s1">self.source_match:</span>
+                <span class="s2">if </span><span class="s1">self.source_match.match(filename):</span>
+                    <span class="s1">ok = </span><span class="s2">True</span>
+            <span class="s2">if not </span><span class="s1">ok:</span>
+                <span class="s2">return </span><span class="s1">extra + </span><span class="s3">&quot;falls outside the --source spec&quot;</span>
+        <span class="s2">elif </span><span class="s1">self.include_match:</span>
+            <span class="s2">if not </span><span class="s1">self.include_match.match(filename):</span>
+                <span class="s2">return </span><span class="s3">&quot;falls outside the --include trees&quot;</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s0"># If we aren't supposed to trace installed code, then check if this</span>
+            <span class="s0"># is near the Python standard library and skip it if so.</span>
+            <span class="s2">if </span><span class="s1">self.pylib_match </span><span class="s2">and </span><span class="s1">self.pylib_match.match(filename):</span>
+                <span class="s2">return </span><span class="s3">&quot;is in the stdlib&quot;</span>
+
+            <span class="s0"># We exclude the coverage.py code itself, since a little of it</span>
+            <span class="s0"># will be measured otherwise.</span>
+            <span class="s2">if </span><span class="s1">self.cover_match </span><span class="s2">and </span><span class="s1">self.cover_match.match(filename):</span>
+                <span class="s2">return </span><span class="s3">&quot;is part of coverage.py&quot;</span>
+
+        <span class="s0"># Check the file against the omit pattern.</span>
+        <span class="s2">if </span><span class="s1">self.omit_match </span><span class="s2">and </span><span class="s1">self.omit_match.match(filename):</span>
+            <span class="s2">return </span><span class="s3">&quot;is inside an --omit pattern&quot;</span>
+
+        <span class="s0"># No point tracing a file we can't later write to SQLite.</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">filename.encode(</span><span class="s3">&quot;utf8&quot;</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">UnicodeEncodeError:</span>
+            <span class="s2">return </span><span class="s3">&quot;non-encodable filename&quot;</span>
+
+        <span class="s0"># No reason found to skip this file.</span>
+        <span class="s2">return None</span>
+
+    <span class="s2">def </span><span class="s1">warn_conflicting_settings(self):</span>
+        <span class="s0">&quot;&quot;&quot;Warn if there are settings that conflict.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.include:</span>
+            <span class="s2">if </span><span class="s1">self.source </span><span class="s2">or </span><span class="s1">self.source_pkgs:</span>
+                <span class="s1">self.warn(</span><span class="s3">&quot;--include is ignored because --source is set&quot;</span><span class="s1">, slug=</span><span class="s3">&quot;include-ignored&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">warn_already_imported_files(self):</span>
+        <span class="s0">&quot;&quot;&quot;Warn if files have already been imported that we will be measuring.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.include </span><span class="s2">or </span><span class="s1">self.source </span><span class="s2">or </span><span class="s1">self.source_pkgs:</span>
+            <span class="s1">warned = set()</span>
+            <span class="s2">for </span><span class="s1">mod </span><span class="s2">in </span><span class="s1">list(sys.modules.values()):</span>
+                <span class="s1">filename = getattr(mod, </span><span class="s3">&quot;__file__&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+                <span class="s2">if </span><span class="s1">filename </span><span class="s2">is None</span><span class="s1">:</span>
+                    <span class="s2">continue</span>
+                <span class="s2">if </span><span class="s1">filename </span><span class="s2">in </span><span class="s1">warned:</span>
+                    <span class="s2">continue</span>
+
+                <span class="s1">disp = self.should_trace(filename)</span>
+                <span class="s2">if </span><span class="s1">disp.trace:</span>
+                    <span class="s1">msg = </span><span class="s3">&quot;Already imported a file that will be measured: {}&quot;</span><span class="s1">.format(filename)</span>
+                    <span class="s1">self.warn(msg, slug=</span><span class="s3">&quot;already-imported&quot;</span><span class="s1">)</span>
+                    <span class="s1">warned.add(filename)</span>
+
+    <span class="s2">def </span><span class="s1">warn_unimported_source(self):</span>
+        <span class="s0">&quot;&quot;&quot;Warn about source packages that were of interest, but never traced.&quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">pkg </span><span class="s2">in </span><span class="s1">self.source_pkgs_unmatched:</span>
+            <span class="s1">self._warn_about_unmeasured_code(pkg)</span>
+
+    <span class="s2">def </span><span class="s1">_warn_about_unmeasured_code(self, pkg):</span>
+        <span class="s0">&quot;&quot;&quot;Warn about a package or module that we never traced. 
+ 
+        `pkg` is a string, the name of the package or module. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">mod = sys.modules.get(pkg)</span>
+        <span class="s2">if </span><span class="s1">mod </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">self.warn(</span><span class="s3">&quot;Module %s was never imported.&quot; </span><span class="s1">% pkg, slug=</span><span class="s3">&quot;module-not-imported&quot;</span><span class="s1">)</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">module_is_namespace(mod):</span>
+            <span class="s0"># A namespace package. It's OK for this not to have been traced,</span>
+            <span class="s0"># since there is no code directly in it.</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if not </span><span class="s1">module_has_file(mod):</span>
+            <span class="s1">self.warn(</span><span class="s3">&quot;Module %s has no Python source.&quot; </span><span class="s1">% pkg, slug=</span><span class="s3">&quot;module-not-python&quot;</span><span class="s1">)</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># The module was in sys.modules, and seems like a module with code, but</span>
+        <span class="s0"># we never measured it. I guess that means it was imported before</span>
+        <span class="s0"># coverage even started.</span>
+        <span class="s1">self.warn(</span>
+            <span class="s3">&quot;Module %s was previously imported, but not measured&quot; </span><span class="s1">% pkg,</span>
+            <span class="s1">slug=</span><span class="s3">&quot;module-not-measured&quot;</span><span class="s1">,</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">find_possibly_unexecuted_files(self):</span>
+        <span class="s0">&quot;&quot;&quot;Find files in the areas of interest that might be untraced. 
+ 
+        Yields pairs: file path, and responsible plug-in name. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">pkg </span><span class="s2">in </span><span class="s1">self.source_pkgs:</span>
+            <span class="s2">if </span><span class="s1">(</span><span class="s2">not </span><span class="s1">pkg </span><span class="s2">in </span><span class="s1">sys.modules </span><span class="s2">or</span>
+                <span class="s2">not </span><span class="s1">module_has_file(sys.modules[pkg])):</span>
+                <span class="s2">continue</span>
+            <span class="s1">pkg_file = source_for_file(sys.modules[pkg].__file__)</span>
+            <span class="s2">for </span><span class="s1">ret </span><span class="s2">in </span><span class="s1">self._find_executable_files(canonical_path(pkg_file)):</span>
+                <span class="s2">yield </span><span class="s1">ret</span>
+
+        <span class="s2">for </span><span class="s1">src </span><span class="s2">in </span><span class="s1">self.source:</span>
+            <span class="s2">for </span><span class="s1">ret </span><span class="s2">in </span><span class="s1">self._find_executable_files(src):</span>
+                <span class="s2">yield </span><span class="s1">ret</span>
+
+    <span class="s2">def </span><span class="s1">_find_plugin_files(self, src_dir):</span>
+        <span class="s0">&quot;&quot;&quot;Get executable files from the plugins.&quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">plugin </span><span class="s2">in </span><span class="s1">self.plugins.file_tracers:</span>
+            <span class="s2">for </span><span class="s1">x_file </span><span class="s2">in </span><span class="s1">plugin.find_executable_files(src_dir):</span>
+                <span class="s2">yield </span><span class="s1">x_file, plugin._coverage_plugin_name</span>
+
+    <span class="s2">def </span><span class="s1">_find_executable_files(self, src_dir):</span>
+        <span class="s0">&quot;&quot;&quot;Find executable files in `src_dir`. 
+ 
+        Search for files in `src_dir` that can be executed because they 
+        are probably importable. Don't include ones that have been omitted 
+        by the configuration. 
+ 
+        Yield the file path, and the plugin name that handles the file. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">py_files = ((py_file, </span><span class="s2">None</span><span class="s1">) </span><span class="s2">for </span><span class="s1">py_file </span><span class="s2">in </span><span class="s1">find_python_files(src_dir))</span>
+        <span class="s1">plugin_files = self._find_plugin_files(src_dir)</span>
+
+        <span class="s2">for </span><span class="s1">file_path, plugin_name </span><span class="s2">in </span><span class="s1">itertools.chain(py_files, plugin_files):</span>
+            <span class="s1">file_path = canonical_filename(file_path)</span>
+            <span class="s2">if </span><span class="s1">self.omit_match </span><span class="s2">and </span><span class="s1">self.omit_match.match(file_path):</span>
+                <span class="s0"># Turns out this file was omitted, so don't pull it back</span>
+                <span class="s0"># in as unexecuted.</span>
+                <span class="s2">continue</span>
+            <span class="s2">yield </span><span class="s1">file_path, plugin_name</span>
+
+    <span class="s2">def </span><span class="s1">sys_info(self):</span>
+        <span class="s0">&quot;&quot;&quot;Our information for Coverage.sys_info. 
+ 
+        Returns a list of (key, value) pairs. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">info = [</span>
+            <span class="s1">(</span><span class="s3">'cover_paths'</span><span class="s1">, self.cover_paths),</span>
+            <span class="s1">(</span><span class="s3">'pylib_paths'</span><span class="s1">, self.pylib_paths),</span>
+        <span class="s1">]</span>
+
+        <span class="s1">matcher_names = [</span>
+            <span class="s3">'source_match'</span><span class="s1">, </span><span class="s3">'source_pkgs_match'</span><span class="s1">,</span>
+            <span class="s3">'include_match'</span><span class="s1">, </span><span class="s3">'omit_match'</span><span class="s1">,</span>
+            <span class="s3">'cover_match'</span><span class="s1">, </span><span class="s3">'pylib_match'</span><span class="s1">,</span>
+            <span class="s1">]</span>
+
+        <span class="s2">for </span><span class="s1">matcher_name </span><span class="s2">in </span><span class="s1">matcher_names:</span>
+            <span class="s1">matcher = getattr(self, matcher_name)</span>
+            <span class="s2">if </span><span class="s1">matcher:</span>
+                <span class="s1">matcher_info = matcher.info()</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">matcher_info = </span><span class="s3">'-none-'</span>
+            <span class="s1">info.append((matcher_name, matcher_info))</span>
+
+        <span class="s2">return </span><span class="s1">info</span>
+</pre>
+</body>
+</html>

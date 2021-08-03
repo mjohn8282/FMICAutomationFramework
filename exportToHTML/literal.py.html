@@ -1,0 +1,131 @@
+<html>
+<head>
+<title>literal.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+literal.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">ast</span>
+<span class="s0">from </span><span class="s1">pprint </span><span class="s0">import </span><span class="s1">PrettyPrinter</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Any, Callable, Dict, List, Set, Tuple</span>
+
+<span class="s0">from </span><span class="s1">isort.exceptions </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">AssignmentsFormatMismatch,</span>
+    <span class="s1">LiteralParsingFailure,</span>
+    <span class="s1">LiteralSortTypeMismatch,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">isort.settings </span><span class="s0">import </span><span class="s1">DEFAULT_CONFIG, Config</span>
+
+
+<span class="s0">class </span><span class="s1">ISortPrettyPrinter(PrettyPrinter):</span>
+    <span class="s2">&quot;&quot;&quot;an isort customized pretty printer for sorted literals&quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, config: Config):</span>
+        <span class="s1">super().__init__(width=config.line_length, compact=</span><span class="s0">True</span><span class="s1">)</span>
+
+
+<span class="s1">type_mapping: Dict[str, Tuple[type, Callable[[Any, ISortPrettyPrinter], str]]] = {}</span>
+
+
+<span class="s0">def </span><span class="s1">assignments(code: str) -&gt; str:</span>
+    <span class="s1">values = {}</span>
+    <span class="s0">for </span><span class="s1">line </span><span class="s0">in </span><span class="s1">code.splitlines(keepends=</span><span class="s0">True</span><span class="s1">):</span>
+        <span class="s0">if not </span><span class="s1">line.strip():</span>
+            <span class="s0">continue</span>
+        <span class="s0">if </span><span class="s3">&quot; = &quot; </span><span class="s0">not in </span><span class="s1">line:</span>
+            <span class="s0">raise </span><span class="s1">AssignmentsFormatMismatch(code)</span>
+        <span class="s1">variable_name, value = line.split(</span><span class="s3">&quot; = &quot;</span><span class="s1">, </span><span class="s4">1</span><span class="s1">)</span>
+        <span class="s1">values[variable_name] = value</span>
+
+    <span class="s0">return </span><span class="s3">&quot;&quot;</span><span class="s1">.join(</span>
+        <span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">variable_name</span><span class="s5">} </span><span class="s3">= </span><span class="s5">{</span><span class="s1">values[variable_name]</span><span class="s5">}</span><span class="s3">&quot; </span><span class="s0">for </span><span class="s1">variable_name </span><span class="s0">in </span><span class="s1">sorted(values.keys())</span>
+    <span class="s1">)</span>
+
+
+<span class="s0">def </span><span class="s1">assignment(code: str, sort_type: str, extension: str, config: Config = DEFAULT_CONFIG) -&gt; str:</span>
+    <span class="s2">&quot;&quot;&quot;Sorts the literal present within the provided code against the provided sort type, 
+    returning the sorted representation of the source code. 
+    &quot;&quot;&quot;</span>
+    <span class="s0">if </span><span class="s1">sort_type == </span><span class="s3">&quot;assignments&quot;</span><span class="s1">:</span>
+        <span class="s0">return </span><span class="s1">assignments(code)</span>
+    <span class="s0">if </span><span class="s1">sort_type </span><span class="s0">not in </span><span class="s1">type_mapping:</span>
+        <span class="s0">raise </span><span class="s1">ValueError(</span>
+            <span class="s3">&quot;Trying to sort using an undefined sort_type. &quot;</span>
+            <span class="s3">f&quot;Defined sort types are </span><span class="s5">{</span><span class="s3">', '</span><span class="s1">.join(type_mapping.keys())</span><span class="s5">}</span><span class="s3">.&quot;</span>
+        <span class="s1">)</span>
+
+    <span class="s1">variable_name, literal = code.split(</span><span class="s3">&quot; = &quot;</span><span class="s1">)</span>
+    <span class="s1">variable_name = variable_name.lstrip()</span>
+    <span class="s0">try</span><span class="s1">:</span>
+        <span class="s1">value = ast.literal_eval(literal)</span>
+    <span class="s0">except </span><span class="s1">Exception </span><span class="s0">as </span><span class="s1">error:</span>
+        <span class="s0">raise </span><span class="s1">LiteralParsingFailure(code, error)</span>
+
+    <span class="s1">expected_type, sort_function = type_mapping[sort_type]</span>
+    <span class="s0">if </span><span class="s1">type(value) != expected_type:</span>
+        <span class="s0">raise </span><span class="s1">LiteralSortTypeMismatch(type(value), expected_type)</span>
+
+    <span class="s1">printer = ISortPrettyPrinter(config)</span>
+    <span class="s1">sorted_value_code = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">variable_name</span><span class="s5">} </span><span class="s3">= </span><span class="s5">{</span><span class="s1">sort_function(value, printer)</span><span class="s5">}</span><span class="s3">&quot;</span>
+    <span class="s0">if </span><span class="s1">config.formatting_function:</span>
+        <span class="s1">sorted_value_code = config.formatting_function(</span>
+            <span class="s1">sorted_value_code, extension, config</span>
+        <span class="s1">).rstrip()</span>
+
+    <span class="s1">sorted_value_code += code[len(code.rstrip()) :]</span>
+    <span class="s0">return </span><span class="s1">sorted_value_code</span>
+
+
+<span class="s0">def </span><span class="s1">register_type(name: str, kind: type):</span>
+    <span class="s2">&quot;&quot;&quot;Registers a new literal sort type.&quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">wrap(function):</span>
+        <span class="s1">type_mapping[name] = (kind, function)</span>
+        <span class="s0">return </span><span class="s1">function</span>
+
+    <span class="s0">return </span><span class="s1">wrap</span>
+
+
+<span class="s1">@register_type(</span><span class="s3">&quot;dict&quot;</span><span class="s1">, dict)</span>
+<span class="s0">def </span><span class="s1">_dict(value: Dict[Any, Any], printer: ISortPrettyPrinter) -&gt; str:</span>
+    <span class="s0">return </span><span class="s1">printer.pformat(dict(sorted(value.items(), key=</span><span class="s0">lambda </span><span class="s1">item: item[</span><span class="s4">1</span><span class="s1">])))</span>
+
+
+<span class="s1">@register_type(</span><span class="s3">&quot;list&quot;</span><span class="s1">, list)</span>
+<span class="s0">def </span><span class="s1">_list(value: List[Any], printer: ISortPrettyPrinter) -&gt; str:</span>
+    <span class="s0">return </span><span class="s1">printer.pformat(sorted(value))</span>
+
+
+<span class="s1">@register_type(</span><span class="s3">&quot;unique-list&quot;</span><span class="s1">, list)</span>
+<span class="s0">def </span><span class="s1">_unique_list(value: List[Any], printer: ISortPrettyPrinter) -&gt; str:</span>
+    <span class="s0">return </span><span class="s1">printer.pformat(list(sorted(set(value))))</span>
+
+
+<span class="s1">@register_type(</span><span class="s3">&quot;set&quot;</span><span class="s1">, set)</span>
+<span class="s0">def </span><span class="s1">_set(value: Set[Any], printer: ISortPrettyPrinter) -&gt; str:</span>
+    <span class="s0">return </span><span class="s3">&quot;{&quot; </span><span class="s1">+ printer.pformat(tuple(sorted(value)))[</span><span class="s4">1</span><span class="s1">:-</span><span class="s4">1</span><span class="s1">] + </span><span class="s3">&quot;}&quot;</span>
+
+
+<span class="s1">@register_type(</span><span class="s3">&quot;tuple&quot;</span><span class="s1">, tuple)</span>
+<span class="s0">def </span><span class="s1">_tuple(value: Tuple[Any, ...], printer: ISortPrettyPrinter) -&gt; str:</span>
+    <span class="s0">return </span><span class="s1">printer.pformat(tuple(sorted(value)))</span>
+
+
+<span class="s1">@register_type(</span><span class="s3">&quot;unique-tuple&quot;</span><span class="s1">, tuple)</span>
+<span class="s0">def </span><span class="s1">_unique_tuple(value: Tuple[Any, ...], printer: ISortPrettyPrinter) -&gt; str:</span>
+    <span class="s0">return </span><span class="s1">printer.pformat(tuple(sorted(set(value))))</span>
+</pre>
+</body>
+</html>

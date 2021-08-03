@@ -1,0 +1,117 @@
+<html>
+<head>
+<title>brain_numpy_core_multiarray.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_numpy_core_multiarray.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2019-2020 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Marc Mueller &lt;30130371+cdce8p@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+
+<span class="s0">&quot;&quot;&quot;Astroid hooks for numpy.core.multiarray module.&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">functools</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+
+<span class="s2">from </span><span class="s1">.brain_numpy_utils </span><span class="s2">import </span><span class="s1">infer_numpy_member, looks_like_numpy_member</span>
+
+
+<span class="s2">def </span><span class="s1">numpy_core_multiarray_transform():</span>
+    <span class="s2">return </span><span class="s1">astroid.parse(</span>
+        <span class="s3">&quot;&quot;&quot; 
+    # different functions defined in multiarray.py 
+    def inner(a, b): 
+        return numpy.ndarray([0, 0]) 
+ 
+    def vdot(a, b): 
+        return numpy.ndarray([0, 0]) 
+        &quot;&quot;&quot;</span>
+    <span class="s1">)</span>
+
+
+<span class="s1">astroid.register_module_extender(</span>
+    <span class="s1">astroid.MANAGER, </span><span class="s3">&quot;numpy.core.multiarray&quot;</span><span class="s1">, numpy_core_multiarray_transform</span>
+<span class="s1">)</span>
+
+
+<span class="s1">METHODS_TO_BE_INFERRED = {</span>
+    <span class="s3">&quot;array&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def array(object, dtype=None, copy=True, order='K', subok=False, ndmin=0): 
+            return numpy.ndarray([0, 0])&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;dot&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def dot(a, b, out=None): 
+            return numpy.ndarray([0, 0])&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;empty_like&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def empty_like(a, dtype=None, order='K', subok=True): 
+            return numpy.ndarray((0, 0))&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;concatenate&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def concatenate(arrays, axis=None, out=None): 
+            return numpy.ndarray((0, 0))&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;where&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def where(condition, x=None, y=None): 
+            return numpy.ndarray([0, 0])&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;empty&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def empty(shape, dtype=float, order='C'): 
+            return numpy.ndarray([0, 0])&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;bincount&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def bincount(x, weights=None, minlength=0): 
+            return numpy.ndarray([0, 0])&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;busday_count&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def busday_count(begindates, enddates, weekmask='1111100', holidays=[], busdaycal=None, out=None): 
+            return numpy.ndarray([0, 0])&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;busday_offset&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def busday_offset(dates, offsets, roll='raise', weekmask='1111100', holidays=None, busdaycal=None, out=None): 
+            return numpy.ndarray([0, 0])&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;can_cast&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def can_cast(from_, to, casting='safe'): 
+            return True&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;copyto&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def copyto(dst, src, casting='same_kind', where=True): 
+            return None&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;datetime_as_string&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def datetime_as_string(arr, unit=None, timezone='naive', casting='same_kind'): 
+            return numpy.ndarray([0, 0])&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;is_busday&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def is_busday(dates, weekmask='1111100', holidays=None, busdaycal=None, out=None): 
+            return numpy.ndarray([0, 0])&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;lexsort&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def lexsort(keys, axis=-1): 
+            return numpy.ndarray([0, 0])&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;may_share_memory&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def may_share_memory(a, b, max_work=None): 
+            return True&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s0"># Not yet available because dtype is not yet present in those brains</span>
+    <span class="s0">#     &quot;min_scalar_type&quot;: &quot;&quot;&quot;def min_scalar_type(a):</span>
+    <span class="s0">#             return numpy.dtype('int16')&quot;&quot;&quot;,</span>
+    <span class="s3">&quot;packbits&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def packbits(a, axis=None, bitorder='big'): 
+            return numpy.ndarray([0, 0])&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s0"># Not yet available because dtype is not yet present in those brains</span>
+    <span class="s0">#     &quot;result_type&quot;: &quot;&quot;&quot;def result_type(*arrays_and_dtypes):</span>
+    <span class="s0">#             return numpy.dtype('int16')&quot;&quot;&quot;,</span>
+    <span class="s3">&quot;shares_memory&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def shares_memory(a, b, max_work=None): 
+            return True&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;unpackbits&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def unpackbits(a, axis=None, count=None, bitorder='big'): 
+            return numpy.ndarray([0, 0])&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;unravel_index&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def unravel_index(indices, shape, order='C'): 
+            return (numpy.ndarray([0, 0]),)&quot;&quot;&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;zeros&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;&quot;def zeros(shape, dtype=float, order='C'): 
+            return numpy.ndarray([0, 0])&quot;&quot;&quot;</span><span class="s1">,</span>
+<span class="s1">}</span>
+
+<span class="s2">for </span><span class="s1">method_name, function_src </span><span class="s2">in </span><span class="s1">METHODS_TO_BE_INFERRED.items():</span>
+    <span class="s1">inference_function = functools.partial(infer_numpy_member, function_src)</span>
+    <span class="s1">astroid.MANAGER.register_transform(</span>
+        <span class="s1">astroid.Attribute,</span>
+        <span class="s1">astroid.inference_tip(inference_function),</span>
+        <span class="s1">functools.partial(looks_like_numpy_member, method_name),</span>
+    <span class="s1">)</span>
+    <span class="s1">astroid.MANAGER.register_transform(</span>
+        <span class="s1">astroid.Name,</span>
+        <span class="s1">astroid.inference_tip(inference_function),</span>
+        <span class="s1">functools.partial(looks_like_numpy_member, method_name),</span>
+    <span class="s1">)</span>
+</pre>
+</body>
+</html>

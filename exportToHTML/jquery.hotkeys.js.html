@@ -1,0 +1,121 @@
+<html>
+<head>
+<title>jquery.hotkeys.js</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+jquery.hotkeys.js</font>
+</center></td></tr></table>
+<pre><span class="s0">/* 
+ * jQuery Hotkeys Plugin 
+ * Copyright 2010, John Resig 
+ * Dual licensed under the MIT or GPL Version 2 licenses. 
+ * 
+ * Based upon the plugin by Tzury Bar Yochay: 
+ * http://github.com/tzuryby/hotkeys 
+ * 
+ * Original idea by: 
+ * Binny V A, http://www.openjs.com/scripts/events/keyboard_shortcuts/ 
+*/</span>
+
+<span class="s1">(</span><span class="s2">function</span><span class="s1">(jQuery){</span>
+
+	<span class="s1">jQuery.hotkeys = {</span>
+		<span class="s1">version: </span><span class="s3">&quot;0.8&quot;</span><span class="s1">,</span>
+
+		<span class="s1">specialKeys: {</span>
+			<span class="s4">8</span><span class="s1">: </span><span class="s3">&quot;backspace&quot;</span><span class="s1">, </span><span class="s4">9</span><span class="s1">: </span><span class="s3">&quot;tab&quot;</span><span class="s1">, </span><span class="s4">13</span><span class="s1">: </span><span class="s3">&quot;return&quot;</span><span class="s1">, </span><span class="s4">16</span><span class="s1">: </span><span class="s3">&quot;shift&quot;</span><span class="s1">, </span><span class="s4">17</span><span class="s1">: </span><span class="s3">&quot;ctrl&quot;</span><span class="s1">, </span><span class="s4">18</span><span class="s1">: </span><span class="s3">&quot;alt&quot;</span><span class="s1">, </span><span class="s4">19</span><span class="s1">: </span><span class="s3">&quot;pause&quot;</span><span class="s1">,</span>
+			<span class="s4">20</span><span class="s1">: </span><span class="s3">&quot;capslock&quot;</span><span class="s1">, </span><span class="s4">27</span><span class="s1">: </span><span class="s3">&quot;esc&quot;</span><span class="s1">, </span><span class="s4">32</span><span class="s1">: </span><span class="s3">&quot;space&quot;</span><span class="s1">, </span><span class="s4">33</span><span class="s1">: </span><span class="s3">&quot;pageup&quot;</span><span class="s1">, </span><span class="s4">34</span><span class="s1">: </span><span class="s3">&quot;pagedown&quot;</span><span class="s1">, </span><span class="s4">35</span><span class="s1">: </span><span class="s3">&quot;end&quot;</span><span class="s1">, </span><span class="s4">36</span><span class="s1">: </span><span class="s3">&quot;home&quot;</span><span class="s1">,</span>
+			<span class="s4">37</span><span class="s1">: </span><span class="s3">&quot;left&quot;</span><span class="s1">, </span><span class="s4">38</span><span class="s1">: </span><span class="s3">&quot;up&quot;</span><span class="s1">, </span><span class="s4">39</span><span class="s1">: </span><span class="s3">&quot;right&quot;</span><span class="s1">, </span><span class="s4">40</span><span class="s1">: </span><span class="s3">&quot;down&quot;</span><span class="s1">, </span><span class="s4">45</span><span class="s1">: </span><span class="s3">&quot;insert&quot;</span><span class="s1">, </span><span class="s4">46</span><span class="s1">: </span><span class="s3">&quot;del&quot;</span><span class="s1">,</span>
+			<span class="s4">96</span><span class="s1">: </span><span class="s3">&quot;0&quot;</span><span class="s1">, </span><span class="s4">97</span><span class="s1">: </span><span class="s3">&quot;1&quot;</span><span class="s1">, </span><span class="s4">98</span><span class="s1">: </span><span class="s3">&quot;2&quot;</span><span class="s1">, </span><span class="s4">99</span><span class="s1">: </span><span class="s3">&quot;3&quot;</span><span class="s1">, </span><span class="s4">100</span><span class="s1">: </span><span class="s3">&quot;4&quot;</span><span class="s1">, </span><span class="s4">101</span><span class="s1">: </span><span class="s3">&quot;5&quot;</span><span class="s1">, </span><span class="s4">102</span><span class="s1">: </span><span class="s3">&quot;6&quot;</span><span class="s1">, </span><span class="s4">103</span><span class="s1">: </span><span class="s3">&quot;7&quot;</span><span class="s1">,</span>
+			<span class="s4">104</span><span class="s1">: </span><span class="s3">&quot;8&quot;</span><span class="s1">, </span><span class="s4">105</span><span class="s1">: </span><span class="s3">&quot;9&quot;</span><span class="s1">, </span><span class="s4">106</span><span class="s1">: </span><span class="s3">&quot;*&quot;</span><span class="s1">, </span><span class="s4">107</span><span class="s1">: </span><span class="s3">&quot;+&quot;</span><span class="s1">, </span><span class="s4">109</span><span class="s1">: </span><span class="s3">&quot;-&quot;</span><span class="s1">, </span><span class="s4">110</span><span class="s1">: </span><span class="s3">&quot;.&quot;</span><span class="s1">, </span><span class="s4">111 </span><span class="s1">: </span><span class="s3">&quot;/&quot;</span><span class="s1">,</span>
+			<span class="s4">112</span><span class="s1">: </span><span class="s3">&quot;f1&quot;</span><span class="s1">, </span><span class="s4">113</span><span class="s1">: </span><span class="s3">&quot;f2&quot;</span><span class="s1">, </span><span class="s4">114</span><span class="s1">: </span><span class="s3">&quot;f3&quot;</span><span class="s1">, </span><span class="s4">115</span><span class="s1">: </span><span class="s3">&quot;f4&quot;</span><span class="s1">, </span><span class="s4">116</span><span class="s1">: </span><span class="s3">&quot;f5&quot;</span><span class="s1">, </span><span class="s4">117</span><span class="s1">: </span><span class="s3">&quot;f6&quot;</span><span class="s1">, </span><span class="s4">118</span><span class="s1">: </span><span class="s3">&quot;f7&quot;</span><span class="s1">, </span><span class="s4">119</span><span class="s1">: </span><span class="s3">&quot;f8&quot;</span><span class="s1">,</span>
+			<span class="s4">120</span><span class="s1">: </span><span class="s3">&quot;f9&quot;</span><span class="s1">, </span><span class="s4">121</span><span class="s1">: </span><span class="s3">&quot;f10&quot;</span><span class="s1">, </span><span class="s4">122</span><span class="s1">: </span><span class="s3">&quot;f11&quot;</span><span class="s1">, </span><span class="s4">123</span><span class="s1">: </span><span class="s3">&quot;f12&quot;</span><span class="s1">, </span><span class="s4">144</span><span class="s1">: </span><span class="s3">&quot;numlock&quot;</span><span class="s1">, </span><span class="s4">145</span><span class="s1">: </span><span class="s3">&quot;scroll&quot;</span><span class="s1">, </span><span class="s4">191</span><span class="s1">: </span><span class="s3">&quot;/&quot;</span><span class="s1">, </span><span class="s4">224</span><span class="s1">: </span><span class="s3">&quot;meta&quot;</span>
+		<span class="s1">},</span>
+
+		<span class="s1">shiftNums: {</span>
+			<span class="s3">&quot;`&quot;</span><span class="s1">: </span><span class="s3">&quot;~&quot;</span><span class="s1">, </span><span class="s3">&quot;1&quot;</span><span class="s1">: </span><span class="s3">&quot;!&quot;</span><span class="s1">, </span><span class="s3">&quot;2&quot;</span><span class="s1">: </span><span class="s3">&quot;@&quot;</span><span class="s1">, </span><span class="s3">&quot;3&quot;</span><span class="s1">: </span><span class="s3">&quot;#&quot;</span><span class="s1">, </span><span class="s3">&quot;4&quot;</span><span class="s1">: </span><span class="s3">&quot;$&quot;</span><span class="s1">, </span><span class="s3">&quot;5&quot;</span><span class="s1">: </span><span class="s3">&quot;%&quot;</span><span class="s1">, </span><span class="s3">&quot;6&quot;</span><span class="s1">: </span><span class="s3">&quot;^&quot;</span><span class="s1">, </span><span class="s3">&quot;7&quot;</span><span class="s1">: </span><span class="s3">&quot;&amp;&quot;</span><span class="s1">,</span>
+			<span class="s3">&quot;8&quot;</span><span class="s1">: </span><span class="s3">&quot;*&quot;</span><span class="s1">, </span><span class="s3">&quot;9&quot;</span><span class="s1">: </span><span class="s3">&quot;(&quot;</span><span class="s1">, </span><span class="s3">&quot;0&quot;</span><span class="s1">: </span><span class="s3">&quot;)&quot;</span><span class="s1">, </span><span class="s3">&quot;-&quot;</span><span class="s1">: </span><span class="s3">&quot;_&quot;</span><span class="s1">, </span><span class="s3">&quot;=&quot;</span><span class="s1">: </span><span class="s3">&quot;+&quot;</span><span class="s1">, </span><span class="s3">&quot;;&quot;</span><span class="s1">: </span><span class="s3">&quot;: &quot;</span><span class="s1">, </span><span class="s3">&quot;'&quot;</span><span class="s1">: </span><span class="s3">&quot;</span><span class="s5">\&quot;</span><span class="s3">&quot;</span><span class="s1">, </span><span class="s3">&quot;,&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;&quot;</span><span class="s1">,</span>
+			<span class="s3">&quot;.&quot;</span><span class="s1">: </span><span class="s3">&quot;&gt;&quot;</span><span class="s1">,  </span><span class="s3">&quot;/&quot;</span><span class="s1">: </span><span class="s3">&quot;?&quot;</span><span class="s1">,  </span><span class="s3">&quot;</span><span class="s5">\\</span><span class="s3">&quot;</span><span class="s1">: </span><span class="s3">&quot;|&quot;</span>
+		<span class="s1">}</span>
+	<span class="s1">};</span>
+
+	<span class="s2">function </span><span class="s1">keyHandler( handleObj ) {</span>
+		<span class="s0">// Only care when a possible input has been specified</span>
+		<span class="s2">if </span><span class="s1">( </span><span class="s2">typeof </span><span class="s1">handleObj.data !== </span><span class="s3">&quot;string&quot; </span><span class="s1">) {</span>
+			<span class="s2">return</span><span class="s1">;</span>
+		<span class="s1">}</span>
+
+		<span class="s2">var </span><span class="s1">origHandler = handleObj.handler,</span>
+			<span class="s1">keys = handleObj.data.toLowerCase().split(</span><span class="s3">&quot; &quot;</span><span class="s1">);</span>
+
+		<span class="s1">handleObj.handler = </span><span class="s2">function</span><span class="s1">( event ) {</span>
+			<span class="s0">// Don't fire in text-accepting inputs that we didn't directly bind to</span>
+			<span class="s2">if </span><span class="s1">( </span><span class="s2">this </span><span class="s1">!== event.target &amp;&amp; (/textarea|select/i.test( event.target.nodeName ) ||</span>
+				 <span class="s1">event.target.type === </span><span class="s3">&quot;text&quot;</span><span class="s1">) ) {</span>
+				<span class="s2">return</span><span class="s1">;</span>
+			<span class="s1">}</span>
+
+			<span class="s0">// Keypress represents characters, not special keys</span>
+			<span class="s2">var </span><span class="s1">special = event.type !== </span><span class="s3">&quot;keypress&quot; </span><span class="s1">&amp;&amp; jQuery.hotkeys.specialKeys[ event.which ],</span>
+				<span class="s1">character = String.fromCharCode( event.which ).toLowerCase(),</span>
+				<span class="s1">key, modif = </span><span class="s3">&quot;&quot;</span><span class="s1">, possible = {};</span>
+
+			<span class="s0">// check combinations (alt|ctrl|shift+anything)</span>
+			<span class="s2">if </span><span class="s1">( event.altKey &amp;&amp; special !== </span><span class="s3">&quot;alt&quot; </span><span class="s1">) {</span>
+				<span class="s1">modif += </span><span class="s3">&quot;alt+&quot;</span><span class="s1">;</span>
+			<span class="s1">}</span>
+
+			<span class="s2">if </span><span class="s1">( event.ctrlKey &amp;&amp; special !== </span><span class="s3">&quot;ctrl&quot; </span><span class="s1">) {</span>
+				<span class="s1">modif += </span><span class="s3">&quot;ctrl+&quot;</span><span class="s1">;</span>
+			<span class="s1">}</span>
+
+			<span class="s0">// TODO: Need to make sure this works consistently across platforms</span>
+			<span class="s2">if </span><span class="s1">( event.metaKey &amp;&amp; !event.ctrlKey &amp;&amp; special !== </span><span class="s3">&quot;meta&quot; </span><span class="s1">) {</span>
+				<span class="s1">modif += </span><span class="s3">&quot;meta+&quot;</span><span class="s1">;</span>
+			<span class="s1">}</span>
+
+			<span class="s2">if </span><span class="s1">( event.shiftKey &amp;&amp; special !== </span><span class="s3">&quot;shift&quot; </span><span class="s1">) {</span>
+				<span class="s1">modif += </span><span class="s3">&quot;shift+&quot;</span><span class="s1">;</span>
+			<span class="s1">}</span>
+
+			<span class="s2">if </span><span class="s1">( special ) {</span>
+				<span class="s1">possible[ modif + special ] = </span><span class="s2">true</span><span class="s1">;</span>
+
+			<span class="s1">} </span><span class="s2">else </span><span class="s1">{</span>
+				<span class="s1">possible[ modif + character ] = </span><span class="s2">true</span><span class="s1">;</span>
+				<span class="s1">possible[ modif + jQuery.hotkeys.shiftNums[ character ] ] = </span><span class="s2">true</span><span class="s1">;</span>
+
+				<span class="s0">// &quot;$&quot; can be triggered as &quot;Shift+4&quot; or &quot;Shift+$&quot; or just &quot;$&quot;</span>
+				<span class="s2">if </span><span class="s1">( modif === </span><span class="s3">&quot;shift+&quot; </span><span class="s1">) {</span>
+					<span class="s1">possible[ jQuery.hotkeys.shiftNums[ character ] ] = </span><span class="s2">true</span><span class="s1">;</span>
+				<span class="s1">}</span>
+			<span class="s1">}</span>
+
+			<span class="s2">for </span><span class="s1">( </span><span class="s2">var </span><span class="s1">i = </span><span class="s4">0</span><span class="s1">, l = keys.length; i &lt; l; i++ ) {</span>
+				<span class="s2">if </span><span class="s1">( possible[ keys[i] ] ) {</span>
+					<span class="s2">return </span><span class="s1">origHandler.apply( </span><span class="s2">this</span><span class="s1">, arguments );</span>
+				<span class="s1">}</span>
+			<span class="s1">}</span>
+		<span class="s1">};</span>
+	<span class="s1">}</span>
+
+	<span class="s1">jQuery.each([ </span><span class="s3">&quot;keydown&quot;</span><span class="s1">, </span><span class="s3">&quot;keyup&quot;</span><span class="s1">, </span><span class="s3">&quot;keypress&quot; </span><span class="s1">], </span><span class="s2">function</span><span class="s1">() {</span>
+		<span class="s1">jQuery.event.special[ </span><span class="s2">this </span><span class="s1">] = { add: keyHandler };</span>
+	<span class="s1">});</span>
+
+<span class="s1">})( jQuery );</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,264 @@
+<html>
+<head>
+<title>brain_six.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_six.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2014-2016, 2018, 2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015-2016 Ceridwen &lt;ceridwenv@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Bryce Guinta &lt;bryce.paul.guinta@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020-2021 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Ram Rachum &lt;ram@rachum.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Francis Charette Migneault &lt;francis.charette.migneault@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+
+<span class="s0">&quot;&quot;&quot;Astroid hooks for six module.&quot;&quot;&quot;</span>
+
+<span class="s2">from </span><span class="s1">textwrap </span><span class="s2">import </span><span class="s1">dedent</span>
+
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">MANAGER, nodes, register_module_extender</span>
+<span class="s2">from </span><span class="s1">astroid.builder </span><span class="s2">import </span><span class="s1">AstroidBuilder</span>
+<span class="s2">from </span><span class="s1">astroid.exceptions </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">AstroidBuildingError,</span>
+    <span class="s1">AttributeInferenceError,</span>
+    <span class="s1">InferenceError,</span>
+<span class="s1">)</span>
+
+<span class="s1">SIX_ADD_METACLASS = </span><span class="s3">&quot;six.add_metaclass&quot;</span>
+<span class="s1">SIX_WITH_METACLASS = </span><span class="s3">&quot;six.with_metaclass&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">_indent(text, prefix, predicate=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Adds 'prefix' to the beginning of selected lines in 'text'. 
+ 
+    If 'predicate' is provided, 'prefix' will only be added to the lines 
+    where 'predicate(line)' is True. If 'predicate' is not provided, 
+    it will default to adding 'prefix' to all non-empty lines that do not 
+    consist solely of whitespace characters. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">predicate </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s1">predicate = </span><span class="s2">lambda </span><span class="s1">line: line.strip()</span>
+
+    <span class="s2">def </span><span class="s1">prefixed_lines():</span>
+        <span class="s2">for </span><span class="s1">line </span><span class="s2">in </span><span class="s1">text.splitlines(</span><span class="s2">True</span><span class="s1">):</span>
+            <span class="s2">yield </span><span class="s1">prefix + line </span><span class="s2">if </span><span class="s1">predicate(line) </span><span class="s2">else </span><span class="s1">line</span>
+
+    <span class="s2">return </span><span class="s3">&quot;&quot;</span><span class="s1">.join(prefixed_lines())</span>
+
+
+<span class="s1">_IMPORTS = </span><span class="s3">&quot;&quot;&quot; 
+import _io 
+cStringIO = _io.StringIO 
+filter = filter 
+from itertools import filterfalse 
+input = input 
+from sys import intern 
+map = map 
+range = range 
+from importlib import reload 
+reload_module = lambda module: reload(module) 
+from functools import reduce 
+from shlex import quote as shlex_quote 
+from io import StringIO 
+from collections import UserDict, UserList, UserString 
+xrange = range 
+zip = zip 
+from itertools import zip_longest 
+import builtins 
+import configparser 
+import copyreg 
+import _dummy_thread 
+import http.cookiejar as http_cookiejar 
+import http.cookies as http_cookies 
+import html.entities as html_entities 
+import html.parser as html_parser 
+import http.client as http_client 
+import http.server as http_server 
+BaseHTTPServer = CGIHTTPServer = SimpleHTTPServer = http.server 
+import pickle as cPickle 
+import queue 
+import reprlib 
+import socketserver 
+import _thread 
+import winreg 
+import xmlrpc.server as xmlrpc_server 
+import xmlrpc.client as xmlrpc_client 
+import urllib.robotparser as urllib_robotparser 
+import email.mime.multipart as email_mime_multipart 
+import email.mime.nonmultipart as email_mime_nonmultipart 
+import email.mime.text as email_mime_text 
+import email.mime.base as email_mime_base 
+import urllib.parse as urllib_parse 
+import urllib.error as urllib_error 
+import tkinter 
+import tkinter.dialog as tkinter_dialog 
+import tkinter.filedialog as tkinter_filedialog 
+import tkinter.scrolledtext as tkinter_scrolledtext 
+import tkinter.simpledialog as tkinder_simpledialog 
+import tkinter.tix as tkinter_tix 
+import tkinter.ttk as tkinter_ttk 
+import tkinter.constants as tkinter_constants 
+import tkinter.dnd as tkinter_dnd 
+import tkinter.colorchooser as tkinter_colorchooser 
+import tkinter.commondialog as tkinter_commondialog 
+import tkinter.filedialog as tkinter_tkfiledialog 
+import tkinter.font as tkinter_font 
+import tkinter.messagebox as tkinter_messagebox 
+import urllib 
+import urllib.request as urllib_request 
+import urllib.robotparser as urllib_robotparser 
+import urllib.parse as urllib_parse 
+import urllib.error as urllib_error 
+&quot;&quot;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">six_moves_transform():</span>
+    <span class="s1">code = dedent(</span>
+        <span class="s3">&quot;&quot;&quot; 
+    class Moves(object): 
+    {} 
+    moves = Moves() 
+    &quot;&quot;&quot;</span>
+    <span class="s1">).format(_indent(_IMPORTS, </span><span class="s3">&quot;    &quot;</span><span class="s1">))</span>
+    <span class="s1">module = AstroidBuilder(MANAGER).string_build(code)</span>
+    <span class="s1">module.name = </span><span class="s3">&quot;six.moves&quot;</span>
+    <span class="s2">return </span><span class="s1">module</span>
+
+
+<span class="s2">def </span><span class="s1">_six_fail_hook(modname):</span>
+    <span class="s0">&quot;&quot;&quot;Fix six.moves imports due to the dynamic nature of this 
+    class. 
+ 
+    Construct a pseudo-module which contains all the necessary imports 
+    for six 
+ 
+    :param modname: Name of failed module 
+    :type modname: str 
+ 
+    :return: An astroid module 
+    :rtype: nodes.Module 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">attribute_of = modname != </span><span class="s3">&quot;six.moves&quot; </span><span class="s2">and </span><span class="s1">modname.startswith(</span><span class="s3">&quot;six.moves&quot;</span><span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">modname != </span><span class="s3">&quot;six.moves&quot; </span><span class="s2">and not </span><span class="s1">attribute_of:</span>
+        <span class="s2">raise </span><span class="s1">AstroidBuildingError(modname=modname)</span>
+    <span class="s1">module = AstroidBuilder(MANAGER).string_build(_IMPORTS)</span>
+    <span class="s1">module.name = </span><span class="s3">&quot;six.moves&quot;</span>
+    <span class="s2">if </span><span class="s1">attribute_of:</span>
+        <span class="s0"># Facilitate import of submodules in Moves</span>
+        <span class="s1">start_index = len(module.name)</span>
+        <span class="s1">attribute = modname[start_index:].lstrip(</span><span class="s3">&quot;.&quot;</span><span class="s1">).replace(</span><span class="s3">&quot;.&quot;</span><span class="s1">, </span><span class="s3">&quot;_&quot;</span><span class="s1">)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">import_attr = module.getattr(attribute)[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s2">except </span><span class="s1">AttributeInferenceError </span><span class="s2">as </span><span class="s1">exc:</span>
+            <span class="s2">raise </span><span class="s1">AstroidBuildingError(modname=modname) </span><span class="s2">from </span><span class="s1">exc</span>
+        <span class="s2">if </span><span class="s1">isinstance(import_attr, nodes.Import):</span>
+            <span class="s1">submodule = MANAGER.ast_from_module_name(import_attr.names[</span><span class="s4">0</span><span class="s1">][</span><span class="s4">0</span><span class="s1">])</span>
+            <span class="s2">return </span><span class="s1">submodule</span>
+    <span class="s0"># Let dummy submodule imports pass through</span>
+    <span class="s0"># This will cause an Uninferable result, which is okay</span>
+    <span class="s2">return </span><span class="s1">module</span>
+
+
+<span class="s2">def </span><span class="s1">_looks_like_decorated_with_six_add_metaclass(node):</span>
+    <span class="s2">if not </span><span class="s1">node.decorators:</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">for </span><span class="s1">decorator </span><span class="s2">in </span><span class="s1">node.decorators.nodes:</span>
+        <span class="s2">if not </span><span class="s1">isinstance(decorator, nodes.Call):</span>
+            <span class="s2">continue</span>
+        <span class="s2">if </span><span class="s1">decorator.func.as_string() == SIX_ADD_METACLASS:</span>
+            <span class="s2">return True</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">transform_six_add_metaclass(node):  </span><span class="s0"># pylint: disable=inconsistent-return-statements</span>
+    <span class="s0">&quot;&quot;&quot;Check if the given class node is decorated with *six.add_metaclass* 
+ 
+    If so, inject its argument as the metaclass of the underlying class. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if not </span><span class="s1">node.decorators:</span>
+        <span class="s2">return</span>
+
+    <span class="s2">for </span><span class="s1">decorator </span><span class="s2">in </span><span class="s1">node.decorators.nodes:</span>
+        <span class="s2">if not </span><span class="s1">isinstance(decorator, nodes.Call):</span>
+            <span class="s2">continue</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">func = next(decorator.func.infer())</span>
+        <span class="s2">except </span><span class="s1">InferenceError:</span>
+            <span class="s2">continue</span>
+        <span class="s2">if </span><span class="s1">func.qname() == SIX_ADD_METACLASS </span><span class="s2">and </span><span class="s1">decorator.args:</span>
+            <span class="s1">metaclass = decorator.args[</span><span class="s4">0</span><span class="s1">]</span>
+            <span class="s1">node._metaclass = metaclass</span>
+            <span class="s2">return </span><span class="s1">node</span>
+    <span class="s2">return</span>
+
+
+<span class="s2">def </span><span class="s1">_looks_like_nested_from_six_with_metaclass(node):</span>
+    <span class="s2">if </span><span class="s1">len(node.bases) != </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s2">return False</span>
+    <span class="s1">base = node.bases[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s2">if not </span><span class="s1">isinstance(base, nodes.Call):</span>
+        <span class="s2">return False</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">if </span><span class="s1">hasattr(base.func, </span><span class="s3">&quot;expr&quot;</span><span class="s1">):</span>
+            <span class="s0"># format when explicit 'six.with_metaclass' is used</span>
+            <span class="s1">mod = base.func.expr.name</span>
+            <span class="s1">func = base.func.attrname</span>
+            <span class="s1">func = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">mod</span><span class="s5">}</span><span class="s3">.</span><span class="s5">{</span><span class="s1">func</span><span class="s5">}</span><span class="s3">&quot;</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s0"># format when 'with_metaclass' is used directly (local import from six)</span>
+            <span class="s0"># check reference module to avoid 'with_metaclass' name clashes</span>
+            <span class="s1">mod = base.parent.parent</span>
+            <span class="s1">import_from = mod.locals[</span><span class="s3">&quot;with_metaclass&quot;</span><span class="s1">][</span><span class="s4">0</span><span class="s1">]</span>
+            <span class="s1">func = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">import_from.modname</span><span class="s5">}</span><span class="s3">.</span><span class="s5">{</span><span class="s1">base.func.name</span><span class="s5">}</span><span class="s3">&quot;</span>
+    <span class="s2">except </span><span class="s1">(AttributeError, KeyError, IndexError):</span>
+        <span class="s2">return False</span>
+    <span class="s2">return </span><span class="s1">func == SIX_WITH_METACLASS</span>
+
+
+<span class="s2">def </span><span class="s1">transform_six_with_metaclass(node):</span>
+    <span class="s0">&quot;&quot;&quot;Check if the given class node is defined with *six.with_metaclass* 
+ 
+    If so, inject its argument as the metaclass of the underlying class. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">call = node.bases[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s1">node._metaclass = call.args[</span><span class="s4">0</span><span class="s1">]</span>
+
+
+<span class="s1">register_module_extender(MANAGER, </span><span class="s3">&quot;six&quot;</span><span class="s1">, six_moves_transform)</span>
+<span class="s1">register_module_extender(</span>
+    <span class="s1">MANAGER, </span><span class="s3">&quot;requests.packages.urllib3.packages.six&quot;</span><span class="s1">, six_moves_transform</span>
+<span class="s1">)</span>
+<span class="s1">MANAGER.register_failed_import_hook(_six_fail_hook)</span>
+<span class="s1">MANAGER.register_transform(</span>
+    <span class="s1">nodes.ClassDef,</span>
+    <span class="s1">transform_six_add_metaclass,</span>
+    <span class="s1">_looks_like_decorated_with_six_add_metaclass,</span>
+<span class="s1">)</span>
+<span class="s1">MANAGER.register_transform(</span>
+    <span class="s1">nodes.ClassDef,</span>
+    <span class="s1">transform_six_with_metaclass,</span>
+    <span class="s1">_looks_like_nested_from_six_with_metaclass,</span>
+<span class="s1">)</span>
+</pre>
+</body>
+</html>

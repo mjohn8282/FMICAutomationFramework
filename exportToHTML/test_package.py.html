@@ -1,0 +1,157 @@
+<html>
+<head>
+<title>test_package.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+.s3 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+test_package.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">collections </span><span class="s0">import </span><span class="s1">namedtuple</span>
+<span class="s0">import </span><span class="s1">json</span>
+<span class="s0">import </span><span class="s1">os</span>
+<span class="s0">import </span><span class="s1">unittest</span>
+
+<span class="s0">from </span><span class="s1">yarg.package </span><span class="s0">import </span><span class="s1">json2package</span>
+
+
+<span class="s0">class </span><span class="s1">TestPackage(unittest.TestCase):</span>
+
+    <span class="s0">def </span><span class="s1">setUp(self):</span>
+        <span class="s1">package = os.path.join(os.path.dirname(__file__),</span>
+                               <span class="s2">'package.json'</span><span class="s1">)</span>
+        <span class="s1">self.json = json.loads(open(package).read())</span>
+        <span class="s1">self.package = json2package(open(package).read())</span>
+
+    <span class="s0">def </span><span class="s1">test_repr(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">u'&lt;Package yarg&gt;'</span><span class="s1">, self.package.__repr__())</span>
+
+    <span class="s0">def </span><span class="s1">test_name(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">u'yarg'</span><span class="s1">, self.package.name)</span>
+
+    <span class="s0">def </span><span class="s1">test_pypi_url(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">u'http://pypi.python.org/pypi/yarg'</span><span class="s1">,</span>
+                          <span class="s1">self.package.pypi_url)</span>
+
+    <span class="s0">def </span><span class="s1">test_summary(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">u'This is the short summary.'</span><span class="s1">, self.package.summary)</span>
+
+    <span class="s0">def </span><span class="s1">test_description(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">u'This is the long description.'</span><span class="s1">,</span>
+                          <span class="s1">self.package.description)</span>
+
+    <span class="s0">def </span><span class="s1">test_homepage(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">u'https://kura.io/yarg/'</span><span class="s1">,</span>
+                          <span class="s1">self.package.homepage)</span>
+
+    <span class="s0">def </span><span class="s1">test_bugtracker(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">u'https://github.com/kura/yarg/issues'</span><span class="s1">,</span>
+                          <span class="s1">self.package.bugtracker)</span>
+
+    <span class="s0">def </span><span class="s1">test_docs(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">u'http://yarg.readthedocs.org/'</span><span class="s1">,</span>
+                          <span class="s1">self.package.docs)</span>
+
+    <span class="s0">def </span><span class="s1">test_author(self):</span>
+        <span class="s1">author = namedtuple(</span><span class="s2">'Author'</span><span class="s1">, </span><span class="s2">'name email'</span><span class="s1">)</span>
+        <span class="s1">self.assertEquals(author(name=</span><span class="s2">'Kura'</span><span class="s1">, email=</span><span class="s2">'kura@kura.io'</span><span class="s1">),</span>
+                          <span class="s1">self.package.author)</span>
+
+    <span class="s0">def </span><span class="s1">test_maintainer(self):</span>
+        <span class="s1">maintainer = namedtuple(</span><span class="s2">'Maintainer'</span><span class="s1">, </span><span class="s2">'name email'</span><span class="s1">)</span>
+        <span class="s1">self.assertEquals(maintainer(name=</span><span class="s2">'Kura'</span><span class="s1">, email=</span><span class="s2">'kura@kura.io'</span><span class="s1">),</span>
+                          <span class="s1">self.package.maintainer)</span>
+
+    <span class="s0">def </span><span class="s1">test_license(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">u'MIT'</span><span class="s1">,</span>
+                          <span class="s1">self.package.license)</span>
+
+    <span class="s0">def </span><span class="s1">test_license_from_classifiers(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">u'MIT License'</span><span class="s1">,</span>
+                          <span class="s1">self.package.license_from_classifiers)</span>
+
+    <span class="s0">def </span><span class="s1">test_downloads(self):</span>
+        <span class="s1">downloads = namedtuple(</span><span class="s2">'Downloads'</span><span class="s1">, </span><span class="s2">'day week month'</span><span class="s1">)</span>
+        <span class="s1">self.assertEquals(downloads(day=</span><span class="s3">34001</span><span class="s1">, week=</span><span class="s3">72700</span><span class="s1">, month=</span><span class="s3">510000</span><span class="s1">),</span>
+                          <span class="s1">self.package.downloads)</span>
+
+    <span class="s0">def </span><span class="s1">test_classifiers(self):</span>
+        <span class="s1">self.assertEquals([</span><span class="s2">u'Development Status :: 5 - Production/Stable'</span><span class="s1">,</span>
+                          <span class="s2">u'Intended Audience :: Developers'</span><span class="s1">,</span>
+                          <span class="s2">u'License :: OSI Approved :: MIT License'</span><span class="s1">,</span>
+                          <span class="s2">u'Programming Language :: Python'</span><span class="s1">,</span>
+                          <span class="s2">u'Programming Language :: Python :: 2.6'</span><span class="s1">,</span>
+                          <span class="s2">u'Programming Language :: Python :: 2.7'</span><span class="s1">,</span>
+                          <span class="s2">u'Programming Language :: Python :: 3'</span><span class="s1">,</span>
+                          <span class="s2">u'Programming Language :: Python :: 3.1'</span><span class="s1">,</span>
+                          <span class="s2">u'Programming Language :: Python :: 3.2'</span><span class="s1">,</span>
+                          <span class="s2">u'Programming Language :: Python :: 3.3'</span><span class="s1">,</span>
+                          <span class="s2">u'Programming Language :: Python :: Implementation :: CPython'</span><span class="s1">,</span>
+                          <span class="s2">u'Programming Language :: Python :: Implementation :: PyPy'</span><span class="s1">],</span>
+                         <span class="s1">self.package.classifiers)</span>
+
+    <span class="s0">def </span><span class="s1">test_release_ids(self):</span>
+        <span class="s1">self.assertEquals([</span><span class="s2">u'0.0.0'</span><span class="s1">, </span><span class="s2">u'0.0.2'</span><span class="s1">, </span><span class="s2">u'0.0.15'</span><span class="s1">],</span>
+                          <span class="s1">self.package.release_ids)</span>
+
+    <span class="s0">def </span><span class="s1">test_latest_release_id(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">u'0.0.15'</span><span class="s1">, self.package.latest_release_id)</span>
+
+    <span class="s0">def </span><span class="s1">test_has_wheel(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s0">True</span><span class="s1">, self.package.has_wheel)</span>
+
+    <span class="s0">def </span><span class="s1">test_has_egg(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s0">False</span><span class="s1">, self.package.has_egg)</span>
+
+    <span class="s0">def </span><span class="s1">test_has_source(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s0">True</span><span class="s1">, self.package.has_source)</span>
+
+    <span class="s0">def </span><span class="s1">test_python_versions(self):</span>
+        <span class="s1">self.assertEquals([</span><span class="s2">u'2.6'</span><span class="s1">, </span><span class="s2">u'2.7'</span><span class="s1">, </span><span class="s2">u'3.1'</span><span class="s1">, </span><span class="s2">u'3.2'</span><span class="s1">, </span><span class="s2">u'3.3'</span><span class="s1">],</span>
+                          <span class="s1">self.package.python_versions)</span>
+
+    <span class="s0">def </span><span class="s1">test_python_implementations(self):</span>
+        <span class="s1">self.assertEquals([</span><span class="s2">u'CPython'</span><span class="s1">, </span><span class="s2">u'PyPy'</span><span class="s1">],</span>
+                          <span class="s1">self.package.python_implementations)</span>
+
+
+<span class="s0">class </span><span class="s1">TestPackageMissingData(unittest.TestCase):</span>
+
+    <span class="s0">def </span><span class="s1">setUp(self):</span>
+        <span class="s1">package = os.path.join(os.path.dirname(__file__),</span>
+                               <span class="s2">'package_no_homepage_bugtrack_one_release.json'</span><span class="s1">)</span>
+        <span class="s1">self.json = json.loads(open(package).read())</span>
+        <span class="s1">self.package = json2package(open(package).read())</span>
+
+
+    <span class="s0">def </span><span class="s1">test_homepage(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s0">None</span><span class="s1">, self.package.homepage)</span>
+
+    <span class="s0">def </span><span class="s1">test_bugtracker(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s0">None</span><span class="s1">, self.package.bugtracker)</span>
+
+    <span class="s0">def </span><span class="s1">test_docs(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s0">None</span><span class="s1">, self.package.docs)</span>
+
+    <span class="s0">def </span><span class="s1">test_latest_release_id(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s2">u'0.0.0'</span><span class="s1">, self.package.latest_release_id)</span>
+
+    <span class="s0">def </span><span class="s1">test_has_wheel(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s0">False</span><span class="s1">, self.package.has_wheel)</span>
+
+    <span class="s0">def </span><span class="s1">test_has_egg(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s0">True</span><span class="s1">, self.package.has_egg)</span>
+
+    <span class="s0">def </span><span class="s1">test_has_source(self):</span>
+        <span class="s1">self.assertEquals(</span><span class="s0">False</span><span class="s1">, self.package.has_source)</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,1231 @@
+<html>
+<head>
+<title>_dataclasses.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+_dataclasses.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># type: ignore</span>
+<span class="s0"># flake8: noqa</span>
+<span class="s0"># flake8: noqa</span>
+<span class="s0">&quot;&quot;&quot;Backport of Python3.7 dataclasses Library 
+ 
+Taken directly from here: https://github.com/ericvsmith/dataclasses 
+Licensed under the Apache License: https://github.com/ericvsmith/dataclasses/blob/master/LICENSE.txt 
+ 
+Needed due to isorts strict no non-optional requirements stance. 
+ 
+TODO: Remove once isort only supports 3.7+ 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">copy</span>
+<span class="s2">import </span><span class="s1">inspect</span>
+<span class="s2">import </span><span class="s1">keyword</span>
+<span class="s2">import </span><span class="s1">re</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">types</span>
+
+<span class="s1">__all__ = [</span>
+    <span class="s3">&quot;dataclass&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;field&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;Field&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;FrozenInstanceError&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;InitVar&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;MISSING&quot;</span><span class="s1">,</span>
+    <span class="s0"># Helper functions.</span>
+    <span class="s3">&quot;fields&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;asdict&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;astuple&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;make_dataclass&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;replace&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;is_dataclass&quot;</span><span class="s1">,</span>
+<span class="s1">]</span>
+
+<span class="s0"># Conditions for adding methods.  The boxes indicate what action the</span>
+<span class="s0"># dataclass decorator takes.  For all of these tables, when I talk</span>
+<span class="s0"># about init=, repr=, eq=, order=, unsafe_hash=, or frozen=, I'm</span>
+<span class="s0"># referring to the arguments to the @dataclass decorator.  When</span>
+<span class="s0"># checking if a dunder method already exists, I mean check for an</span>
+<span class="s0"># entry in the class's __dict__.  I never check to see if an attribute</span>
+<span class="s0"># is defined in a base class.</span>
+
+<span class="s0"># Key:</span>
+<span class="s0"># +=========+=========================================+</span>
+<span class="s0"># + Value   | Meaning                                 |</span>
+<span class="s0"># +=========+=========================================+</span>
+<span class="s0"># | &lt;blank&gt; | No action: no method is added.          |</span>
+<span class="s0"># +---------+-----------------------------------------+</span>
+<span class="s0"># | add     | Generated method is added.              |</span>
+<span class="s0"># +---------+-----------------------------------------+</span>
+<span class="s0"># | raise   | TypeError is raised.                    |</span>
+<span class="s0"># +---------+-----------------------------------------+</span>
+<span class="s0"># | None    | Attribute is set to None.               |</span>
+<span class="s0"># +=========+=========================================+</span>
+
+<span class="s0"># __init__</span>
+<span class="s0">#</span>
+<span class="s0">#   +--- init= parameter</span>
+<span class="s0">#   |</span>
+<span class="s0">#   v     |       |       |</span>
+<span class="s0">#         |  no   |  yes  |  &lt;--- class has __init__ in __dict__?</span>
+<span class="s0"># +=======+=======+=======+</span>
+<span class="s0"># | False |       |       |</span>
+<span class="s0"># +-------+-------+-------+</span>
+<span class="s0"># | True  | add   |       |  &lt;- the default</span>
+<span class="s0"># +=======+=======+=======+</span>
+
+<span class="s0"># __repr__</span>
+<span class="s0">#</span>
+<span class="s0">#    +--- repr= parameter</span>
+<span class="s0">#    |</span>
+<span class="s0">#    v    |       |       |</span>
+<span class="s0">#         |  no   |  yes  |  &lt;--- class has __repr__ in __dict__?</span>
+<span class="s0"># +=======+=======+=======+</span>
+<span class="s0"># | False |       |       |</span>
+<span class="s0"># +-------+-------+-------+</span>
+<span class="s0"># | True  | add   |       |  &lt;- the default</span>
+<span class="s0"># +=======+=======+=======+</span>
+
+
+<span class="s0"># __setattr__</span>
+<span class="s0"># __delattr__</span>
+<span class="s0">#</span>
+<span class="s0">#    +--- frozen= parameter</span>
+<span class="s0">#    |</span>
+<span class="s0">#    v    |       |       |</span>
+<span class="s0">#         |  no   |  yes  |  &lt;--- class has __setattr__ or __delattr__ in __dict__?</span>
+<span class="s0"># +=======+=======+=======+</span>
+<span class="s0"># | False |       |       |  &lt;- the default</span>
+<span class="s0"># +-------+-------+-------+</span>
+<span class="s0"># | True  | add   | raise |</span>
+<span class="s0"># +=======+=======+=======+</span>
+<span class="s0"># Raise because not adding these methods would break the &quot;frozen-ness&quot;</span>
+<span class="s0"># of the class.</span>
+
+<span class="s0"># __eq__</span>
+<span class="s0">#</span>
+<span class="s0">#    +--- eq= parameter</span>
+<span class="s0">#    |</span>
+<span class="s0">#    v    |       |       |</span>
+<span class="s0">#         |  no   |  yes  |  &lt;--- class has __eq__ in __dict__?</span>
+<span class="s0"># +=======+=======+=======+</span>
+<span class="s0"># | False |       |       |</span>
+<span class="s0"># +-------+-------+-------+</span>
+<span class="s0"># | True  | add   |       |  &lt;- the default</span>
+<span class="s0"># +=======+=======+=======+</span>
+
+<span class="s0"># __lt__</span>
+<span class="s0"># __le__</span>
+<span class="s0"># __gt__</span>
+<span class="s0"># __ge__</span>
+<span class="s0">#</span>
+<span class="s0">#    +--- order= parameter</span>
+<span class="s0">#    |</span>
+<span class="s0">#    v    |       |       |</span>
+<span class="s0">#         |  no   |  yes  |  &lt;--- class has any comparison method in __dict__?</span>
+<span class="s0"># +=======+=======+=======+</span>
+<span class="s0"># | False |       |       |  &lt;- the default</span>
+<span class="s0"># +-------+-------+-------+</span>
+<span class="s0"># | True  | add   | raise |</span>
+<span class="s0"># +=======+=======+=======+</span>
+<span class="s0"># Raise because to allow this case would interfere with using</span>
+<span class="s0"># functools.total_ordering.</span>
+
+<span class="s0"># __hash__</span>
+
+<span class="s0">#    +------------------- unsafe_hash= parameter</span>
+<span class="s0">#    |       +----------- eq= parameter</span>
+<span class="s0">#    |       |       +--- frozen= parameter</span>
+<span class="s0">#    |       |       |</span>
+<span class="s0">#    v       v       v    |        |        |</span>
+<span class="s0">#                         |   no   |  yes   |  &lt;--- class has explicitly defined __hash__</span>
+<span class="s0"># +=======+=======+=======+========+========+</span>
+<span class="s0"># | False | False | False |        |        | No __eq__, use the base class __hash__</span>
+<span class="s0"># +-------+-------+-------+--------+--------+</span>
+<span class="s0"># | False | False | True  |        |        | No __eq__, use the base class __hash__</span>
+<span class="s0"># +-------+-------+-------+--------+--------+</span>
+<span class="s0"># | False | True  | False | None   |        | &lt;-- the default, not hashable</span>
+<span class="s0"># +-------+-------+-------+--------+--------+</span>
+<span class="s0"># | False | True  | True  | add    |        | Frozen, so hashable, allows override</span>
+<span class="s0"># +-------+-------+-------+--------+--------+</span>
+<span class="s0"># | True  | False | False | add    | raise  | Has no __eq__, but hashable</span>
+<span class="s0"># +-------+-------+-------+--------+--------+</span>
+<span class="s0"># | True  | False | True  | add    | raise  | Has no __eq__, but hashable</span>
+<span class="s0"># +-------+-------+-------+--------+--------+</span>
+<span class="s0"># | True  | True  | False | add    | raise  | Not frozen, but hashable</span>
+<span class="s0"># +-------+-------+-------+--------+--------+</span>
+<span class="s0"># | True  | True  | True  | add    | raise  | Frozen, so hashable</span>
+<span class="s0"># +=======+=======+=======+========+========+</span>
+<span class="s0"># For boxes that are blank, __hash__ is untouched and therefore</span>
+<span class="s0"># inherited from the base class.  If the base is object, then</span>
+<span class="s0"># id-based hashing is used.</span>
+<span class="s0">#</span>
+<span class="s0"># Note that a class may already have __hash__=None if it specified an</span>
+<span class="s0"># __eq__ method in the class body (not one that was created by</span>
+<span class="s0"># @dataclass).</span>
+<span class="s0">#</span>
+<span class="s0"># See _hash_action (below) for a coded version of this table.</span>
+
+
+<span class="s0"># Raised when an attempt is made to modify a frozen class.</span>
+<span class="s2">class </span><span class="s1">FrozenInstanceError(AttributeError):</span>
+    <span class="s2">pass</span>
+
+
+<span class="s0"># A sentinel object for default values to signal that a default</span>
+<span class="s0"># factory will be used.  This is given a nice repr() which will appear</span>
+<span class="s0"># in the function signature of dataclasses' constructors.</span>
+<span class="s2">class </span><span class="s1">_HAS_DEFAULT_FACTORY_CLASS:</span>
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;&lt;factory&gt;&quot;</span>
+
+
+<span class="s1">_HAS_DEFAULT_FACTORY = _HAS_DEFAULT_FACTORY_CLASS()</span>
+
+<span class="s0"># A sentinel object to detect if a parameter is supplied or not.  Use</span>
+<span class="s0"># a class to give it a better repr.</span>
+<span class="s2">class </span><span class="s1">_MISSING_TYPE:</span>
+    <span class="s2">pass</span>
+
+
+<span class="s1">MISSING = _MISSING_TYPE()</span>
+
+<span class="s0"># Since most per-field metadata will be unused, create an empty</span>
+<span class="s0"># read-only proxy that can be shared among all fields.</span>
+<span class="s1">_EMPTY_METADATA = types.MappingProxyType({})</span>
+
+<span class="s0"># Markers for the various kinds of fields and pseudo-fields.</span>
+<span class="s2">class </span><span class="s1">_FIELD_BASE:</span>
+    <span class="s2">def </span><span class="s1">__init__(self, name):</span>
+        <span class="s1">self.name = name</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s1">self.name</span>
+
+
+<span class="s1">_FIELD = _FIELD_BASE(</span><span class="s3">&quot;_FIELD&quot;</span><span class="s1">)</span>
+<span class="s1">_FIELD_CLASSVAR = _FIELD_BASE(</span><span class="s3">&quot;_FIELD_CLASSVAR&quot;</span><span class="s1">)</span>
+<span class="s1">_FIELD_INITVAR = _FIELD_BASE(</span><span class="s3">&quot;_FIELD_INITVAR&quot;</span><span class="s1">)</span>
+
+<span class="s0"># The name of an attribute on the class where we store the Field</span>
+<span class="s0"># objects.  Also used to check if a class is a Data Class.</span>
+<span class="s1">_FIELDS = </span><span class="s3">&quot;__dataclass_fields__&quot;</span>
+
+<span class="s0"># The name of an attribute on the class that stores the parameters to</span>
+<span class="s0"># @dataclass.</span>
+<span class="s1">_PARAMS = </span><span class="s3">&quot;__dataclass_params__&quot;</span>
+
+<span class="s0"># The name of the function, that if it exists, is called at the end of</span>
+<span class="s0"># __init__.</span>
+<span class="s1">_POST_INIT_NAME = </span><span class="s3">&quot;__post_init__&quot;</span>
+
+<span class="s0"># String regex that string annotations for ClassVar or InitVar must match.</span>
+<span class="s0"># Allows &quot;identifier.identifier[&quot; or &quot;identifier[&quot;.</span>
+<span class="s0"># https://bugs.python.org/issue33453 for details.</span>
+<span class="s1">_MODULE_IDENTIFIER_RE = re.compile(</span><span class="s3">r&quot;^(?:\s*(\w+)\s*\.)?\s*(\w+)&quot;</span><span class="s1">)</span>
+
+
+<span class="s2">class </span><span class="s1">_InitVarMeta(type):</span>
+    <span class="s2">def </span><span class="s1">__getitem__(self, params):</span>
+        <span class="s2">return </span><span class="s1">self</span>
+
+
+<span class="s2">class </span><span class="s1">InitVar(metaclass=_InitVarMeta):</span>
+    <span class="s2">pass</span>
+
+
+<span class="s0"># Instances of Field are only ever created from within this module,</span>
+<span class="s0"># and only from the field() function, although Field instances are</span>
+<span class="s0"># exposed externally as (conceptually) read-only objects.</span>
+<span class="s0">#</span>
+<span class="s0"># name and type are filled in after the fact, not in __init__.</span>
+<span class="s0"># They're not known at the time this class is instantiated, but it's</span>
+<span class="s0"># convenient if they're available later.</span>
+<span class="s0">#</span>
+<span class="s0"># When cls._FIELDS is filled in with a list of Field objects, the name</span>
+<span class="s0"># and type fields will have been populated.</span>
+<span class="s2">class </span><span class="s1">Field:</span>
+    <span class="s1">__slots__ = (</span>
+        <span class="s3">&quot;name&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;type&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;default&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;default_factory&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;repr&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;hash&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;init&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;compare&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;metadata&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;_field_type&quot;</span><span class="s1">,  </span><span class="s0"># Private: not to be used by user code.</span>
+    <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, default, default_factory, init, repr, hash, compare, metadata):</span>
+        <span class="s1">self.name = </span><span class="s2">None</span>
+        <span class="s1">self.type = </span><span class="s2">None</span>
+        <span class="s1">self.default = default</span>
+        <span class="s1">self.default_factory = default_factory</span>
+        <span class="s1">self.init = init</span>
+        <span class="s1">self.repr = repr</span>
+        <span class="s1">self.hash = hash</span>
+        <span class="s1">self.compare = compare</span>
+        <span class="s1">self.metadata = (</span>
+            <span class="s1">_EMPTY_METADATA</span>
+            <span class="s2">if </span><span class="s1">metadata </span><span class="s2">is None or </span><span class="s1">len(metadata) == </span><span class="s4">0</span>
+            <span class="s2">else </span><span class="s1">types.MappingProxyType(metadata)</span>
+        <span class="s1">)</span>
+        <span class="s1">self._field_type = </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s1">(</span>
+            <span class="s3">&quot;Field(&quot;</span>
+            <span class="s3">f&quot;name=</span><span class="s5">{</span><span class="s1">self.name</span><span class="s5">!r}</span><span class="s3">,&quot;</span>
+            <span class="s3">f&quot;type=</span><span class="s5">{</span><span class="s1">self.type</span><span class="s5">!r}</span><span class="s3">,&quot;</span>
+            <span class="s3">f&quot;default=</span><span class="s5">{</span><span class="s1">self.default</span><span class="s5">!r}</span><span class="s3">,&quot;</span>
+            <span class="s3">f&quot;default_factory=</span><span class="s5">{</span><span class="s1">self.default_factory</span><span class="s5">!r}</span><span class="s3">,&quot;</span>
+            <span class="s3">f&quot;init=</span><span class="s5">{</span><span class="s1">self.init</span><span class="s5">!r}</span><span class="s3">,&quot;</span>
+            <span class="s3">f&quot;repr=</span><span class="s5">{</span><span class="s1">self.repr</span><span class="s5">!r}</span><span class="s3">,&quot;</span>
+            <span class="s3">f&quot;hash=</span><span class="s5">{</span><span class="s1">self.hash</span><span class="s5">!r}</span><span class="s3">,&quot;</span>
+            <span class="s3">f&quot;compare=</span><span class="s5">{</span><span class="s1">self.compare</span><span class="s5">!r}</span><span class="s3">,&quot;</span>
+            <span class="s3">f&quot;metadata=</span><span class="s5">{</span><span class="s1">self.metadata</span><span class="s5">!r}</span><span class="s3">,&quot;</span>
+            <span class="s3">f&quot;_field_type=</span><span class="s5">{</span><span class="s1">self._field_type</span><span class="s5">}</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;)&quot;</span>
+        <span class="s1">)</span>
+
+    <span class="s0"># This is used to support the PEP 487 __set_name__ protocol in the</span>
+    <span class="s0"># case where we're using a field that contains a descriptor as a</span>
+    <span class="s0"># defaul value.  For details on __set_name__, see</span>
+    <span class="s0"># https://www.python.org/dev/peps/pep-0487/#implementation-details.</span>
+    <span class="s0">#</span>
+    <span class="s0"># Note that in _process_class, this Field object is overwritten</span>
+    <span class="s0"># with the default value, so the end result is a descriptor that</span>
+    <span class="s0"># had __set_name__ called on it at the right time.</span>
+    <span class="s2">def </span><span class="s1">__set_name__(self, owner, name):</span>
+        <span class="s1">func = getattr(type(self.default), </span><span class="s3">&quot;__set_name__&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">func:</span>
+            <span class="s0"># There is a __set_name__ method on the descriptor, call</span>
+            <span class="s0"># it.</span>
+            <span class="s1">func(self.default, owner, name)</span>
+
+
+<span class="s2">class </span><span class="s1">_DataclassParams:</span>
+    <span class="s1">__slots__ = (</span><span class="s3">&quot;init&quot;</span><span class="s1">, </span><span class="s3">&quot;repr&quot;</span><span class="s1">, </span><span class="s3">&quot;eq&quot;</span><span class="s1">, </span><span class="s3">&quot;order&quot;</span><span class="s1">, </span><span class="s3">&quot;unsafe_hash&quot;</span><span class="s1">, </span><span class="s3">&quot;frozen&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, init, repr, eq, order, unsafe_hash, frozen):</span>
+        <span class="s1">self.init = init</span>
+        <span class="s1">self.repr = repr</span>
+        <span class="s1">self.eq = eq</span>
+        <span class="s1">self.order = order</span>
+        <span class="s1">self.unsafe_hash = unsafe_hash</span>
+        <span class="s1">self.frozen = frozen</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s1">(</span>
+            <span class="s3">&quot;_DataclassParams(&quot;</span>
+            <span class="s3">f&quot;init=</span><span class="s5">{</span><span class="s1">self.init</span><span class="s5">!r}</span><span class="s3">,&quot;</span>
+            <span class="s3">f&quot;repr=</span><span class="s5">{</span><span class="s1">self.repr</span><span class="s5">!r}</span><span class="s3">,&quot;</span>
+            <span class="s3">f&quot;eq=</span><span class="s5">{</span><span class="s1">self.eq</span><span class="s5">!r}</span><span class="s3">,&quot;</span>
+            <span class="s3">f&quot;order=</span><span class="s5">{</span><span class="s1">self.order</span><span class="s5">!r}</span><span class="s3">,&quot;</span>
+            <span class="s3">f&quot;unsafe_hash=</span><span class="s5">{</span><span class="s1">self.unsafe_hash</span><span class="s5">!r}</span><span class="s3">,&quot;</span>
+            <span class="s3">f&quot;frozen=</span><span class="s5">{</span><span class="s1">self.frozen</span><span class="s5">!r}</span><span class="s3">&quot;</span>
+            <span class="s3">&quot;)&quot;</span>
+        <span class="s1">)</span>
+
+
+<span class="s0"># This function is used instead of exposing Field creation directly,</span>
+<span class="s0"># so that a type checker can be told (via overloads) that this is a</span>
+<span class="s0"># function whose type depends on its parameters.</span>
+<span class="s2">def </span><span class="s1">field(</span>
+    <span class="s1">*,</span>
+    <span class="s1">default=MISSING,</span>
+    <span class="s1">default_factory=MISSING,</span>
+    <span class="s1">init=</span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s1">repr=</span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s1">hash=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">compare=</span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s1">metadata=</span><span class="s2">None</span><span class="s1">,</span>
+<span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Return an object to identify dataclass fields. 
+    default is the default value of the field.  default_factory is a 
+    0-argument function called to initialize a field's value.  If init 
+    is True, the field will be a parameter to the class's __init__() 
+    function.  If repr is True, the field will be included in the 
+    object's repr().  If hash is True, the field will be included in 
+    the object's hash().  If compare is True, the field will be used 
+    in comparison functions.  metadata, if specified, must be a 
+    mapping which is stored but not otherwise examined by dataclass. 
+    It is an error to specify both default and default_factory. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">if </span><span class="s1">default </span><span class="s2">is not </span><span class="s1">MISSING </span><span class="s2">and </span><span class="s1">default_factory </span><span class="s2">is not </span><span class="s1">MISSING:</span>
+        <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;cannot specify both default and default_factory&quot;</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">Field(default, default_factory, init, repr, hash, compare, metadata)</span>
+
+
+<span class="s2">def </span><span class="s1">_tuple_str(obj_name, fields):</span>
+    <span class="s0"># Return a string representing each field of obj_name as a tuple</span>
+    <span class="s0"># member.  So, if fields is ['x', 'y'] and obj_name is &quot;self&quot;,</span>
+    <span class="s0"># return &quot;(self.x,self.y)&quot;.</span>
+
+    <span class="s0"># Special case for the 0-tuple.</span>
+    <span class="s2">if not </span><span class="s1">fields:</span>
+        <span class="s2">return </span><span class="s3">&quot;()&quot;</span>
+    <span class="s0"># Note the trailing comma, needed if this turns out to be a 1-tuple.</span>
+    <span class="s2">return </span><span class="s3">f'(</span><span class="s5">{</span><span class="s3">&quot;,&quot;</span><span class="s1">.join(</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">obj_name</span><span class="s5">}</span><span class="s3">.</span><span class="s5">{</span><span class="s1">f.name</span><span class="s5">}</span><span class="s3">&quot; </span><span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">fields)</span><span class="s5">}</span><span class="s3">,)'</span>
+
+
+<span class="s2">def </span><span class="s1">_create_fn(name, args, body, *, globals=</span><span class="s2">None</span><span class="s1">, locals=</span><span class="s2">None</span><span class="s1">, return_type=MISSING):</span>
+    <span class="s0"># Note that we mutate locals when exec() is called.  Caller</span>
+    <span class="s0"># beware!  The only callers are internal to this module, so no</span>
+    <span class="s0"># worries about external callers.</span>
+    <span class="s2">if </span><span class="s1">locals </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s1">locals = {}</span>
+    <span class="s1">return_annotation = </span><span class="s3">&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">return_type </span><span class="s2">is not </span><span class="s1">MISSING:</span>
+        <span class="s1">locals[</span><span class="s3">&quot;_return_type&quot;</span><span class="s1">] = return_type</span>
+        <span class="s1">return_annotation = </span><span class="s3">&quot;-&gt;_return_type&quot;</span>
+    <span class="s1">args = </span><span class="s3">&quot;,&quot;</span><span class="s1">.join(args)</span>
+    <span class="s1">body = </span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">&quot;</span><span class="s1">.join(</span><span class="s3">f&quot; </span><span class="s5">{</span><span class="s1">b</span><span class="s5">}</span><span class="s3">&quot; </span><span class="s2">for </span><span class="s1">b </span><span class="s2">in </span><span class="s1">body)</span>
+
+    <span class="s0"># Compute the text of the entire function.</span>
+    <span class="s1">txt = </span><span class="s3">f&quot;def </span><span class="s5">{</span><span class="s1">name</span><span class="s5">}</span><span class="s3">(</span><span class="s5">{</span><span class="s1">args</span><span class="s5">}</span><span class="s3">)</span><span class="s5">{</span><span class="s1">return_annotation</span><span class="s5">}</span><span class="s3">:</span><span class="s5">\n{</span><span class="s1">body</span><span class="s5">}</span><span class="s3">&quot;</span>
+
+    <span class="s1">exec(txt, globals, locals)  </span><span class="s0"># nosec</span>
+    <span class="s2">return </span><span class="s1">locals[name]</span>
+
+
+<span class="s2">def </span><span class="s1">_field_assign(frozen, name, value, self_name):</span>
+    <span class="s0"># If we're a frozen class, then assign to our fields in __init__</span>
+    <span class="s0"># via object.__setattr__.  Otherwise, just use a simple</span>
+    <span class="s0"># assignment.</span>
+    <span class="s0">#</span>
+    <span class="s0"># self_name is what &quot;self&quot; is called in this function: don't</span>
+    <span class="s0"># hard-code &quot;self&quot;, since that might be a field name.</span>
+    <span class="s2">if </span><span class="s1">frozen:</span>
+        <span class="s2">return </span><span class="s3">f&quot;object.__setattr__(</span><span class="s5">{</span><span class="s1">self_name</span><span class="s5">}</span><span class="s3">,</span><span class="s5">{</span><span class="s1">name</span><span class="s5">!r}</span><span class="s3">,</span><span class="s5">{</span><span class="s1">value</span><span class="s5">}</span><span class="s3">)&quot;</span>
+    <span class="s2">return </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">self_name</span><span class="s5">}</span><span class="s3">.</span><span class="s5">{</span><span class="s1">name</span><span class="s5">}</span><span class="s3">=</span><span class="s5">{</span><span class="s1">value</span><span class="s5">}</span><span class="s3">&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">_field_init(f, frozen, globals, self_name):</span>
+    <span class="s0"># Return the text of the line in the body of __init__ that will</span>
+    <span class="s0"># initialize this field.</span>
+
+    <span class="s1">default_name = </span><span class="s3">f&quot;_dflt_</span><span class="s5">{</span><span class="s1">f.name</span><span class="s5">}</span><span class="s3">&quot;</span>
+    <span class="s2">if </span><span class="s1">f.default_factory </span><span class="s2">is not </span><span class="s1">MISSING:</span>
+        <span class="s2">if </span><span class="s1">f.init:</span>
+            <span class="s0"># This field has a default factory.  If a parameter is</span>
+            <span class="s0"># given, use it.  If not, call the factory.</span>
+            <span class="s1">globals[default_name] = f.default_factory</span>
+            <span class="s1">value = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">default_name</span><span class="s5">}</span><span class="s3">() &quot; f&quot;if </span><span class="s5">{</span><span class="s1">f.name</span><span class="s5">} </span><span class="s3">is _HAS_DEFAULT_FACTORY &quot; f&quot;else </span><span class="s5">{</span><span class="s1">f.name</span><span class="s5">}</span><span class="s3">&quot;</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s0"># This is a field that's not in the __init__ params, but</span>
+            <span class="s0"># has a default factory function.  It needs to be</span>
+            <span class="s0"># initialized here by calling the factory function,</span>
+            <span class="s0"># because there's no other way to initialize it.</span>
+
+            <span class="s0"># For a field initialized with a default=defaultvalue, the</span>
+            <span class="s0"># class dict just has the default value</span>
+            <span class="s0"># (cls.fieldname=defaultvalue).  But that won't work for a</span>
+            <span class="s0"># default factory, the factory must be called in __init__</span>
+            <span class="s0"># and we must assign that to self.fieldname.  We can't</span>
+            <span class="s0"># fall back to the class dict's value, both because it's</span>
+            <span class="s0"># not set, and because it might be different per-class</span>
+            <span class="s0"># (which, after all, is why we have a factory function!).</span>
+
+            <span class="s1">globals[default_name] = f.default_factory</span>
+            <span class="s1">value = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">default_name</span><span class="s5">}</span><span class="s3">()&quot;</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s0"># No default factory.</span>
+        <span class="s2">if </span><span class="s1">f.init:</span>
+            <span class="s2">if </span><span class="s1">f.default </span><span class="s2">is </span><span class="s1">MISSING:</span>
+                <span class="s0"># There's no default, just do an assignment.</span>
+                <span class="s1">value = f.name</span>
+            <span class="s2">elif </span><span class="s1">f.default </span><span class="s2">is not </span><span class="s1">MISSING:</span>
+                <span class="s1">globals[default_name] = f.default</span>
+                <span class="s1">value = f.name</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s0"># This field does not need initialization.  Signify that</span>
+            <span class="s0"># to the caller by returning None.</span>
+            <span class="s2">return None</span>
+
+    <span class="s0"># Only test this now, so that we can create variables for the</span>
+    <span class="s0"># default.  However, return None to signify that we're not going</span>
+    <span class="s0"># to actually do the assignment statement for InitVars.</span>
+    <span class="s2">if </span><span class="s1">f._field_type == _FIELD_INITVAR:</span>
+        <span class="s2">return None</span>
+
+    <span class="s0"># Now, actually generate the field assignment.</span>
+    <span class="s2">return </span><span class="s1">_field_assign(frozen, f.name, value, self_name)</span>
+
+
+<span class="s2">def </span><span class="s1">_init_param(f):</span>
+    <span class="s0"># Return the __init__ parameter string for this field.  For</span>
+    <span class="s0"># example, the equivalent of 'x:int=3' (except instead of 'int',</span>
+    <span class="s0"># reference a variable set to int, and instead of '3', reference a</span>
+    <span class="s0"># variable set to 3).</span>
+    <span class="s2">if </span><span class="s1">f.default </span><span class="s2">is </span><span class="s1">MISSING </span><span class="s2">and </span><span class="s1">f.default_factory </span><span class="s2">is </span><span class="s1">MISSING:</span>
+        <span class="s0"># There's no default, and no default_factory, just output the</span>
+        <span class="s0"># variable name and type.</span>
+        <span class="s1">default = </span><span class="s3">&quot;&quot;</span>
+    <span class="s2">elif </span><span class="s1">f.default </span><span class="s2">is not </span><span class="s1">MISSING:</span>
+        <span class="s0"># There's a default, this will be the name that's used to look</span>
+        <span class="s0"># it up.</span>
+        <span class="s1">default = </span><span class="s3">f&quot;=_dflt_</span><span class="s5">{</span><span class="s1">f.name</span><span class="s5">}</span><span class="s3">&quot;</span>
+    <span class="s2">elif </span><span class="s1">f.default_factory </span><span class="s2">is not </span><span class="s1">MISSING:</span>
+        <span class="s0"># There's a factory function.  Set a marker.</span>
+        <span class="s1">default = </span><span class="s3">&quot;=_HAS_DEFAULT_FACTORY&quot;</span>
+    <span class="s2">return </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">f.name</span><span class="s5">}</span><span class="s3">:_type_</span><span class="s5">{</span><span class="s1">f.name</span><span class="s5">}{</span><span class="s1">default</span><span class="s5">}</span><span class="s3">&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">_init_fn(fields, frozen, has_post_init, self_name):</span>
+    <span class="s0"># fields contains both real fields and InitVar pseudo-fields.</span>
+
+    <span class="s0"># Make sure we don't have fields without defaults following fields</span>
+    <span class="s0"># with defaults.  This actually would be caught when exec-ing the</span>
+    <span class="s0"># function source code, but catching it here gives a better error</span>
+    <span class="s0"># message, and future-proofs us in case we build up the function</span>
+    <span class="s0"># using ast.</span>
+    <span class="s1">seen_default = </span><span class="s2">False</span>
+    <span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">fields:</span>
+        <span class="s0"># Only consider fields in the __init__ call.</span>
+        <span class="s2">if </span><span class="s1">f.init:</span>
+            <span class="s2">if not </span><span class="s1">(f.default </span><span class="s2">is </span><span class="s1">MISSING </span><span class="s2">and </span><span class="s1">f.default_factory </span><span class="s2">is </span><span class="s1">MISSING):</span>
+                <span class="s1">seen_default = </span><span class="s2">True</span>
+            <span class="s2">elif </span><span class="s1">seen_default:</span>
+                <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">f&quot;non-default argument </span><span class="s5">{</span><span class="s1">f.name</span><span class="s5">!r} </span><span class="s3">&quot; &quot;follows default argument&quot;</span><span class="s1">)</span>
+
+    <span class="s1">globals = {</span><span class="s3">&quot;MISSING&quot;</span><span class="s1">: MISSING, </span><span class="s3">&quot;_HAS_DEFAULT_FACTORY&quot;</span><span class="s1">: _HAS_DEFAULT_FACTORY}</span>
+
+    <span class="s1">body_lines = []</span>
+    <span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">fields:</span>
+        <span class="s1">line = _field_init(f, frozen, globals, self_name)</span>
+        <span class="s0"># line is None means that this field doesn't require</span>
+        <span class="s0"># initialization (it's a pseudo-field).  Just skip it.</span>
+        <span class="s2">if </span><span class="s1">line:</span>
+            <span class="s1">body_lines.append(line)</span>
+
+    <span class="s0"># Does this class have a post-init function?</span>
+    <span class="s2">if </span><span class="s1">has_post_init:</span>
+        <span class="s1">params_str = </span><span class="s3">&quot;,&quot;</span><span class="s1">.join(f.name </span><span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">fields </span><span class="s2">if </span><span class="s1">f._field_type </span><span class="s2">is </span><span class="s1">_FIELD_INITVAR)</span>
+        <span class="s1">body_lines.append(</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">self_name</span><span class="s5">}</span><span class="s3">.</span><span class="s5">{</span><span class="s1">_POST_INIT_NAME</span><span class="s5">}</span><span class="s3">(</span><span class="s5">{</span><span class="s1">params_str</span><span class="s5">}</span><span class="s3">)&quot;</span><span class="s1">)</span>
+
+    <span class="s0"># If no body lines, use 'pass'.</span>
+    <span class="s2">if not </span><span class="s1">body_lines:</span>
+        <span class="s1">body_lines = [</span><span class="s3">&quot;pass&quot;</span><span class="s1">]</span>
+
+    <span class="s1">locals = {</span><span class="s3">f&quot;_type_</span><span class="s5">{</span><span class="s1">f.name</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">: f.type </span><span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">fields}</span>
+    <span class="s2">return </span><span class="s1">_create_fn(</span>
+        <span class="s3">&quot;__init__&quot;</span><span class="s1">,</span>
+        <span class="s1">[self_name] + [_init_param(f) </span><span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">fields </span><span class="s2">if </span><span class="s1">f.init],</span>
+        <span class="s1">body_lines,</span>
+        <span class="s1">locals=locals,</span>
+        <span class="s1">globals=globals,</span>
+        <span class="s1">return_type=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_repr_fn(fields):</span>
+    <span class="s2">return </span><span class="s1">_create_fn(</span>
+        <span class="s3">&quot;__repr__&quot;</span><span class="s1">,</span>
+        <span class="s1">(</span><span class="s3">&quot;self&quot;</span><span class="s1">,),</span>
+        <span class="s1">[</span>
+            <span class="s3">'return self.__class__.__qualname__ + f&quot;('</span>
+            <span class="s1">+ </span><span class="s3">&quot;, &quot;</span><span class="s1">.join(</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">f.name</span><span class="s5">}</span><span class="s3">={{self.</span><span class="s5">{</span><span class="s1">f.name</span><span class="s5">}</span><span class="s3">!r}}&quot; </span><span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">fields)</span>
+            <span class="s1">+ </span><span class="s3">')&quot;'</span>
+        <span class="s1">],</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_frozen_get_del_attr(cls, fields):</span>
+    <span class="s0"># XXX: globals is modified on the first call to _create_fn, then</span>
+    <span class="s0"># the modified version is used in the second call.  Is this okay?</span>
+    <span class="s1">globals = {</span><span class="s3">&quot;cls&quot;</span><span class="s1">: cls, </span><span class="s3">&quot;FrozenInstanceError&quot;</span><span class="s1">: FrozenInstanceError}</span>
+    <span class="s2">if </span><span class="s1">fields:</span>
+        <span class="s1">fields_str = </span><span class="s3">&quot;(&quot; </span><span class="s1">+ </span><span class="s3">&quot;,&quot;</span><span class="s1">.join(repr(f.name) </span><span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">fields) + </span><span class="s3">&quot;,)&quot;</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s0"># Special case for the zero-length tuple.</span>
+        <span class="s1">fields_str = </span><span class="s3">&quot;()&quot;</span>
+    <span class="s2">return </span><span class="s1">(</span>
+        <span class="s1">_create_fn(</span>
+            <span class="s3">&quot;__setattr__&quot;</span><span class="s1">,</span>
+            <span class="s1">(</span><span class="s3">&quot;self&quot;</span><span class="s1">, </span><span class="s3">&quot;name&quot;</span><span class="s1">, </span><span class="s3">&quot;value&quot;</span><span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">f&quot;if type(self) is cls or name in </span><span class="s5">{</span><span class="s1">fields_str</span><span class="s5">}</span><span class="s3">:&quot;</span><span class="s1">,</span>
+                <span class="s3">' raise FrozenInstanceError(f&quot;cannot assign to field {name!r}&quot;)'</span><span class="s1">,</span>
+                <span class="s3">f&quot;super(cls, self).__setattr__(name, value)&quot;</span><span class="s1">,</span>
+            <span class="s1">),</span>
+            <span class="s1">globals=globals,</span>
+        <span class="s1">),</span>
+        <span class="s1">_create_fn(</span>
+            <span class="s3">&quot;__delattr__&quot;</span><span class="s1">,</span>
+            <span class="s1">(</span><span class="s3">&quot;self&quot;</span><span class="s1">, </span><span class="s3">&quot;name&quot;</span><span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">f&quot;if type(self) is cls or name in </span><span class="s5">{</span><span class="s1">fields_str</span><span class="s5">}</span><span class="s3">:&quot;</span><span class="s1">,</span>
+                <span class="s3">' raise FrozenInstanceError(f&quot;cannot delete field {name!r}&quot;)'</span><span class="s1">,</span>
+                <span class="s3">f&quot;super(cls, self).__delattr__(name)&quot;</span><span class="s1">,</span>
+            <span class="s1">),</span>
+            <span class="s1">globals=globals,</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_cmp_fn(name, op, self_tuple, other_tuple):</span>
+    <span class="s0"># Create a comparison function.  If the fields in the object are</span>
+    <span class="s0"># named 'x' and 'y', then self_tuple is the string</span>
+    <span class="s0"># '(self.x,self.y)' and other_tuple is the string</span>
+    <span class="s0"># '(other.x,other.y)'.</span>
+
+    <span class="s2">return </span><span class="s1">_create_fn(</span>
+        <span class="s1">name,</span>
+        <span class="s1">(</span><span class="s3">&quot;self&quot;</span><span class="s1">, </span><span class="s3">&quot;other&quot;</span><span class="s1">),</span>
+        <span class="s1">[</span>
+            <span class="s3">&quot;if other.__class__ is self.__class__:&quot;</span><span class="s1">,</span>
+            <span class="s3">f&quot; return </span><span class="s5">{</span><span class="s1">self_tuple</span><span class="s5">}{</span><span class="s1">op</span><span class="s5">}{</span><span class="s1">other_tuple</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;return NotImplemented&quot;</span><span class="s1">,</span>
+        <span class="s1">],</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_hash_fn(fields):</span>
+    <span class="s1">self_tuple = _tuple_str(</span><span class="s3">&quot;self&quot;</span><span class="s1">, fields)</span>
+    <span class="s2">return </span><span class="s1">_create_fn(</span><span class="s3">&quot;__hash__&quot;</span><span class="s1">, (</span><span class="s3">&quot;self&quot;</span><span class="s1">,), [</span><span class="s3">f&quot;return hash(</span><span class="s5">{</span><span class="s1">self_tuple</span><span class="s5">}</span><span class="s3">)&quot;</span><span class="s1">])</span>
+
+
+<span class="s2">def </span><span class="s1">_is_classvar(a_type, typing):</span>
+    <span class="s0"># This test uses a typing internal class, but it's the best way to</span>
+    <span class="s0"># test if this is a ClassVar.</span>
+    <span class="s2">return </span><span class="s1">type(a_type) </span><span class="s2">is </span><span class="s1">typing._ClassVar</span>
+
+
+<span class="s2">def </span><span class="s1">_is_initvar(a_type, dataclasses):</span>
+    <span class="s0"># The module we're checking against is the module we're</span>
+    <span class="s0"># currently in (dataclasses.py).</span>
+    <span class="s2">return </span><span class="s1">a_type </span><span class="s2">is </span><span class="s1">dataclasses.InitVar</span>
+
+
+<span class="s2">def </span><span class="s1">_is_type(annotation, cls, a_module, a_type, is_type_predicate):</span>
+    <span class="s0"># Given a type annotation string, does it refer to a_type in</span>
+    <span class="s0"># a_module?  For example, when checking that annotation denotes a</span>
+    <span class="s0"># ClassVar, then a_module is typing, and a_type is</span>
+    <span class="s0"># typing.ClassVar.</span>
+
+    <span class="s0"># It's possible to look up a_module given a_type, but it involves</span>
+    <span class="s0"># looking in sys.modules (again!), and seems like a waste since</span>
+    <span class="s0"># the caller already knows a_module.</span>
+
+    <span class="s0"># - annotation is a string type annotation</span>
+    <span class="s0"># - cls is the class that this annotation was found in</span>
+    <span class="s0"># - a_module is the module we want to match</span>
+    <span class="s0"># - a_type is the type in that module we want to match</span>
+    <span class="s0"># - is_type_predicate is a function called with (obj, a_module)</span>
+    <span class="s0">#   that determines if obj is of the desired type.</span>
+
+    <span class="s0"># Since this test does not do a local namespace lookup (and</span>
+    <span class="s0"># instead only a module (global) lookup), there are some things it</span>
+    <span class="s0"># gets wrong.</span>
+
+    <span class="s0"># With string annotations, cv0 will be detected as a ClassVar:</span>
+    <span class="s0">#   CV = ClassVar</span>
+    <span class="s0">#   @dataclass</span>
+    <span class="s0">#   class C0:</span>
+    <span class="s0">#     cv0: CV</span>
+
+    <span class="s0"># But in this example cv1 will not be detected as a ClassVar:</span>
+    <span class="s0">#   @dataclass</span>
+    <span class="s0">#   class C1:</span>
+    <span class="s0">#     CV = ClassVar</span>
+    <span class="s0">#     cv1: CV</span>
+
+    <span class="s0"># In C1, the code in this function (_is_type) will look up &quot;CV&quot; in</span>
+    <span class="s0"># the module and not find it, so it will not consider cv1 as a</span>
+    <span class="s0"># ClassVar.  This is a fairly obscure corner case, and the best</span>
+    <span class="s0"># way to fix it would be to eval() the string &quot;CV&quot; with the</span>
+    <span class="s0"># correct global and local namespaces.  However that would involve</span>
+    <span class="s0"># a eval() penalty for every single field of every dataclass</span>
+    <span class="s0"># that's defined.  It was judged not worth it.</span>
+
+    <span class="s1">match = _MODULE_IDENTIFIER_RE.match(annotation)</span>
+    <span class="s2">if </span><span class="s1">match:</span>
+        <span class="s1">ns = </span><span class="s2">None</span>
+        <span class="s1">module_name = match.group(</span><span class="s4">1</span><span class="s1">)</span>
+        <span class="s2">if not </span><span class="s1">module_name:</span>
+            <span class="s0"># No module name, assume the class's module did</span>
+            <span class="s0"># &quot;from dataclasses import InitVar&quot;.</span>
+            <span class="s1">ns = sys.modules.get(cls.__module__).__dict__</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s0"># Look up module_name in the class's module.</span>
+            <span class="s1">module = sys.modules.get(cls.__module__)</span>
+            <span class="s2">if </span><span class="s1">module </span><span class="s2">and </span><span class="s1">module.__dict__.get(module_name) </span><span class="s2">is </span><span class="s1">a_module:</span>
+                <span class="s1">ns = sys.modules.get(a_type.__module__).__dict__</span>
+        <span class="s2">if </span><span class="s1">ns </span><span class="s2">and </span><span class="s1">is_type_predicate(ns.get(match.group(</span><span class="s4">2</span><span class="s1">)), a_module):</span>
+            <span class="s2">return True</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">_get_field(cls, a_name, a_type):</span>
+    <span class="s0"># Return a Field object for this field name and type.  ClassVars</span>
+    <span class="s0"># and InitVars are also returned, but marked as such (see</span>
+    <span class="s0"># f._field_type).</span>
+
+    <span class="s0"># If the default value isn't derived from Field, then it's only a</span>
+    <span class="s0"># normal default value.  Convert it to a Field().</span>
+    <span class="s1">default = getattr(cls, a_name, MISSING)</span>
+    <span class="s2">if </span><span class="s1">isinstance(default, Field):</span>
+        <span class="s1">f = default</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">if </span><span class="s1">isinstance(default, types.MemberDescriptorType):</span>
+            <span class="s0"># This is a field in __slots__, so it has no default value.</span>
+            <span class="s1">default = MISSING</span>
+        <span class="s1">f = field(default=default)</span>
+
+    <span class="s0"># Only at this point do we know the name and the type.  Set them.</span>
+    <span class="s1">f.name = a_name</span>
+    <span class="s1">f.type = a_type</span>
+
+    <span class="s0"># Assume it's a normal field until proven otherwise.  We're next</span>
+    <span class="s0"># going to decide if it's a ClassVar or InitVar, everything else</span>
+    <span class="s0"># is just a normal field.</span>
+    <span class="s1">f._field_type = _FIELD</span>
+
+    <span class="s0"># In addition to checking for actual types here, also check for</span>
+    <span class="s0"># string annotations.  get_type_hints() won't always work for us</span>
+    <span class="s0"># (see https://github.com/python/typing/issues/508 for example),</span>
+    <span class="s0"># plus it's expensive and would require an eval for every stirng</span>
+    <span class="s0"># annotation.  So, make a best effort to see if this is a ClassVar</span>
+    <span class="s0"># or InitVar using regex's and checking that the thing referenced</span>
+    <span class="s0"># is actually of the correct type.</span>
+
+    <span class="s0"># For the complete discussion, see https://bugs.python.org/issue33453</span>
+
+    <span class="s0"># If typing has not been imported, then it's impossible for any</span>
+    <span class="s0"># annotation to be a ClassVar.  So, only look for ClassVar if</span>
+    <span class="s0"># typing has been imported by any module (not necessarily cls's</span>
+    <span class="s0"># module).</span>
+    <span class="s1">typing = sys.modules.get(</span><span class="s3">&quot;typing&quot;</span><span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">typing:</span>
+        <span class="s2">if </span><span class="s1">_is_classvar(a_type, typing) </span><span class="s2">or </span><span class="s1">(</span>
+            <span class="s1">isinstance(f.type, str) </span><span class="s2">and </span><span class="s1">_is_type(f.type, cls, typing, typing.ClassVar, _is_classvar)</span>
+        <span class="s1">):</span>
+            <span class="s1">f._field_type = _FIELD_CLASSVAR</span>
+
+    <span class="s0"># If the type is InitVar, or if it's a matching string annotation,</span>
+    <span class="s0"># then it's an InitVar.</span>
+    <span class="s2">if </span><span class="s1">f._field_type </span><span class="s2">is </span><span class="s1">_FIELD:</span>
+        <span class="s0"># The module we're checking against is the module we're</span>
+        <span class="s0"># currently in (dataclasses.py).</span>
+        <span class="s1">dataclasses = sys.modules[__name__]</span>
+        <span class="s2">if </span><span class="s1">_is_initvar(a_type, dataclasses) </span><span class="s2">or </span><span class="s1">(</span>
+            <span class="s1">isinstance(f.type, str)</span>
+            <span class="s2">and </span><span class="s1">_is_type(f.type, cls, dataclasses, dataclasses.InitVar, _is_initvar)</span>
+        <span class="s1">):</span>
+            <span class="s1">f._field_type = _FIELD_INITVAR</span>
+
+    <span class="s0"># Validations for individual fields.  This is delayed until now,</span>
+    <span class="s0"># instead of in the Field() constructor, since only here do we</span>
+    <span class="s0"># know the field name, which allows for better error reporting.</span>
+
+    <span class="s0"># Special restrictions for ClassVar and InitVar.</span>
+    <span class="s2">if </span><span class="s1">f._field_type </span><span class="s2">in </span><span class="s1">(_FIELD_CLASSVAR, _FIELD_INITVAR):</span>
+        <span class="s2">if </span><span class="s1">f.default_factory </span><span class="s2">is not </span><span class="s1">MISSING:</span>
+            <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">f&quot;field </span><span class="s5">{</span><span class="s1">f.name</span><span class="s5">} </span><span class="s3">cannot have a &quot; &quot;default factory&quot;</span><span class="s1">)</span>
+        <span class="s0"># Should I check for other field settings? default_factory</span>
+        <span class="s0"># seems the most serious to check for.  Maybe add others.  For</span>
+        <span class="s0"># example, how about init=False (or really,</span>
+        <span class="s0"># init=&lt;not-the-default-init-value&gt;)?  It makes no sense for</span>
+        <span class="s0"># ClassVar and InitVar to specify init=&lt;anything&gt;.</span>
+
+    <span class="s0"># For real fields, disallow mutable defaults for known types.</span>
+    <span class="s2">if </span><span class="s1">f._field_type </span><span class="s2">is </span><span class="s1">_FIELD </span><span class="s2">and </span><span class="s1">isinstance(f.default, (list, dict, set)):</span>
+        <span class="s2">raise </span><span class="s1">ValueError(</span>
+            <span class="s3">f&quot;mutable default </span><span class="s5">{</span><span class="s1">type(f.default)</span><span class="s5">} </span><span class="s3">for field &quot;</span>
+            <span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">f.name</span><span class="s5">} </span><span class="s3">is not allowed: use default_factory&quot;</span>
+        <span class="s1">)</span>
+
+    <span class="s2">return </span><span class="s1">f</span>
+
+
+<span class="s2">def </span><span class="s1">_set_new_attribute(cls, name, value):</span>
+    <span class="s0"># Never overwrites an existing attribute.  Returns True if the</span>
+    <span class="s0"># attribute already exists.</span>
+    <span class="s2">if </span><span class="s1">name </span><span class="s2">in </span><span class="s1">cls.__dict__:</span>
+        <span class="s2">return True</span>
+    <span class="s1">setattr(cls, name, value)</span>
+    <span class="s2">return False</span>
+
+
+<span class="s0"># Decide if/how we're going to create a hash function.  Key is</span>
+<span class="s0"># (unsafe_hash, eq, frozen, does-hash-exist).  Value is the action to</span>
+<span class="s0"># take.  The common case is to do nothing, so instead of providing a</span>
+<span class="s0"># function that is a no-op, use None to signify that.</span>
+
+
+<span class="s2">def </span><span class="s1">_hash_set_none(cls, fields):</span>
+    <span class="s2">return None</span>
+
+
+<span class="s2">def </span><span class="s1">_hash_add(cls, fields):</span>
+    <span class="s1">flds = [f </span><span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">fields </span><span class="s2">if </span><span class="s1">(f.compare </span><span class="s2">if </span><span class="s1">f.hash </span><span class="s2">is None else </span><span class="s1">f.hash)]</span>
+    <span class="s2">return </span><span class="s1">_hash_fn(flds)</span>
+
+
+<span class="s2">def </span><span class="s1">_hash_exception(cls, fields):</span>
+    <span class="s0"># Raise an exception.</span>
+    <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">f&quot;Cannot overwrite attribute __hash__ &quot; f&quot;in class </span><span class="s5">{</span><span class="s1">cls.__name__</span><span class="s5">}</span><span class="s3">&quot;</span><span class="s1">)</span>
+
+
+<span class="s0">#</span>
+<span class="s0">#                +-------------------------------------- unsafe_hash?</span>
+<span class="s0">#                |      +------------------------------- eq?</span>
+<span class="s0">#                |      |      +------------------------ frozen?</span>
+<span class="s0">#                |      |      |      +----------------  has-explicit-hash?</span>
+<span class="s0">#                |      |      |      |</span>
+<span class="s0">#                |      |      |      |        +-------  action</span>
+<span class="s0">#                |      |      |      |        |</span>
+<span class="s0">#                v      v      v      v        v</span>
+<span class="s1">_hash_action = {</span>
+    <span class="s1">(</span><span class="s2">False</span><span class="s1">, </span><span class="s2">False</span><span class="s1">, </span><span class="s2">False</span><span class="s1">, </span><span class="s2">False</span><span class="s1">): </span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">(</span><span class="s2">False</span><span class="s1">, </span><span class="s2">False</span><span class="s1">, </span><span class="s2">False</span><span class="s1">, </span><span class="s2">True</span><span class="s1">): </span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">(</span><span class="s2">False</span><span class="s1">, </span><span class="s2">False</span><span class="s1">, </span><span class="s2">True</span><span class="s1">, </span><span class="s2">False</span><span class="s1">): </span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">(</span><span class="s2">False</span><span class="s1">, </span><span class="s2">False</span><span class="s1">, </span><span class="s2">True</span><span class="s1">, </span><span class="s2">True</span><span class="s1">): </span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">(</span><span class="s2">False</span><span class="s1">, </span><span class="s2">True</span><span class="s1">, </span><span class="s2">False</span><span class="s1">, </span><span class="s2">False</span><span class="s1">): _hash_set_none,</span>
+    <span class="s1">(</span><span class="s2">False</span><span class="s1">, </span><span class="s2">True</span><span class="s1">, </span><span class="s2">False</span><span class="s1">, </span><span class="s2">True</span><span class="s1">): </span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">(</span><span class="s2">False</span><span class="s1">, </span><span class="s2">True</span><span class="s1">, </span><span class="s2">True</span><span class="s1">, </span><span class="s2">False</span><span class="s1">): _hash_add,</span>
+    <span class="s1">(</span><span class="s2">False</span><span class="s1">, </span><span class="s2">True</span><span class="s1">, </span><span class="s2">True</span><span class="s1">, </span><span class="s2">True</span><span class="s1">): </span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">(</span><span class="s2">True</span><span class="s1">, </span><span class="s2">False</span><span class="s1">, </span><span class="s2">False</span><span class="s1">, </span><span class="s2">False</span><span class="s1">): _hash_add,</span>
+    <span class="s1">(</span><span class="s2">True</span><span class="s1">, </span><span class="s2">False</span><span class="s1">, </span><span class="s2">False</span><span class="s1">, </span><span class="s2">True</span><span class="s1">): _hash_exception,</span>
+    <span class="s1">(</span><span class="s2">True</span><span class="s1">, </span><span class="s2">False</span><span class="s1">, </span><span class="s2">True</span><span class="s1">, </span><span class="s2">False</span><span class="s1">): _hash_add,</span>
+    <span class="s1">(</span><span class="s2">True</span><span class="s1">, </span><span class="s2">False</span><span class="s1">, </span><span class="s2">True</span><span class="s1">, </span><span class="s2">True</span><span class="s1">): _hash_exception,</span>
+    <span class="s1">(</span><span class="s2">True</span><span class="s1">, </span><span class="s2">True</span><span class="s1">, </span><span class="s2">False</span><span class="s1">, </span><span class="s2">False</span><span class="s1">): _hash_add,</span>
+    <span class="s1">(</span><span class="s2">True</span><span class="s1">, </span><span class="s2">True</span><span class="s1">, </span><span class="s2">False</span><span class="s1">, </span><span class="s2">True</span><span class="s1">): _hash_exception,</span>
+    <span class="s1">(</span><span class="s2">True</span><span class="s1">, </span><span class="s2">True</span><span class="s1">, </span><span class="s2">True</span><span class="s1">, </span><span class="s2">False</span><span class="s1">): _hash_add,</span>
+    <span class="s1">(</span><span class="s2">True</span><span class="s1">, </span><span class="s2">True</span><span class="s1">, </span><span class="s2">True</span><span class="s1">, </span><span class="s2">True</span><span class="s1">): _hash_exception,</span>
+<span class="s1">}</span>
+<span class="s0"># See https://bugs.python.org/issue32929#msg312829 for an if-statement</span>
+<span class="s0"># version of this table.</span>
+
+
+<span class="s2">def </span><span class="s1">_process_class(cls, init, repr, eq, order, unsafe_hash, frozen):</span>
+    <span class="s0"># Now that dicts retain insertion order, there's no reason to use</span>
+    <span class="s0"># an ordered dict.  I am leveraging that ordering here, because</span>
+    <span class="s0"># derived class fields overwrite base class fields, but the order</span>
+    <span class="s0"># is defined by the base class, which is found first.</span>
+    <span class="s1">fields = {}</span>
+
+    <span class="s1">setattr(cls, _PARAMS, _DataclassParams(init, repr, eq, order, unsafe_hash, frozen))</span>
+
+    <span class="s0"># Find our base classes in reverse MRO order, and exclude</span>
+    <span class="s0"># ourselves.  In reversed order so that more derived classes</span>
+    <span class="s0"># override earlier field definitions in base classes.  As long as</span>
+    <span class="s0"># we're iterating over them, see if any are frozen.</span>
+    <span class="s1">any_frozen_base = </span><span class="s2">False</span>
+    <span class="s1">has_dataclass_bases = </span><span class="s2">False</span>
+    <span class="s2">for </span><span class="s1">b </span><span class="s2">in </span><span class="s1">cls.__mro__[-</span><span class="s4">1</span><span class="s1">:</span><span class="s4">0</span><span class="s1">:-</span><span class="s4">1</span><span class="s1">]:</span>
+        <span class="s0"># Only process classes that have been processed by our</span>
+        <span class="s0"># decorator.  That is, they have a _FIELDS attribute.</span>
+        <span class="s1">base_fields = getattr(b, _FIELDS, </span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">base_fields:</span>
+            <span class="s1">has_dataclass_bases = </span><span class="s2">True</span>
+            <span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">base_fields.values():</span>
+                <span class="s1">fields[f.name] = f</span>
+            <span class="s2">if </span><span class="s1">getattr(b, _PARAMS).frozen:</span>
+                <span class="s1">any_frozen_base = </span><span class="s2">True</span>
+
+    <span class="s0"># Annotations that are defined in this class (not in base</span>
+    <span class="s0"># classes).  If __annotations__ isn't present, then this class</span>
+    <span class="s0"># adds no new annotations.  We use this to compute fields that are</span>
+    <span class="s0"># added by this class.</span>
+    <span class="s0">#</span>
+    <span class="s0"># Fields are found from cls_annotations, which is guaranteed to be</span>
+    <span class="s0"># ordered.  Default values are from class attributes, if a field</span>
+    <span class="s0"># has a default.  If the default value is a Field(), then it</span>
+    <span class="s0"># contains additional info beyond (and possibly including) the</span>
+    <span class="s0"># actual default value.  Pseudo-fields ClassVars and InitVars are</span>
+    <span class="s0"># included, despite the fact that they're not real fields.  That's</span>
+    <span class="s0"># dealt with later.</span>
+    <span class="s1">cls_annotations = cls.__dict__.get(</span><span class="s3">&quot;__annotations__&quot;</span><span class="s1">, {})</span>
+
+    <span class="s0"># Now find fields in our class.  While doing so, validate some</span>
+    <span class="s0"># things, and set the default values (as class attributes) where</span>
+    <span class="s0"># we can.</span>
+    <span class="s1">cls_fields = [_get_field(cls, name, type) </span><span class="s2">for </span><span class="s1">name, type </span><span class="s2">in </span><span class="s1">cls_annotations.items()]</span>
+    <span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">cls_fields:</span>
+        <span class="s1">fields[f.name] = f</span>
+
+        <span class="s0"># If the class attribute (which is the default value for this</span>
+        <span class="s0"># field) exists and is of type 'Field', replace it with the</span>
+        <span class="s0"># real default.  This is so that normal class introspection</span>
+        <span class="s0"># sees a real default value, not a Field.</span>
+        <span class="s2">if </span><span class="s1">isinstance(getattr(cls, f.name, </span><span class="s2">None</span><span class="s1">), Field):</span>
+            <span class="s2">if </span><span class="s1">f.default </span><span class="s2">is </span><span class="s1">MISSING:</span>
+                <span class="s0"># If there's no default, delete the class attribute.</span>
+                <span class="s0"># This happens if we specify field(repr=False), for</span>
+                <span class="s0"># example (that is, we specified a field object, but</span>
+                <span class="s0"># no default value).  Also if we're using a default</span>
+                <span class="s0"># factory.  The class attribute should not be set at</span>
+                <span class="s0"># all in the post-processed class.</span>
+                <span class="s1">delattr(cls, f.name)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">setattr(cls, f.name, f.default)</span>
+
+    <span class="s0"># Do we have any Field members that don't also have annotations?</span>
+    <span class="s2">for </span><span class="s1">name, value </span><span class="s2">in </span><span class="s1">cls.__dict__.items():</span>
+        <span class="s2">if </span><span class="s1">isinstance(value, Field) </span><span class="s2">and not </span><span class="s1">name </span><span class="s2">in </span><span class="s1">cls_annotations:</span>
+            <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">name</span><span class="s5">!r} </span><span class="s3">is a field but has no type annotation&quot;</span><span class="s1">)</span>
+
+    <span class="s0"># Check rules that apply if we are derived from any dataclasses.</span>
+    <span class="s2">if </span><span class="s1">has_dataclass_bases:</span>
+        <span class="s0"># Raise an exception if any of our bases are frozen, but we're not.</span>
+        <span class="s2">if </span><span class="s1">any_frozen_base </span><span class="s2">and not </span><span class="s1">frozen:</span>
+            <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">&quot;cannot inherit non-frozen dataclass from a &quot; &quot;frozen one&quot;</span><span class="s1">)</span>
+
+        <span class="s0"># Raise an exception if we're frozen, but none of our bases are.</span>
+        <span class="s2">if not </span><span class="s1">any_frozen_base </span><span class="s2">and </span><span class="s1">frozen:</span>
+            <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">&quot;cannot inherit frozen dataclass from a &quot; &quot;non-frozen one&quot;</span><span class="s1">)</span>
+
+    <span class="s0"># Remember all of the fields on our class (including bases).  This</span>
+    <span class="s0"># also marks this class as being a dataclass.</span>
+    <span class="s1">setattr(cls, _FIELDS, fields)</span>
+
+    <span class="s0"># Was this class defined with an explicit __hash__?  Note that if</span>
+    <span class="s0"># __eq__ is defined in this class, then python will automatically</span>
+    <span class="s0"># set __hash__ to None.  This is a heuristic, as it's possible</span>
+    <span class="s0"># that such a __hash__ == None was not auto-generated, but it</span>
+    <span class="s0"># close enough.</span>
+    <span class="s1">class_hash = cls.__dict__.get(</span><span class="s3">&quot;__hash__&quot;</span><span class="s1">, MISSING)</span>
+    <span class="s1">has_explicit_hash = </span><span class="s2">not </span><span class="s1">(</span>
+        <span class="s1">class_hash </span><span class="s2">is </span><span class="s1">MISSING </span><span class="s2">or </span><span class="s1">(class_hash </span><span class="s2">is None and </span><span class="s3">&quot;__eq__&quot; </span><span class="s2">in </span><span class="s1">cls.__dict__)</span>
+    <span class="s1">)</span>
+
+    <span class="s0"># If we're generating ordering methods, we must be generating the</span>
+    <span class="s0"># eq methods.</span>
+    <span class="s2">if </span><span class="s1">order </span><span class="s2">and not </span><span class="s1">eq:</span>
+        <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;eq must be true if order is true&quot;</span><span class="s1">)</span>
+
+    <span class="s2">if </span><span class="s1">init:</span>
+        <span class="s0"># Does this class have a post-init function?</span>
+        <span class="s1">has_post_init = hasattr(cls, _POST_INIT_NAME)</span>
+
+        <span class="s0"># Include InitVars and regular fields (so, not ClassVars).</span>
+        <span class="s1">flds = [f </span><span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">fields.values() </span><span class="s2">if </span><span class="s1">f._field_type </span><span class="s2">in </span><span class="s1">(_FIELD, _FIELD_INITVAR)]</span>
+        <span class="s1">_set_new_attribute(</span>
+            <span class="s1">cls,</span>
+            <span class="s3">&quot;__init__&quot;</span><span class="s1">,</span>
+            <span class="s1">_init_fn(</span>
+                <span class="s1">flds,</span>
+                <span class="s1">frozen,</span>
+                <span class="s1">has_post_init,</span>
+                <span class="s0"># The name to use for the &quot;self&quot;</span>
+                <span class="s0"># param in __init__.  Use &quot;self&quot;</span>
+                <span class="s0"># if possible.</span>
+                <span class="s3">&quot;__dataclass_self__&quot; </span><span class="s2">if </span><span class="s3">&quot;self&quot; </span><span class="s2">in </span><span class="s1">fields </span><span class="s2">else </span><span class="s3">&quot;self&quot;</span><span class="s1">,</span>
+            <span class="s1">),</span>
+        <span class="s1">)</span>
+
+    <span class="s0"># Get the fields as a list, and include only real fields.  This is</span>
+    <span class="s0"># used in all of the following methods.</span>
+    <span class="s1">field_list = [f </span><span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">fields.values() </span><span class="s2">if </span><span class="s1">f._field_type </span><span class="s2">is </span><span class="s1">_FIELD]</span>
+
+    <span class="s2">if </span><span class="s1">repr:</span>
+        <span class="s1">flds = [f </span><span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">field_list </span><span class="s2">if </span><span class="s1">f.repr]</span>
+        <span class="s1">_set_new_attribute(cls, </span><span class="s3">&quot;__repr__&quot;</span><span class="s1">, _repr_fn(flds))</span>
+
+    <span class="s2">if </span><span class="s1">eq:</span>
+        <span class="s0"># Create _eq__ method.  There's no need for a __ne__ method,</span>
+        <span class="s0"># since python will call __eq__ and negate it.</span>
+        <span class="s1">flds = [f </span><span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">field_list </span><span class="s2">if </span><span class="s1">f.compare]</span>
+        <span class="s1">self_tuple = _tuple_str(</span><span class="s3">&quot;self&quot;</span><span class="s1">, flds)</span>
+        <span class="s1">other_tuple = _tuple_str(</span><span class="s3">&quot;other&quot;</span><span class="s1">, flds)</span>
+        <span class="s1">_set_new_attribute(cls, </span><span class="s3">&quot;__eq__&quot;</span><span class="s1">, _cmp_fn(</span><span class="s3">&quot;__eq__&quot;</span><span class="s1">, </span><span class="s3">&quot;==&quot;</span><span class="s1">, self_tuple, other_tuple))</span>
+
+    <span class="s2">if </span><span class="s1">order:</span>
+        <span class="s0"># Create and set the ordering methods.</span>
+        <span class="s1">flds = [f </span><span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">field_list </span><span class="s2">if </span><span class="s1">f.compare]</span>
+        <span class="s1">self_tuple = _tuple_str(</span><span class="s3">&quot;self&quot;</span><span class="s1">, flds)</span>
+        <span class="s1">other_tuple = _tuple_str(</span><span class="s3">&quot;other&quot;</span><span class="s1">, flds)</span>
+        <span class="s2">for </span><span class="s1">name, op </span><span class="s2">in </span><span class="s1">[(</span><span class="s3">&quot;__lt__&quot;</span><span class="s1">, </span><span class="s3">&quot;&lt;&quot;</span><span class="s1">), (</span><span class="s3">&quot;__le__&quot;</span><span class="s1">, </span><span class="s3">&quot;&lt;=&quot;</span><span class="s1">), (</span><span class="s3">&quot;__gt__&quot;</span><span class="s1">, </span><span class="s3">&quot;&gt;&quot;</span><span class="s1">), (</span><span class="s3">&quot;__ge__&quot;</span><span class="s1">, </span><span class="s3">&quot;&gt;=&quot;</span><span class="s1">)]:</span>
+            <span class="s2">if </span><span class="s1">_set_new_attribute(cls, name, _cmp_fn(name, op, self_tuple, other_tuple)):</span>
+                <span class="s2">raise </span><span class="s1">TypeError(</span>
+                    <span class="s3">f&quot;Cannot overwrite attribute </span><span class="s5">{</span><span class="s1">name</span><span class="s5">} </span><span class="s3">&quot;</span>
+                    <span class="s3">f&quot;in class </span><span class="s5">{</span><span class="s1">cls.__name__</span><span class="s5">}</span><span class="s3">. Consider using &quot;</span>
+                    <span class="s3">&quot;functools.total_ordering&quot;</span>
+                <span class="s1">)</span>
+
+    <span class="s2">if </span><span class="s1">frozen:</span>
+        <span class="s2">for </span><span class="s1">fn </span><span class="s2">in </span><span class="s1">_frozen_get_del_attr(cls, field_list):</span>
+            <span class="s2">if </span><span class="s1">_set_new_attribute(cls, fn.__name__, fn):</span>
+                <span class="s2">raise </span><span class="s1">TypeError(</span>
+                    <span class="s3">f&quot;Cannot overwrite attribute </span><span class="s5">{</span><span class="s1">fn.__name__</span><span class="s5">} </span><span class="s3">&quot; f&quot;in class </span><span class="s5">{</span><span class="s1">cls.__name__</span><span class="s5">}</span><span class="s3">&quot;</span>
+                <span class="s1">)</span>
+
+    <span class="s0"># Decide if/how we're going to create a hash function.</span>
+    <span class="s1">hash_action = _hash_action[bool(unsafe_hash), bool(eq), bool(frozen), has_explicit_hash]</span>
+    <span class="s2">if </span><span class="s1">hash_action:</span>
+        <span class="s0"># No need to call _set_new_attribute here, since by the time</span>
+        <span class="s0"># we're here the overwriting is unconditional.</span>
+        <span class="s1">cls.__hash__ = hash_action(cls, field_list)</span>
+
+    <span class="s2">if not </span><span class="s1">getattr(cls, </span><span class="s3">&quot;__doc__&quot;</span><span class="s1">):</span>
+        <span class="s0"># Create a class doc-string.</span>
+        <span class="s1">cls.__doc__ = cls.__name__ + str(inspect.signature(cls)).replace(</span><span class="s3">&quot; -&gt; None&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+
+    <span class="s2">return </span><span class="s1">cls</span>
+
+
+<span class="s0"># _cls should never be specified by keyword, so start it with an</span>
+<span class="s0"># underscore.  The presence of _cls is used to detect if this</span>
+<span class="s0"># decorator is being called with parameters or not.</span>
+<span class="s2">def </span><span class="s1">dataclass(</span>
+    <span class="s1">_cls=</span><span class="s2">None</span><span class="s1">, *, init=</span><span class="s2">True</span><span class="s1">, repr=</span><span class="s2">True</span><span class="s1">, eq=</span><span class="s2">True</span><span class="s1">, order=</span><span class="s2">False</span><span class="s1">, unsafe_hash=</span><span class="s2">False</span><span class="s1">, frozen=</span><span class="s2">False</span>
+<span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Returns the same class as was passed in, with dunder methods 
+    added based on the fields defined in the class. 
+    Examines PEP 526 __annotations__ to determine fields. 
+    If init is true, an __init__() method is added to the class. If 
+    repr is true, a __repr__() method is added. If order is true, rich 
+    comparison dunder methods are added. If unsafe_hash is true, a 
+    __hash__() method function is added. If frozen is true, fields may 
+    not be assigned to after instance creation. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">wrap(cls):</span>
+        <span class="s2">return </span><span class="s1">_process_class(cls, init, repr, eq, order, unsafe_hash, frozen)</span>
+
+    <span class="s0"># See if we're being called as @dataclass or @dataclass().</span>
+    <span class="s2">if </span><span class="s1">_cls </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s0"># We're called with parens.</span>
+        <span class="s2">return </span><span class="s1">wrap</span>
+
+    <span class="s0"># We're called as @dataclass without parens.</span>
+    <span class="s2">return </span><span class="s1">wrap(_cls)</span>
+
+
+<span class="s2">def </span><span class="s1">fields(class_or_instance):</span>
+    <span class="s0">&quot;&quot;&quot;Return a tuple describing the fields of this dataclass. 
+    Accepts a dataclass or an instance of one. Tuple elements are of 
+    type Field. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0"># Might it be worth caching this, per class?</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">fields = getattr(class_or_instance, _FIELDS)</span>
+    <span class="s2">except </span><span class="s1">AttributeError:</span>
+        <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">&quot;must be called with a dataclass type or instance&quot;</span><span class="s1">)</span>
+
+    <span class="s0"># Exclude pseudo-fields.  Note that fields is sorted by insertion</span>
+    <span class="s0"># order, so the order of the tuple is as the fields were defined.</span>
+    <span class="s2">return </span><span class="s1">tuple(f </span><span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">fields.values() </span><span class="s2">if </span><span class="s1">f._field_type </span><span class="s2">is </span><span class="s1">_FIELD)</span>
+
+
+<span class="s2">def </span><span class="s1">_is_dataclass_instance(obj):</span>
+    <span class="s0">&quot;&quot;&quot;Returns True if obj is an instance of a dataclass.&quot;&quot;&quot;</span>
+    <span class="s2">return not </span><span class="s1">isinstance(obj, type) </span><span class="s2">and </span><span class="s1">hasattr(obj, _FIELDS)</span>
+
+
+<span class="s2">def </span><span class="s1">is_dataclass(obj):</span>
+    <span class="s0">&quot;&quot;&quot;Returns True if obj is a dataclass or an instance of a 
+    dataclass.&quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">hasattr(obj, _FIELDS)</span>
+
+
+<span class="s2">def </span><span class="s1">asdict(obj, *, dict_factory=dict):</span>
+    <span class="s0">&quot;&quot;&quot;Return the fields of a dataclass instance as a new dictionary mapping 
+    field names to field values. 
+    Example usage: 
+      @dataclass 
+      class C: 
+          x: int 
+          y: int 
+      c = C(1, 2) 
+      assert asdict(c) == {'x': 1, 'y': 2} 
+    If given, 'dict_factory' will be used instead of built-in dict. 
+    The function applies recursively to field values that are 
+    dataclass instances. This will also look into built-in containers: 
+    tuples, lists, and dicts. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if not </span><span class="s1">_is_dataclass_instance(obj):</span>
+        <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">&quot;asdict() should be called on dataclass instances&quot;</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">_asdict_inner(obj, dict_factory)</span>
+
+
+<span class="s2">def </span><span class="s1">_asdict_inner(obj, dict_factory):</span>
+    <span class="s2">if </span><span class="s1">_is_dataclass_instance(obj):</span>
+        <span class="s1">result = []</span>
+        <span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">fields(obj):</span>
+            <span class="s1">value = _asdict_inner(getattr(obj, f.name), dict_factory)</span>
+            <span class="s1">result.append((f.name, value))</span>
+        <span class="s2">return </span><span class="s1">dict_factory(result)</span>
+    <span class="s2">elif </span><span class="s1">isinstance(obj, (list, tuple)):</span>
+        <span class="s2">return </span><span class="s1">type(obj)(_asdict_inner(v, dict_factory) </span><span class="s2">for </span><span class="s1">v </span><span class="s2">in </span><span class="s1">obj)</span>
+    <span class="s2">elif </span><span class="s1">isinstance(obj, dict):</span>
+        <span class="s2">return </span><span class="s1">type(obj)(</span>
+            <span class="s1">(_asdict_inner(k, dict_factory), _asdict_inner(v, dict_factory)) </span><span class="s2">for </span><span class="s1">k, v </span><span class="s2">in </span><span class="s1">obj.items()</span>
+        <span class="s1">)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">copy.deepcopy(obj)</span>
+
+
+<span class="s2">def </span><span class="s1">astuple(obj, *, tuple_factory=tuple):</span>
+    <span class="s0">&quot;&quot;&quot;Return the fields of a dataclass instance as a new tuple of field values. 
+    Example usage:: 
+      @dataclass 
+      class C: 
+          x: int 
+          y: int 
+    c = C(1, 2) 
+    assert astuple(c) == (1, 2) 
+    If given, 'tuple_factory' will be used instead of built-in tuple. 
+    The function applies recursively to field values that are 
+    dataclass instances. This will also look into built-in containers: 
+    tuples, lists, and dicts. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">if not </span><span class="s1">_is_dataclass_instance(obj):</span>
+        <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">&quot;astuple() should be called on dataclass instances&quot;</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">_astuple_inner(obj, tuple_factory)</span>
+
+
+<span class="s2">def </span><span class="s1">_astuple_inner(obj, tuple_factory):</span>
+    <span class="s2">if </span><span class="s1">_is_dataclass_instance(obj):</span>
+        <span class="s1">result = []</span>
+        <span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">fields(obj):</span>
+            <span class="s1">value = _astuple_inner(getattr(obj, f.name), tuple_factory)</span>
+            <span class="s1">result.append(value)</span>
+        <span class="s2">return </span><span class="s1">tuple_factory(result)</span>
+    <span class="s2">elif </span><span class="s1">isinstance(obj, (list, tuple)):</span>
+        <span class="s2">return </span><span class="s1">type(obj)(_astuple_inner(v, tuple_factory) </span><span class="s2">for </span><span class="s1">v </span><span class="s2">in </span><span class="s1">obj)</span>
+    <span class="s2">elif </span><span class="s1">isinstance(obj, dict):</span>
+        <span class="s2">return </span><span class="s1">type(obj)(</span>
+            <span class="s1">(_astuple_inner(k, tuple_factory), _astuple_inner(v, tuple_factory))</span>
+            <span class="s2">for </span><span class="s1">k, v </span><span class="s2">in </span><span class="s1">obj.items()</span>
+        <span class="s1">)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">copy.deepcopy(obj)</span>
+
+
+<span class="s2">def </span><span class="s1">make_dataclass(</span>
+    <span class="s1">cls_name,</span>
+    <span class="s1">fields,</span>
+    <span class="s1">*,</span>
+    <span class="s1">bases=(),</span>
+    <span class="s1">namespace=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">init=</span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s1">repr=</span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s1">eq=</span><span class="s2">True</span><span class="s1">,</span>
+    <span class="s1">order=</span><span class="s2">False</span><span class="s1">,</span>
+    <span class="s1">unsafe_hash=</span><span class="s2">False</span><span class="s1">,</span>
+    <span class="s1">frozen=</span><span class="s2">False</span><span class="s1">,</span>
+<span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Return a new dynamically created dataclass. 
+    The dataclass name will be 'cls_name'.  'fields' is an iterable 
+    of either (name), (name, type) or (name, type, Field) objects. If type is 
+    omitted, use the string 'typing.Any'.  Field objects are created by 
+    the equivalent of calling 'field(name, type [, Field-info])'. 
+      C = make_dataclass('C', ['x', ('y', int), ('z', int, field(init=False))], bases=(Base,)) 
+    is equivalent to: 
+      @dataclass 
+      class C(Base): 
+          x: 'typing.Any' 
+          y: int 
+          z: int = field(init=False) 
+    For the bases and namespace parameters, see the builtin type() function. 
+    The parameters init, repr, eq, order, unsafe_hash, and frozen are passed to 
+    dataclass(). 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">if </span><span class="s1">namespace </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s1">namespace = {}</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s0"># Copy namespace since we're going to mutate it.</span>
+        <span class="s1">namespace = namespace.copy()</span>
+
+    <span class="s0"># While we're looking through the field names, validate that they</span>
+    <span class="s0"># are identifiers, are not keywords, and not duplicates.</span>
+    <span class="s1">seen = set()</span>
+    <span class="s1">anns = {}</span>
+    <span class="s2">for </span><span class="s1">item </span><span class="s2">in </span><span class="s1">fields:</span>
+        <span class="s2">if </span><span class="s1">isinstance(item, str):</span>
+            <span class="s1">name = item</span>
+            <span class="s1">tp = </span><span class="s3">&quot;typing.Any&quot;</span>
+        <span class="s2">elif </span><span class="s1">len(item) == </span><span class="s4">2</span><span class="s1">:</span>
+            <span class="s1">(</span>
+                <span class="s1">name,</span>
+                <span class="s1">tp,</span>
+            <span class="s1">) = item</span>
+        <span class="s2">elif </span><span class="s1">len(item) == </span><span class="s4">3</span><span class="s1">:</span>
+            <span class="s1">name, tp, spec = item</span>
+            <span class="s1">namespace[name] = spec</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">f&quot;Invalid field: </span><span class="s5">{</span><span class="s1">item</span><span class="s5">!r}</span><span class="s3">&quot;</span><span class="s1">)</span>
+
+        <span class="s2">if not </span><span class="s1">isinstance(name, str) </span><span class="s2">or not </span><span class="s1">name.isidentifier():</span>
+            <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">f&quot;Field names must be valid identifers: </span><span class="s5">{</span><span class="s1">name</span><span class="s5">!r}</span><span class="s3">&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">keyword.iskeyword(name):</span>
+            <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">f&quot;Field names must not be keywords: </span><span class="s5">{</span><span class="s1">name</span><span class="s5">!r}</span><span class="s3">&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">name </span><span class="s2">in </span><span class="s1">seen:</span>
+            <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">f&quot;Field name duplicated: </span><span class="s5">{</span><span class="s1">name</span><span class="s5">!r}</span><span class="s3">&quot;</span><span class="s1">)</span>
+
+        <span class="s1">seen.add(name)</span>
+        <span class="s1">anns[name] = tp</span>
+
+    <span class="s1">namespace[</span><span class="s3">&quot;__annotations__&quot;</span><span class="s1">] = anns</span>
+    <span class="s0"># We use `types.new_class()` instead of simply `type()` to allow dynamic creation</span>
+    <span class="s0"># of generic dataclassses.</span>
+    <span class="s1">cls = types.new_class(cls_name, bases, {}, </span><span class="s2">lambda </span><span class="s1">ns: ns.update(namespace))</span>
+    <span class="s2">return </span><span class="s1">dataclass(</span>
+        <span class="s1">cls, init=init, repr=repr, eq=eq, order=order, unsafe_hash=unsafe_hash, frozen=frozen</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">replace(obj, **changes):</span>
+    <span class="s0">&quot;&quot;&quot;Return a new object replacing specified fields with new values. 
+    This is especially useful for frozen classes.  Example usage: 
+      @dataclass(frozen=True) 
+      class C: 
+          x: int 
+          y: int 
+      c = C(1, 2) 
+      c1 = replace(c, x=3) 
+      assert c1.x == 3 and c1.y == 2 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0"># We're going to mutate 'changes', but that's okay because it's a</span>
+    <span class="s0"># new dict, even if called with 'replace(obj, **my_changes)'.</span>
+
+    <span class="s2">if not </span><span class="s1">_is_dataclass_instance(obj):</span>
+        <span class="s2">raise </span><span class="s1">TypeError(</span><span class="s3">&quot;replace() should be called on dataclass instances&quot;</span><span class="s1">)</span>
+
+    <span class="s0"># It's an error to have init=False fields in 'changes'.</span>
+    <span class="s0"># If a field is not in 'changes', read its value from the provided obj.</span>
+
+    <span class="s2">for </span><span class="s1">f </span><span class="s2">in </span><span class="s1">getattr(obj, _FIELDS).values():</span>
+        <span class="s2">if not </span><span class="s1">f.init:</span>
+            <span class="s0"># Error if this field is specified in changes.</span>
+            <span class="s2">if </span><span class="s1">f.name </span><span class="s2">in </span><span class="s1">changes:</span>
+                <span class="s2">raise </span><span class="s1">ValueError(</span>
+                    <span class="s3">f&quot;field </span><span class="s5">{</span><span class="s1">f.name</span><span class="s5">} </span><span class="s3">is declared with &quot;</span>
+                    <span class="s3">&quot;init=False, it cannot be specified with &quot;</span>
+                    <span class="s3">&quot;replace()&quot;</span>
+                <span class="s1">)</span>
+            <span class="s2">continue</span>
+
+        <span class="s2">if </span><span class="s1">f.name </span><span class="s2">not in </span><span class="s1">changes:</span>
+            <span class="s1">changes[f.name] = getattr(obj, f.name)</span>
+
+    <span class="s0"># Create the new object, which calls __init__() and</span>
+    <span class="s0"># __post_init__() (if defined), using all of the init fields we've</span>
+    <span class="s0"># added and/or left in 'changes'.  If there are values supplied in</span>
+    <span class="s0"># changes that aren't fields, this will correctly raise a</span>
+    <span class="s0"># TypeError.</span>
+    <span class="s2">return </span><span class="s1">obj.__class__(**changes)</span>
+</pre>
+</body>
+</html>

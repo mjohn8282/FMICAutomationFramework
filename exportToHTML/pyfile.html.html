@@ -1,0 +1,133 @@
+<html>
+<head>
+<title>pyfile.html</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #abb2bf;}
+.s1 { color: #d19a66;}
+.s2 { color: #e06c75;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+pyfile.html</font>
+</center></td></tr></table>
+<pre><span class="s0">{# Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0 #}</span>
+<span class="s0">{# For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt #}</span>
+
+<span class="s0">&lt;!DOCTYPE </span><span class="s1">html</span><span class="s0">&gt;</span>
+<span class="s0">&lt;</span><span class="s2">html</span><span class="s0">&gt;</span>
+<span class="s0">&lt;</span><span class="s2">head</span><span class="s0">&gt;</span>
+    <span class="s0">&lt;</span><span class="s2">meta </span><span class="s1">http-equiv</span><span class="s3">=&quot;Content-Type&quot; </span><span class="s1">content</span><span class="s3">=&quot;text/html; charset=utf-8&quot;</span><span class="s0">&gt;</span>
+    <span class="s0">{# IE8 rounds line-height incorrectly, and adding this emulateIE7 line makes it right! #}</span>
+    <span class="s0">{# http://social.msdn.microsoft.com/Forums/en-US/iewebdevelopment/thread/7684445e-f080-4d8f-8529-132763348e21 #}</span>
+    <span class="s0">&lt;</span><span class="s2">meta </span><span class="s1">http-equiv</span><span class="s3">=&quot;X-UA-Compatible&quot; </span><span class="s1">content</span><span class="s3">=&quot;IE=emulateIE7&quot; </span><span class="s0">/&gt;</span>
+    <span class="s0">&lt;</span><span class="s2">title</span><span class="s0">&gt;Coverage for {{relative_filename|escape}}: {{nums.pc_covered_str}}%&lt;/</span><span class="s2">title</span><span class="s0">&gt;</span>
+    <span class="s0">&lt;</span><span class="s2">link </span><span class="s1">rel</span><span class="s3">=&quot;icon&quot; </span><span class="s1">sizes</span><span class="s3">=&quot;32x32&quot; </span><span class="s1">href</span><span class="s3">=&quot;favicon_32.png&quot;</span><span class="s0">&gt;</span>
+    <span class="s0">&lt;</span><span class="s2">link </span><span class="s1">rel</span><span class="s3">=&quot;stylesheet&quot; </span><span class="s1">href</span><span class="s3">=&quot;style.css&quot; </span><span class="s1">type</span><span class="s3">=&quot;text/css&quot;</span><span class="s0">&gt;</span>
+    <span class="s0">{% if extra_css %}</span>
+        <span class="s0">&lt;</span><span class="s2">link </span><span class="s1">rel</span><span class="s3">=&quot;stylesheet&quot; </span><span class="s1">href</span><span class="s3">=&quot;{{ extra_css }}&quot; </span><span class="s1">type</span><span class="s3">=&quot;text/css&quot;</span><span class="s0">&gt;</span>
+    <span class="s0">{% endif %}</span>
+    <span class="s0">&lt;</span><span class="s2">script </span><span class="s1">type</span><span class="s3">=&quot;text/javascript&quot; </span><span class="s1">src</span><span class="s3">=&quot;jquery.min.js&quot;</span><span class="s0">&gt;&lt;/</span><span class="s2">script</span><span class="s0">&gt;</span>
+    <span class="s0">&lt;</span><span class="s2">script </span><span class="s1">type</span><span class="s3">=&quot;text/javascript&quot; </span><span class="s1">src</span><span class="s3">=&quot;jquery.hotkeys.js&quot;</span><span class="s0">&gt;&lt;/</span><span class="s2">script</span><span class="s0">&gt;</span>
+    <span class="s0">&lt;</span><span class="s2">script </span><span class="s1">type</span><span class="s3">=&quot;text/javascript&quot; </span><span class="s1">src</span><span class="s3">=&quot;jquery.isonscreen.js&quot;</span><span class="s0">&gt;&lt;/</span><span class="s2">script</span><span class="s0">&gt;</span>
+    <span class="s0">&lt;</span><span class="s2">script </span><span class="s1">type</span><span class="s3">=&quot;text/javascript&quot; </span><span class="s1">src</span><span class="s3">=&quot;coverage_html.js&quot;</span><span class="s0">&gt;&lt;/</span><span class="s2">script</span><span class="s0">&gt;</span>
+    <span class="s0">&lt;</span><span class="s2">script </span><span class="s1">type</span><span class="s3">=&quot;text/javascript&quot;</span><span class="s0">&gt;</span>
+        <span class="s0">jQuery(document).ready(coverage.pyfile_ready);</span>
+    <span class="s0">&lt;/</span><span class="s2">script</span><span class="s0">&gt;</span>
+<span class="s0">&lt;/</span><span class="s2">head</span><span class="s0">&gt;</span>
+<span class="s0">&lt;</span><span class="s2">body </span><span class="s1">class</span><span class="s3">=&quot;pyfile&quot;</span><span class="s0">&gt;</span>
+
+<span class="s0">&lt;</span><span class="s2">div </span><span class="s1">id</span><span class="s3">=&quot;header&quot;</span><span class="s0">&gt;</span>
+    <span class="s0">&lt;</span><span class="s2">div </span><span class="s1">class</span><span class="s3">=&quot;content&quot;</span><span class="s0">&gt;</span>
+        <span class="s0">&lt;</span><span class="s2">h1</span><span class="s0">&gt;Coverage for &lt;</span><span class="s2">b</span><span class="s0">&gt;{{relative_filename|escape}}&lt;/</span><span class="s2">b</span><span class="s0">&gt; :</span>
+            <span class="s0">&lt;</span><span class="s2">span </span><span class="s1">class</span><span class="s3">=&quot;pc_cov&quot;</span><span class="s0">&gt;{{nums.pc_covered_str}}%&lt;/</span><span class="s2">span</span><span class="s0">&gt;</span>
+        <span class="s0">&lt;/</span><span class="s2">h1</span><span class="s0">&gt;</span>
+
+        <span class="s0">&lt;</span><span class="s2">img </span><span class="s1">id</span><span class="s3">=&quot;keyboard_icon&quot; </span><span class="s1">src</span><span class="s3">=&quot;keybd_closed.png&quot; </span><span class="s1">alt</span><span class="s3">=&quot;Show keyboard shortcuts&quot; </span><span class="s0">/&gt;</span>
+
+        <span class="s0">&lt;</span><span class="s2">h2 </span><span class="s1">class</span><span class="s3">=&quot;stats&quot;</span><span class="s0">&gt;</span>
+            <span class="s0">{{nums.n_statements}} statements </span><span class="s2">&amp;nbsp;</span>
+            <span class="s0">&lt;</span><span class="s2">button </span><span class="s1">type</span><span class="s3">=&quot;button&quot; </span><span class="s1">class</span><span class="s3">=&quot;{{category.run}} shortkey_r button_toggle_run&quot; </span><span class="s1">title</span><span class="s3">=&quot;Toggle lines run&quot;</span><span class="s0">&gt;{{nums.n_executed}} run&lt;/</span><span class="s2">button</span><span class="s0">&gt;</span>
+            <span class="s0">&lt;</span><span class="s2">button </span><span class="s1">type</span><span class="s3">=&quot;button&quot; </span><span class="s1">class</span><span class="s3">=&quot;{{category.mis}} shortkey_m button_toggle_mis&quot; </span><span class="s1">title</span><span class="s3">=&quot;Toggle lines missing&quot;</span><span class="s0">&gt;{{nums.n_missing}} missing&lt;/</span><span class="s2">button</span><span class="s0">&gt;</span>
+            <span class="s0">&lt;</span><span class="s2">button </span><span class="s1">type</span><span class="s3">=&quot;button&quot; </span><span class="s1">class</span><span class="s3">=&quot;{{category.exc}} shortkey_x button_toggle_exc&quot; </span><span class="s1">title</span><span class="s3">=&quot;Toggle lines excluded&quot;</span><span class="s0">&gt;{{nums.n_excluded}} excluded&lt;/</span><span class="s2">button</span><span class="s0">&gt;</span>
+
+            <span class="s0">{% if has_arcs %}</span>
+            <span class="s0">&lt;</span><span class="s2">button </span><span class="s1">type</span><span class="s3">=&quot;button&quot; </span><span class="s1">class</span><span class="s3">=&quot;{{category.par}} shortkey_p button_toggle_par&quot; </span><span class="s1">title</span><span class="s3">=&quot;Toggle lines partially run&quot;</span><span class="s0">&gt;{{nums.n_partial_branches}} partial&lt;/</span><span class="s2">button</span><span class="s0">&gt;</span>
+            <span class="s0">{% endif %}</span>
+        <span class="s0">&lt;/</span><span class="s2">h2</span><span class="s0">&gt;</span>
+    <span class="s0">&lt;/</span><span class="s2">div</span><span class="s0">&gt;</span>
+<span class="s0">&lt;/</span><span class="s2">div</span><span class="s0">&gt;</span>
+
+<span class="s0">&lt;</span><span class="s2">div </span><span class="s1">class</span><span class="s3">=&quot;help_panel&quot;</span><span class="s0">&gt;</span>
+    <span class="s0">&lt;</span><span class="s2">img </span><span class="s1">id</span><span class="s3">=&quot;panel_icon&quot; </span><span class="s1">src</span><span class="s3">=&quot;keybd_open.png&quot; </span><span class="s1">alt</span><span class="s3">=&quot;Hide keyboard shortcuts&quot; </span><span class="s0">/&gt;</span>
+    <span class="s0">&lt;</span><span class="s2">p </span><span class="s1">class</span><span class="s3">=&quot;legend&quot;</span><span class="s0">&gt;Hot-keys on this page&lt;/</span><span class="s2">p</span><span class="s0">&gt;</span>
+    <span class="s0">&lt;</span><span class="s2">div</span><span class="s0">&gt;</span>
+    <span class="s0">&lt;</span><span class="s2">p </span><span class="s1">class</span><span class="s3">=&quot;keyhelp&quot;</span><span class="s0">&gt;</span>
+        <span class="s0">&lt;</span><span class="s2">span </span><span class="s1">class</span><span class="s3">=&quot;key&quot;</span><span class="s0">&gt;r&lt;/</span><span class="s2">span</span><span class="s0">&gt;</span>
+        <span class="s0">&lt;</span><span class="s2">span </span><span class="s1">class</span><span class="s3">=&quot;key&quot;</span><span class="s0">&gt;m&lt;/</span><span class="s2">span</span><span class="s0">&gt;</span>
+        <span class="s0">&lt;</span><span class="s2">span </span><span class="s1">class</span><span class="s3">=&quot;key&quot;</span><span class="s0">&gt;x&lt;/</span><span class="s2">span</span><span class="s0">&gt;</span>
+        <span class="s0">&lt;</span><span class="s2">span </span><span class="s1">class</span><span class="s3">=&quot;key&quot;</span><span class="s0">&gt;p&lt;/</span><span class="s2">span</span><span class="s0">&gt; </span><span class="s2">&amp;nbsp; </span><span class="s0">toggle line displays</span>
+    <span class="s0">&lt;/</span><span class="s2">p</span><span class="s0">&gt;</span>
+    <span class="s0">&lt;</span><span class="s2">p </span><span class="s1">class</span><span class="s3">=&quot;keyhelp&quot;</span><span class="s0">&gt;</span>
+        <span class="s0">&lt;</span><span class="s2">span </span><span class="s1">class</span><span class="s3">=&quot;key&quot;</span><span class="s0">&gt;j&lt;/</span><span class="s2">span</span><span class="s0">&gt;</span>
+        <span class="s0">&lt;</span><span class="s2">span </span><span class="s1">class</span><span class="s3">=&quot;key&quot;</span><span class="s0">&gt;k&lt;/</span><span class="s2">span</span><span class="s0">&gt; </span><span class="s2">&amp;nbsp; </span><span class="s0">next/prev highlighted chunk</span>
+    <span class="s0">&lt;/</span><span class="s2">p</span><span class="s0">&gt;</span>
+    <span class="s0">&lt;</span><span class="s2">p </span><span class="s1">class</span><span class="s3">=&quot;keyhelp&quot;</span><span class="s0">&gt;</span>
+        <span class="s0">&lt;</span><span class="s2">span </span><span class="s1">class</span><span class="s3">=&quot;key&quot;</span><span class="s0">&gt;0&lt;/</span><span class="s2">span</span><span class="s0">&gt; </span><span class="s2">&amp;nbsp; </span><span class="s0">(zero) top of page</span>
+    <span class="s0">&lt;/</span><span class="s2">p</span><span class="s0">&gt;</span>
+    <span class="s0">&lt;</span><span class="s2">p </span><span class="s1">class</span><span class="s3">=&quot;keyhelp&quot;</span><span class="s0">&gt;</span>
+        <span class="s0">&lt;</span><span class="s2">span </span><span class="s1">class</span><span class="s3">=&quot;key&quot;</span><span class="s0">&gt;1&lt;/</span><span class="s2">span</span><span class="s0">&gt; </span><span class="s2">&amp;nbsp; </span><span class="s0">(one) first highlighted chunk</span>
+    <span class="s0">&lt;/</span><span class="s2">p</span><span class="s0">&gt;</span>
+    <span class="s0">&lt;/</span><span class="s2">div</span><span class="s0">&gt;</span>
+<span class="s0">&lt;/</span><span class="s2">div</span><span class="s0">&gt;</span>
+
+<span class="s0">&lt;</span><span class="s2">div </span><span class="s1">id</span><span class="s3">=&quot;source&quot;</span><span class="s0">&gt;</span>
+    <span class="s0">{% for line in lines -%}</span>
+        <span class="s0">{% joined %}</span>
+        <span class="s0">&lt;</span><span class="s2">p </span><span class="s1">id</span><span class="s3">=&quot;t{{line.number}}&quot; </span><span class="s1">class</span><span class="s3">=&quot;{{line.css_class}}&quot;</span><span class="s0">&gt;</span>
+            <span class="s0">&lt;</span><span class="s2">span </span><span class="s1">class</span><span class="s3">=&quot;n&quot;</span><span class="s0">&gt;&lt;</span><span class="s2">a </span><span class="s1">href</span><span class="s3">=&quot;#t{{line.number}}&quot;</span><span class="s0">&gt;{{line.number}}&lt;/</span><span class="s2">a</span><span class="s0">&gt;&lt;/</span><span class="s2">span</span><span class="s0">&gt;</span>
+            <span class="s0">&lt;</span><span class="s2">span </span><span class="s1">class</span><span class="s3">=&quot;t&quot;</span><span class="s0">&gt;{{line.html}}</span><span class="s2">&amp;nbsp;</span><span class="s0">&lt;/</span><span class="s2">span</span><span class="s0">&gt;</span>
+            <span class="s0">{% if line.context_list %}</span>
+                <span class="s0">&lt;</span><span class="s2">input </span><span class="s1">type</span><span class="s3">=&quot;checkbox&quot; </span><span class="s1">id</span><span class="s3">=&quot;ctxs{{line.number}}&quot; </span><span class="s0">/&gt;</span>
+            <span class="s0">{% endif %}</span>
+            <span class="s0">{# Things that should float right in the line. #}</span>
+            <span class="s0">&lt;</span><span class="s2">span </span><span class="s1">class</span><span class="s3">=&quot;r&quot;</span><span class="s0">&gt;</span>
+                <span class="s0">{% if line.annotate %}</span>
+                    <span class="s0">&lt;</span><span class="s2">span </span><span class="s1">class</span><span class="s3">=&quot;annotate short&quot;</span><span class="s0">&gt;{{line.annotate}}&lt;/</span><span class="s2">span</span><span class="s0">&gt;</span>
+                    <span class="s0">&lt;</span><span class="s2">span </span><span class="s1">class</span><span class="s3">=&quot;annotate long&quot;</span><span class="s0">&gt;{{line.annotate_long}}&lt;/</span><span class="s2">span</span><span class="s0">&gt;</span>
+                <span class="s0">{% endif %}</span>
+                <span class="s0">{% if line.contexts %}</span>
+                    <span class="s0">&lt;</span><span class="s2">label </span><span class="s1">for</span><span class="s3">=&quot;ctxs{{line.number}}&quot; </span><span class="s1">class</span><span class="s3">=&quot;ctx&quot;</span><span class="s0">&gt;{{ line.contexts_label }}&lt;/</span><span class="s2">label</span><span class="s0">&gt;</span>
+                <span class="s0">{% endif %}</span>
+            <span class="s0">&lt;/</span><span class="s2">span</span><span class="s0">&gt;</span>
+            <span class="s0">{# Things that should appear below the line. #}</span>
+            <span class="s0">{% if line.context_list %}</span>
+                <span class="s0">&lt;</span><span class="s2">span </span><span class="s1">class</span><span class="s3">=&quot;ctxs&quot;</span><span class="s0">&gt;</span>
+                    <span class="s0">{% for context in line.context_list %}</span>
+                        <span class="s0">&lt;</span><span class="s2">span</span><span class="s0">&gt;{{context}}&lt;/</span><span class="s2">span</span><span class="s0">&gt;</span>
+                    <span class="s0">{% endfor %}</span>
+                <span class="s0">&lt;/</span><span class="s2">span</span><span class="s0">&gt;</span>
+            <span class="s0">{% endif %}</span>
+        <span class="s0">&lt;/</span><span class="s2">p</span><span class="s0">&gt;</span>
+        <span class="s0">{% endjoined %}</span>
+    <span class="s0">{% endfor %}</span>
+<span class="s0">&lt;/</span><span class="s2">div</span><span class="s0">&gt;</span>
+
+<span class="s0">&lt;</span><span class="s2">div </span><span class="s1">id</span><span class="s3">=&quot;footer&quot;</span><span class="s0">&gt;</span>
+    <span class="s0">&lt;</span><span class="s2">div </span><span class="s1">class</span><span class="s3">=&quot;content&quot;</span><span class="s0">&gt;</span>
+        <span class="s0">&lt;</span><span class="s2">p</span><span class="s0">&gt;</span>
+            <span class="s0">&lt;</span><span class="s2">a </span><span class="s1">class</span><span class="s3">=&quot;nav&quot; </span><span class="s1">href</span><span class="s3">=&quot;index.html&quot;</span><span class="s0">&gt;</span><span class="s2">&amp;#xab; </span><span class="s0">index&lt;/</span><span class="s2">a</span><span class="s0">&gt; </span><span class="s2">&amp;nbsp; &amp;nbsp; </span><span class="s0">&lt;</span><span class="s2">a </span><span class="s1">class</span><span class="s3">=&quot;nav&quot; </span><span class="s1">href</span><span class="s3">=&quot;{{__url__}}&quot;</span><span class="s0">&gt;coverage.py v{{__version__}}&lt;/</span><span class="s2">a</span><span class="s0">&gt;,</span>
+            <span class="s0">created at {{ time_stamp }}</span>
+        <span class="s0">&lt;/</span><span class="s2">p</span><span class="s0">&gt;</span>
+    <span class="s0">&lt;/</span><span class="s2">div</span><span class="s0">&gt;</span>
+<span class="s0">&lt;/</span><span class="s2">div</span><span class="s0">&gt;</span>
+
+<span class="s0">&lt;/</span><span class="s2">body</span><span class="s0">&gt;</span>
+<span class="s0">&lt;/</span><span class="s2">html</span><span class="s0">&gt;</span>
+</pre>
+</body>
+</html>

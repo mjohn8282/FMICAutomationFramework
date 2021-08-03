@@ -1,0 +1,481 @@
+<html>
+<head>
+<title>builder.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+builder.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2006-2011, 2013-2014 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2013 Phil Schaf &lt;flying-sheep@web.de&gt;</span>
+<span class="s0"># Copyright (c) 2014-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014-2015 Google, Inc.</span>
+<span class="s0"># Copyright (c) 2014 Alexander Presnyakov &lt;flagist0@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015-2016 Ceridwen &lt;ceridwenv@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Derek Gustafson &lt;degustaf@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Łukasz Rogalski &lt;rogalski.91@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Anthony Sottile &lt;asottile@umich.edu&gt;</span>
+<span class="s0"># Copyright (c) 2020-2021 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;The AstroidBuilder makes astroid from living object and / or from _ast 
+ 
+The builder is not thread safe and can't be used to parse different sources 
+at the same time. 
+&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">textwrap</span>
+<span class="s2">from </span><span class="s1">tokenize </span><span class="s2">import </span><span class="s1">detect_encoding</span>
+
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">bases,</span>
+    <span class="s1">exceptions,</span>
+    <span class="s1">manager,</span>
+    <span class="s1">modutils,</span>
+    <span class="s1">nodes,</span>
+    <span class="s1">raw_building,</span>
+    <span class="s1">rebuilder,</span>
+    <span class="s1">util,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">astroid._ast </span><span class="s2">import </span><span class="s1">get_parser_module</span>
+
+<span class="s1">objects = util.lazy_import(</span><span class="s3">&quot;objects&quot;</span><span class="s1">)</span>
+
+<span class="s0"># The name of the transient function that is used to</span>
+<span class="s0"># wrap expressions to be extracted when calling</span>
+<span class="s0"># extract_node.</span>
+<span class="s1">_TRANSIENT_FUNCTION = </span><span class="s3">&quot;__&quot;</span>
+
+<span class="s0"># The comment used to select a statement to be extracted</span>
+<span class="s0"># when calling extract_node.</span>
+<span class="s1">_STATEMENT_SELECTOR = </span><span class="s3">&quot;#@&quot;</span>
+<span class="s1">MISPLACED_TYPE_ANNOTATION_ERROR = </span><span class="s3">&quot;misplaced type annotation&quot;</span>
+<span class="s1">MANAGER = manager.AstroidManager()</span>
+
+
+<span class="s2">def </span><span class="s1">open_source_file(filename):</span>
+    <span class="s0"># pylint: disable=consider-using-with</span>
+    <span class="s2">with </span><span class="s1">open(filename, </span><span class="s3">&quot;rb&quot;</span><span class="s1">) </span><span class="s2">as </span><span class="s1">byte_stream:</span>
+        <span class="s1">encoding = detect_encoding(byte_stream.readline)[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s1">stream = open(filename, newline=</span><span class="s2">None</span><span class="s1">, encoding=encoding)</span>
+    <span class="s1">data = stream.read()</span>
+    <span class="s2">return </span><span class="s1">stream, encoding, data</span>
+
+
+<span class="s2">def </span><span class="s1">_can_assign_attr(node, attrname):</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">slots = node.slots()</span>
+    <span class="s2">except </span><span class="s1">NotImplementedError:</span>
+        <span class="s2">pass</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">if </span><span class="s1">slots </span><span class="s2">and </span><span class="s1">attrname </span><span class="s2">not in </span><span class="s1">{slot.value </span><span class="s2">for </span><span class="s1">slot </span><span class="s2">in </span><span class="s1">slots}:</span>
+            <span class="s2">return False</span>
+    <span class="s2">return True</span>
+
+
+<span class="s2">class </span><span class="s1">AstroidBuilder(raw_building.InspectBuilder):</span>
+    <span class="s0">&quot;&quot;&quot;Class for building an astroid tree from source code or from a live module. 
+ 
+    The param *manager* specifies the manager class which should be used. 
+    If no manager is given, then the default one will be used. The 
+    param *apply_transforms* determines if the transforms should be 
+    applied after the tree was built from source or from a live object, 
+    by default being True. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0"># pylint: disable=redefined-outer-name</span>
+    <span class="s2">def </span><span class="s1">__init__(self, manager=</span><span class="s2">None</span><span class="s1">, apply_transforms=</span><span class="s2">True</span><span class="s1">):</span>
+        <span class="s1">super().__init__()</span>
+        <span class="s1">self._manager = manager </span><span class="s2">or </span><span class="s1">MANAGER</span>
+        <span class="s1">self._apply_transforms = apply_transforms</span>
+
+    <span class="s2">def </span><span class="s1">module_build(self, module, modname=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Build an astroid from a living module instance.&quot;&quot;&quot;</span>
+        <span class="s1">node = </span><span class="s2">None</span>
+        <span class="s1">path = getattr(module, </span><span class="s3">&quot;__file__&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">path </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">path_, ext = os.path.splitext(modutils._path_from_filename(path))</span>
+            <span class="s2">if </span><span class="s1">ext </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;.py&quot;</span><span class="s1">, </span><span class="s3">&quot;.pyc&quot;</span><span class="s1">, </span><span class="s3">&quot;.pyo&quot;</span><span class="s1">) </span><span class="s2">and </span><span class="s1">os.path.exists(path_ + </span><span class="s3">&quot;.py&quot;</span><span class="s1">):</span>
+                <span class="s1">node = self.file_build(path_ + </span><span class="s3">&quot;.py&quot;</span><span class="s1">, modname)</span>
+        <span class="s2">if </span><span class="s1">node </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s0"># this is a built-in module</span>
+            <span class="s0"># get a partial representation by introspection</span>
+            <span class="s1">node = self.inspect_build(module, modname=modname, path=path)</span>
+            <span class="s2">if </span><span class="s1">self._apply_transforms:</span>
+                <span class="s0"># We have to handle transformation by ourselves since the</span>
+                <span class="s0"># rebuilder isn't called for builtin nodes</span>
+                <span class="s1">node = self._manager.visit_transforms(node)</span>
+        <span class="s2">return </span><span class="s1">node</span>
+
+    <span class="s2">def </span><span class="s1">file_build(self, path, modname=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Build astroid from a source code file (i.e. from an ast) 
+ 
+        *path* is expected to be a python source file 
+        &quot;&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">stream, encoding, data = open_source_file(path)</span>
+        <span class="s2">except </span><span class="s1">OSError </span><span class="s2">as </span><span class="s1">exc:</span>
+            <span class="s2">raise </span><span class="s1">exceptions.AstroidBuildingError(</span>
+                <span class="s3">&quot;Unable to load file {path}:</span><span class="s5">\n</span><span class="s3">{error}&quot;</span><span class="s1">,</span>
+                <span class="s1">modname=modname,</span>
+                <span class="s1">path=path,</span>
+                <span class="s1">error=exc,</span>
+            <span class="s1">) </span><span class="s2">from </span><span class="s1">exc</span>
+        <span class="s2">except </span><span class="s1">(SyntaxError, LookupError) </span><span class="s2">as </span><span class="s1">exc:</span>
+            <span class="s2">raise </span><span class="s1">exceptions.AstroidSyntaxError(</span>
+                <span class="s3">&quot;Python 3 encoding specification error or unknown encoding:</span><span class="s5">\n</span><span class="s3">&quot;</span>
+                <span class="s3">&quot;{error}&quot;</span><span class="s1">,</span>
+                <span class="s1">modname=modname,</span>
+                <span class="s1">path=path,</span>
+                <span class="s1">error=exc,</span>
+            <span class="s1">) </span><span class="s2">from </span><span class="s1">exc</span>
+        <span class="s2">except </span><span class="s1">UnicodeError </span><span class="s2">as </span><span class="s1">exc:  </span><span class="s0"># wrong encoding</span>
+            <span class="s0"># detect_encoding returns utf-8 if no encoding specified</span>
+            <span class="s2">raise </span><span class="s1">exceptions.AstroidBuildingError(</span>
+                <span class="s3">&quot;Wrong or no encoding specified for {filename}.&quot;</span><span class="s1">, filename=path</span>
+            <span class="s1">) </span><span class="s2">from </span><span class="s1">exc</span>
+        <span class="s2">with </span><span class="s1">stream:</span>
+            <span class="s0"># get module name if necessary</span>
+            <span class="s2">if </span><span class="s1">modname </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">modname = </span><span class="s3">&quot;.&quot;</span><span class="s1">.join(modutils.modpath_from_file(path))</span>
+                <span class="s2">except </span><span class="s1">ImportError:</span>
+                    <span class="s1">modname = os.path.splitext(os.path.basename(path))[</span><span class="s4">0</span><span class="s1">]</span>
+            <span class="s0"># build astroid representation</span>
+            <span class="s1">module = self._data_build(data, modname, path)</span>
+            <span class="s2">return </span><span class="s1">self._post_build(module, encoding)</span>
+
+    <span class="s2">def </span><span class="s1">string_build(self, data, modname=</span><span class="s3">&quot;&quot;</span><span class="s1">, path=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Build astroid from source code string.&quot;&quot;&quot;</span>
+        <span class="s1">module = self._data_build(data, modname, path)</span>
+        <span class="s1">module.file_bytes = data.encode(</span><span class="s3">&quot;utf-8&quot;</span><span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">self._post_build(module, </span><span class="s3">&quot;utf-8&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_post_build(self, module, encoding):</span>
+        <span class="s0">&quot;&quot;&quot;Handles encoding and delayed nodes after a module has been built&quot;&quot;&quot;</span>
+        <span class="s1">module.file_encoding = encoding</span>
+        <span class="s1">self._manager.cache_module(module)</span>
+        <span class="s0"># post tree building steps after we stored the module in the cache:</span>
+        <span class="s2">for </span><span class="s1">from_node </span><span class="s2">in </span><span class="s1">module._import_from_nodes:</span>
+            <span class="s2">if </span><span class="s1">from_node.modname == </span><span class="s3">&quot;__future__&quot;</span><span class="s1">:</span>
+                <span class="s2">for </span><span class="s1">symbol, _ </span><span class="s2">in </span><span class="s1">from_node.names:</span>
+                    <span class="s1">module.future_imports.add(symbol)</span>
+            <span class="s1">self.add_from_names_to_locals(from_node)</span>
+        <span class="s0"># handle delayed assattr nodes</span>
+        <span class="s2">for </span><span class="s1">delayed </span><span class="s2">in </span><span class="s1">module._delayed_assattr:</span>
+            <span class="s1">self.delayed_assattr(delayed)</span>
+
+        <span class="s0"># Visit the transforms</span>
+        <span class="s2">if </span><span class="s1">self._apply_transforms:</span>
+            <span class="s1">module = self._manager.visit_transforms(module)</span>
+        <span class="s2">return </span><span class="s1">module</span>
+
+    <span class="s2">def </span><span class="s1">_data_build(self, data, modname, path):</span>
+        <span class="s0">&quot;&quot;&quot;Build tree node from data and add some informations&quot;&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">node, parser_module = _parse_string(data, type_comments=</span><span class="s2">True</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">(TypeError, ValueError, SyntaxError) </span><span class="s2">as </span><span class="s1">exc:</span>
+            <span class="s2">raise </span><span class="s1">exceptions.AstroidSyntaxError(</span>
+                <span class="s3">&quot;Parsing Python code failed:</span><span class="s5">\n</span><span class="s3">{error}&quot;</span><span class="s1">,</span>
+                <span class="s1">source=data,</span>
+                <span class="s1">modname=modname,</span>
+                <span class="s1">path=path,</span>
+                <span class="s1">error=exc,</span>
+            <span class="s1">) </span><span class="s2">from </span><span class="s1">exc</span>
+
+        <span class="s2">if </span><span class="s1">path </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">node_file = os.path.abspath(path)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">node_file = </span><span class="s3">&quot;&lt;?&gt;&quot;</span>
+        <span class="s2">if </span><span class="s1">modname.endswith(</span><span class="s3">&quot;.__init__&quot;</span><span class="s1">):</span>
+            <span class="s1">modname = modname[:-</span><span class="s4">9</span><span class="s1">]</span>
+            <span class="s1">package = </span><span class="s2">True</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">package = (</span>
+                <span class="s1">path </span><span class="s2">is not None</span>
+                <span class="s2">and </span><span class="s1">os.path.splitext(os.path.basename(path))[</span><span class="s4">0</span><span class="s1">] == </span><span class="s3">&quot;__init__&quot;</span>
+            <span class="s1">)</span>
+        <span class="s1">builder = rebuilder.TreeRebuilder(self._manager, parser_module)</span>
+        <span class="s1">module = builder.visit_module(node, modname, node_file, package)</span>
+        <span class="s1">module._import_from_nodes = builder._import_from_nodes</span>
+        <span class="s1">module._delayed_assattr = builder._delayed_assattr</span>
+        <span class="s2">return </span><span class="s1">module</span>
+
+    <span class="s2">def </span><span class="s1">add_from_names_to_locals(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Store imported names to the locals 
+ 
+        Resort the locals if coming from a delayed node 
+        &quot;&quot;&quot;</span>
+        <span class="s1">_key_func = </span><span class="s2">lambda </span><span class="s1">node: node.fromlineno</span>
+
+        <span class="s2">def </span><span class="s1">sort_locals(my_list):</span>
+            <span class="s1">my_list.sort(key=_key_func)</span>
+
+        <span class="s2">for </span><span class="s1">(name, asname) </span><span class="s2">in </span><span class="s1">node.names:</span>
+            <span class="s2">if </span><span class="s1">name == </span><span class="s3">&quot;*&quot;</span><span class="s1">:</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">imported = node.do_import_module()</span>
+                <span class="s2">except </span><span class="s1">exceptions.AstroidBuildingError:</span>
+                    <span class="s2">continue</span>
+                <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">imported.public_names():</span>
+                    <span class="s1">node.parent.set_local(name, node)</span>
+                    <span class="s1">sort_locals(node.parent.scope().locals[name])</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">node.parent.set_local(asname </span><span class="s2">or </span><span class="s1">name, node)</span>
+                <span class="s1">sort_locals(node.parent.scope().locals[asname </span><span class="s2">or </span><span class="s1">name])</span>
+
+    <span class="s2">def </span><span class="s1">delayed_assattr(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Visit a AssAttr node 
+ 
+        This adds name to locals and handle members definition. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">frame = node.frame()</span>
+            <span class="s2">for </span><span class="s1">inferred </span><span class="s2">in </span><span class="s1">node.expr.infer():</span>
+                <span class="s2">if </span><span class="s1">inferred </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+                    <span class="s2">continue</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">cls = inferred.__class__</span>
+                    <span class="s2">if </span><span class="s1">cls </span><span class="s2">is </span><span class="s1">bases.Instance </span><span class="s2">or </span><span class="s1">cls </span><span class="s2">is </span><span class="s1">objects.ExceptionInstance:</span>
+                        <span class="s1">inferred = inferred._proxied</span>
+                        <span class="s1">iattrs = inferred.instance_attrs</span>
+                        <span class="s2">if not </span><span class="s1">_can_assign_attr(inferred, node.attrname):</span>
+                            <span class="s2">continue</span>
+                    <span class="s2">elif </span><span class="s1">isinstance(inferred, bases.Instance):</span>
+                        <span class="s0"># Const, Tuple or other containers that inherit from</span>
+                        <span class="s0"># `Instance`</span>
+                        <span class="s2">continue</span>
+                    <span class="s2">elif </span><span class="s1">inferred.is_function:</span>
+                        <span class="s1">iattrs = inferred.instance_attrs</span>
+                    <span class="s2">else</span><span class="s1">:</span>
+                        <span class="s1">iattrs = inferred.locals</span>
+                <span class="s2">except </span><span class="s1">AttributeError:</span>
+                    <span class="s0"># XXX log error</span>
+                    <span class="s2">continue</span>
+                <span class="s1">values = iattrs.setdefault(node.attrname, [])</span>
+                <span class="s2">if </span><span class="s1">node </span><span class="s2">in </span><span class="s1">values:</span>
+                    <span class="s2">continue</span>
+                <span class="s0"># get assign in __init__ first XXX useful ?</span>
+                <span class="s2">if </span><span class="s1">(</span>
+                    <span class="s1">frame.name == </span><span class="s3">&quot;__init__&quot;</span>
+                    <span class="s2">and </span><span class="s1">values</span>
+                    <span class="s2">and </span><span class="s1">values[</span><span class="s4">0</span><span class="s1">].frame().name != </span><span class="s3">&quot;__init__&quot;</span>
+                <span class="s1">):</span>
+                    <span class="s1">values.insert(</span><span class="s4">0</span><span class="s1">, node)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">values.append(node)</span>
+        <span class="s2">except </span><span class="s1">exceptions.InferenceError:</span>
+            <span class="s2">pass</span>
+
+
+<span class="s2">def </span><span class="s1">build_namespace_package_module(name, path):</span>
+    <span class="s2">return </span><span class="s1">nodes.Module(name, doc=</span><span class="s3">&quot;&quot;</span><span class="s1">, path=path, package=</span><span class="s2">True</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">parse(code, module_name=</span><span class="s3">&quot;&quot;</span><span class="s1">, path=</span><span class="s2">None</span><span class="s1">, apply_transforms=</span><span class="s2">True</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Parses a source string in order to obtain an astroid AST from it 
+ 
+    :param str code: The code for the module. 
+    :param str module_name: The name for the module, if any 
+    :param str path: The path for the module 
+    :param bool apply_transforms: 
+        Apply the transforms for the give code. Use it if you 
+        don't want the default transforms to be applied. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">code = textwrap.dedent(code)</span>
+    <span class="s1">builder = AstroidBuilder(manager=MANAGER, apply_transforms=apply_transforms)</span>
+    <span class="s2">return </span><span class="s1">builder.string_build(code, modname=module_name, path=path)</span>
+
+
+<span class="s2">def </span><span class="s1">_extract_expressions(node):</span>
+    <span class="s0">&quot;&quot;&quot;Find expressions in a call to _TRANSIENT_FUNCTION and extract them. 
+ 
+    The function walks the AST recursively to search for expressions that 
+    are wrapped into a call to _TRANSIENT_FUNCTION. If it finds such an 
+    expression, it completely removes the function call node from the tree, 
+    replacing it by the wrapped expression inside the parent. 
+ 
+    :param node: An astroid node. 
+    :type node:  astroid.bases.NodeNG 
+    :yields: The sequence of wrapped expressions on the modified tree 
+    expression can be found. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">(</span>
+        <span class="s1">isinstance(node, nodes.Call)</span>
+        <span class="s2">and </span><span class="s1">isinstance(node.func, nodes.Name)</span>
+        <span class="s2">and </span><span class="s1">node.func.name == _TRANSIENT_FUNCTION</span>
+    <span class="s1">):</span>
+        <span class="s1">real_expr = node.args[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s1">real_expr.parent = node.parent</span>
+        <span class="s0"># Search for node in all _astng_fields (the fields checked when</span>
+        <span class="s0"># get_children is called) of its parent. Some of those fields may</span>
+        <span class="s0"># be lists or tuples, in which case the elements need to be checked.</span>
+        <span class="s0"># When we find it, replace it by real_expr, so that the AST looks</span>
+        <span class="s0"># like no call to _TRANSIENT_FUNCTION ever took place.</span>
+        <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">node.parent._astroid_fields:</span>
+            <span class="s1">child = getattr(node.parent, name)</span>
+            <span class="s2">if </span><span class="s1">isinstance(child, (list, tuple)):</span>
+                <span class="s2">for </span><span class="s1">idx, compound_child </span><span class="s2">in </span><span class="s1">enumerate(child):</span>
+                    <span class="s2">if </span><span class="s1">compound_child </span><span class="s2">is </span><span class="s1">node:</span>
+                        <span class="s1">child[idx] = real_expr</span>
+            <span class="s2">elif </span><span class="s1">child </span><span class="s2">is </span><span class="s1">node:</span>
+                <span class="s1">setattr(node.parent, name, real_expr)</span>
+        <span class="s2">yield </span><span class="s1">real_expr</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.get_children():</span>
+            <span class="s2">yield from </span><span class="s1">_extract_expressions(child)</span>
+
+
+<span class="s2">def </span><span class="s1">_find_statement_by_line(node, line):</span>
+    <span class="s0">&quot;&quot;&quot;Extracts the statement on a specific line from an AST. 
+ 
+    If the line number of node matches line, it will be returned; 
+    otherwise its children are iterated and the function is called 
+    recursively. 
+ 
+    :param node: An astroid node. 
+    :type node: astroid.bases.NodeNG 
+    :param line: The line number of the statement to extract. 
+    :type line: int 
+    :returns: The statement on the line, or None if no statement for the line 
+      can be found. 
+    :rtype:  astroid.bases.NodeNG or None 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">isinstance(node, (nodes.ClassDef, nodes.FunctionDef)):</span>
+        <span class="s0"># This is an inaccuracy in the AST: the nodes that can be</span>
+        <span class="s0"># decorated do not carry explicit information on which line</span>
+        <span class="s0"># the actual definition (class/def), but .fromline seems to</span>
+        <span class="s0"># be close enough.</span>
+        <span class="s1">node_line = node.fromlineno</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">node_line = node.lineno</span>
+
+    <span class="s2">if </span><span class="s1">node_line == line:</span>
+        <span class="s2">return </span><span class="s1">node</span>
+
+    <span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.get_children():</span>
+        <span class="s1">result = _find_statement_by_line(child, line)</span>
+        <span class="s2">if </span><span class="s1">result:</span>
+            <span class="s2">return </span><span class="s1">result</span>
+
+    <span class="s2">return None</span>
+
+
+<span class="s2">def </span><span class="s1">extract_node(code, module_name=</span><span class="s3">&quot;&quot;</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Parses some Python code as a module and extracts a designated AST node. 
+ 
+    Statements: 
+     To extract one or more statement nodes, append #@ to the end of the line 
+ 
+     Examples: 
+       &gt;&gt;&gt; def x(): 
+       &gt;&gt;&gt;   def y(): 
+       &gt;&gt;&gt;     return 1 #@ 
+ 
+       The return statement will be extracted. 
+ 
+       &gt;&gt;&gt; class X(object): 
+       &gt;&gt;&gt;   def meth(self): #@ 
+       &gt;&gt;&gt;     pass 
+ 
+      The function object 'meth' will be extracted. 
+ 
+    Expressions: 
+     To extract arbitrary expressions, surround them with the fake 
+     function call __(...). After parsing, the surrounded expression 
+     will be returned and the whole AST (accessible via the returned 
+     node's parent attribute) will look like the function call was 
+     never there in the first place. 
+ 
+     Examples: 
+       &gt;&gt;&gt; a = __(1) 
+ 
+       The const node will be extracted. 
+ 
+       &gt;&gt;&gt; def x(d=__(foo.bar)): pass 
+ 
+       The node containing the default argument will be extracted. 
+ 
+       &gt;&gt;&gt; def foo(a, b): 
+       &gt;&gt;&gt;   return 0 &lt; __(len(a)) &lt; b 
+ 
+       The node containing the function call 'len' will be extracted. 
+ 
+    If no statements or expressions are selected, the last toplevel 
+    statement will be returned. 
+ 
+    If the selected statement is a discard statement, (i.e. an expression 
+    turned into a statement), the wrapped expression is returned instead. 
+ 
+    For convenience, singleton lists are unpacked. 
+ 
+    :param str code: A piece of Python code that is parsed as 
+    a module. Will be passed through textwrap.dedent first. 
+    :param str module_name: The name of the module. 
+    :returns: The designated node from the parse tree, or a list of nodes. 
+    :rtype: astroid.bases.NodeNG, or a list of nodes. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">_extract(node):</span>
+        <span class="s2">if </span><span class="s1">isinstance(node, nodes.Expr):</span>
+            <span class="s2">return </span><span class="s1">node.value</span>
+
+        <span class="s2">return </span><span class="s1">node</span>
+
+    <span class="s1">requested_lines = []</span>
+    <span class="s2">for </span><span class="s1">idx, line </span><span class="s2">in </span><span class="s1">enumerate(code.splitlines()):</span>
+        <span class="s2">if </span><span class="s1">line.strip().endswith(_STATEMENT_SELECTOR):</span>
+            <span class="s1">requested_lines.append(idx + </span><span class="s4">1</span><span class="s1">)</span>
+
+    <span class="s1">tree = parse(code, module_name=module_name)</span>
+    <span class="s2">if not </span><span class="s1">tree.body:</span>
+        <span class="s2">raise </span><span class="s1">ValueError(</span><span class="s3">&quot;Empty tree, cannot extract from it&quot;</span><span class="s1">)</span>
+
+    <span class="s1">extracted = []</span>
+    <span class="s2">if </span><span class="s1">requested_lines:</span>
+        <span class="s1">extracted = [_find_statement_by_line(tree, line) </span><span class="s2">for </span><span class="s1">line </span><span class="s2">in </span><span class="s1">requested_lines]</span>
+
+    <span class="s0"># Modifies the tree.</span>
+    <span class="s1">extracted.extend(_extract_expressions(tree))</span>
+
+    <span class="s2">if not </span><span class="s1">extracted:</span>
+        <span class="s1">extracted.append(tree.body[-</span><span class="s4">1</span><span class="s1">])</span>
+
+    <span class="s1">extracted = [_extract(node) </span><span class="s2">for </span><span class="s1">node </span><span class="s2">in </span><span class="s1">extracted]</span>
+    <span class="s2">if </span><span class="s1">len(extracted) == </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">extracted[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s2">return </span><span class="s1">extracted</span>
+
+
+<span class="s2">def </span><span class="s1">_parse_string(data, type_comments=</span><span class="s2">True</span><span class="s1">):</span>
+    <span class="s1">parser_module = get_parser_module(type_comments=type_comments)</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">parsed = parser_module.parse(data + </span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">&quot;</span><span class="s1">, type_comments=type_comments)</span>
+    <span class="s2">except </span><span class="s1">SyntaxError </span><span class="s2">as </span><span class="s1">exc:</span>
+        <span class="s0"># If the type annotations are misplaced for some reason, we do not want</span>
+        <span class="s0"># to fail the entire parsing of the file, so we need to retry the parsing without</span>
+        <span class="s0"># type comment support.</span>
+        <span class="s2">if </span><span class="s1">exc.args[</span><span class="s4">0</span><span class="s1">] != MISPLACED_TYPE_ANNOTATION_ERROR </span><span class="s2">or not </span><span class="s1">type_comments:</span>
+            <span class="s2">raise</span>
+
+        <span class="s1">parser_module = get_parser_module(type_comments=</span><span class="s2">False</span><span class="s1">)</span>
+        <span class="s1">parsed = parser_module.parse(data + </span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">&quot;</span><span class="s1">, type_comments=</span><span class="s2">False</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">parsed, parser_module</span>
+</pre>
+</body>
+</html>

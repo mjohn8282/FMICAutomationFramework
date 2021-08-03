@@ -1,0 +1,302 @@
+<html>
+<head>
+<title>plugin_support.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+plugin_support.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;Support for plugins.&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">os.path</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s2">from </span><span class="s1">coverage.misc </span><span class="s2">import </span><span class="s1">CoverageException, isolate_module</span>
+<span class="s2">from </span><span class="s1">coverage.plugin </span><span class="s2">import </span><span class="s1">CoveragePlugin, FileTracer, FileReporter</span>
+
+<span class="s1">os = isolate_module(os)</span>
+
+
+<span class="s2">class </span><span class="s1">Plugins(object):</span>
+    <span class="s0">&quot;&quot;&quot;The currently loaded collection of coverage.py plugins.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self):</span>
+        <span class="s1">self.order = []</span>
+        <span class="s1">self.names = {}</span>
+        <span class="s1">self.file_tracers = []</span>
+        <span class="s1">self.configurers = []</span>
+        <span class="s1">self.context_switchers = []</span>
+
+        <span class="s1">self.current_module = </span><span class="s2">None</span>
+        <span class="s1">self.debug = </span><span class="s2">None</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s2">def </span><span class="s1">load_plugins(cls, modules, config, debug=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Load plugins from `modules`. 
+ 
+        Returns a Plugins object with the loaded and configured plugins. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">plugins = cls()</span>
+        <span class="s1">plugins.debug = debug</span>
+
+        <span class="s2">for </span><span class="s1">module </span><span class="s2">in </span><span class="s1">modules:</span>
+            <span class="s1">plugins.current_module = module</span>
+            <span class="s1">__import__(module)</span>
+            <span class="s1">mod = sys.modules[module]</span>
+
+            <span class="s1">coverage_init = getattr(mod, </span><span class="s3">&quot;coverage_init&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+            <span class="s2">if not </span><span class="s1">coverage_init:</span>
+                <span class="s2">raise </span><span class="s1">CoverageException(</span>
+                    <span class="s3">&quot;Plugin module %r didn't define a coverage_init function&quot; </span><span class="s1">% module</span>
+                <span class="s1">)</span>
+
+            <span class="s1">options = config.get_plugin_options(module)</span>
+            <span class="s1">coverage_init(plugins, options)</span>
+
+        <span class="s1">plugins.current_module = </span><span class="s2">None</span>
+        <span class="s2">return </span><span class="s1">plugins</span>
+
+    <span class="s2">def </span><span class="s1">add_file_tracer(self, plugin):</span>
+        <span class="s0">&quot;&quot;&quot;Add a file tracer plugin. 
+ 
+        `plugin` is an instance of a third-party plugin class.  It must 
+        implement the :meth:`CoveragePlugin.file_tracer` method. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self._add_plugin(plugin, self.file_tracers)</span>
+
+    <span class="s2">def </span><span class="s1">add_configurer(self, plugin):</span>
+        <span class="s0">&quot;&quot;&quot;Add a configuring plugin. 
+ 
+        `plugin` is an instance of a third-party plugin class. It must 
+        implement the :meth:`CoveragePlugin.configure` method. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self._add_plugin(plugin, self.configurers)</span>
+
+    <span class="s2">def </span><span class="s1">add_dynamic_context(self, plugin):</span>
+        <span class="s0">&quot;&quot;&quot;Add a dynamic context plugin. 
+ 
+        `plugin` is an instance of a third-party plugin class.  It must 
+        implement the :meth:`CoveragePlugin.dynamic_context` method. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self._add_plugin(plugin, self.context_switchers)</span>
+
+    <span class="s2">def </span><span class="s1">add_noop(self, plugin):</span>
+        <span class="s0">&quot;&quot;&quot;Add a plugin that does nothing. 
+ 
+        This is only useful for testing the plugin support. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self._add_plugin(plugin, </span><span class="s2">None</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_add_plugin(self, plugin, specialized):</span>
+        <span class="s0">&quot;&quot;&quot;Add a plugin object. 
+ 
+        `plugin` is a :class:`CoveragePlugin` instance to add.  `specialized` 
+        is a list to append the plugin to. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">plugin_name = </span><span class="s3">&quot;%s.%s&quot; </span><span class="s1">% (self.current_module, plugin.__class__.__name__)</span>
+        <span class="s2">if </span><span class="s1">self.debug </span><span class="s2">and </span><span class="s1">self.debug.should(</span><span class="s3">'plugin'</span><span class="s1">):</span>
+            <span class="s1">self.debug.write(</span><span class="s3">&quot;Loaded plugin %r: %r&quot; </span><span class="s1">% (self.current_module, plugin))</span>
+            <span class="s1">labelled = LabelledDebug(</span><span class="s3">&quot;plugin %r&quot; </span><span class="s1">% (self.current_module,), self.debug)</span>
+            <span class="s1">plugin = DebugPluginWrapper(plugin, labelled)</span>
+
+        <span class="s0"># pylint: disable=attribute-defined-outside-init</span>
+        <span class="s1">plugin._coverage_plugin_name = plugin_name</span>
+        <span class="s1">plugin._coverage_enabled = </span><span class="s2">True</span>
+        <span class="s1">self.order.append(plugin)</span>
+        <span class="s1">self.names[plugin_name] = plugin</span>
+        <span class="s2">if </span><span class="s1">specialized </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">specialized.append(plugin)</span>
+
+    <span class="s2">def </span><span class="s1">__nonzero__(self):</span>
+        <span class="s2">return </span><span class="s1">bool(self.order)</span>
+
+    <span class="s1">__bool__ = __nonzero__</span>
+
+    <span class="s2">def </span><span class="s1">__iter__(self):</span>
+        <span class="s2">return </span><span class="s1">iter(self.order)</span>
+
+    <span class="s2">def </span><span class="s1">get(self, plugin_name):</span>
+        <span class="s0">&quot;&quot;&quot;Return a plugin by name.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.names[plugin_name]</span>
+
+
+<span class="s2">class </span><span class="s1">LabelledDebug(object):</span>
+    <span class="s0">&quot;&quot;&quot;A Debug writer, but with labels for prepending to the messages.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, label, debug, prev_labels=()):</span>
+        <span class="s1">self.labels = list(prev_labels) + [label]</span>
+        <span class="s1">self.debug = debug</span>
+
+    <span class="s2">def </span><span class="s1">add_label(self, label):</span>
+        <span class="s0">&quot;&quot;&quot;Add a label to the writer, and return a new `LabelledDebug`.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">LabelledDebug(label, self.debug, self.labels)</span>
+
+    <span class="s2">def </span><span class="s1">message_prefix(self):</span>
+        <span class="s0">&quot;&quot;&quot;The prefix to use on messages, combining the labels.&quot;&quot;&quot;</span>
+        <span class="s1">prefixes = self.labels + [</span><span class="s3">''</span><span class="s1">]</span>
+        <span class="s2">return </span><span class="s3">&quot;:</span><span class="s4">\n</span><span class="s3">&quot;</span><span class="s1">.join(</span><span class="s3">&quot;  &quot;</span><span class="s1">*i+label </span><span class="s2">for </span><span class="s1">i, label </span><span class="s2">in </span><span class="s1">enumerate(prefixes))</span>
+
+    <span class="s2">def </span><span class="s1">write(self, message):</span>
+        <span class="s0">&quot;&quot;&quot;Write `message`, but with the labels prepended.&quot;&quot;&quot;</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;%s%s&quot; </span><span class="s1">% (self.message_prefix(), message))</span>
+
+
+<span class="s2">class </span><span class="s1">DebugPluginWrapper(CoveragePlugin):</span>
+    <span class="s0">&quot;&quot;&quot;Wrap a plugin, and use debug to report on what it's doing.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, plugin, debug):</span>
+        <span class="s1">super(DebugPluginWrapper, self).__init__()</span>
+        <span class="s1">self.plugin = plugin</span>
+        <span class="s1">self.debug = debug</span>
+
+    <span class="s2">def </span><span class="s1">file_tracer(self, filename):</span>
+        <span class="s1">tracer = self.plugin.file_tracer(filename)</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;file_tracer(%r) --&gt; %r&quot; </span><span class="s1">% (filename, tracer))</span>
+        <span class="s2">if </span><span class="s1">tracer:</span>
+            <span class="s1">debug = self.debug.add_label(</span><span class="s3">&quot;file %r&quot; </span><span class="s1">% (filename,))</span>
+            <span class="s1">tracer = DebugFileTracerWrapper(tracer, debug)</span>
+        <span class="s2">return </span><span class="s1">tracer</span>
+
+    <span class="s2">def </span><span class="s1">file_reporter(self, filename):</span>
+        <span class="s1">reporter = self.plugin.file_reporter(filename)</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;file_reporter(%r) --&gt; %r&quot; </span><span class="s1">% (filename, reporter))</span>
+        <span class="s2">if </span><span class="s1">reporter:</span>
+            <span class="s1">debug = self.debug.add_label(</span><span class="s3">&quot;file %r&quot; </span><span class="s1">% (filename,))</span>
+            <span class="s1">reporter = DebugFileReporterWrapper(filename, reporter, debug)</span>
+        <span class="s2">return </span><span class="s1">reporter</span>
+
+    <span class="s2">def </span><span class="s1">dynamic_context(self, frame):</span>
+        <span class="s1">context = self.plugin.dynamic_context(frame)</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;dynamic_context(%r) --&gt; %r&quot; </span><span class="s1">% (frame, context))</span>
+        <span class="s2">return </span><span class="s1">context</span>
+
+    <span class="s2">def </span><span class="s1">find_executable_files(self, src_dir):</span>
+        <span class="s1">executable_files = self.plugin.find_executable_files(src_dir)</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;find_executable_files(%r) --&gt; %r&quot; </span><span class="s1">% (src_dir, executable_files))</span>
+        <span class="s2">return </span><span class="s1">executable_files</span>
+
+    <span class="s2">def </span><span class="s1">configure(self, config):</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;configure(%r)&quot; </span><span class="s1">% (config,))</span>
+        <span class="s1">self.plugin.configure(config)</span>
+
+    <span class="s2">def </span><span class="s1">sys_info(self):</span>
+        <span class="s2">return </span><span class="s1">self.plugin.sys_info()</span>
+
+
+<span class="s2">class </span><span class="s1">DebugFileTracerWrapper(FileTracer):</span>
+    <span class="s0">&quot;&quot;&quot;A debugging `FileTracer`.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, tracer, debug):</span>
+        <span class="s1">self.tracer = tracer</span>
+        <span class="s1">self.debug = debug</span>
+
+    <span class="s2">def </span><span class="s1">_show_frame(self, frame):</span>
+        <span class="s0">&quot;&quot;&quot;A short string identifying a frame, for debug messages.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s3">&quot;%s@%d&quot; </span><span class="s1">% (</span>
+            <span class="s1">os.path.basename(frame.f_code.co_filename),</span>
+            <span class="s1">frame.f_lineno,</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">source_filename(self):</span>
+        <span class="s1">sfilename = self.tracer.source_filename()</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;source_filename() --&gt; %r&quot; </span><span class="s1">% (sfilename,))</span>
+        <span class="s2">return </span><span class="s1">sfilename</span>
+
+    <span class="s2">def </span><span class="s1">has_dynamic_source_filename(self):</span>
+        <span class="s1">has = self.tracer.has_dynamic_source_filename()</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;has_dynamic_source_filename() --&gt; %r&quot; </span><span class="s1">% (has,))</span>
+        <span class="s2">return </span><span class="s1">has</span>
+
+    <span class="s2">def </span><span class="s1">dynamic_source_filename(self, filename, frame):</span>
+        <span class="s1">dyn = self.tracer.dynamic_source_filename(filename, frame)</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;dynamic_source_filename(%r, %s) --&gt; %r&quot; </span><span class="s1">% (</span>
+            <span class="s1">filename, self._show_frame(frame), dyn,</span>
+        <span class="s1">))</span>
+        <span class="s2">return </span><span class="s1">dyn</span>
+
+    <span class="s2">def </span><span class="s1">line_number_range(self, frame):</span>
+        <span class="s1">pair = self.tracer.line_number_range(frame)</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;line_number_range(%s) --&gt; %r&quot; </span><span class="s1">% (self._show_frame(frame), pair))</span>
+        <span class="s2">return </span><span class="s1">pair</span>
+
+
+<span class="s2">class </span><span class="s1">DebugFileReporterWrapper(FileReporter):</span>
+    <span class="s0">&quot;&quot;&quot;A debugging `FileReporter`.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, filename, reporter, debug):</span>
+        <span class="s1">super(DebugFileReporterWrapper, self).__init__(filename)</span>
+        <span class="s1">self.reporter = reporter</span>
+        <span class="s1">self.debug = debug</span>
+
+    <span class="s2">def </span><span class="s1">relative_filename(self):</span>
+        <span class="s1">ret = self.reporter.relative_filename()</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;relative_filename() --&gt; %r&quot; </span><span class="s1">% (ret,))</span>
+        <span class="s2">return </span><span class="s1">ret</span>
+
+    <span class="s2">def </span><span class="s1">lines(self):</span>
+        <span class="s1">ret = self.reporter.lines()</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;lines() --&gt; %r&quot; </span><span class="s1">% (ret,))</span>
+        <span class="s2">return </span><span class="s1">ret</span>
+
+    <span class="s2">def </span><span class="s1">excluded_lines(self):</span>
+        <span class="s1">ret = self.reporter.excluded_lines()</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;excluded_lines() --&gt; %r&quot; </span><span class="s1">% (ret,))</span>
+        <span class="s2">return </span><span class="s1">ret</span>
+
+    <span class="s2">def </span><span class="s1">translate_lines(self, lines):</span>
+        <span class="s1">ret = self.reporter.translate_lines(lines)</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;translate_lines(%r) --&gt; %r&quot; </span><span class="s1">% (lines, ret))</span>
+        <span class="s2">return </span><span class="s1">ret</span>
+
+    <span class="s2">def </span><span class="s1">translate_arcs(self, arcs):</span>
+        <span class="s1">ret = self.reporter.translate_arcs(arcs)</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;translate_arcs(%r) --&gt; %r&quot; </span><span class="s1">% (arcs, ret))</span>
+        <span class="s2">return </span><span class="s1">ret</span>
+
+    <span class="s2">def </span><span class="s1">no_branch_lines(self):</span>
+        <span class="s1">ret = self.reporter.no_branch_lines()</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;no_branch_lines() --&gt; %r&quot; </span><span class="s1">% (ret,))</span>
+        <span class="s2">return </span><span class="s1">ret</span>
+
+    <span class="s2">def </span><span class="s1">exit_counts(self):</span>
+        <span class="s1">ret = self.reporter.exit_counts()</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;exit_counts() --&gt; %r&quot; </span><span class="s1">% (ret,))</span>
+        <span class="s2">return </span><span class="s1">ret</span>
+
+    <span class="s2">def </span><span class="s1">arcs(self):</span>
+        <span class="s1">ret = self.reporter.arcs()</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;arcs() --&gt; %r&quot; </span><span class="s1">% (ret,))</span>
+        <span class="s2">return </span><span class="s1">ret</span>
+
+    <span class="s2">def </span><span class="s1">source(self):</span>
+        <span class="s1">ret = self.reporter.source()</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;source() --&gt; %d chars&quot; </span><span class="s1">% (len(ret),))</span>
+        <span class="s2">return </span><span class="s1">ret</span>
+
+    <span class="s2">def </span><span class="s1">source_token_lines(self):</span>
+        <span class="s1">ret = list(self.reporter.source_token_lines())</span>
+        <span class="s1">self.debug.write(</span><span class="s3">&quot;source_token_lines() --&gt; %d tokens&quot; </span><span class="s1">% (len(ret),))</span>
+        <span class="s2">return </span><span class="s1">ret</span>
+</pre>
+</body>
+</html>

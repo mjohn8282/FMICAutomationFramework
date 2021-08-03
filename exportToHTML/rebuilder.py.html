@@ -1,0 +1,1031 @@
+<html>
+<head>
+<title>rebuilder.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+rebuilder.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2009-2014 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2013-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2013-2014 Google, Inc.</span>
+<span class="s0"># Copyright (c) 2014 Alexander Presnyakov &lt;flagist0@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Eevee (Alex Munroe) &lt;amunroe@yelp.com&gt;</span>
+<span class="s0"># Copyright (c) 2015-2016 Ceridwen &lt;ceridwenv@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016-2017 Derek Gustafson &lt;degustaf@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Jared Garst &lt;jgarst@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Hugo &lt;hugovk@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Łukasz Rogalski &lt;rogalski.91@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 rr- &lt;rr-@sakuya.pl&gt;</span>
+<span class="s0"># Copyright (c) 2018-2019 Ville Skyttä &lt;ville.skytta@iki.fi&gt;</span>
+<span class="s0"># Copyright (c) 2018 Tomas Gavenciak &lt;gavento@ucw.cz&gt;</span>
+<span class="s0"># Copyright (c) 2018 Serhiy Storchaka &lt;storchaka@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Nick Drozd &lt;nicholasdrozd@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Bryce Guinta &lt;bryce.paul.guinta@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019-2021 Ashley Whetter &lt;ashley@awhetter.co.uk&gt;</span>
+<span class="s0"># Copyright (c) 2019 Hugo van Kemenade &lt;hugovk@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Zbigniew Jędrzejewski-Szmek &lt;zbyszek@in.waw.pl&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;this module contains utilities for rebuilding an _ast tree in 
+order to get a single Astroid representation 
+&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">Optional</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">nodes</span>
+<span class="s2">from </span><span class="s1">astroid._ast </span><span class="s2">import </span><span class="s1">ParserModule, get_parser_module, parse_function_type_comment</span>
+
+<span class="s1">CONST_NAME_TRANSFORMS = {</span><span class="s3">&quot;None&quot;</span><span class="s1">: </span><span class="s2">None</span><span class="s1">, </span><span class="s3">&quot;True&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">, </span><span class="s3">&quot;False&quot;</span><span class="s1">: </span><span class="s2">False</span><span class="s1">}</span>
+
+<span class="s1">REDIRECT = {</span>
+    <span class="s3">&quot;arguments&quot;</span><span class="s1">: </span><span class="s3">&quot;Arguments&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;comprehension&quot;</span><span class="s1">: </span><span class="s3">&quot;Comprehension&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;ListCompFor&quot;</span><span class="s1">: </span><span class="s3">&quot;Comprehension&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;GenExprFor&quot;</span><span class="s1">: </span><span class="s3">&quot;Comprehension&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;excepthandler&quot;</span><span class="s1">: </span><span class="s3">&quot;ExceptHandler&quot;</span><span class="s1">,</span>
+    <span class="s3">&quot;keyword&quot;</span><span class="s1">: </span><span class="s3">&quot;Keyword&quot;</span><span class="s1">,</span>
+<span class="s1">}</span>
+<span class="s1">PY37 = sys.version_info &gt;= (</span><span class="s4">3</span><span class="s1">, </span><span class="s4">7</span><span class="s1">)</span>
+<span class="s1">PY38 = sys.version_info &gt;= (</span><span class="s4">3</span><span class="s1">, </span><span class="s4">8</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_visit_or_none(node, attr, visitor, parent, visit=</span><span class="s3">&quot;visit&quot;</span><span class="s1">, **kws):</span>
+    <span class="s0">&quot;&quot;&quot;If the given node has an attribute, visits the attribute, and 
+    otherwise returns None. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">value = getattr(node, attr, </span><span class="s2">None</span><span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">value:</span>
+        <span class="s2">return </span><span class="s1">getattr(visitor, visit)(value, parent, **kws)</span>
+
+    <span class="s2">return None</span>
+
+
+<span class="s2">class </span><span class="s1">TreeRebuilder:</span>
+    <span class="s0">&quot;&quot;&quot;Rebuilds the _ast tree to become an Astroid tree&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, manager, parser_module: Optional[ParserModule] = </span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">self._manager = manager</span>
+        <span class="s1">self._global_names = []</span>
+        <span class="s1">self._import_from_nodes = []</span>
+        <span class="s1">self._delayed_assattr = []</span>
+        <span class="s1">self._visit_meths = {}</span>
+
+        <span class="s2">if </span><span class="s1">parser_module </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">self._parser_module = get_parser_module()</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self._parser_module = parser_module</span>
+        <span class="s1">self._module = self._parser_module.module</span>
+
+    <span class="s2">def </span><span class="s1">_get_doc(self, node):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">PY37 </span><span class="s2">and </span><span class="s1">hasattr(node, </span><span class="s3">&quot;docstring&quot;</span><span class="s1">):</span>
+                <span class="s1">doc = node.docstring</span>
+                <span class="s2">return </span><span class="s1">node, doc</span>
+            <span class="s2">if </span><span class="s1">node.body </span><span class="s2">and </span><span class="s1">isinstance(node.body[</span><span class="s4">0</span><span class="s1">], self._module.Expr):</span>
+
+                <span class="s1">first_value = node.body[</span><span class="s4">0</span><span class="s1">].value</span>
+                <span class="s2">if </span><span class="s1">isinstance(first_value, self._module.Str) </span><span class="s2">or </span><span class="s1">(</span>
+                    <span class="s1">PY38</span>
+                    <span class="s2">and </span><span class="s1">isinstance(first_value, self._module.Constant)</span>
+                    <span class="s2">and </span><span class="s1">isinstance(first_value.value, str)</span>
+                <span class="s1">):</span>
+                    <span class="s1">doc = first_value.value </span><span class="s2">if </span><span class="s1">PY38 </span><span class="s2">else </span><span class="s1">first_value.s</span>
+                    <span class="s1">node.body = node.body[</span><span class="s4">1</span><span class="s1">:]</span>
+                    <span class="s2">return </span><span class="s1">node, doc</span>
+        <span class="s2">except </span><span class="s1">IndexError:</span>
+            <span class="s2">pass  </span><span class="s0"># ast built from scratch</span>
+        <span class="s2">return </span><span class="s1">node, </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">_get_context(self, node):</span>
+        <span class="s2">return </span><span class="s1">self._parser_module.context_classes.get(type(node.ctx), astroid.Load)</span>
+
+    <span class="s2">def </span><span class="s1">visit_module(self, node, modname, modpath, package):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Module node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">node, doc = self._get_doc(node)</span>
+        <span class="s1">newnode = nodes.Module(</span>
+            <span class="s1">name=modname,</span>
+            <span class="s1">doc=doc,</span>
+            <span class="s1">file=modpath,</span>
+            <span class="s1">path=[modpath],</span>
+            <span class="s1">package=package,</span>
+            <span class="s1">parent=</span><span class="s2">None</span><span class="s1">,</span>
+        <span class="s1">)</span>
+        <span class="s1">newnode.postinit([self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.body])</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit(self, node, parent):</span>
+        <span class="s1">cls = node.__class__</span>
+        <span class="s2">if </span><span class="s1">cls </span><span class="s2">in </span><span class="s1">self._visit_meths:</span>
+            <span class="s1">visit_method = self._visit_meths[cls]</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">cls_name = cls.__name__</span>
+            <span class="s1">visit_name = </span><span class="s3">&quot;visit_&quot; </span><span class="s1">+ REDIRECT.get(cls_name, cls_name).lower()</span>
+            <span class="s1">visit_method = getattr(self, visit_name)</span>
+            <span class="s1">self._visit_meths[cls] = visit_method</span>
+        <span class="s2">return </span><span class="s1">visit_method(node, parent)</span>
+
+    <span class="s2">def </span><span class="s1">_save_assignment(self, node, name=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;save assignement situation since node.parent is not available yet&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self._global_names </span><span class="s2">and </span><span class="s1">node.name </span><span class="s2">in </span><span class="s1">self._global_names[-</span><span class="s4">1</span><span class="s1">]:</span>
+            <span class="s1">node.root().set_local(node.name, node)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">node.parent.set_local(node.name, node)</span>
+
+    <span class="s2">def </span><span class="s1">visit_arg(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit an arg node by returning a fresh AssName instance&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.visit_assignname(node, parent, node.arg)</span>
+
+    <span class="s2">def </span><span class="s1">visit_arguments(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit an Arguments node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">vararg, kwarg = node.vararg, node.kwarg</span>
+        <span class="s1">newnode = nodes.Arguments(</span>
+            <span class="s1">vararg.arg </span><span class="s2">if </span><span class="s1">vararg </span><span class="s2">else None</span><span class="s1">, kwarg.arg </span><span class="s2">if </span><span class="s1">kwarg </span><span class="s2">else None</span><span class="s1">, parent</span>
+        <span class="s1">)</span>
+        <span class="s1">args = [self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.args]</span>
+        <span class="s1">defaults = [self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.defaults]</span>
+        <span class="s1">varargannotation = </span><span class="s2">None</span>
+        <span class="s1">kwargannotation = </span><span class="s2">None</span>
+        <span class="s1">posonlyargs = []</span>
+        <span class="s0"># change added in 82732 (7c5c678e4164), vararg and kwarg</span>
+        <span class="s0"># are instances of `_ast.arg`, not strings</span>
+        <span class="s2">if </span><span class="s1">vararg:</span>
+            <span class="s2">if </span><span class="s1">node.vararg.annotation:</span>
+                <span class="s1">varargannotation = self.visit(node.vararg.annotation, newnode)</span>
+            <span class="s1">vararg = vararg.arg</span>
+        <span class="s2">if </span><span class="s1">kwarg:</span>
+            <span class="s2">if </span><span class="s1">node.kwarg.annotation:</span>
+                <span class="s1">kwargannotation = self.visit(node.kwarg.annotation, newnode)</span>
+            <span class="s1">kwarg = kwarg.arg</span>
+        <span class="s1">kwonlyargs = [self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.kwonlyargs]</span>
+        <span class="s1">kw_defaults = [</span>
+            <span class="s1">self.visit(child, newnode) </span><span class="s2">if </span><span class="s1">child </span><span class="s2">else None for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.kw_defaults</span>
+        <span class="s1">]</span>
+        <span class="s1">annotations = [</span>
+            <span class="s1">self.visit(arg.annotation, newnode) </span><span class="s2">if </span><span class="s1">arg.annotation </span><span class="s2">else None</span>
+            <span class="s2">for </span><span class="s1">arg </span><span class="s2">in </span><span class="s1">node.args</span>
+        <span class="s1">]</span>
+        <span class="s1">kwonlyargs_annotations = [</span>
+            <span class="s1">self.visit(arg.annotation, newnode) </span><span class="s2">if </span><span class="s1">arg.annotation </span><span class="s2">else None</span>
+            <span class="s2">for </span><span class="s1">arg </span><span class="s2">in </span><span class="s1">node.kwonlyargs</span>
+        <span class="s1">]</span>
+
+        <span class="s1">posonlyargs_annotations = []</span>
+        <span class="s2">if </span><span class="s1">PY38:</span>
+            <span class="s1">posonlyargs = [self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.posonlyargs]</span>
+            <span class="s1">posonlyargs_annotations = [</span>
+                <span class="s1">self.visit(arg.annotation, newnode) </span><span class="s2">if </span><span class="s1">arg.annotation </span><span class="s2">else None</span>
+                <span class="s2">for </span><span class="s1">arg </span><span class="s2">in </span><span class="s1">node.posonlyargs</span>
+            <span class="s1">]</span>
+        <span class="s1">type_comment_args = [</span>
+            <span class="s1">self.check_type_comment(child, parent=newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.args</span>
+        <span class="s1">]</span>
+        <span class="s1">type_comment_kwonlyargs = [</span>
+            <span class="s1">self.check_type_comment(child, parent=newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.kwonlyargs</span>
+        <span class="s1">]</span>
+        <span class="s1">type_comment_posonlyargs = []</span>
+        <span class="s2">if </span><span class="s1">PY38:</span>
+            <span class="s1">type_comment_posonlyargs = [</span>
+                <span class="s1">self.check_type_comment(child, parent=newnode)</span>
+                <span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.posonlyargs</span>
+            <span class="s1">]</span>
+
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">args=args,</span>
+            <span class="s1">defaults=defaults,</span>
+            <span class="s1">kwonlyargs=kwonlyargs,</span>
+            <span class="s1">posonlyargs=posonlyargs,</span>
+            <span class="s1">kw_defaults=kw_defaults,</span>
+            <span class="s1">annotations=annotations,</span>
+            <span class="s1">kwonlyargs_annotations=kwonlyargs_annotations,</span>
+            <span class="s1">posonlyargs_annotations=posonlyargs_annotations,</span>
+            <span class="s1">varargannotation=varargannotation,</span>
+            <span class="s1">kwargannotation=kwargannotation,</span>
+            <span class="s1">type_comment_args=type_comment_args,</span>
+            <span class="s1">type_comment_kwonlyargs=type_comment_kwonlyargs,</span>
+            <span class="s1">type_comment_posonlyargs=type_comment_posonlyargs,</span>
+        <span class="s1">)</span>
+        <span class="s0"># save argument names in locals:</span>
+        <span class="s2">if </span><span class="s1">vararg:</span>
+            <span class="s1">newnode.parent.set_local(vararg, newnode)</span>
+        <span class="s2">if </span><span class="s1">kwarg:</span>
+            <span class="s1">newnode.parent.set_local(kwarg, newnode)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_assert(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Assert node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Assert(node.lineno, node.col_offset, parent)</span>
+        <span class="s2">if </span><span class="s1">node.msg:</span>
+            <span class="s1">msg = self.visit(node.msg, newnode)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">msg = </span><span class="s2">None</span>
+        <span class="s1">newnode.postinit(self.visit(node.test, newnode), msg)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">check_type_comment(self, node, parent):</span>
+        <span class="s1">type_comment = getattr(node, </span><span class="s3">&quot;type_comment&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s2">if not </span><span class="s1">type_comment:</span>
+            <span class="s2">return None</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">type_comment_ast = self._parser_module.parse(type_comment)</span>
+        <span class="s2">except </span><span class="s1">SyntaxError:</span>
+            <span class="s0"># Invalid type comment, just skip it.</span>
+            <span class="s2">return None</span>
+
+        <span class="s1">type_object = self.visit(type_comment_ast.body[</span><span class="s4">0</span><span class="s1">], parent=parent)</span>
+        <span class="s2">if not </span><span class="s1">isinstance(type_object, nodes.Expr):</span>
+            <span class="s2">return None</span>
+
+        <span class="s2">return </span><span class="s1">type_object.value</span>
+
+    <span class="s2">def </span><span class="s1">check_function_type_comment(self, node, parent):</span>
+        <span class="s1">type_comment = getattr(node, </span><span class="s3">&quot;type_comment&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s2">if not </span><span class="s1">type_comment:</span>
+            <span class="s2">return None</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">type_comment_ast = parse_function_type_comment(type_comment)</span>
+        <span class="s2">except </span><span class="s1">SyntaxError:</span>
+            <span class="s0"># Invalid type comment, just skip it.</span>
+            <span class="s2">return None</span>
+
+        <span class="s1">returns = </span><span class="s2">None</span>
+        <span class="s1">argtypes = [</span>
+            <span class="s1">self.visit(elem, parent) </span><span class="s2">for </span><span class="s1">elem </span><span class="s2">in </span><span class="s1">(type_comment_ast.argtypes </span><span class="s2">or </span><span class="s1">[])</span>
+        <span class="s1">]</span>
+        <span class="s2">if </span><span class="s1">type_comment_ast.returns:</span>
+            <span class="s1">returns = self.visit(type_comment_ast.returns, parent)</span>
+
+        <span class="s2">return </span><span class="s1">returns, argtypes</span>
+
+    <span class="s0"># Async structs added in Python 3.5</span>
+    <span class="s2">def </span><span class="s1">visit_asyncfunctiondef(self, node, parent):</span>
+        <span class="s2">return </span><span class="s1">self._visit_functiondef(nodes.AsyncFunctionDef, node, parent)</span>
+
+    <span class="s2">def </span><span class="s1">visit_asyncfor(self, node, parent):</span>
+        <span class="s2">return </span><span class="s1">self._visit_for(nodes.AsyncFor, node, parent)</span>
+
+    <span class="s2">def </span><span class="s1">visit_await(self, node, parent):</span>
+        <span class="s1">newnode = nodes.Await(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(value=self.visit(node.value, newnode))</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_asyncwith(self, node, parent):</span>
+        <span class="s2">return </span><span class="s1">self._visit_with(nodes.AsyncWith, node, parent)</span>
+
+    <span class="s2">def </span><span class="s1">visit_assign(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Assign node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Assign(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">type_annotation = self.check_type_comment(node, parent=newnode)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">targets=[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.targets],</span>
+            <span class="s1">value=self.visit(node.value, newnode),</span>
+            <span class="s1">type_annotation=type_annotation,</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_annassign(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit an AnnAssign node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.AnnAssign(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">annotation = _visit_or_none(node, </span><span class="s3">&quot;annotation&quot;</span><span class="s1">, self, newnode)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">target=self.visit(node.target, newnode),</span>
+            <span class="s1">annotation=annotation,</span>
+            <span class="s1">simple=node.simple,</span>
+            <span class="s1">value=_visit_or_none(node, </span><span class="s3">&quot;value&quot;</span><span class="s1">, self, newnode),</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_assignname(self, node, parent, node_name=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;visit a node and return a AssignName node&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.AssignName(</span>
+            <span class="s1">node_name,</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;lineno&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;col_offset&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">parent,</span>
+        <span class="s1">)</span>
+        <span class="s1">self._save_assignment(newnode)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_augassign(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a AugAssign node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.AugAssign(</span>
+            <span class="s1">self._parser_module.bin_op_classes[type(node.op)] + </span><span class="s3">&quot;=&quot;</span><span class="s1">,</span>
+            <span class="s1">node.lineno,</span>
+            <span class="s1">node.col_offset,</span>
+            <span class="s1">parent,</span>
+        <span class="s1">)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">self.visit(node.target, newnode), self.visit(node.value, newnode)</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_repr(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Backquote node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Repr(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(self.visit(node.value, newnode))</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_binop(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a BinOp node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.BinOp(</span>
+            <span class="s1">self._parser_module.bin_op_classes[type(node.op)],</span>
+            <span class="s1">node.lineno,</span>
+            <span class="s1">node.col_offset,</span>
+            <span class="s1">parent,</span>
+        <span class="s1">)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">self.visit(node.left, newnode), self.visit(node.right, newnode)</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_boolop(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a BoolOp node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.BoolOp(</span>
+            <span class="s1">self._parser_module.bool_op_classes[type(node.op)],</span>
+            <span class="s1">node.lineno,</span>
+            <span class="s1">node.col_offset,</span>
+            <span class="s1">parent,</span>
+        <span class="s1">)</span>
+        <span class="s1">newnode.postinit([self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.values])</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_break(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Break node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">nodes.Break(</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;lineno&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">), getattr(node, </span><span class="s3">&quot;col_offset&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">), parent</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">visit_call(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a CallFunc node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Call(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">starargs = _visit_or_none(node, </span><span class="s3">&quot;starargs&quot;</span><span class="s1">, self, newnode)</span>
+        <span class="s1">kwargs = _visit_or_none(node, </span><span class="s3">&quot;kwargs&quot;</span><span class="s1">, self, newnode)</span>
+        <span class="s1">args = [self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.args]</span>
+
+        <span class="s2">if </span><span class="s1">node.keywords:</span>
+            <span class="s1">keywords = [self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.keywords]</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">keywords = </span><span class="s2">None</span>
+        <span class="s2">if </span><span class="s1">starargs:</span>
+            <span class="s1">new_starargs = nodes.Starred(</span>
+                <span class="s1">col_offset=starargs.col_offset,</span>
+                <span class="s1">lineno=starargs.lineno,</span>
+                <span class="s1">parent=starargs.parent,</span>
+            <span class="s1">)</span>
+            <span class="s1">new_starargs.postinit(value=starargs)</span>
+            <span class="s1">args.append(new_starargs)</span>
+        <span class="s2">if </span><span class="s1">kwargs:</span>
+            <span class="s1">new_kwargs = nodes.Keyword(</span>
+                <span class="s1">arg=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">col_offset=kwargs.col_offset,</span>
+                <span class="s1">lineno=kwargs.lineno,</span>
+                <span class="s1">parent=kwargs.parent,</span>
+            <span class="s1">)</span>
+            <span class="s1">new_kwargs.postinit(value=kwargs)</span>
+            <span class="s2">if </span><span class="s1">keywords:</span>
+                <span class="s1">keywords.append(new_kwargs)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">keywords = [new_kwargs]</span>
+
+        <span class="s1">newnode.postinit(self.visit(node.func, newnode), args, keywords)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_classdef(self, node, parent, newstyle=</span><span class="s2">True</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;visit a ClassDef node to become astroid&quot;&quot;&quot;</span>
+        <span class="s1">node, doc = self._get_doc(node)</span>
+        <span class="s1">newnode = nodes.ClassDef(node.name, doc, node.lineno, node.col_offset, parent)</span>
+        <span class="s1">metaclass = </span><span class="s2">None</span>
+        <span class="s2">for </span><span class="s1">keyword </span><span class="s2">in </span><span class="s1">node.keywords:</span>
+            <span class="s2">if </span><span class="s1">keyword.arg == </span><span class="s3">&quot;metaclass&quot;</span><span class="s1">:</span>
+                <span class="s1">metaclass = self.visit(keyword, newnode).value</span>
+                <span class="s2">break</span>
+        <span class="s2">if </span><span class="s1">node.decorator_list:</span>
+            <span class="s1">decorators = self.visit_decorators(node, newnode)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">decorators = </span><span class="s2">None</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.bases],</span>
+            <span class="s1">[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.body],</span>
+            <span class="s1">decorators,</span>
+            <span class="s1">newstyle,</span>
+            <span class="s1">metaclass,</span>
+            <span class="s1">[</span>
+                <span class="s1">self.visit(kwd, newnode)</span>
+                <span class="s2">for </span><span class="s1">kwd </span><span class="s2">in </span><span class="s1">node.keywords</span>
+                <span class="s2">if </span><span class="s1">kwd.arg != </span><span class="s3">&quot;metaclass&quot;</span>
+            <span class="s1">],</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_const(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Const node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">nodes.Const(</span>
+            <span class="s1">node.value,</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;lineno&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;col_offset&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">parent,</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">visit_continue(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Continue node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">nodes.Continue(</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;lineno&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">), getattr(node, </span><span class="s3">&quot;col_offset&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">), parent</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">visit_compare(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Compare node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Compare(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">self.visit(node.left, newnode),</span>
+            <span class="s1">[</span>
+                <span class="s1">(</span>
+                    <span class="s1">self._parser_module.cmp_op_classes[op.__class__],</span>
+                    <span class="s1">self.visit(expr, newnode),</span>
+                <span class="s1">)</span>
+                <span class="s2">for </span><span class="s1">(op, expr) </span><span class="s2">in </span><span class="s1">zip(node.ops, node.comparators)</span>
+            <span class="s1">],</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_comprehension(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Comprehension node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Comprehension(parent)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">self.visit(node.target, newnode),</span>
+            <span class="s1">self.visit(node.iter, newnode),</span>
+            <span class="s1">[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.ifs],</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;is_async&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_decorators(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Decorators node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s0"># /!\ node is actually an _ast.FunctionDef node while</span>
+        <span class="s0"># parent is an astroid.nodes.FunctionDef node</span>
+        <span class="s2">if </span><span class="s1">PY38:</span>
+            <span class="s0"># Set the line number of the first decorator for Python 3.8+.</span>
+            <span class="s1">lineno = node.decorator_list[</span><span class="s4">0</span><span class="s1">].lineno</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">lineno = node.lineno</span>
+        <span class="s1">newnode = nodes.Decorators(lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit([self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.decorator_list])</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_delete(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Delete node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Delete(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit([self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.targets])</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">_visit_dict_items(self, node, parent, newnode):</span>
+        <span class="s2">for </span><span class="s1">key, value </span><span class="s2">in </span><span class="s1">zip(node.keys, node.values):</span>
+            <span class="s1">rebuilt_value = self.visit(value, newnode)</span>
+            <span class="s2">if not </span><span class="s1">key:</span>
+                <span class="s0"># Python 3.5 and extended unpacking</span>
+                <span class="s1">rebuilt_key = nodes.DictUnpack(</span>
+                    <span class="s1">rebuilt_value.lineno, rebuilt_value.col_offset, parent</span>
+                <span class="s1">)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">rebuilt_key = self.visit(key, newnode)</span>
+            <span class="s2">yield </span><span class="s1">rebuilt_key, rebuilt_value</span>
+
+    <span class="s2">def </span><span class="s1">visit_dict(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Dict node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Dict(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">items = list(self._visit_dict_items(node, parent, newnode))</span>
+        <span class="s1">newnode.postinit(items)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_dictcomp(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a DictComp node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.DictComp(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">self.visit(node.key, newnode),</span>
+            <span class="s1">self.visit(node.value, newnode),</span>
+            <span class="s1">[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.generators],</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_expr(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Expr node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Expr(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(self.visit(node.value, newnode))</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s0"># Not used in Python 3.8+.</span>
+    <span class="s2">def </span><span class="s1">visit_ellipsis(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit an Ellipsis node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">nodes.Ellipsis(</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;lineno&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">), getattr(node, </span><span class="s3">&quot;col_offset&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">), parent</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">visit_emptynode(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit an EmptyNode node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">nodes.EmptyNode(</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;lineno&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">), getattr(node, </span><span class="s3">&quot;col_offset&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">), parent</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">visit_excepthandler(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit an ExceptHandler node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.ExceptHandler(node.lineno, node.col_offset, parent)</span>
+        <span class="s2">if </span><span class="s1">node.name:</span>
+            <span class="s1">name = self.visit_assignname(node, newnode, node.name)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">name = </span><span class="s2">None</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">_visit_or_none(node, </span><span class="s3">&quot;type&quot;</span><span class="s1">, self, newnode),</span>
+            <span class="s1">name,</span>
+            <span class="s1">[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.body],</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_exec(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit an Exec node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Exec(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">self.visit(node.body, newnode),</span>
+            <span class="s1">_visit_or_none(node, </span><span class="s3">&quot;globals&quot;</span><span class="s1">, self, newnode),</span>
+            <span class="s1">_visit_or_none(node, </span><span class="s3">&quot;locals&quot;</span><span class="s1">, self, newnode),</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s0"># Not used in Python 3.8+.</span>
+    <span class="s2">def </span><span class="s1">visit_extslice(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit an ExtSlice node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.ExtSlice(parent=parent)</span>
+        <span class="s1">newnode.postinit([self.visit(dim, newnode) </span><span class="s2">for </span><span class="s1">dim </span><span class="s2">in </span><span class="s1">node.dims])</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">_visit_for(self, cls, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a For node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = cls(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">type_annotation = self.check_type_comment(node, parent=newnode)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">target=self.visit(node.target, newnode),</span>
+            <span class="s1">iter=self.visit(node.iter, newnode),</span>
+            <span class="s1">body=[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.body],</span>
+            <span class="s1">orelse=[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.orelse],</span>
+            <span class="s1">type_annotation=type_annotation,</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_for(self, node, parent):</span>
+        <span class="s2">return </span><span class="s1">self._visit_for(nodes.For, node, parent)</span>
+
+    <span class="s2">def </span><span class="s1">visit_importfrom(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit an ImportFrom node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">names = [(alias.name, alias.asname) </span><span class="s2">for </span><span class="s1">alias </span><span class="s2">in </span><span class="s1">node.names]</span>
+        <span class="s1">newnode = nodes.ImportFrom(</span>
+            <span class="s1">node.module </span><span class="s2">or </span><span class="s3">&quot;&quot;</span><span class="s1">,</span>
+            <span class="s1">names,</span>
+            <span class="s1">node.level </span><span class="s2">or None</span><span class="s1">,</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;lineno&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;col_offset&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">parent,</span>
+        <span class="s1">)</span>
+        <span class="s0"># store From names to add them to locals after building</span>
+        <span class="s1">self._import_from_nodes.append(newnode)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">_visit_functiondef(self, cls, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit an FunctionDef node to become astroid&quot;&quot;&quot;</span>
+        <span class="s1">self._global_names.append({})</span>
+        <span class="s1">node, doc = self._get_doc(node)</span>
+
+        <span class="s1">lineno = node.lineno</span>
+        <span class="s2">if </span><span class="s1">PY38 </span><span class="s2">and </span><span class="s1">node.decorator_list:</span>
+            <span class="s0"># Python 3.8 sets the line number of a decorated function</span>
+            <span class="s0"># to be the actual line number of the function, but the</span>
+            <span class="s0"># previous versions expected the decorator's line number instead.</span>
+            <span class="s0"># We reset the function's line number to that of the</span>
+            <span class="s0"># first decorator to maintain backward compatibility.</span>
+            <span class="s0"># It's not ideal but this discrepancy was baked into</span>
+            <span class="s0"># the framework for *years*.</span>
+            <span class="s1">lineno = node.decorator_list[</span><span class="s4">0</span><span class="s1">].lineno</span>
+
+        <span class="s1">newnode = cls(node.name, doc, lineno, node.col_offset, parent)</span>
+        <span class="s2">if </span><span class="s1">node.decorator_list:</span>
+            <span class="s1">decorators = self.visit_decorators(node, newnode)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">decorators = </span><span class="s2">None</span>
+        <span class="s2">if </span><span class="s1">node.returns:</span>
+            <span class="s1">returns = self.visit(node.returns, newnode)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">returns = </span><span class="s2">None</span>
+
+        <span class="s1">type_comment_args = type_comment_returns = </span><span class="s2">None</span>
+        <span class="s1">type_comment_annotation = self.check_function_type_comment(node, newnode)</span>
+        <span class="s2">if </span><span class="s1">type_comment_annotation:</span>
+            <span class="s1">type_comment_returns, type_comment_args = type_comment_annotation</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">args=self.visit(node.args, newnode),</span>
+            <span class="s1">body=[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.body],</span>
+            <span class="s1">decorators=decorators,</span>
+            <span class="s1">returns=returns,</span>
+            <span class="s1">type_comment_returns=type_comment_returns,</span>
+            <span class="s1">type_comment_args=type_comment_args,</span>
+        <span class="s1">)</span>
+        <span class="s1">self._global_names.pop()</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_functiondef(self, node, parent):</span>
+        <span class="s2">return </span><span class="s1">self._visit_functiondef(nodes.FunctionDef, node, parent)</span>
+
+    <span class="s2">def </span><span class="s1">visit_generatorexp(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a GeneratorExp node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.GeneratorExp(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">self.visit(node.elt, newnode),</span>
+            <span class="s1">[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.generators],</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_attribute(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit an Attribute node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">context = self._get_context(node)</span>
+        <span class="s2">if </span><span class="s1">context == astroid.Del:</span>
+            <span class="s0"># FIXME : maybe we should reintroduce and visit_delattr ?</span>
+            <span class="s0"># for instance, deactivating assign_ctx</span>
+            <span class="s1">newnode = nodes.DelAttr(node.attr, node.lineno, node.col_offset, parent)</span>
+        <span class="s2">elif </span><span class="s1">context == astroid.Store:</span>
+            <span class="s1">newnode = nodes.AssignAttr(node.attr, node.lineno, node.col_offset, parent)</span>
+            <span class="s0"># Prohibit a local save if we are in an ExceptHandler.</span>
+            <span class="s2">if not </span><span class="s1">isinstance(parent, astroid.ExceptHandler):</span>
+                <span class="s1">self._delayed_assattr.append(newnode)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">newnode = nodes.Attribute(node.attr, node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(self.visit(node.value, newnode))</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_global(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Global node to become astroid&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Global(</span>
+            <span class="s1">node.names,</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;lineno&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;col_offset&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">parent,</span>
+        <span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">self._global_names:  </span><span class="s0"># global at the module level, no effect</span>
+            <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">node.names:</span>
+                <span class="s1">self._global_names[-</span><span class="s4">1</span><span class="s1">].setdefault(name, []).append(newnode)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_if(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit an If node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.If(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">self.visit(node.test, newnode),</span>
+            <span class="s1">[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.body],</span>
+            <span class="s1">[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.orelse],</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_ifexp(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a IfExp node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.IfExp(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">self.visit(node.test, newnode),</span>
+            <span class="s1">self.visit(node.body, newnode),</span>
+            <span class="s1">self.visit(node.orelse, newnode),</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_import(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Import node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">names = [(alias.name, alias.asname) </span><span class="s2">for </span><span class="s1">alias </span><span class="s2">in </span><span class="s1">node.names]</span>
+        <span class="s1">newnode = nodes.Import(</span>
+            <span class="s1">names,</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;lineno&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;col_offset&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">parent,</span>
+        <span class="s1">)</span>
+        <span class="s0"># save import names in parent's locals:</span>
+        <span class="s2">for </span><span class="s1">(name, asname) </span><span class="s2">in </span><span class="s1">newnode.names:</span>
+            <span class="s1">name = asname </span><span class="s2">or </span><span class="s1">name</span>
+            <span class="s1">parent.set_local(name.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">], newnode)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_joinedstr(self, node, parent):</span>
+        <span class="s1">newnode = nodes.JoinedStr(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit([self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.values])</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_formattedvalue(self, node, parent):</span>
+        <span class="s1">newnode = nodes.FormattedValue(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">self.visit(node.value, newnode),</span>
+            <span class="s1">node.conversion,</span>
+            <span class="s1">_visit_or_none(node, </span><span class="s3">&quot;format_spec&quot;</span><span class="s1">, self, newnode),</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_namedexpr(self, node, parent):</span>
+        <span class="s1">newnode = nodes.NamedExpr(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">self.visit(node.target, newnode), self.visit(node.value, newnode)</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s0"># Not used in Python 3.8+.</span>
+    <span class="s2">def </span><span class="s1">visit_index(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Index node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Index(parent=parent)</span>
+        <span class="s1">newnode.postinit(self.visit(node.value, newnode))</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_keyword(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Keyword node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Keyword(node.arg, parent=parent)</span>
+        <span class="s1">newnode.postinit(self.visit(node.value, newnode))</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_lambda(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Lambda node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Lambda(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(self.visit(node.args, newnode), self.visit(node.body, newnode))</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_list(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a List node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">context = self._get_context(node)</span>
+        <span class="s1">newnode = nodes.List(</span>
+            <span class="s1">ctx=context, lineno=node.lineno, col_offset=node.col_offset, parent=parent</span>
+        <span class="s1">)</span>
+        <span class="s1">newnode.postinit([self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.elts])</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_listcomp(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a ListComp node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.ListComp(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">self.visit(node.elt, newnode),</span>
+            <span class="s1">[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.generators],</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_name(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Name node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">context = self._get_context(node)</span>
+        <span class="s0"># True and False can be assigned to something in py2x, so we have to</span>
+        <span class="s0"># check first the context.</span>
+        <span class="s2">if </span><span class="s1">context == astroid.Del:</span>
+            <span class="s1">newnode = nodes.DelName(node.id, node.lineno, node.col_offset, parent)</span>
+        <span class="s2">elif </span><span class="s1">context == astroid.Store:</span>
+            <span class="s1">newnode = nodes.AssignName(node.id, node.lineno, node.col_offset, parent)</span>
+        <span class="s2">elif </span><span class="s1">node.id </span><span class="s2">in </span><span class="s1">CONST_NAME_TRANSFORMS:</span>
+            <span class="s1">newnode = nodes.Const(</span>
+                <span class="s1">CONST_NAME_TRANSFORMS[node.id],</span>
+                <span class="s1">getattr(node, </span><span class="s3">&quot;lineno&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+                <span class="s1">getattr(node, </span><span class="s3">&quot;col_offset&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+                <span class="s1">parent,</span>
+            <span class="s1">)</span>
+            <span class="s2">return </span><span class="s1">newnode</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">newnode = nodes.Name(node.id, node.lineno, node.col_offset, parent)</span>
+        <span class="s0"># XXX REMOVE me :</span>
+        <span class="s2">if </span><span class="s1">context </span><span class="s2">in </span><span class="s1">(astroid.Del, astroid.Store):  </span><span class="s0"># 'Aug' ??</span>
+            <span class="s1">self._save_assignment(newnode)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s0"># Not used in Python 3.8+.</span>
+    <span class="s2">def </span><span class="s1">visit_nameconstant(self, node, parent):</span>
+        <span class="s0"># in Python 3.4 we have NameConstant for True / False / None</span>
+        <span class="s2">return </span><span class="s1">nodes.Const(</span>
+            <span class="s1">node.value,</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;lineno&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;col_offset&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">parent,</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">visit_nonlocal(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Nonlocal node and return a new instance of it&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">nodes.Nonlocal(</span>
+            <span class="s1">node.names,</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;lineno&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;col_offset&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">parent,</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">visit_constant(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Constant node by returning a fresh instance of Const&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">nodes.Const(</span>
+            <span class="s1">node.value,</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;lineno&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;col_offset&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">parent,</span>
+        <span class="s1">)</span>
+
+    <span class="s0"># Not used in Python 3.8+.</span>
+    <span class="s2">def </span><span class="s1">visit_str(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a String/Bytes node by returning a fresh instance of Const&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">nodes.Const(</span>
+            <span class="s1">node.s,</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;lineno&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;col_offset&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">parent,</span>
+        <span class="s1">)</span>
+
+    <span class="s1">visit_bytes = visit_str</span>
+
+    <span class="s0"># Not used in Python 3.8+.</span>
+    <span class="s2">def </span><span class="s1">visit_num(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Num node by returning a fresh instance of Const&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">nodes.Const(</span>
+            <span class="s1">node.n,</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;lineno&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">getattr(node, </span><span class="s3">&quot;col_offset&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+            <span class="s1">parent,</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">visit_pass(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Pass node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">nodes.Pass(node.lineno, node.col_offset, parent)</span>
+
+    <span class="s2">def </span><span class="s1">visit_print(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Print node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Print(node.nl, node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">_visit_or_none(node, </span><span class="s3">&quot;dest&quot;</span><span class="s1">, self, newnode),</span>
+            <span class="s1">[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.values],</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_raise(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Raise node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Raise(node.lineno, node.col_offset, parent)</span>
+        <span class="s0"># no traceback; anyway it is not used in Pylint</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">_visit_or_none(node, </span><span class="s3">&quot;exc&quot;</span><span class="s1">, self, newnode),</span>
+            <span class="s1">_visit_or_none(node, </span><span class="s3">&quot;cause&quot;</span><span class="s1">, self, newnode),</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_return(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Return node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Return(node.lineno, node.col_offset, parent)</span>
+        <span class="s2">if </span><span class="s1">node.value </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">newnode.postinit(self.visit(node.value, newnode))</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_set(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Set node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Set(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit([self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.elts])</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_setcomp(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a SetComp node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.SetComp(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">self.visit(node.elt, newnode),</span>
+            <span class="s1">[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.generators],</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_slice(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Slice node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Slice(parent=parent)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">_visit_or_none(node, </span><span class="s3">&quot;lower&quot;</span><span class="s1">, self, newnode),</span>
+            <span class="s1">_visit_or_none(node, </span><span class="s3">&quot;upper&quot;</span><span class="s1">, self, newnode),</span>
+            <span class="s1">_visit_or_none(node, </span><span class="s3">&quot;step&quot;</span><span class="s1">, self, newnode),</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_subscript(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Subscript node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">context = self._get_context(node)</span>
+        <span class="s1">newnode = nodes.Subscript(</span>
+            <span class="s1">ctx=context, lineno=node.lineno, col_offset=node.col_offset, parent=parent</span>
+        <span class="s1">)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">self.visit(node.value, newnode), self.visit(node.slice, newnode)</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_starred(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Starred node and return a new instance of it&quot;&quot;&quot;</span>
+        <span class="s1">context = self._get_context(node)</span>
+        <span class="s1">newnode = nodes.Starred(</span>
+            <span class="s1">ctx=context, lineno=node.lineno, col_offset=node.col_offset, parent=parent</span>
+        <span class="s1">)</span>
+        <span class="s1">newnode.postinit(self.visit(node.value, newnode))</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_tryexcept(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a TryExcept node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.TryExcept(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.body],</span>
+            <span class="s1">[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.handlers],</span>
+            <span class="s1">[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.orelse],</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_try(self, node, parent):</span>
+        <span class="s0"># python 3.3 introduce a new Try node replacing</span>
+        <span class="s0"># TryFinally/TryExcept nodes</span>
+        <span class="s2">if </span><span class="s1">node.finalbody:</span>
+            <span class="s1">newnode = nodes.TryFinally(node.lineno, node.col_offset, parent)</span>
+            <span class="s2">if </span><span class="s1">node.handlers:</span>
+                <span class="s1">body = [self.visit_tryexcept(node, newnode)]</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">body = [self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.body]</span>
+            <span class="s1">newnode.postinit(body, [self.visit(n, newnode) </span><span class="s2">for </span><span class="s1">n </span><span class="s2">in </span><span class="s1">node.finalbody])</span>
+            <span class="s2">return </span><span class="s1">newnode</span>
+        <span class="s2">if </span><span class="s1">node.handlers:</span>
+            <span class="s2">return </span><span class="s1">self.visit_tryexcept(node, parent)</span>
+        <span class="s2">return None</span>
+
+    <span class="s2">def </span><span class="s1">visit_tryfinally(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a TryFinally node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.TryFinally(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.body],</span>
+            <span class="s1">[self.visit(n, newnode) </span><span class="s2">for </span><span class="s1">n </span><span class="s2">in </span><span class="s1">node.finalbody],</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_tuple(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Tuple node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">context = self._get_context(node)</span>
+        <span class="s1">newnode = nodes.Tuple(</span>
+            <span class="s1">ctx=context, lineno=node.lineno, col_offset=node.col_offset, parent=parent</span>
+        <span class="s1">)</span>
+        <span class="s1">newnode.postinit([self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.elts])</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_unaryop(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a UnaryOp node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.UnaryOp(</span>
+            <span class="s1">self._parser_module.unary_op_classes[node.op.__class__],</span>
+            <span class="s1">node.lineno,</span>
+            <span class="s1">node.col_offset,</span>
+            <span class="s1">parent,</span>
+        <span class="s1">)</span>
+        <span class="s1">newnode.postinit(self.visit(node.operand, newnode))</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_while(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a While node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.While(node.lineno, node.col_offset, parent)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">self.visit(node.test, newnode),</span>
+            <span class="s1">[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.body],</span>
+            <span class="s1">[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.orelse],</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">_visit_with(self, cls, node, parent):</span>
+        <span class="s1">newnode = cls(node.lineno, node.col_offset, parent)</span>
+
+        <span class="s2">def </span><span class="s1">visit_child(child):</span>
+            <span class="s1">expr = self.visit(child.context_expr, newnode)</span>
+            <span class="s1">var = _visit_or_none(child, </span><span class="s3">&quot;optional_vars&quot;</span><span class="s1">, self, newnode)</span>
+            <span class="s2">return </span><span class="s1">expr, var</span>
+
+        <span class="s1">type_annotation = self.check_type_comment(node, parent=newnode)</span>
+        <span class="s1">newnode.postinit(</span>
+            <span class="s1">items=[visit_child(child) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.items],</span>
+            <span class="s1">body=[self.visit(child, newnode) </span><span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">node.body],</span>
+            <span class="s1">type_annotation=type_annotation,</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_with(self, node, parent):</span>
+        <span class="s2">return </span><span class="s1">self._visit_with(nodes.With, node, parent)</span>
+
+    <span class="s2">def </span><span class="s1">visit_yield(self, node, parent):</span>
+        <span class="s0">&quot;&quot;&quot;visit a Yield node by returning a fresh instance of it&quot;&quot;&quot;</span>
+        <span class="s1">newnode = nodes.Yield(node.lineno, node.col_offset, parent)</span>
+        <span class="s2">if </span><span class="s1">node.value </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">newnode.postinit(self.visit(node.value, newnode))</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+
+    <span class="s2">def </span><span class="s1">visit_yieldfrom(self, node, parent):</span>
+        <span class="s1">newnode = nodes.YieldFrom(node.lineno, node.col_offset, parent)</span>
+        <span class="s2">if </span><span class="s1">node.value </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">newnode.postinit(self.visit(node.value, newnode))</span>
+        <span class="s2">return </span><span class="s1">newnode</span>
+</pre>
+</body>
+</html>

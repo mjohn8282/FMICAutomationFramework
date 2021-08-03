@@ -1,0 +1,478 @@
+<html>
+<head>
+<title>cell_range.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+cell_range.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import, unicode_literals</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">copy </span><span class="s0">import </span><span class="s1">copy</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.compat.strings </span><span class="s0">import </span><span class="s1">safe_repr</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">Strict</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">MinMax, Sequence</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.utils </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">range_boundaries,</span>
+    <span class="s1">range_to_tuple,</span>
+    <span class="s1">get_column_letter,</span>
+    <span class="s1">quote_sheetname,</span>
+<span class="s1">)</span>
+
+
+<span class="s0">class </span><span class="s1">CellRange(Serialisable):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Represents a range in a sheet: title and coordinates. 
+ 
+    This object is used to perform operations on ranges, like: 
+ 
+    - shift, expand or shrink 
+    - union/intersection with another sheet range, 
+ 
+    We can check whether a range is: 
+ 
+    - equal or not equal to another, 
+    - disjoint of another, 
+    - contained in another. 
+ 
+    We can get: 
+ 
+    - the size of a range. 
+    - the range bounds (vertices) 
+    - the coordinates, 
+    - the string representation, 
+ 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">min_col = MinMax(min=</span><span class="s3">1</span><span class="s1">, max=</span><span class="s3">18278</span><span class="s1">, expected_type=int)</span>
+    <span class="s1">min_row = MinMax(min=</span><span class="s3">1</span><span class="s1">, max=</span><span class="s3">1048576</span><span class="s1">, expected_type=int)</span>
+    <span class="s1">max_col = MinMax(min=</span><span class="s3">1</span><span class="s1">, max=</span><span class="s3">18278</span><span class="s1">, expected_type=int)</span>
+    <span class="s1">max_row = MinMax(min=</span><span class="s3">1</span><span class="s1">, max=</span><span class="s3">1048576</span><span class="s1">, expected_type=int)</span>
+
+
+    <span class="s0">def </span><span class="s1">__init__(self, range_string=</span><span class="s0">None</span><span class="s1">, min_col=</span><span class="s0">None</span><span class="s1">, min_row=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">max_col=</span><span class="s0">None</span><span class="s1">, max_row=</span><span class="s0">None</span><span class="s1">, title=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s0">if </span><span class="s1">range_string </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s0">if </span><span class="s4">&quot;!&quot; </span><span class="s0">in </span><span class="s1">range_string:</span>
+                <span class="s1">title, (min_col, min_row, max_col, max_row) = range_to_tuple(range_string)</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">min_col, min_row, max_col, max_row = range_boundaries(range_string)</span>
+
+        <span class="s1">self.min_col = min_col</span>
+        <span class="s1">self.min_row = min_row</span>
+        <span class="s1">self.max_col = max_col</span>
+        <span class="s1">self.max_row = max_row</span>
+        <span class="s1">self.title = title</span>
+
+        <span class="s0">if </span><span class="s1">min_col &gt; max_col:</span>
+            <span class="s1">fmt = </span><span class="s4">&quot;{max_col} must be greater than {min_col}&quot;</span>
+            <span class="s0">raise </span><span class="s1">ValueError(fmt.format(min_col=min_col, max_col=max_col))</span>
+        <span class="s0">if </span><span class="s1">min_row &gt; max_row:</span>
+            <span class="s1">fmt = </span><span class="s4">&quot;{max_row} must be greater than {min_row}&quot;</span>
+            <span class="s0">raise </span><span class="s1">ValueError(fmt.format(min_row=min_row, max_row=max_row))</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">bounds(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Vertices of the range as a tuple 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self.min_col, self.min_row, self.max_col, self.max_row</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">coord(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Excel-style representation of the range 
+        &quot;&quot;&quot;</span>
+        <span class="s1">fmt = </span><span class="s4">&quot;{min_col}{min_row}:{max_col}{max_row}&quot;</span>
+        <span class="s0">if </span><span class="s1">(self.min_col == self.max_col</span>
+            <span class="s0">and </span><span class="s1">self.min_row == self.max_row):</span>
+            <span class="s1">fmt = </span><span class="s4">&quot;{min_col}{min_row}&quot;</span>
+
+        <span class="s0">return </span><span class="s1">fmt.format(</span>
+            <span class="s1">min_col=get_column_letter(self.min_col),</span>
+            <span class="s1">min_row=self.min_row,</span>
+            <span class="s1">max_col=get_column_letter(self.max_col),</span>
+            <span class="s1">max_row=self.max_row</span>
+        <span class="s1">)</span>
+
+
+    <span class="s0">def </span><span class="s1">_check_title(self, other):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Check whether comparisons between ranges are possible. 
+        Cannot compare ranges from different worksheets 
+        Skip if the range passed in has no title. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">if not </span><span class="s1">isinstance(other, CellRange):</span>
+            <span class="s0">raise </span><span class="s1">TypeError(repr(type(other)))</span>
+
+        <span class="s0">if </span><span class="s1">other.title </span><span class="s0">and </span><span class="s1">self.title != other.title:</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;Cannot work with ranges from different worksheets&quot;</span><span class="s1">)</span>
+
+
+    <span class="s0">def </span><span class="s1">__repr__(self):</span>
+        <span class="s1">fmt = </span><span class="s4">u&quot;&lt;{cls} {coord}&gt;&quot;</span>
+        <span class="s0">if </span><span class="s1">self.title:</span>
+            <span class="s1">fmt = </span><span class="s4">u&quot;&lt;{cls} {title!r}!{coord}&gt;&quot;</span>
+        <span class="s0">return </span><span class="s1">safe_repr(fmt.format(cls=self.__class__.__name__, title=self.title, coord=self.coord))</span>
+
+
+    <span class="s0">def </span><span class="s1">_get_range_string(self):</span>
+        <span class="s1">fmt = </span><span class="s4">&quot;{coord}&quot;</span>
+        <span class="s1">title = self.title</span>
+        <span class="s0">if </span><span class="s1">title:</span>
+            <span class="s1">fmt = </span><span class="s4">u&quot;{title}!{coord}&quot;</span>
+            <span class="s1">title = quote_sheetname(title)</span>
+        <span class="s0">return </span><span class="s1">fmt.format(title=title, coord=self.coord)</span>
+
+    <span class="s1">__unicode__ = _get_range_string</span>
+
+
+    <span class="s0">def </span><span class="s1">__str__(self):</span>
+        <span class="s1">coord = self._get_range_string()</span>
+        <span class="s0">return </span><span class="s1">safe_repr(coord)</span>
+
+
+    <span class="s0">def </span><span class="s1">__copy__(self):</span>
+        <span class="s0">return </span><span class="s1">self.__class__(min_col=self.min_col, min_row=self.min_row,</span>
+                              <span class="s1">max_col=self.max_col, max_row=self.max_row,</span>
+                              <span class="s1">title=self.title)</span>
+
+
+    <span class="s0">def </span><span class="s1">shift(self, col_shift=</span><span class="s3">0</span><span class="s1">, row_shift=</span><span class="s3">0</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Shift the range according to the shift values (*col_shift*, *row_shift*). 
+ 
+        :type col_shift: int 
+        :param col_shift: number of columns to be moved by, can be negative 
+        :type row_shift: int 
+        :param row_shift: number of rows to be moved by, can be negative 
+        :raise: :class:`ValueError` if any row or column index &lt; 1 
+        &quot;&quot;&quot;</span>
+
+        <span class="s0">if </span><span class="s1">(self.min_col + col_shift &lt;= </span><span class="s3">0</span>
+            <span class="s0">or </span><span class="s1">self.min_row + row_shift &lt;= </span><span class="s3">0</span><span class="s1">):</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;Invalid shift value: col_shift={0}, row_shift={1}&quot;</span><span class="s1">.format(col_shift, row_shift))</span>
+        <span class="s1">self.min_col += col_shift</span>
+        <span class="s1">self.min_row += row_shift</span>
+        <span class="s1">self.max_col += col_shift</span>
+        <span class="s1">self.max_row += row_shift</span>
+
+
+    <span class="s0">def </span><span class="s1">__ne__(self, other):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Test whether the ranges are not equal. 
+ 
+        :type other: openpyexcel.worksheet.cell_range.CellRange 
+        :param other: Other sheet range 
+        :return: ``True`` if *range* != *other*. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s1">self._check_title(other)</span>
+        <span class="s0">except </span><span class="s1">ValueError:</span>
+            <span class="s0">return True</span>
+
+        <span class="s0">return </span><span class="s1">(</span>
+            <span class="s1">other.min_row != self.min_row</span>
+            <span class="s0">or </span><span class="s1">self.max_row != other.max_row</span>
+            <span class="s0">or </span><span class="s1">other.min_col != self.min_col</span>
+            <span class="s0">or </span><span class="s1">self.max_col != other.max_col</span>
+        <span class="s1">)</span>
+
+
+    <span class="s0">def </span><span class="s1">__eq__(self, other):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Test whether the ranges are equal. 
+ 
+        :type other: openpyexcel.worksheet.cell_range.CellRange 
+        :param other: Other sheet range 
+        :return: ``True`` if *range* == *other*. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return not </span><span class="s1">self.__ne__(other)</span>
+
+
+    <span class="s0">def </span><span class="s1">issubset(self, other):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Test whether every cell in this range is also in *other*. 
+ 
+        :type other: openpyexcel.worksheet.cell_range.CellRange 
+        :param other: Other sheet range 
+        :return: ``True`` if *range* &lt;= *other*. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self._check_title(other)</span>
+
+        <span class="s0">return </span><span class="s1">(</span>
+            <span class="s1">(other.min_row &lt;= self.min_row &lt;= self.max_row &lt;= other.max_row)</span>
+            <span class="s0">and</span>
+            <span class="s1">(other.min_col &lt;= self.min_col &lt;= self.max_col &lt;= other.max_col)</span>
+        <span class="s1">)</span>
+
+    <span class="s1">__le__ = issubset</span>
+
+
+    <span class="s0">def </span><span class="s1">__lt__(self, other):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Test whether *other* contains every cell of this range, and more. 
+ 
+        :type other: openpyexcel.worksheet.cell_range.CellRange 
+        :param other: Other sheet range 
+        :return: ``True`` if *range* &lt; *other*. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self.__le__(other) </span><span class="s0">and </span><span class="s1">self.__ne__(other)</span>
+
+
+    <span class="s0">def </span><span class="s1">issuperset(self, other):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Test whether every cell in *other* is in this range. 
+ 
+        :type other: openpyexcel.worksheet.cell_range.CellRange 
+        :param other: Other sheet range 
+        :return: ``True`` if *range* &gt;= *other* (or *other* in *range*). 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self._check_title(other)</span>
+
+        <span class="s0">return </span><span class="s1">(</span>
+            <span class="s1">(self.min_row &lt;= other.min_row &lt;= other.max_row &lt;= self.max_row)</span>
+            <span class="s0">and</span>
+            <span class="s1">(self.min_col &lt;= other.min_col &lt;= other.max_col &lt;= self.max_col)</span>
+        <span class="s1">)</span>
+
+    <span class="s1">__ge__ = issuperset</span>
+
+
+    <span class="s0">def </span><span class="s1">__contains__(self, coord):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Check whether the range contains a particular cell coordinate 
+        &quot;&quot;&quot;</span>
+        <span class="s1">cr = self.__class__(coord)</span>
+        <span class="s0">if </span><span class="s1">cr.title </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">cr.title = self.title</span>
+        <span class="s0">return </span><span class="s1">self.issuperset(cr)</span>
+
+
+    <span class="s0">def </span><span class="s1">__gt__(self, other):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Test whether this range contains every cell in *other*, and more. 
+ 
+        :type other: openpyexcel.worksheet.cell_range.CellRange 
+        :param other: Other sheet range 
+        :return: ``True`` if *range* &gt; *other*. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self.__ge__(other) </span><span class="s0">and </span><span class="s1">self.__ne__(other)</span>
+
+
+    <span class="s0">def </span><span class="s1">isdisjoint(self, other):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Return ``True`` if this range has no cell in common with *other*. 
+        Ranges are disjoint if and only if their intersection is the empty range. 
+ 
+        :type other: openpyexcel.worksheet.cell_range.CellRange 
+        :param other: Other sheet range. 
+        :return: ``True`` if the range has no cells in common with other. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self._check_title(other)</span>
+
+        <span class="s2"># Sort by top-left vertex</span>
+        <span class="s0">if </span><span class="s1">self.bounds &gt; other.bounds:</span>
+            <span class="s1">self, other = other, self</span>
+
+        <span class="s0">return </span><span class="s1">(self.max_col &lt; other.min_col</span>
+                <span class="s0">or </span><span class="s1">self.max_row &lt; other.min_row</span>
+                <span class="s0">or </span><span class="s1">other.max_row &lt; self.min_row)</span>
+
+
+    <span class="s0">def </span><span class="s1">intersection(self, other):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Return a new range with cells common to this range and *other* 
+ 
+        :type other: openpyexcel.worksheet.cell_range.CellRange 
+        :param other: Other sheet range. 
+        :return: the intersecting sheet range. 
+        :raise: :class:`ValueError` if the *other* range doesn't intersect 
+            with this range. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">if </span><span class="s1">self.isdisjoint(other):</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;Range {0} doesn't intersect {0}&quot;</span><span class="s1">.format(self, other))</span>
+
+        <span class="s1">min_row = max(self.min_row, other.min_row)</span>
+        <span class="s1">max_row = min(self.max_row, other.max_row)</span>
+        <span class="s1">min_col = max(self.min_col, other.min_col)</span>
+        <span class="s1">max_col = min(self.max_col, other.max_col)</span>
+
+        <span class="s0">return </span><span class="s1">CellRange(min_col=min_col, min_row=min_row, max_col=max_col,</span>
+                         <span class="s1">max_row=max_row)</span>
+
+    <span class="s1">__and__ = intersection</span>
+
+
+    <span class="s0">def </span><span class="s1">union(self, other):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Return the minimal superset of this range and *other*. This new range 
+        will contain all cells from this range, *other*, and any additional 
+        cells required to form a rectangular ``CellRange``. 
+ 
+        :type other: openpyexcel.worksheet.cell_range.CellRange 
+        :param other: Other sheet range. 
+        :return: a ``CellRange`` that is a superset of this and *other*. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self._check_title(other)</span>
+
+        <span class="s1">min_row = min(self.min_row, other.min_row)</span>
+        <span class="s1">max_row = max(self.max_row, other.max_row)</span>
+        <span class="s1">min_col = min(self.min_col, other.min_col)</span>
+        <span class="s1">max_col = max(self.max_col, other.max_col)</span>
+        <span class="s0">return </span><span class="s1">CellRange(min_col=min_col, min_row=min_row, max_col=max_col,</span>
+                         <span class="s1">max_row=max_row, title=self.title)</span>
+
+    <span class="s1">__or__ = union</span>
+
+
+    <span class="s0">def </span><span class="s1">expand(self, right=</span><span class="s3">0</span><span class="s1">, down=</span><span class="s3">0</span><span class="s1">, left=</span><span class="s3">0</span><span class="s1">, up=</span><span class="s3">0</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Expand the range by the dimensions provided. 
+ 
+        :type right: int 
+        :param right: expand range to the right by this number of cells 
+        :type down: int 
+        :param down: expand range down by this number of cells 
+        :type left: int 
+        :param left: expand range to the left by this number of cells 
+        :type up: int 
+        :param up: expand range up by this number of cells 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.min_col -= left</span>
+        <span class="s1">self.min_row -= up</span>
+        <span class="s1">self.max_col += right</span>
+        <span class="s1">self.max_row += down</span>
+
+
+    <span class="s0">def </span><span class="s1">shrink(self, right=</span><span class="s3">0</span><span class="s1">, bottom=</span><span class="s3">0</span><span class="s1">, left=</span><span class="s3">0</span><span class="s1">, top=</span><span class="s3">0</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Shrink the range by the dimensions provided. 
+ 
+        :type right: int 
+        :param right: shrink range from the right by this number of cells 
+        :type down: int 
+        :param down: shrink range from the top by this number of cells 
+        :type left: int 
+        :param left: shrink range from the left by this number of cells 
+        :type up: int 
+        :param up: shrink range from the bottown by this number of cells 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.min_col += left</span>
+        <span class="s1">self.min_row += top</span>
+        <span class="s1">self.max_col -= right</span>
+        <span class="s1">self.max_row -= bottom</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">size(self):</span>
+        <span class="s2">&quot;&quot;&quot; Return the size of the range as a dictionary of rows and columns. &quot;&quot;&quot;</span>
+        <span class="s1">cols = self.max_col + </span><span class="s3">1 </span><span class="s1">- self.min_col</span>
+        <span class="s1">rows = self.max_row + </span><span class="s3">1 </span><span class="s1">- self.min_row</span>
+        <span class="s0">return </span><span class="s1">{</span><span class="s4">'columns'</span><span class="s1">:cols, </span><span class="s4">'rows'</span><span class="s1">:rows}</span>
+
+
+<span class="s0">class </span><span class="s1">MultiCellRange(Strict):</span>
+
+
+    <span class="s1">ranges = Sequence(expected_type=CellRange)</span>
+
+
+    <span class="s0">def </span><span class="s1">__init__(self, ranges=()):</span>
+        <span class="s0">if </span><span class="s1">isinstance(ranges, str):</span>
+            <span class="s1">ranges = [CellRange(r) </span><span class="s0">for </span><span class="s1">r </span><span class="s0">in </span><span class="s1">ranges.split()]</span>
+        <span class="s1">self.ranges = ranges</span>
+
+
+    <span class="s0">def </span><span class="s1">__contains__(self, coord):</span>
+        <span class="s0">for </span><span class="s1">r </span><span class="s0">in </span><span class="s1">self.ranges:</span>
+            <span class="s0">if </span><span class="s1">coord </span><span class="s0">in </span><span class="s1">r:</span>
+                <span class="s0">return True</span>
+        <span class="s0">return False</span>
+
+
+    <span class="s0">def </span><span class="s1">__repr__(self):</span>
+        <span class="s1">ranges = </span><span class="s4">&quot; &quot;</span><span class="s1">.join([str(r) </span><span class="s0">for </span><span class="s1">r </span><span class="s0">in </span><span class="s1">self.ranges])</span>
+        <span class="s0">return </span><span class="s4">&quot;&lt;{0} [{1}]&gt;&quot;</span><span class="s1">.format(self.__class__.__name__, ranges)</span>
+
+
+    <span class="s0">def </span><span class="s1">__str__(self):</span>
+        <span class="s1">ranges = </span><span class="s4">u&quot; &quot;</span><span class="s1">.join([str(r) </span><span class="s0">for </span><span class="s1">r </span><span class="s0">in </span><span class="s1">self.ranges])</span>
+        <span class="s0">return </span><span class="s1">ranges</span>
+
+    <span class="s1">__unicode__ = __str__</span>
+
+
+    <span class="s0">def </span><span class="s1">add(self, coord):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Add a cell coordinate or CellRange 
+        &quot;&quot;&quot;</span>
+        <span class="s1">cr = </span><span class="s0">None</span>
+        <span class="s0">if </span><span class="s1">isinstance(coord, CellRange):</span>
+            <span class="s1">cr = coord</span>
+            <span class="s1">coord = cr.coord</span>
+        <span class="s0">if </span><span class="s1">coord </span><span class="s0">not in </span><span class="s1">self:</span>
+            <span class="s0">if </span><span class="s1">cr </span><span class="s0">is None</span><span class="s1">:</span>
+                <span class="s1">cr = CellRange(coord)</span>
+            <span class="s1">ranges = self.ranges</span>
+            <span class="s1">ranges.append(cr)</span>
+            <span class="s1">self.ranges = ranges</span>
+
+
+    <span class="s0">def </span><span class="s1">__iadd__(self, coord):</span>
+        <span class="s1">self.add(coord)</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+
+    <span class="s0">def </span><span class="s1">__eq__(self, other):</span>
+        <span class="s0">if  </span><span class="s1">isinstance(other, str):</span>
+            <span class="s1">other = self.__class__(other)</span>
+        <span class="s0">return </span><span class="s1">self.ranges == other.ranges</span>
+
+
+    <span class="s0">def </span><span class="s1">__ne__(self, other):</span>
+        <span class="s0">return not </span><span class="s1">self == other</span>
+
+
+    <span class="s0">def </span><span class="s1">__bool__(self):</span>
+        <span class="s0">return </span><span class="s1">bool(self.ranges)</span>
+
+    <span class="s1">__nonzero__ = __bool__</span>
+
+
+    <span class="s0">def </span><span class="s1">remove(self, coord):</span>
+        <span class="s0">if not </span><span class="s1">isinstance(coord, CellRange):</span>
+            <span class="s1">coord = CellRange(coord)</span>
+        <span class="s1">self.ranges.remove(coord)</span>
+
+
+    <span class="s0">def </span><span class="s1">__iter__(self):</span>
+        <span class="s0">for </span><span class="s1">cr </span><span class="s0">in </span><span class="s1">self.ranges:</span>
+            <span class="s0">yield </span><span class="s1">cr</span>
+
+
+    <span class="s0">def </span><span class="s1">__copy__(self):</span>
+        <span class="s1">n = MultiCellRange()</span>
+
+        <span class="s0">for </span><span class="s1">r </span><span class="s0">in </span><span class="s1">self.ranges:</span>
+            <span class="s1">n.ranges.append(copy(r))</span>
+        <span class="s0">return </span><span class="s1">n</span>
+</pre>
+</body>
+</html>

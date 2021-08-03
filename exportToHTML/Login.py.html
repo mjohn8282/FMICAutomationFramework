@@ -1,0 +1,34 @@
+<html>
+<head>
+<title>Login.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+.s3 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+Login.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">inspect</span>
+<span class="s0">from </span><span class="s1">PagesObjects.Loginpage </span><span class="s0">import </span><span class="s1">Login</span>
+<span class="s0">from </span><span class="s1">Utilities.CustomLogger </span><span class="s0">import </span><span class="s1">logs</span>
+
+
+<span class="s0">def </span><span class="s1">login(setup):</span>
+    <span class="s1">logs.loggen().info(</span><span class="s2">&quot;************ Verifying Homepage Title ***********&quot;</span><span class="s1">)</span>
+    <span class="s1">logs.loggen().info(</span><span class="s2">&quot;************ Verifying &quot; </span><span class="s1">+ inspect.stack()[</span><span class="s3">0</span><span class="s1">][</span><span class="s3">3</span><span class="s1">] + </span><span class="s2">&quot;***********&quot;</span><span class="s1">)</span>
+    <span class="s1">driver = setup</span>
+    <span class="s1">driver.get(</span><span class="s2">&quot;https://fmicdev.dat.com/Login.aspx&quot;</span><span class="s1">)</span>
+    <span class="s1">lp = Login(driver)</span>
+    <span class="s1">lp.setUsername(</span><span class="s2">&quot;john.moses@dat.com&quot;</span><span class="s1">)</span>
+    <span class="s1">lp.setPassword(</span><span class="s2">&quot;Dat@1794&quot;</span><span class="s1">)</span>
+    <span class="s1">lp.clickLoginbtn()</span>
+</pre>
+</body>
+</html>

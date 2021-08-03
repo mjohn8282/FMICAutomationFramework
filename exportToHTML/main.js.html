@@ -1,0 +1,257 @@
+<html>
+<head>
+<title>main.js</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+main.js</font>
+</center></td></tr></table>
+<pre><span class="s0">/* This Source Code Form is subject to the terms of the Mozilla Public 
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file, 
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */</span>
+
+
+<span class="s2">function </span><span class="s1">toArray(iter) {</span>
+    <span class="s2">if </span><span class="s1">(iter === </span><span class="s2">null</span><span class="s1">) {</span>
+        <span class="s2">return null</span><span class="s1">;</span>
+    <span class="s1">}</span>
+    <span class="s2">return </span><span class="s1">Array.prototype.slice.call(iter);</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">find(selector, elem) { </span><span class="s0">// eslint-disable-line no-redeclare</span>
+    <span class="s2">if </span><span class="s1">(!elem) {</span>
+        <span class="s1">elem = document;</span>
+    <span class="s1">}</span>
+    <span class="s2">return </span><span class="s1">elem.querySelector(selector);</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">findAll(selector, elem) {</span>
+    <span class="s2">if </span><span class="s1">(!elem) {</span>
+        <span class="s1">elem = document;</span>
+    <span class="s1">}</span>
+    <span class="s2">return </span><span class="s1">toArray(elem.querySelectorAll(selector));</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">sortColumn(elem) {</span>
+    <span class="s1">toggleSortStates(elem);</span>
+    <span class="s1">const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);</span>
+    <span class="s1">let key;</span>
+    <span class="s2">if </span><span class="s1">(elem.classList.contains(</span><span class="s3">'result'</span><span class="s1">)) {</span>
+        <span class="s1">key = keyResult;</span>
+    <span class="s1">} </span><span class="s2">else if </span><span class="s1">(elem.classList.contains(</span><span class="s3">'links'</span><span class="s1">)) {</span>
+        <span class="s1">key = keyLink;</span>
+    <span class="s1">} </span><span class="s2">else </span><span class="s1">{</span>
+        <span class="s1">key = keyAlpha;</span>
+    <span class="s1">}</span>
+    <span class="s1">sortTable(elem, key(colIndex));</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">showAllExtras() { </span><span class="s0">// eslint-disable-line no-unused-vars</span>
+    <span class="s1">findAll(</span><span class="s3">'.col-result'</span><span class="s1">).forEach(showExtras);</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">hideAllExtras() { </span><span class="s0">// eslint-disable-line no-unused-vars</span>
+    <span class="s1">findAll(</span><span class="s3">'.col-result'</span><span class="s1">).forEach(hideExtras);</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">showExtras(colresultElem) {</span>
+    <span class="s1">const extras = colresultElem.parentNode.nextElementSibling;</span>
+    <span class="s1">const expandcollapse = colresultElem.firstElementChild;</span>
+    <span class="s1">extras.classList.remove(</span><span class="s3">'collapsed'</span><span class="s1">);</span>
+    <span class="s1">expandcollapse.classList.remove(</span><span class="s3">'expander'</span><span class="s1">);</span>
+    <span class="s1">expandcollapse.classList.add(</span><span class="s3">'collapser'</span><span class="s1">);</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">hideExtras(colresultElem) {</span>
+    <span class="s1">const extras = colresultElem.parentNode.nextElementSibling;</span>
+    <span class="s1">const expandcollapse = colresultElem.firstElementChild;</span>
+    <span class="s1">extras.classList.add(</span><span class="s3">'collapsed'</span><span class="s1">);</span>
+    <span class="s1">expandcollapse.classList.remove(</span><span class="s3">'collapser'</span><span class="s1">);</span>
+    <span class="s1">expandcollapse.classList.add(</span><span class="s3">'expander'</span><span class="s1">);</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">showFilters() {</span>
+    <span class="s1">const filterItems = document.getElementsByClassName(</span><span class="s3">'filter'</span><span class="s1">);</span>
+    <span class="s2">for </span><span class="s1">(let i = </span><span class="s4">0</span><span class="s1">; i &lt; filterItems.length; i++)</span>
+        <span class="s1">filterItems[i].hidden = </span><span class="s2">false</span><span class="s1">;</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">addCollapse() {</span>
+    <span class="s0">// Add links for show/hide all</span>
+    <span class="s1">const resulttable = find(</span><span class="s3">'table#results-table'</span><span class="s1">);</span>
+    <span class="s1">const showhideall = document.createElement(</span><span class="s3">'p'</span><span class="s1">);</span>
+    <span class="s1">showhideall.innerHTML = </span><span class="s3">'&lt;a href=&quot;javascript:showAllExtras()&quot;&gt;Show all details&lt;/a&gt; / ' </span><span class="s1">+</span>
+                            <span class="s3">'&lt;a href=&quot;javascript:hideAllExtras()&quot;&gt;Hide all details&lt;/a&gt;'</span><span class="s1">;</span>
+    <span class="s1">resulttable.parentElement.insertBefore(showhideall, resulttable);</span>
+
+    <span class="s0">// Add show/hide link to each result</span>
+    <span class="s1">findAll(</span><span class="s3">'.col-result'</span><span class="s1">).forEach(</span><span class="s2">function</span><span class="s1">(elem) {</span>
+        <span class="s1">const collapsed = getQueryParameter(</span><span class="s3">'collapsed'</span><span class="s1">) || </span><span class="s3">'Passed'</span><span class="s1">;</span>
+        <span class="s1">const extras = elem.parentNode.nextElementSibling;</span>
+        <span class="s1">const expandcollapse = document.createElement(</span><span class="s3">'span'</span><span class="s1">);</span>
+        <span class="s2">if </span><span class="s1">(extras.classList.contains(</span><span class="s3">'collapsed'</span><span class="s1">)) {</span>
+            <span class="s1">expandcollapse.classList.add(</span><span class="s3">'expander'</span><span class="s1">);</span>
+        <span class="s1">} </span><span class="s2">else if </span><span class="s1">(collapsed.includes(elem.innerHTML)) {</span>
+            <span class="s1">extras.classList.add(</span><span class="s3">'collapsed'</span><span class="s1">);</span>
+            <span class="s1">expandcollapse.classList.add(</span><span class="s3">'expander'</span><span class="s1">);</span>
+        <span class="s1">} </span><span class="s2">else </span><span class="s1">{</span>
+            <span class="s1">expandcollapse.classList.add(</span><span class="s3">'collapser'</span><span class="s1">);</span>
+        <span class="s1">}</span>
+        <span class="s1">elem.appendChild(expandcollapse);</span>
+
+        <span class="s1">elem.addEventListener(</span><span class="s3">'click'</span><span class="s1">, </span><span class="s2">function</span><span class="s1">(event) {</span>
+            <span class="s2">if </span><span class="s1">(event.currentTarget.parentNode.nextElementSibling.classList.contains(</span><span class="s3">'collapsed'</span><span class="s1">)) {</span>
+                <span class="s1">showExtras(event.currentTarget);</span>
+            <span class="s1">} </span><span class="s2">else </span><span class="s1">{</span>
+                <span class="s1">hideExtras(event.currentTarget);</span>
+            <span class="s1">}</span>
+        <span class="s1">});</span>
+    <span class="s1">});</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">getQueryParameter(name) {</span>
+    <span class="s1">const match = RegExp(</span><span class="s3">'[?&amp;]' </span><span class="s1">+ name + </span><span class="s3">'=([^&amp;]*)'</span><span class="s1">).exec(window.location.search);</span>
+    <span class="s2">return </span><span class="s1">match &amp;&amp; decodeURIComponent(match[</span><span class="s4">1</span><span class="s1">].replace(/\+/g, </span><span class="s3">' '</span><span class="s1">));</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">init () { </span><span class="s0">// eslint-disable-line no-unused-vars</span>
+    <span class="s1">resetSortHeaders();</span>
+
+    <span class="s1">addCollapse();</span>
+
+    <span class="s1">showFilters();</span>
+
+    <span class="s1">sortColumn(find(</span><span class="s3">'.initial-sort'</span><span class="s1">));</span>
+
+    <span class="s1">findAll(</span><span class="s3">'.sortable'</span><span class="s1">).forEach(</span><span class="s2">function</span><span class="s1">(elem) {</span>
+        <span class="s1">elem.addEventListener(</span><span class="s3">'click'</span><span class="s1">,</span>
+            <span class="s2">function</span><span class="s1">() {</span>
+                <span class="s1">sortColumn(elem);</span>
+            <span class="s1">}, </span><span class="s2">false</span><span class="s1">);</span>
+    <span class="s1">});</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">sortTable(clicked, keyFunc) {</span>
+    <span class="s1">const rows = findAll(</span><span class="s3">'.results-table-row'</span><span class="s1">);</span>
+    <span class="s1">const reversed = !clicked.classList.contains(</span><span class="s3">'asc'</span><span class="s1">);</span>
+    <span class="s1">const sortedRows = sort(rows, keyFunc, reversed);</span>
+    <span class="s0">/* Whole table is removed here because browsers acts much slower 
+     * when appending existing elements. 
+     */</span>
+    <span class="s1">const thead = document.getElementById(</span><span class="s3">'results-table-head'</span><span class="s1">);</span>
+    <span class="s1">document.getElementById(</span><span class="s3">'results-table'</span><span class="s1">).remove();</span>
+    <span class="s1">const parent = document.createElement(</span><span class="s3">'table'</span><span class="s1">);</span>
+    <span class="s1">parent.id = </span><span class="s3">'results-table'</span><span class="s1">;</span>
+    <span class="s1">parent.appendChild(thead);</span>
+    <span class="s1">sortedRows.forEach(</span><span class="s2">function</span><span class="s1">(elem) {</span>
+        <span class="s1">parent.appendChild(elem);</span>
+    <span class="s1">});</span>
+    <span class="s1">document.getElementsByTagName(</span><span class="s3">'BODY'</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">].appendChild(parent);</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">sort(items, keyFunc, reversed) {</span>
+    <span class="s1">const sortArray = items.map(</span><span class="s2">function</span><span class="s1">(item, i) {</span>
+        <span class="s2">return </span><span class="s1">[keyFunc(item), i];</span>
+    <span class="s1">});</span>
+
+    <span class="s1">sortArray.sort(</span><span class="s2">function</span><span class="s1">(a, b) {</span>
+        <span class="s1">const keyA = a[</span><span class="s4">0</span><span class="s1">];</span>
+        <span class="s1">const keyB = b[</span><span class="s4">0</span><span class="s1">];</span>
+
+        <span class="s2">if </span><span class="s1">(keyA == keyB) </span><span class="s2">return </span><span class="s4">0</span><span class="s1">;</span>
+
+        <span class="s2">if </span><span class="s1">(reversed) {</span>
+            <span class="s2">return </span><span class="s1">keyA &lt; keyB ? </span><span class="s4">1 </span><span class="s1">: -</span><span class="s4">1</span><span class="s1">;</span>
+        <span class="s1">} </span><span class="s2">else </span><span class="s1">{</span>
+            <span class="s2">return </span><span class="s1">keyA &gt; keyB ? </span><span class="s4">1 </span><span class="s1">: -</span><span class="s4">1</span><span class="s1">;</span>
+        <span class="s1">}</span>
+    <span class="s1">});</span>
+
+    <span class="s2">return </span><span class="s1">sortArray.map(</span><span class="s2">function</span><span class="s1">(item) {</span>
+        <span class="s1">const index = item[</span><span class="s4">1</span><span class="s1">];</span>
+        <span class="s2">return </span><span class="s1">items[index];</span>
+    <span class="s1">});</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">keyAlpha(colIndex) {</span>
+    <span class="s2">return function</span><span class="s1">(elem) {</span>
+        <span class="s2">return </span><span class="s1">elem.childNodes[</span><span class="s4">1</span><span class="s1">].childNodes[colIndex].firstChild.data.toLowerCase();</span>
+    <span class="s1">};</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">keyLink(colIndex) {</span>
+    <span class="s2">return function</span><span class="s1">(elem) {</span>
+        <span class="s1">const dataCell = elem.childNodes[</span><span class="s4">1</span><span class="s1">].childNodes[colIndex].firstChild;</span>
+        <span class="s2">return </span><span class="s1">dataCell == </span><span class="s2">null </span><span class="s1">? </span><span class="s3">'' </span><span class="s1">: dataCell.innerText.toLowerCase();</span>
+    <span class="s1">};</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">keyResult(colIndex) {</span>
+    <span class="s2">return function</span><span class="s1">(elem) {</span>
+        <span class="s1">const strings = [</span><span class="s3">'Error'</span><span class="s1">, </span><span class="s3">'Failed'</span><span class="s1">, </span><span class="s3">'Rerun'</span><span class="s1">, </span><span class="s3">'XFailed'</span><span class="s1">, </span><span class="s3">'XPassed'</span><span class="s1">,</span>
+            <span class="s3">'Skipped'</span><span class="s1">, </span><span class="s3">'Passed'</span><span class="s1">];</span>
+        <span class="s2">return </span><span class="s1">strings.indexOf(elem.childNodes[</span><span class="s4">1</span><span class="s1">].childNodes[colIndex].firstChild.data);</span>
+    <span class="s1">};</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">resetSortHeaders() {</span>
+    <span class="s1">findAll(</span><span class="s3">'.sort-icon'</span><span class="s1">).forEach(</span><span class="s2">function</span><span class="s1">(elem) {</span>
+        <span class="s1">elem.parentNode.removeChild(elem);</span>
+    <span class="s1">});</span>
+    <span class="s1">findAll(</span><span class="s3">'.sortable'</span><span class="s1">).forEach(</span><span class="s2">function</span><span class="s1">(elem) {</span>
+        <span class="s1">const icon = document.createElement(</span><span class="s3">'div'</span><span class="s1">);</span>
+        <span class="s1">icon.className = </span><span class="s3">'sort-icon'</span><span class="s1">;</span>
+        <span class="s1">icon.textContent = </span><span class="s3">'vvv'</span><span class="s1">;</span>
+        <span class="s1">elem.insertBefore(icon, elem.firstChild);</span>
+        <span class="s1">elem.classList.remove(</span><span class="s3">'desc'</span><span class="s1">, </span><span class="s3">'active'</span><span class="s1">);</span>
+        <span class="s1">elem.classList.add(</span><span class="s3">'asc'</span><span class="s1">, </span><span class="s3">'inactive'</span><span class="s1">);</span>
+    <span class="s1">});</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">toggleSortStates(elem) {</span>
+    <span class="s0">//if active, toggle between asc and desc</span>
+    <span class="s2">if </span><span class="s1">(elem.classList.contains(</span><span class="s3">'active'</span><span class="s1">)) {</span>
+        <span class="s1">elem.classList.toggle(</span><span class="s3">'asc'</span><span class="s1">);</span>
+        <span class="s1">elem.classList.toggle(</span><span class="s3">'desc'</span><span class="s1">);</span>
+    <span class="s1">}</span>
+
+    <span class="s0">//if inactive, reset all other functions and add ascending active</span>
+    <span class="s2">if </span><span class="s1">(elem.classList.contains(</span><span class="s3">'inactive'</span><span class="s1">)) {</span>
+        <span class="s1">resetSortHeaders();</span>
+        <span class="s1">elem.classList.remove(</span><span class="s3">'inactive'</span><span class="s1">);</span>
+        <span class="s1">elem.classList.add(</span><span class="s3">'active'</span><span class="s1">);</span>
+    <span class="s1">}</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">isAllRowsHidden(value) {</span>
+    <span class="s2">return </span><span class="s1">value.hidden == </span><span class="s2">false</span><span class="s1">;</span>
+<span class="s1">}</span>
+
+<span class="s2">function </span><span class="s1">filterTable(elem) { </span><span class="s0">// eslint-disable-line no-unused-vars</span>
+    <span class="s1">const outcomeAtt = </span><span class="s3">'data-test-result'</span><span class="s1">;</span>
+    <span class="s1">const outcome = elem.getAttribute(outcomeAtt);</span>
+    <span class="s1">const classOutcome = outcome + </span><span class="s3">' results-table-row'</span><span class="s1">;</span>
+    <span class="s1">const outcomeRows = document.getElementsByClassName(classOutcome);</span>
+
+    <span class="s2">for</span><span class="s1">(let i = </span><span class="s4">0</span><span class="s1">; i &lt; outcomeRows.length; i++){</span>
+        <span class="s1">outcomeRows[i].hidden = !elem.checked;</span>
+    <span class="s1">}</span>
+
+    <span class="s1">const rows = findAll(</span><span class="s3">'.results-table-row'</span><span class="s1">).filter(isAllRowsHidden);</span>
+    <span class="s1">const allRowsHidden = rows.length == </span><span class="s4">0 </span><span class="s1">? </span><span class="s2">true </span><span class="s1">: </span><span class="s2">false</span><span class="s1">;</span>
+    <span class="s1">const notFoundMessage = document.getElementById(</span><span class="s3">'not-found-message'</span><span class="s1">);</span>
+    <span class="s1">notFoundMessage.hidden = !allRowsHidden;</span>
+<span class="s1">}</span>
+</pre>
+</body>
+</html>

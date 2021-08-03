@@ -1,0 +1,53 @@
+<html>
+<head>
+<title>brain_argparse.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_argparse.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">astroid </span><span class="s0">import </span><span class="s1">MANAGER, UseInferenceDefault, arguments, inference_tip, nodes</span>
+
+
+<span class="s0">def </span><span class="s1">infer_namespace(node, context=</span><span class="s0">None</span><span class="s1">):</span>
+    <span class="s1">callsite = arguments.CallSite.from_call(node, context=context)</span>
+    <span class="s0">if not </span><span class="s1">callsite.keyword_arguments:</span>
+        <span class="s2"># Cannot make sense of it.</span>
+        <span class="s0">raise </span><span class="s1">UseInferenceDefault()</span>
+
+    <span class="s1">class_node = nodes.ClassDef(</span><span class="s3">&quot;Namespace&quot;</span><span class="s1">, </span><span class="s3">&quot;docstring&quot;</span><span class="s1">)</span>
+    <span class="s1">class_node.parent = node.parent</span>
+    <span class="s0">for </span><span class="s1">attr </span><span class="s0">in </span><span class="s1">set(callsite.keyword_arguments):</span>
+        <span class="s1">fake_node = nodes.EmptyNode()</span>
+        <span class="s1">fake_node.parent = class_node</span>
+        <span class="s1">fake_node.attrname = attr</span>
+        <span class="s1">class_node.instance_attrs[attr] = [fake_node]</span>
+    <span class="s0">return </span><span class="s1">iter((class_node.instantiate_class(),))</span>
+
+
+<span class="s0">def </span><span class="s1">_looks_like_namespace(node):</span>
+    <span class="s1">func = node.func</span>
+    <span class="s0">if </span><span class="s1">isinstance(func, nodes.Attribute):</span>
+        <span class="s0">return </span><span class="s1">(</span>
+            <span class="s1">func.attrname == </span><span class="s3">&quot;Namespace&quot;</span>
+            <span class="s0">and </span><span class="s1">isinstance(func.expr, nodes.Name)</span>
+            <span class="s0">and </span><span class="s1">func.expr.name == </span><span class="s3">&quot;argparse&quot;</span>
+        <span class="s1">)</span>
+    <span class="s0">return False</span>
+
+
+<span class="s1">MANAGER.register_transform(</span>
+    <span class="s1">nodes.Call, inference_tip(infer_namespace), _looks_like_namespace</span>
+<span class="s1">)</span>
+</pre>
+</body>
+</html>

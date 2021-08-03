@@ -1,0 +1,261 @@
+<html>
+<head>
+<title>diadefslib.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+.s5 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+diadefslib.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2006, 2008-2010, 2013-2014 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2014 Brett Cannon &lt;brett@python.org&gt;</span>
+<span class="s0"># Copyright (c) 2014 Arun Persaud &lt;arun@nubati.net&gt;</span>
+<span class="s0"># Copyright (c) 2015-2018, 2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015 Florian Bruhin &lt;me@the-compiler.org&gt;</span>
+<span class="s0"># Copyright (c) 2015 Ionel Cristian Maries &lt;contact@ionelmc.ro&gt;</span>
+<span class="s0"># Copyright (c) 2016 Ashley Whetter &lt;ashley@awhetter.co.uk&gt;</span>
+<span class="s0"># Copyright (c) 2017 Łukasz Rogalski &lt;rogalski.91@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 ssolanki &lt;sushobhitsolanki@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Sushobhit &lt;31987769+sushobhit27@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Ville Skyttä &lt;ville.skytta@iki.fi&gt;</span>
+<span class="s0"># Copyright (c) 2019-2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Anthony Sottile &lt;asottile@umich.edu&gt;</span>
+
+<span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;handle diagram generation options for class diagram or default diagrams 
+&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+
+<span class="s2">from </span><span class="s1">pylint.pyreverse.diagrams </span><span class="s2">import </span><span class="s1">ClassDiagram, PackageDiagram</span>
+<span class="s2">from </span><span class="s1">pylint.pyreverse.utils </span><span class="s2">import </span><span class="s1">LocalsVisitor</span>
+
+<span class="s1">BUILTINS_NAME = </span><span class="s3">&quot;builtins&quot;</span>
+
+<span class="s0"># diagram generators ##########################################################</span>
+
+
+<span class="s2">class </span><span class="s1">DiaDefGenerator:</span>
+    <span class="s0">&quot;&quot;&quot;handle diagram generation options&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, linker, handler):</span>
+        <span class="s0">&quot;&quot;&quot;common Diagram Handler initialization&quot;&quot;&quot;</span>
+        <span class="s1">self.config = handler.config</span>
+        <span class="s1">self._set_default_options()</span>
+        <span class="s1">self.linker = linker</span>
+        <span class="s1">self.classdiagram = </span><span class="s2">None  </span><span class="s0"># defined by subclasses</span>
+
+    <span class="s2">def </span><span class="s1">get_title(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;get title for objects&quot;&quot;&quot;</span>
+        <span class="s1">title = node.name</span>
+        <span class="s2">if </span><span class="s1">self.module_names:</span>
+            <span class="s1">title = </span><span class="s3">f&quot;</span><span class="s4">{</span><span class="s1">node.root().name</span><span class="s4">}</span><span class="s3">.</span><span class="s4">{</span><span class="s1">title</span><span class="s4">}</span><span class="s3">&quot;</span>
+        <span class="s2">return </span><span class="s1">title</span>
+
+    <span class="s2">def </span><span class="s1">_set_option(self, option):</span>
+        <span class="s0">&quot;&quot;&quot;activate some options if not explicitly deactivated&quot;&quot;&quot;</span>
+        <span class="s0"># if we have a class diagram, we want more information by default;</span>
+        <span class="s0"># so if the option is None, we return True</span>
+        <span class="s2">if </span><span class="s1">option </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">bool(self.config.classes)</span>
+        <span class="s2">return </span><span class="s1">option</span>
+
+    <span class="s2">def </span><span class="s1">_set_default_options(self):</span>
+        <span class="s0">&quot;&quot;&quot;set different default options with _default dictionary&quot;&quot;&quot;</span>
+        <span class="s1">self.module_names = self._set_option(self.config.module_names)</span>
+        <span class="s1">all_ancestors = self._set_option(self.config.all_ancestors)</span>
+        <span class="s1">all_associated = self._set_option(self.config.all_associated)</span>
+        <span class="s1">anc_level, association_level = (</span><span class="s5">0</span><span class="s1">, </span><span class="s5">0</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">all_ancestors:</span>
+            <span class="s1">anc_level = -</span><span class="s5">1</span>
+        <span class="s2">if </span><span class="s1">all_associated:</span>
+            <span class="s1">association_level = -</span><span class="s5">1</span>
+        <span class="s2">if </span><span class="s1">self.config.show_ancestors </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">anc_level = self.config.show_ancestors</span>
+        <span class="s2">if </span><span class="s1">self.config.show_associated </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">association_level = self.config.show_associated</span>
+        <span class="s1">self.anc_level, self.association_level = anc_level, association_level</span>
+
+    <span class="s2">def </span><span class="s1">_get_levels(self):</span>
+        <span class="s0">&quot;&quot;&quot;help function for search levels&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.anc_level, self.association_level</span>
+
+    <span class="s2">def </span><span class="s1">show_node(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;true if builtins and not show_builtins&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.config.show_builtin:</span>
+            <span class="s2">return True</span>
+        <span class="s2">return </span><span class="s1">node.root().name != BUILTINS_NAME</span>
+
+    <span class="s2">def </span><span class="s1">add_class(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;visit one class and add it to diagram&quot;&quot;&quot;</span>
+        <span class="s1">self.linker.visit(node)</span>
+        <span class="s1">self.classdiagram.add_object(self.get_title(node), node)</span>
+
+    <span class="s2">def </span><span class="s1">get_ancestors(self, node, level):</span>
+        <span class="s0">&quot;&quot;&quot;return ancestor nodes of a class node&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">level == </span><span class="s5">0</span><span class="s1">:</span>
+            <span class="s2">return</span>
+        <span class="s2">for </span><span class="s1">ancestor </span><span class="s2">in </span><span class="s1">node.ancestors(recurs=</span><span class="s2">False</span><span class="s1">):</span>
+            <span class="s2">if not </span><span class="s1">self.show_node(ancestor):</span>
+                <span class="s2">continue</span>
+            <span class="s2">yield </span><span class="s1">ancestor</span>
+
+    <span class="s2">def </span><span class="s1">get_associated(self, klass_node, level):</span>
+        <span class="s0">&quot;&quot;&quot;return associated nodes of a class node&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">level == </span><span class="s5">0</span><span class="s1">:</span>
+            <span class="s2">return</span>
+        <span class="s2">for </span><span class="s1">association_nodes </span><span class="s2">in </span><span class="s1">list(klass_node.instance_attrs_type.values()) + list(</span>
+            <span class="s1">klass_node.locals_type.values()</span>
+        <span class="s1">):</span>
+            <span class="s2">for </span><span class="s1">node </span><span class="s2">in </span><span class="s1">association_nodes:</span>
+                <span class="s2">if </span><span class="s1">isinstance(node, astroid.Instance):</span>
+                    <span class="s1">node = node._proxied</span>
+                <span class="s2">if not </span><span class="s1">(isinstance(node, astroid.ClassDef) </span><span class="s2">and </span><span class="s1">self.show_node(node)):</span>
+                    <span class="s2">continue</span>
+                <span class="s2">yield </span><span class="s1">node</span>
+
+    <span class="s2">def </span><span class="s1">extract_classes(self, klass_node, anc_level, association_level):</span>
+        <span class="s0">&quot;&quot;&quot;extract recursively classes related to klass_node&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.classdiagram.has_node(klass_node) </span><span class="s2">or not </span><span class="s1">self.show_node(klass_node):</span>
+            <span class="s2">return</span>
+        <span class="s1">self.add_class(klass_node)</span>
+
+        <span class="s2">for </span><span class="s1">ancestor </span><span class="s2">in </span><span class="s1">self.get_ancestors(klass_node, anc_level):</span>
+            <span class="s1">self.extract_classes(ancestor, anc_level - </span><span class="s5">1</span><span class="s1">, association_level)</span>
+
+        <span class="s2">for </span><span class="s1">node </span><span class="s2">in </span><span class="s1">self.get_associated(klass_node, association_level):</span>
+            <span class="s1">self.extract_classes(node, anc_level, association_level - </span><span class="s5">1</span><span class="s1">)</span>
+
+
+<span class="s2">class </span><span class="s1">DefaultDiadefGenerator(LocalsVisitor, DiaDefGenerator):</span>
+    <span class="s0">&quot;&quot;&quot;generate minimum diagram definition for the project : 
+ 
+    * a package diagram including project's modules 
+    * a class diagram including project's classes 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, linker, handler):</span>
+        <span class="s1">DiaDefGenerator.__init__(self, linker, handler)</span>
+        <span class="s1">LocalsVisitor.__init__(self)</span>
+
+    <span class="s2">def </span><span class="s1">visit_project(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;visit a pyreverse.utils.Project node 
+ 
+        create a diagram definition for packages 
+        &quot;&quot;&quot;</span>
+        <span class="s1">mode = self.config.mode</span>
+        <span class="s2">if </span><span class="s1">len(node.modules) &gt; </span><span class="s5">1</span><span class="s1">:</span>
+            <span class="s1">self.pkgdiagram = PackageDiagram(</span><span class="s3">&quot;packages %s&quot; </span><span class="s1">% node.name, mode)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.pkgdiagram = </span><span class="s2">None</span>
+        <span class="s1">self.classdiagram = ClassDiagram(</span><span class="s3">&quot;classes %s&quot; </span><span class="s1">% node.name, mode)</span>
+
+    <span class="s2">def </span><span class="s1">leave_project(self, node):  </span><span class="s0"># pylint: disable=unused-argument</span>
+        <span class="s0">&quot;&quot;&quot;leave the pyreverse.utils.Project node 
+ 
+        return the generated diagram definition 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.pkgdiagram:</span>
+            <span class="s2">return </span><span class="s1">self.pkgdiagram, self.classdiagram</span>
+        <span class="s2">return </span><span class="s1">(self.classdiagram,)</span>
+
+    <span class="s2">def </span><span class="s1">visit_module(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;visit an astroid.Module node 
+ 
+        add this class to the package diagram definition 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.pkgdiagram:</span>
+            <span class="s1">self.linker.visit(node)</span>
+            <span class="s1">self.pkgdiagram.add_object(node.name, node)</span>
+
+    <span class="s2">def </span><span class="s1">visit_classdef(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;visit an astroid.Class node 
+ 
+        add this class to the class diagram definition 
+        &quot;&quot;&quot;</span>
+        <span class="s1">anc_level, association_level = self._get_levels()</span>
+        <span class="s1">self.extract_classes(node, anc_level, association_level)</span>
+
+    <span class="s2">def </span><span class="s1">visit_importfrom(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;visit astroid.ImportFrom  and catch modules for package diagram&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.pkgdiagram:</span>
+            <span class="s1">self.pkgdiagram.add_from_depend(node, node.modname)</span>
+
+
+<span class="s2">class </span><span class="s1">ClassDiadefGenerator(DiaDefGenerator):</span>
+    <span class="s0">&quot;&quot;&quot;generate a class diagram definition including all classes related to a 
+    given class 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, linker, handler):</span>
+        <span class="s1">DiaDefGenerator.__init__(self, linker, handler)</span>
+
+    <span class="s2">def </span><span class="s1">class_diagram(self, project, klass):</span>
+        <span class="s0">&quot;&quot;&quot;return a class diagram definition for the given klass and its 
+        related klasses 
+        &quot;&quot;&quot;</span>
+
+        <span class="s1">self.classdiagram = ClassDiagram(klass, self.config.mode)</span>
+        <span class="s2">if </span><span class="s1">len(project.modules) &gt; </span><span class="s5">1</span><span class="s1">:</span>
+            <span class="s1">module, klass = klass.rsplit(</span><span class="s3">&quot;.&quot;</span><span class="s1">, </span><span class="s5">1</span><span class="s1">)</span>
+            <span class="s1">module = project.get_module(module)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">module = project.modules[</span><span class="s5">0</span><span class="s1">]</span>
+            <span class="s1">klass = klass.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">)[-</span><span class="s5">1</span><span class="s1">]</span>
+        <span class="s1">klass = next(module.ilookup(klass))</span>
+
+        <span class="s1">anc_level, association_level = self._get_levels()</span>
+        <span class="s1">self.extract_classes(klass, anc_level, association_level)</span>
+        <span class="s2">return </span><span class="s1">self.classdiagram</span>
+
+
+<span class="s0"># diagram handler #############################################################</span>
+
+
+<span class="s2">class </span><span class="s1">DiadefsHandler:</span>
+    <span class="s0">&quot;&quot;&quot;handle diagram definitions : 
+ 
+    get it from user (i.e. xml files) or generate them 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, config):</span>
+        <span class="s1">self.config = config</span>
+
+    <span class="s2">def </span><span class="s1">get_diadefs(self, project, linker):</span>
+        <span class="s0">&quot;&quot;&quot;Get the diagrams configuration data 
+ 
+        :param project:The pyreverse project 
+        :type project: pyreverse.utils.Project 
+        :param linker: The linker 
+        :type linker: pyreverse.inspector.Linker(IdGeneratorMixIn, LocalsVisitor) 
+ 
+        :returns: The list of diagram definitions 
+        :rtype: list(:class:`pylint.pyreverse.diagrams.ClassDiagram`) 
+        &quot;&quot;&quot;</span>
+
+        <span class="s0">#  read and interpret diagram definitions (Diadefs)</span>
+        <span class="s1">diagrams = []</span>
+        <span class="s1">generator = ClassDiadefGenerator(linker, self)</span>
+        <span class="s2">for </span><span class="s1">klass </span><span class="s2">in </span><span class="s1">self.config.classes:</span>
+            <span class="s1">diagrams.append(generator.class_diagram(project, klass))</span>
+        <span class="s2">if not </span><span class="s1">diagrams:</span>
+            <span class="s1">diagrams = DefaultDiadefGenerator(linker, self).visit(project)</span>
+        <span class="s2">for </span><span class="s1">diagram </span><span class="s2">in </span><span class="s1">diagrams:</span>
+            <span class="s1">diagram.extract_relationships()</span>
+        <span class="s2">return </span><span class="s1">diagrams</span>
+</pre>
+</body>
+</html>

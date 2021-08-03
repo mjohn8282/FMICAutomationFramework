@@ -1,0 +1,1133 @@
+<html>
+<head>
+<title>cache.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+cache.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s2">import </span><span class="s1">Serialisable</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">Float,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">NoneSet,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">DateTime,</span>
+    <span class="s1">Sequence,</span>
+<span class="s1">)</span>
+
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">HexBinary,</span>
+    <span class="s1">ExtensionList,</span>
+    <span class="s1">Relation,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s2">import </span><span class="s1">NestedInteger</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.sequence </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">NestedSequence,</span>
+    <span class="s1">MultiSequence,</span>
+    <span class="s1">MultiSequencePart,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s2">import </span><span class="s1">SHEET_MAIN_NS</span>
+<span class="s2">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s2">import </span><span class="s1">tostring</span>
+<span class="s2">from </span><span class="s1">openpyexcel.packaging.relationship </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">RelationshipList,</span>
+    <span class="s1">Relationship,</span>
+    <span class="s1">get_rels_path</span>
+<span class="s1">)</span>
+
+<span class="s2">from </span><span class="s1">.table </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">PivotArea,</span>
+    <span class="s1">Reference,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">.fields </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">Boolean,</span>
+    <span class="s1">Error,</span>
+    <span class="s1">Missing,</span>
+    <span class="s1">Number,</span>
+    <span class="s1">Text,</span>
+    <span class="s1">TupleList,</span>
+    <span class="s1">DateTimeField,</span>
+<span class="s1">)</span>
+
+<span class="s2">class </span><span class="s1">MeasureDimensionMap(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;map&quot;</span>
+
+    <span class="s1">measureGroup = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">dimension = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">measureGroup=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">dimension=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.measureGroup = measureGroup</span>
+        <span class="s1">self.dimension = dimension</span>
+
+
+<span class="s2">class </span><span class="s1">MeasureGroup(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;measureGroup&quot;</span>
+
+    <span class="s1">name = String()</span>
+    <span class="s1">caption = String()</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">name=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">caption=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.caption = caption</span>
+
+
+<span class="s2">class </span><span class="s1">PivotDimension(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;dimension&quot;</span>
+
+    <span class="s1">measure = Bool()</span>
+    <span class="s1">name = String()</span>
+    <span class="s1">uniqueName = String()</span>
+    <span class="s1">caption = String()</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">measure=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">name=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">uniqueName=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">caption=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.measure = measure</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.uniqueName = uniqueName</span>
+        <span class="s1">self.caption = caption</span>
+
+
+<span class="s2">class </span><span class="s1">CalculatedMember(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;calculatedMember&quot;</span>
+
+    <span class="s1">name = String()</span>
+    <span class="s1">mdx = String()</span>
+    <span class="s1">memberName = String()</span>
+    <span class="s1">hierarchy = String()</span>
+    <span class="s1">parent = String()</span>
+    <span class="s1">solveOrder = Integer()</span>
+    <span class="s1">set = Bool()</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'extLst'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">name=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">mdx=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">memberName=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">hierarchy=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">parent=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">solveOrder=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">set=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.mdx = mdx</span>
+        <span class="s1">self.memberName = memberName</span>
+        <span class="s1">self.hierarchy = hierarchy</span>
+        <span class="s1">self.parent = parent</span>
+        <span class="s1">self.solveOrder = solveOrder</span>
+        <span class="s1">self.set = set</span>
+        <span class="s1">self.extLst = extLst</span>
+
+
+<span class="s2">class </span><span class="s1">CalculatedItem(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;calculatedItem&quot;</span>
+
+    <span class="s1">field = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">formula = String()</span>
+    <span class="s1">pivotArea = Typed(expected_type=PivotArea, )</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'pivotArea'</span><span class="s1">, </span><span class="s3">'extLst'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">field=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">formula=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">pivotArea=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.field = field</span>
+        <span class="s1">self.formula = formula</span>
+        <span class="s1">self.pivotArea = pivotArea</span>
+        <span class="s1">self.extLst = extLst</span>
+
+
+<span class="s2">class </span><span class="s1">ServerFormat(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;serverFormat&quot;</span>
+
+    <span class="s1">format = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">culture=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">format=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.culture = culture</span>
+        <span class="s1">self.format = format</span>
+
+
+<span class="s2">class </span><span class="s1">ServerFormats(Serialisable):</span>
+
+    <span class="s1">count = Integer()</span>
+    <span class="s1">serverFormat = Typed(expected_type=ServerFormat, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'serverFormat'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">count=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">serverFormat=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.count = count</span>
+        <span class="s1">self.serverFormat = serverFormat</span>
+
+
+<span class="s2">class </span><span class="s1">Query(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;query&quot;</span>
+
+    <span class="s1">mdx = String()</span>
+    <span class="s1">tpls = Typed(expected_type=TupleList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'tpls'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">mdx=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">tpls=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.mdx = mdx</span>
+        <span class="s1">self.tpls = tpls</span>
+
+
+<span class="s2">class </span><span class="s1">QueryCache(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;queryCache&quot;</span>
+
+    <span class="s1">count = Integer()</span>
+    <span class="s1">query = Typed(expected_type=Query, )</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'query'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">count=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">query=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.count = count</span>
+        <span class="s1">self.query = query</span>
+
+
+<span class="s2">class </span><span class="s1">OLAPSet(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;set&quot;</span>
+
+    <span class="s1">count = Integer()</span>
+    <span class="s1">maxRank = Integer()</span>
+    <span class="s1">setDefinition = String()</span>
+    <span class="s1">sortType = NoneSet(values=([</span><span class="s3">'ascending'</span><span class="s1">, </span><span class="s3">'descending'</span><span class="s1">, </span><span class="s3">'ascendingAlpha'</span><span class="s1">,</span>
+                                <span class="s3">'descendingAlpha'</span><span class="s1">, </span><span class="s3">'ascendingNatural'</span><span class="s1">, </span><span class="s3">'descendingNatural'</span><span class="s1">]))</span>
+    <span class="s1">queryFailed = Bool()</span>
+    <span class="s1">tpls = Typed(expected_type=TupleList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">sortByTuple = Typed(expected_type=TupleList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'tpls'</span><span class="s1">, </span><span class="s3">'sortByTuple'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">count=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">maxRank=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">setDefinition=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">sortType=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">queryFailed=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">tpls=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">sortByTuple=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.count = count</span>
+        <span class="s1">self.maxRank = maxRank</span>
+        <span class="s1">self.setDefinition = setDefinition</span>
+        <span class="s1">self.sortType = sortType</span>
+        <span class="s1">self.queryFailed = queryFailed</span>
+        <span class="s1">self.tpls = tpls</span>
+        <span class="s1">self.sortByTuple = sortByTuple</span>
+
+
+<span class="s2">class </span><span class="s1">OLAPSets(Serialisable):</span>
+
+    <span class="s1">count = Integer()</span>
+    <span class="s1">set = Typed(expected_type=OLAPSet, )</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'set'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">count=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">set=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.count = count</span>
+        <span class="s1">self.set = set</span>
+
+
+<span class="s2">class </span><span class="s1">PCDSDTCEntries(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;pCDSDTCEntries&quot;</span>
+
+    <span class="s1">count = Integer()</span>
+    <span class="s0"># some elements are choice</span>
+    <span class="s1">m = Typed(expected_type=Missing, )</span>
+    <span class="s1">n = Typed(expected_type=Number, )</span>
+    <span class="s1">e = Typed(expected_type=Error, )</span>
+    <span class="s1">s = Typed(expected_type=Text)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'m'</span><span class="s1">, </span><span class="s3">'n'</span><span class="s1">, </span><span class="s3">'e'</span><span class="s1">, </span><span class="s3">'s'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">count=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">m=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">n=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">e=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">s=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.count = count</span>
+        <span class="s1">self.m = m</span>
+        <span class="s1">self.n = n</span>
+        <span class="s1">self.e = e</span>
+        <span class="s1">self.s = s</span>
+
+
+<span class="s2">class </span><span class="s1">TupleCache(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;tupleCache&quot;</span>
+
+    <span class="s1">entries = Typed(expected_type=PCDSDTCEntries, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">sets = Typed(expected_type=OLAPSets, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">queryCache = Typed(expected_type=QueryCache, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">serverFormats = Typed(expected_type=ServerFormats, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'entries'</span><span class="s1">, </span><span class="s3">'sets'</span><span class="s1">, </span><span class="s3">'queryCache'</span><span class="s1">, </span><span class="s3">'serverFormats'</span><span class="s1">, </span><span class="s3">'extLst'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">entries=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">sets=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">queryCache=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">serverFormats=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.entries = entries</span>
+        <span class="s1">self.sets = sets</span>
+        <span class="s1">self.queryCache = queryCache</span>
+        <span class="s1">self.serverFormats = serverFormats</span>
+        <span class="s1">self.extLst = extLst</span>
+
+
+<span class="s2">class </span><span class="s1">PCDKPI(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;pCDKPI&quot;</span>
+
+    <span class="s1">uniqueName = String()</span>
+    <span class="s1">caption = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">displayFolder = String()</span>
+    <span class="s1">measureGroup = String()</span>
+    <span class="s1">parent = String()</span>
+    <span class="s1">value = String()</span>
+    <span class="s1">goal = String()</span>
+    <span class="s1">status = String()</span>
+    <span class="s1">trend = String()</span>
+    <span class="s1">weight = String()</span>
+    <span class="s1">time = String()</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">uniqueName=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">caption=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">displayFolder=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">measureGroup=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">parent=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">value=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">goal=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">status=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">trend=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">weight=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">time=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.uniqueName = uniqueName</span>
+        <span class="s1">self.caption = caption</span>
+        <span class="s1">self.displayFolder = displayFolder</span>
+        <span class="s1">self.measureGroup = measureGroup</span>
+        <span class="s1">self.parent = parent</span>
+        <span class="s1">self.value = value</span>
+        <span class="s1">self.goal = goal</span>
+        <span class="s1">self.status = status</span>
+        <span class="s1">self.trend = trend</span>
+        <span class="s1">self.weight = weight</span>
+        <span class="s1">self.time = time</span>
+
+
+<span class="s2">class </span><span class="s1">GroupMember(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;groupMember&quot;</span>
+
+    <span class="s1">uniqueName = String()</span>
+    <span class="s1">group = Bool()</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">uniqueName=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">group=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.uniqueName = uniqueName</span>
+        <span class="s1">self.group = group</span>
+
+
+<span class="s2">class </span><span class="s1">GroupMembers(Serialisable):</span>
+
+    <span class="s1">count = Integer()</span>
+    <span class="s1">groupMember = Typed(expected_type=GroupMember, )</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'groupMember'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">count=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">groupMember=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.count = count</span>
+        <span class="s1">self.groupMember = groupMember</span>
+
+
+<span class="s2">class </span><span class="s1">LevelGroup(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;levelGroup&quot;</span>
+
+    <span class="s1">name = String()</span>
+    <span class="s1">uniqueName = String()</span>
+    <span class="s1">caption = String()</span>
+    <span class="s1">uniqueParent = String()</span>
+    <span class="s1">id = Integer()</span>
+    <span class="s1">groupMembers = Typed(expected_type=GroupMembers, )</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'groupMembers'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">name=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">uniqueName=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">caption=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">uniqueParent=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">id=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">groupMembers=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.uniqueName = uniqueName</span>
+        <span class="s1">self.caption = caption</span>
+        <span class="s1">self.uniqueParent = uniqueParent</span>
+        <span class="s1">self.id = id</span>
+        <span class="s1">self.groupMembers = groupMembers</span>
+
+
+<span class="s2">class </span><span class="s1">Groups(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;groups&quot;</span>
+
+    <span class="s1">count = Integer()</span>
+    <span class="s1">group = Typed(expected_type=LevelGroup, )</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'group'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">count=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">group=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.count = count</span>
+        <span class="s1">self.group = group</span>
+
+
+<span class="s2">class </span><span class="s1">GroupLevel(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;groupLevel&quot;</span>
+
+    <span class="s1">uniqueName = String()</span>
+    <span class="s1">caption = String()</span>
+    <span class="s1">user = Bool()</span>
+    <span class="s1">customRollUp = Bool()</span>
+    <span class="s1">groups = Typed(expected_type=Groups, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'groups'</span><span class="s1">, </span><span class="s3">'extLst'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">uniqueName=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">caption=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">user=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">customRollUp=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">groups=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.uniqueName = uniqueName</span>
+        <span class="s1">self.caption = caption</span>
+        <span class="s1">self.user = user</span>
+        <span class="s1">self.customRollUp = customRollUp</span>
+        <span class="s1">self.groups = groups</span>
+        <span class="s1">self.extLst = extLst</span>
+
+
+<span class="s2">class </span><span class="s1">GroupLevels(Serialisable):</span>
+
+    <span class="s1">count = Integer()</span>
+    <span class="s1">groupLevel = Typed(expected_type=GroupLevel, )</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'groupLevel'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">count=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">groupLevel=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.count = count</span>
+        <span class="s1">self.groupLevel = groupLevel</span>
+
+
+<span class="s2">class </span><span class="s1">FieldUsage(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;fieldUsage&quot;</span>
+
+    <span class="s1">x = Integer()</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">x=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.x = x</span>
+
+
+<span class="s2">class </span><span class="s1">FieldsUsage(Serialisable):</span>
+
+    <span class="s1">count = Integer()</span>
+    <span class="s1">fieldUsage = Typed(expected_type=FieldUsage, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'fieldUsage'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">count=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">fieldUsage=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.count = count</span>
+        <span class="s1">self.fieldUsage = fieldUsage</span>
+
+
+<span class="s2">class </span><span class="s1">CacheHierarchy(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;cacheHierarchy&quot;</span>
+
+    <span class="s1">uniqueName = String()</span>
+    <span class="s1">caption = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">measure = Bool()</span>
+    <span class="s1">set = Bool()</span>
+    <span class="s1">parentSet = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">iconSet = Integer()</span>
+    <span class="s1">attribute = Bool()</span>
+    <span class="s1">time = Bool()</span>
+    <span class="s1">keyAttribute = Bool()</span>
+    <span class="s1">defaultMemberUniqueName = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">allUniqueName = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">allCaption = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">dimensionUniqueName = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">displayFolder = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">measureGroup = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">measures = Bool()</span>
+    <span class="s1">count = Integer()</span>
+    <span class="s1">oneField = Bool()</span>
+    <span class="s1">memberValueDatatype = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">unbalanced = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">unbalancedGroup = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">hidden = Bool()</span>
+    <span class="s1">fieldsUsage = Typed(expected_type=FieldsUsage, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">groupLevels = Typed(expected_type=GroupLevels, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'fieldsUsage'</span><span class="s1">, </span><span class="s3">'groupLevels'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">uniqueName=</span><span class="s3">&quot;&quot;</span><span class="s1">,</span>
+                 <span class="s1">caption=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">measure=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">set=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">parentSet=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">iconSet=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">attribute=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">time=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">keyAttribute=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">defaultMemberUniqueName=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">allUniqueName=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">allCaption=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">dimensionUniqueName=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">displayFolder=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">measureGroup=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">measures=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">count=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">oneField=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">memberValueDatatype=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">unbalanced=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">unbalancedGroup=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">hidden=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">fieldsUsage=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">groupLevels=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.uniqueName = uniqueName</span>
+        <span class="s1">self.caption = caption</span>
+        <span class="s1">self.measure = measure</span>
+        <span class="s1">self.set = set</span>
+        <span class="s1">self.parentSet = parentSet</span>
+        <span class="s1">self.iconSet = iconSet</span>
+        <span class="s1">self.attribute = attribute</span>
+        <span class="s1">self.time = time</span>
+        <span class="s1">self.keyAttribute = keyAttribute</span>
+        <span class="s1">self.defaultMemberUniqueName = defaultMemberUniqueName</span>
+        <span class="s1">self.allUniqueName = allUniqueName</span>
+        <span class="s1">self.allCaption = allCaption</span>
+        <span class="s1">self.dimensionUniqueName = dimensionUniqueName</span>
+        <span class="s1">self.displayFolder = displayFolder</span>
+        <span class="s1">self.measureGroup = measureGroup</span>
+        <span class="s1">self.measures = measures</span>
+        <span class="s1">self.count = count</span>
+        <span class="s1">self.oneField = oneField</span>
+        <span class="s1">self.memberValueDatatype = memberValueDatatype</span>
+        <span class="s1">self.unbalanced = unbalanced</span>
+        <span class="s1">self.unbalancedGroup = unbalancedGroup</span>
+        <span class="s1">self.hidden = hidden</span>
+        <span class="s1">self.fieldsUsage = fieldsUsage</span>
+        <span class="s1">self.groupLevels = groupLevels</span>
+        <span class="s1">self.extLst = extLst</span>
+
+
+<span class="s2">class </span><span class="s1">GroupItems(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;groupItems&quot;</span>
+
+    <span class="s1">m = Sequence(expected_type=Missing)</span>
+    <span class="s1">n = Sequence(expected_type=Number)</span>
+    <span class="s1">b = Sequence(expected_type=Boolean)</span>
+    <span class="s1">e = Sequence(expected_type=Error)</span>
+    <span class="s1">s = Sequence(expected_type=Text)</span>
+    <span class="s1">d = Sequence(expected_type=DateTimeField,)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'m'</span><span class="s1">, </span><span class="s3">'n'</span><span class="s1">, </span><span class="s3">'b'</span><span class="s1">, </span><span class="s3">'e'</span><span class="s1">, </span><span class="s3">'s'</span><span class="s1">, </span><span class="s3">'d'</span><span class="s1">)</span>
+    <span class="s1">__attrs__ = (</span><span class="s3">&quot;count&quot;</span><span class="s1">, )</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">count=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">m=(),</span>
+                 <span class="s1">n=(),</span>
+                 <span class="s1">b=(),</span>
+                 <span class="s1">e=(),</span>
+                 <span class="s1">s=(),</span>
+                 <span class="s1">d=(),</span>
+                <span class="s1">):</span>
+        <span class="s1">self.m = m</span>
+        <span class="s1">self.n = n</span>
+        <span class="s1">self.b = b</span>
+        <span class="s1">self.e = e</span>
+        <span class="s1">self.s = s</span>
+        <span class="s1">self.d = d</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">count(self):</span>
+        <span class="s2">return </span><span class="s1">len(self.m + self.n + self.b + self.e + self.s + self.d)</span>
+
+
+<span class="s2">class </span><span class="s1">DiscretePr(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;discretePr&quot;</span>
+
+    <span class="s1">count = Integer()</span>
+    <span class="s1">x = NestedInteger(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'x'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">count=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">x=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.count = count</span>
+        <span class="s1">self.x = x</span>
+
+
+<span class="s2">class </span><span class="s1">RangePr(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;rangePr&quot;</span>
+
+    <span class="s1">autoStart = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">autoEnd = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">groupBy = Set(values=([</span><span class="s3">'range'</span><span class="s1">, </span><span class="s3">'seconds'</span><span class="s1">, </span><span class="s3">'minutes'</span><span class="s1">, </span><span class="s3">'hours'</span><span class="s1">, </span><span class="s3">'days'</span><span class="s1">,</span>
+                           <span class="s3">'months'</span><span class="s1">, </span><span class="s3">'quarters'</span><span class="s1">, </span><span class="s3">'years'</span><span class="s1">]))</span>
+    <span class="s1">startNum = Float(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">endNum = Float(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">startDate = DateTime(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">endDate = DateTime(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">groupInterval = Float(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">autoStart=</span><span class="s2">True</span><span class="s1">,</span>
+                 <span class="s1">autoEnd=</span><span class="s2">True</span><span class="s1">,</span>
+                 <span class="s1">groupBy=range,</span>
+                 <span class="s1">startNum=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">endNum=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">startDate=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">endDate=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">groupInterval=</span><span class="s4">1</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.autoStart = autoStart</span>
+        <span class="s1">self.autoEnd = autoEnd</span>
+        <span class="s1">self.groupBy = groupBy</span>
+        <span class="s1">self.startNum = startNum</span>
+        <span class="s1">self.endNum = endNum</span>
+        <span class="s1">self.startDate = startDate</span>
+        <span class="s1">self.endDate = endDate</span>
+        <span class="s1">self.groupInterval = groupInterval</span>
+
+
+<span class="s2">class </span><span class="s1">FieldGroup(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;fieldGroup&quot;</span>
+
+    <span class="s1">par = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">base = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">rangePr = Typed(expected_type=RangePr, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">discretePr = Typed(expected_type=DiscretePr, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">groupItems = Typed(expected_type=GroupItems, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'rangePr'</span><span class="s1">, </span><span class="s3">'discretePr'</span><span class="s1">, </span><span class="s3">'groupItems'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">par=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">base=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">rangePr=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">discretePr=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">groupItems=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.par = par</span>
+        <span class="s1">self.base = base</span>
+        <span class="s1">self.rangePr = rangePr</span>
+        <span class="s1">self.discretePr = discretePr</span>
+        <span class="s1">self.groupItems = groupItems</span>
+
+
+<span class="s2">class </span><span class="s1">SharedItems(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;sharedItems&quot;</span>
+
+    <span class="s1">_fields = MultiSequence()</span>
+    <span class="s1">m = MultiSequencePart(expected_type=Missing, store=</span><span class="s3">&quot;_fields&quot;</span><span class="s1">)</span>
+    <span class="s1">n = MultiSequencePart(expected_type=Number, store=</span><span class="s3">&quot;_fields&quot;</span><span class="s1">)</span>
+    <span class="s1">b = MultiSequencePart(expected_type=Boolean, store=</span><span class="s3">&quot;_fields&quot;</span><span class="s1">)</span>
+    <span class="s1">e = MultiSequencePart(expected_type=Error, store=</span><span class="s3">&quot;_fields&quot;</span><span class="s1">)</span>
+    <span class="s1">s = MultiSequencePart(expected_type=Text,  store=</span><span class="s3">&quot;_fields&quot;</span><span class="s1">)</span>
+    <span class="s1">d = MultiSequencePart(expected_type=DateTimeField, store=</span><span class="s3">&quot;_fields&quot;</span><span class="s1">)</span>
+    <span class="s0"># attributes are optional and must be derived from associated cache records</span>
+    <span class="s1">containsSemiMixedTypes = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">containsNonDate = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">containsDate = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">containsString = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">containsBlank = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">containsMixedTypes = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">containsNumber = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">containsInteger = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">minValue = Float(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">maxValue = Float(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">minDate = DateTime(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">maxDate = DateTime(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">longText = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__attrs__ = (</span><span class="s3">'count'</span><span class="s1">, </span><span class="s3">'containsBlank'</span><span class="s1">, </span><span class="s3">'containsDate'</span><span class="s1">, </span><span class="s3">'containsInteger'</span><span class="s1">,</span>
+                 <span class="s3">'containsMixedTypes'</span><span class="s1">, </span><span class="s3">'containsNonDate'</span><span class="s1">, </span><span class="s3">'containsNumber'</span><span class="s1">,</span>
+                 <span class="s3">'containsSemiMixedTypes'</span><span class="s1">, </span><span class="s3">'containsString'</span><span class="s1">, </span><span class="s3">'minValue'</span><span class="s1">, </span><span class="s3">'maxValue'</span><span class="s1">,</span>
+                 <span class="s3">'minDate'</span><span class="s1">, </span><span class="s3">'maxDate'</span><span class="s1">, </span><span class="s3">'longText'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">_fields=(),</span>
+                 <span class="s1">containsSemiMixedTypes=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">containsNonDate=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">containsDate=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">containsString=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">containsBlank=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">containsMixedTypes=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">containsNumber=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">containsInteger=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">minValue=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">maxValue=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">minDate=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">maxDate=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">count=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">longText=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self._fields = _fields</span>
+        <span class="s1">self.containsBlank = containsBlank</span>
+        <span class="s1">self.containsDate = containsDate</span>
+        <span class="s1">self.containsNonDate = containsNonDate</span>
+        <span class="s1">self.containsString = containsString</span>
+        <span class="s1">self.containsMixedTypes = containsMixedTypes</span>
+        <span class="s1">self.containsSemiMixedTypes = containsSemiMixedTypes</span>
+        <span class="s1">self.containsNumber = containsNumber</span>
+        <span class="s1">self.containsInteger = containsInteger</span>
+        <span class="s1">self.minValue = minValue</span>
+        <span class="s1">self.maxValue = maxValue</span>
+        <span class="s1">self.minDate = minDate</span>
+        <span class="s1">self.maxDate = maxDate</span>
+        <span class="s1">self.longText = longText</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">count(self):</span>
+        <span class="s2">return </span><span class="s1">len(self._fields)</span>
+
+
+<span class="s2">class </span><span class="s1">CacheField(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;cacheField&quot;</span>
+
+    <span class="s1">sharedItems = Typed(expected_type=SharedItems, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">fieldGroup = Typed(expected_type=FieldGroup, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">mpMap = NestedInteger(allow_none=</span><span class="s2">True</span><span class="s1">, attribute=</span><span class="s3">&quot;v&quot;</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">name = String()</span>
+    <span class="s1">caption = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">propertyName = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">serverField = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">uniqueList = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">numFmtId = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">formula = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">sqlType = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">hierarchy = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">level = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">databaseField = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">mappingCount = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">memberPropertyField = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'sharedItems'</span><span class="s1">, </span><span class="s3">'fieldGroup'</span><span class="s1">, </span><span class="s3">'mpMap'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">sharedItems=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">fieldGroup=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">mpMap=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">name=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">caption=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">propertyName=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">serverField=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">uniqueList=</span><span class="s2">True</span><span class="s1">,</span>
+                 <span class="s1">numFmtId=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">formula=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">sqlType=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">hierarchy=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">level=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">databaseField=</span><span class="s2">True</span><span class="s1">,</span>
+                 <span class="s1">mappingCount=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">memberPropertyField=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.sharedItems = sharedItems</span>
+        <span class="s1">self.fieldGroup = fieldGroup</span>
+        <span class="s1">self.mpMap = mpMap</span>
+        <span class="s1">self.extLst = extLst</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.caption = caption</span>
+        <span class="s1">self.propertyName = propertyName</span>
+        <span class="s1">self.serverField = serverField</span>
+        <span class="s1">self.uniqueList = uniqueList</span>
+        <span class="s1">self.numFmtId = numFmtId</span>
+        <span class="s1">self.formula = formula</span>
+        <span class="s1">self.sqlType = sqlType</span>
+        <span class="s1">self.hierarchy = hierarchy</span>
+        <span class="s1">self.level = level</span>
+        <span class="s1">self.databaseField = databaseField</span>
+        <span class="s1">self.mappingCount = mappingCount</span>
+        <span class="s1">self.memberPropertyField = memberPropertyField</span>
+
+
+<span class="s2">class </span><span class="s1">RangeSet(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;rangeSet&quot;</span>
+
+    <span class="s1">i1 = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">i2 = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">i3 = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">i4 = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">ref = String()</span>
+    <span class="s1">name = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">sheet = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">i1=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">i2=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">i3=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">i4=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">ref=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">name=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">sheet=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.i1 = i1</span>
+        <span class="s1">self.i2 = i2</span>
+        <span class="s1">self.i3 = i3</span>
+        <span class="s1">self.i4 = i4</span>
+        <span class="s1">self.ref = ref</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.sheet = sheet</span>
+
+
+<span class="s2">class </span><span class="s1">PageItem(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;pageItem&quot;</span>
+
+    <span class="s1">name = String()</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">name=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.name = name</span>
+
+
+<span class="s2">class </span><span class="s1">Page(Serialisable):</span>
+
+    <span class="s0"># PCDSCPage</span>
+    <span class="s1">tagname = </span><span class="s3">&quot;PCDSCPage&quot;</span>
+
+    <span class="s1">pageItem = Sequence(expected_type=PageItem)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'pageItem'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">count=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">pageItem=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.pageItem = pageItem</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">count(self):</span>
+        <span class="s2">return </span><span class="s1">len(self.pageItem)</span>
+
+
+<span class="s2">class </span><span class="s1">Consolidation(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;consolidation&quot;</span>
+
+    <span class="s1">autoPage = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">pages = NestedSequence(expected_type=Page, count=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">rangeSets = NestedSequence(expected_type=RangeSet, count=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'pages'</span><span class="s1">, </span><span class="s3">'rangeSets'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">autoPage=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">pages=(),</span>
+                 <span class="s1">rangeSets=(),</span>
+                <span class="s1">):</span>
+        <span class="s1">self.autoPage = autoPage</span>
+        <span class="s1">self.pages = pages</span>
+        <span class="s1">self.rangeSets = rangeSets</span>
+
+
+<span class="s2">class </span><span class="s1">WorksheetSource(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;worksheetSource&quot;</span>
+
+    <span class="s1">ref = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">name = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">sheet = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">ref=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">name=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">sheet=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.ref = ref</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.sheet = sheet</span>
+
+
+<span class="s2">class </span><span class="s1">CacheSource(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;cacheSource&quot;</span>
+
+    <span class="s1">type = Set(values=([</span><span class="s3">'worksheet'</span><span class="s1">, </span><span class="s3">'external'</span><span class="s1">, </span><span class="s3">'consolidation'</span><span class="s1">, </span><span class="s3">'scenario'</span><span class="s1">]))</span>
+    <span class="s1">connectionId = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s0"># some elements are choice</span>
+    <span class="s1">worksheetSource = Typed(expected_type=WorksheetSource, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">consolidation = Typed(expected_type=Consolidation, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'worksheetSource'</span><span class="s1">, </span><span class="s3">'consolidation'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">type=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">connectionId=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">worksheetSource=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">consolidation=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.type = type</span>
+        <span class="s1">self.connectionId = connectionId</span>
+        <span class="s1">self.worksheetSource = worksheetSource</span>
+        <span class="s1">self.consolidation = consolidation</span>
+
+
+<span class="s2">class </span><span class="s1">CacheDefinition(Serialisable):</span>
+
+    <span class="s1">mime_type = </span><span class="s3">&quot;application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml&quot;</span>
+    <span class="s1">rel_type = </span><span class="s3">&quot;http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition&quot;</span>
+    <span class="s1">_id = </span><span class="s4">1</span>
+    <span class="s1">_path = </span><span class="s3">&quot;/xl/pivotCache/pivotCacheDefinition{0}.xml&quot;</span>
+    <span class="s1">records = </span><span class="s2">None</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;pivotCacheDefinition&quot;</span>
+
+    <span class="s1">invalid = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">saveData = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">refreshOnLoad = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">optimizeMemory = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">enableRefresh = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">refreshedBy = String(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">refreshedDate = Float(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">refreshedDateIso = DateTime(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">backgroundQuery = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">missingItemsLimit = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">createdVersion = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">refreshedVersion = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">minRefreshableVersion = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">recordCount = Integer(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">upgradeOnRefresh = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">tupleCache = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">supportSubquery = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">supportAdvancedDrill = Bool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">cacheSource = Typed(expected_type=CacheSource)</span>
+    <span class="s1">cacheFields = NestedSequence(expected_type=CacheField, count=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">cacheHierarchies = NestedSequence(expected_type=CacheHierarchy, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">kpis = NestedSequence(expected_type=PCDKPI, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">tupleCache = Typed(expected_type=TupleCache, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">calculatedItems = NestedSequence(expected_type=CalculatedItem, count=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">calculatedMembers = NestedSequence(expected_type=CalculatedMember, count=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">dimensions = NestedSequence(expected_type=PivotDimension, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">measureGroups = NestedSequence(expected_type=MeasureGroup, count=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">maps = NestedSequence(expected_type=MeasureDimensionMap, count=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">id = Relation()</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'cacheSource'</span><span class="s1">, </span><span class="s3">'cacheFields'</span><span class="s1">, </span><span class="s3">'cacheHierarchies'</span><span class="s1">, </span><span class="s3">'kpis'</span><span class="s1">,</span>
+                    <span class="s3">'tupleCache'</span><span class="s1">, </span><span class="s3">'calculatedItems'</span><span class="s1">, </span><span class="s3">'calculatedMembers'</span><span class="s1">, </span><span class="s3">'dimensions'</span><span class="s1">,</span>
+                    <span class="s3">'measureGroups'</span><span class="s1">, </span><span class="s3">'maps'</span><span class="s1">,)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">invalid=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">saveData=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">refreshOnLoad=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">optimizeMemory=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">enableRefresh=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">refreshedBy=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">refreshedDate=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">refreshedDateIso=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">backgroundQuery=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">missingItemsLimit=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">createdVersion=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">refreshedVersion=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">minRefreshableVersion=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">recordCount=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">upgradeOnRefresh=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">tupleCache=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">supportSubquery=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">supportAdvancedDrill=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">cacheSource=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">cacheFields=(),</span>
+                 <span class="s1">cacheHierarchies=(),</span>
+                 <span class="s1">kpis=(),</span>
+                 <span class="s1">calculatedItems=(),</span>
+                 <span class="s1">calculatedMembers=(),</span>
+                 <span class="s1">dimensions=(),</span>
+                 <span class="s1">measureGroups=(),</span>
+                 <span class="s1">maps=(),</span>
+                 <span class="s1">extLst=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">id = </span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.invalid = invalid</span>
+        <span class="s1">self.saveData = saveData</span>
+        <span class="s1">self.refreshOnLoad = refreshOnLoad</span>
+        <span class="s1">self.optimizeMemory = optimizeMemory</span>
+        <span class="s1">self.enableRefresh = enableRefresh</span>
+        <span class="s1">self.refreshedBy = refreshedBy</span>
+        <span class="s1">self.refreshedDate = refreshedDate</span>
+        <span class="s1">self.refreshedDateIso = refreshedDateIso</span>
+        <span class="s1">self.backgroundQuery = backgroundQuery</span>
+        <span class="s1">self.missingItemsLimit = missingItemsLimit</span>
+        <span class="s1">self.createdVersion = createdVersion</span>
+        <span class="s1">self.refreshedVersion = refreshedVersion</span>
+        <span class="s1">self.minRefreshableVersion = minRefreshableVersion</span>
+        <span class="s1">self.recordCount = recordCount</span>
+        <span class="s1">self.upgradeOnRefresh = upgradeOnRefresh</span>
+        <span class="s1">self.tupleCache = tupleCache</span>
+        <span class="s1">self.supportSubquery = supportSubquery</span>
+        <span class="s1">self.supportAdvancedDrill = supportAdvancedDrill</span>
+        <span class="s1">self.cacheSource = cacheSource</span>
+        <span class="s1">self.cacheFields = cacheFields</span>
+        <span class="s1">self.cacheHierarchies = cacheHierarchies</span>
+        <span class="s1">self.kpis = kpis</span>
+        <span class="s1">self.tupleCache = tupleCache</span>
+        <span class="s1">self.calculatedItems = calculatedItems</span>
+        <span class="s1">self.calculatedMembers = calculatedMembers</span>
+        <span class="s1">self.dimensions = dimensions</span>
+        <span class="s1">self.measureGroups = measureGroups</span>
+        <span class="s1">self.maps = maps</span>
+        <span class="s1">self.id = id</span>
+
+
+    <span class="s2">def </span><span class="s1">to_tree(self):</span>
+        <span class="s1">node = super(CacheDefinition, self).to_tree()</span>
+        <span class="s1">node.set(</span><span class="s3">&quot;xmlns&quot;</span><span class="s1">, SHEET_MAIN_NS)</span>
+        <span class="s2">return </span><span class="s1">node</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">path(self):</span>
+        <span class="s2">return </span><span class="s1">self._path.format(self._id)</span>
+
+
+    <span class="s2">def </span><span class="s1">_write(self, archive, manifest):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Add to zipfile and update manifest 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self._write_rels(archive, manifest)</span>
+        <span class="s1">xml = tostring(self.to_tree())</span>
+        <span class="s1">archive.writestr(self.path[</span><span class="s4">1</span><span class="s1">:], xml)</span>
+        <span class="s1">manifest.append(self)</span>
+
+
+    <span class="s2">def </span><span class="s1">_write_rels(self, archive, manifest):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Write the relevant child objects and add links 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.records </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s1">rels = RelationshipList()</span>
+        <span class="s1">r = Relationship(Type=self.records.rel_type, Target=self.records.path)</span>
+        <span class="s1">rels.append(r)</span>
+        <span class="s1">self.id = r.id</span>
+        <span class="s1">self.records._id = self._id</span>
+        <span class="s1">self.records._write(archive, manifest)</span>
+
+        <span class="s1">path = get_rels_path(self.path)</span>
+        <span class="s1">xml = tostring(rels.to_tree())</span>
+        <span class="s1">archive.writestr(path[</span><span class="s4">1</span><span class="s1">:], xml)</span>
+</pre>
+</body>
+</html>

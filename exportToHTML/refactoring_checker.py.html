@@ -1,0 +1,1612 @@
+<html>
+<head>
+<title>refactoring_checker.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+refactoring_checker.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s2">import </span><span class="s1">collections</span>
+<span class="s2">import </span><span class="s1">copy</span>
+<span class="s2">import </span><span class="s1">itertools</span>
+<span class="s2">import </span><span class="s1">tokenize</span>
+<span class="s2">from </span><span class="s1">functools </span><span class="s2">import </span><span class="s1">reduce</span>
+<span class="s2">from </span><span class="s1">typing </span><span class="s2">import </span><span class="s1">List</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+
+<span class="s2">from </span><span class="s1">pylint </span><span class="s2">import </span><span class="s1">checkers, interfaces</span>
+<span class="s2">from </span><span class="s1">pylint </span><span class="s2">import </span><span class="s1">utils </span><span class="s2">as </span><span class="s1">lint_utils</span>
+<span class="s2">from </span><span class="s1">pylint.checkers </span><span class="s2">import </span><span class="s1">utils</span>
+<span class="s2">from </span><span class="s1">pylint.checkers.utils </span><span class="s2">import </span><span class="s1">node_frame_class</span>
+
+<span class="s1">KNOWN_INFINITE_ITERATORS = {</span><span class="s3">&quot;itertools.count&quot;</span><span class="s1">}</span>
+<span class="s1">BUILTIN_EXIT_FUNCS = frozenset((</span><span class="s3">&quot;quit&quot;</span><span class="s1">, </span><span class="s3">&quot;exit&quot;</span><span class="s1">))</span>
+<span class="s1">CALLS_THAT_COULD_BE_REPLACED_BY_WITH = frozenset(</span>
+    <span class="s1">(</span>
+        <span class="s3">&quot;threading.lock.acquire&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;threading._RLock.acquire&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;threading.Semaphore.acquire&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;multiprocessing.managers.BaseManager.start&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;multiprocessing.managers.SyncManager.start&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+<span class="s1">)</span>
+<span class="s1">CALLS_RETURNING_CONTEXT_MANAGERS = frozenset(</span>
+    <span class="s1">(</span>
+        <span class="s3">&quot;_io.open&quot;</span><span class="s1">,  </span><span class="s0"># regular 'open()' call</span>
+        <span class="s3">&quot;codecs.open&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;urllib.request.urlopen&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;tempfile.NamedTemporaryFile&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;tempfile.SpooledTemporaryFile&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;tempfile.TemporaryDirectory&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;zipfile.ZipFile&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;zipfile.PyZipFile&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;zipfile.ZipFile.open&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;zipfile.PyZipFile.open&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;tarfile.TarFile&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;tarfile.TarFile.open&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;multiprocessing.context.BaseContext.Pool&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;concurrent.futures.thread.ThreadPoolExecutor&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;concurrent.futures.process.ProcessPoolExecutor&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;subprocess.Popen&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+<span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_if_statement_is_always_returning(if_node, returning_node_class) -&gt; bool:</span>
+    <span class="s2">for </span><span class="s1">node </span><span class="s2">in </span><span class="s1">if_node.body:</span>
+        <span class="s2">if </span><span class="s1">isinstance(node, returning_node_class):</span>
+            <span class="s2">return True</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">_is_trailing_comma(tokens: List[tokenize.TokenInfo], index: int) -&gt; bool:</span>
+    <span class="s0">&quot;&quot;&quot;Check if the given token is a trailing comma 
+ 
+    :param tokens: Sequence of modules tokens 
+    :type tokens: list[tokenize.TokenInfo] 
+    :param int index: Index of token under check in tokens 
+    :returns: True if the token is a comma which trails an expression 
+    :rtype: bool 
+    &quot;&quot;&quot;</span>
+    <span class="s1">token = tokens[index]</span>
+    <span class="s2">if </span><span class="s1">token.exact_type != tokenize.COMMA:</span>
+        <span class="s2">return False</span>
+    <span class="s0"># Must have remaining tokens on the same line such as NEWLINE</span>
+    <span class="s1">left_tokens = itertools.islice(tokens, index + </span><span class="s4">1</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">same_start_token(</span>
+        <span class="s1">other_token: tokenize.TokenInfo, _token: tokenize.TokenInfo = token</span>
+    <span class="s1">) -&gt; bool:</span>
+        <span class="s2">return </span><span class="s1">other_token.start[</span><span class="s4">0</span><span class="s1">] == _token.start[</span><span class="s4">0</span><span class="s1">]</span>
+
+    <span class="s1">same_line_remaining_tokens = list(</span>
+        <span class="s1">itertools.takewhile(same_start_token, left_tokens)</span>
+    <span class="s1">)</span>
+    <span class="s0"># Note: If the newline is tokenize.NEWLINE and not tokenize.NL</span>
+    <span class="s0"># then the newline denotes the end of expression</span>
+    <span class="s1">is_last_element = all(</span>
+        <span class="s1">other_token.type </span><span class="s2">in </span><span class="s1">(tokenize.NEWLINE, tokenize.COMMENT)</span>
+        <span class="s2">for </span><span class="s1">other_token </span><span class="s2">in </span><span class="s1">same_line_remaining_tokens</span>
+    <span class="s1">)</span>
+    <span class="s2">if not </span><span class="s1">same_line_remaining_tokens </span><span class="s2">or not </span><span class="s1">is_last_element:</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">get_curline_index_start():</span>
+        <span class="s0">&quot;&quot;&quot;Get the index denoting the start of the current line&quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">subindex, token </span><span class="s2">in </span><span class="s1">enumerate(reversed(tokens[:index])):</span>
+            <span class="s0"># See Lib/tokenize.py and Lib/token.py in cpython for more info</span>
+            <span class="s2">if </span><span class="s1">token.type == tokenize.NEWLINE:</span>
+                <span class="s2">return </span><span class="s1">index - subindex</span>
+        <span class="s2">return </span><span class="s4">0</span>
+
+    <span class="s1">curline_start = get_curline_index_start()</span>
+    <span class="s1">expected_tokens = {</span><span class="s3">&quot;return&quot;</span><span class="s1">, </span><span class="s3">&quot;yield&quot;</span><span class="s1">}</span>
+    <span class="s2">for </span><span class="s1">prevtoken </span><span class="s2">in </span><span class="s1">tokens[curline_start:index]:</span>
+        <span class="s2">if </span><span class="s3">&quot;=&quot; </span><span class="s2">in </span><span class="s1">prevtoken.string </span><span class="s2">or </span><span class="s1">prevtoken.string </span><span class="s2">in </span><span class="s1">expected_tokens:</span>
+            <span class="s2">return True</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">class </span><span class="s1">RefactoringChecker(checkers.BaseTokenChecker):</span>
+    <span class="s0">&quot;&quot;&quot;Looks for code which can be refactored 
+ 
+    This checker also mixes the astroid and the token approaches 
+    in order to create knowledge about whether an &quot;else if&quot; node 
+    is a true &quot;else if&quot; node, or an &quot;elif&quot; node. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__implements__ = (interfaces.ITokenChecker, interfaces.IAstroidChecker)</span>
+
+    <span class="s1">name = </span><span class="s3">&quot;refactoring&quot;</span>
+
+    <span class="s1">msgs = {</span>
+        <span class="s3">&quot;R1701&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Consider merging these isinstance calls to isinstance(%s, (%s))&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;consider-merging-isinstance&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when multiple consecutive isinstance calls can be merged into one.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1706&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Consider using ternary (%s)&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;consider-using-ternary&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when one of known pre-python 2.5 ternary syntax is used.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1709&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Boolean expression may be simplified to %s&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;simplify-boolean-expression&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Emitted when redundant pre-python 2.5 ternary syntax is used.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1726&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Boolean condition '%s' may be simplified to '%s'&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;simplifiable-condition&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Emitted when a boolean condition is able to be simplified.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1727&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Boolean condition '%s' will always evaluate to '%s'&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;condition-evals-to-constant&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Emitted when a boolean condition can be simplified to a constant value.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1702&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Too many nested blocks (%s/%s)&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;too-many-nested-blocks&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a function or a method has too many nested &quot;</span>
+            <span class="s3">&quot;blocks. This makes the code less understandable and &quot;</span>
+            <span class="s3">&quot;maintainable.&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span><span class="s3">&quot;old_names&quot;</span><span class="s1">: [(</span><span class="s3">&quot;R0101&quot;</span><span class="s1">, </span><span class="s3">&quot;old-too-many-nested-blocks&quot;</span><span class="s1">)]},</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1703&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;The if statement can be replaced with %s&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;simplifiable-if-statement&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when an if statement can be replaced with 'bool(test)'. &quot;</span><span class="s1">,</span>
+            <span class="s1">{</span><span class="s3">&quot;old_names&quot;</span><span class="s1">: [(</span><span class="s3">&quot;R0102&quot;</span><span class="s1">, </span><span class="s3">&quot;old-simplifiable-if-statement&quot;</span><span class="s1">)]},</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1704&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Redefining argument with the local name %r&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;redefined-argument-from-local&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when a local name is redefining an argument, which might &quot;</span>
+            <span class="s3">&quot;suggest a potential error. This is taken in account only for &quot;</span>
+            <span class="s3">&quot;a handful of name binding operations, such as for iteration, &quot;</span>
+            <span class="s3">&quot;with statement assignment and exception handler assignment.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1705&quot;</span><span class="s1">: (</span>
+            <span class="s3">'Unnecessary &quot;%s&quot; after &quot;return&quot;'</span><span class="s1">,</span>
+            <span class="s3">&quot;no-else-return&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used in order to highlight an unnecessary block of &quot;</span>
+            <span class="s3">&quot;code following an if containing a return statement. &quot;</span>
+            <span class="s3">&quot;As such, it will warn when it encounters an else &quot;</span>
+            <span class="s3">&quot;following a chain of ifs, all of them containing a &quot;</span>
+            <span class="s3">&quot;return statement.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1707&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Disallow trailing comma tuple&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;trailing-comma-tuple&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;In Python, a tuple is actually created by the comma symbol, &quot;</span>
+            <span class="s3">&quot;not by the parentheses. Unfortunately, one can actually create a &quot;</span>
+            <span class="s3">&quot;tuple by misplacing a trailing comma, which can lead to potential &quot;</span>
+            <span class="s3">&quot;weird bugs in your code. You should always use parentheses &quot;</span>
+            <span class="s3">&quot;explicitly for creating a tuple.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1708&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Do not raise StopIteration in generator, use return statement instead&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;stop-iteration-return&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;According to PEP479, the raise of StopIteration to end the loop of &quot;</span>
+            <span class="s3">&quot;a generator may lead to hard to find bugs. This PEP specify that &quot;</span>
+            <span class="s3">&quot;raise StopIteration has to be replaced by a simple return statement&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1710&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Either all return statements in a function should return an expression, &quot;</span>
+            <span class="s3">&quot;or none of them should.&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;inconsistent-return-statements&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;According to PEP8, if any return statement returns an expression, &quot;</span>
+            <span class="s3">&quot;any return statements where no value is returned should explicitly &quot;</span>
+            <span class="s3">&quot;state this as return None, and an explicit return statement &quot;</span>
+            <span class="s3">&quot;should be present at the end of the function (if reachable)&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1711&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Useless return at end of function or method&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;useless-return&quot;</span><span class="s1">,</span>
+            <span class="s3">'Emitted when a single &quot;return&quot; or &quot;return None&quot; statement is found '</span>
+            <span class="s3">&quot;at the end of function or method definition. This statement can safely be &quot;</span>
+            <span class="s3">&quot;removed because Python will implicitly return None&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1712&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Consider using tuple unpacking for swapping variables&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;consider-swap-variables&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;You do not have to use a temporary variable in order to &quot;</span>
+            <span class="s3">'swap variables. Using &quot;tuple unpacking&quot; to directly swap '</span>
+            <span class="s3">&quot;variables makes the intention more clear.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1713&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Consider using str.join(sequence) for concatenating &quot;</span>
+            <span class="s3">&quot;strings from an iterable&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;consider-using-join&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Using str.join(sequence) is faster, uses less memory &quot;</span>
+            <span class="s3">&quot;and increases readability compared to for-loop iteration.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1714&quot;</span><span class="s1">: (</span>
+            <span class="s3">'Consider merging these comparisons with &quot;in&quot; to %r'</span><span class="s1">,</span>
+            <span class="s3">&quot;consider-using-in&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;To check if a variable is equal to one of many values,&quot;</span>
+            <span class="s3">'combine the values into a tuple and check if the variable is contained &quot;in&quot; it '</span>
+            <span class="s3">&quot;instead of checking for equality against each of the values.&quot;</span>
+            <span class="s3">&quot;This is faster and less verbose.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1715&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Consider using dict.get for getting values from a dict &quot;</span>
+            <span class="s3">&quot;if a key is present or a default if not&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;consider-using-get&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Using the builtin dict.get for getting a value from a dictionary &quot;</span>
+            <span class="s3">&quot;if a key is present or a default if not, is simpler and considered &quot;</span>
+            <span class="s3">&quot;more idiomatic, although sometimes a bit slower&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1716&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Simplify chained comparison between the operands&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;chained-comparison&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;This message is emitted when pylint encounters boolean operation like&quot;</span>
+            <span class="s3">'&quot;a &lt; b and b &lt; c&quot;, suggesting instead to refactor it to &quot;a &lt; b &lt; c&quot;'</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1717&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Consider using a dictionary comprehension&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;consider-using-dict-comprehension&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Emitted when we detect the creation of a dictionary &quot;</span>
+            <span class="s3">&quot;using the dict() callable and a transient list. &quot;</span>
+            <span class="s3">&quot;Although there is nothing syntactically wrong with this code, &quot;</span>
+            <span class="s3">&quot;it is hard to read and can be simplified to a dict comprehension.&quot;</span>
+            <span class="s3">&quot;Also it is faster since you don't need to create another &quot;</span>
+            <span class="s3">&quot;transient list&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1718&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Consider using a set comprehension&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;consider-using-set-comprehension&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Although there is nothing syntactically wrong with this code, &quot;</span>
+            <span class="s3">&quot;it is hard to read and can be simplified to a set comprehension.&quot;</span>
+            <span class="s3">&quot;Also it is faster since you don't need to create another &quot;</span>
+            <span class="s3">&quot;transient list&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1719&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;The if expression can be replaced with %s&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;simplifiable-if-expression&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when an if expression can be replaced with 'bool(test)'. &quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1720&quot;</span><span class="s1">: (</span>
+            <span class="s3">'Unnecessary &quot;%s&quot; after &quot;raise&quot;'</span><span class="s1">,</span>
+            <span class="s3">&quot;no-else-raise&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used in order to highlight an unnecessary block of &quot;</span>
+            <span class="s3">&quot;code following an if containing a raise statement. &quot;</span>
+            <span class="s3">&quot;As such, it will warn when it encounters an else &quot;</span>
+            <span class="s3">&quot;following a chain of ifs, all of them containing a &quot;</span>
+            <span class="s3">&quot;raise statement.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1721&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Unnecessary use of a comprehension&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;unnecessary-comprehension&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Instead of using an identity comprehension, &quot;</span>
+            <span class="s3">&quot;consider using the list, dict or set constructor. &quot;</span>
+            <span class="s3">&quot;It is faster and simpler.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1722&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Consider using sys.exit()&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;consider-using-sys-exit&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Instead of using exit() or quit(), consider using the sys.exit().&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1723&quot;</span><span class="s1">: (</span>
+            <span class="s3">'Unnecessary &quot;%s&quot; after &quot;break&quot;'</span><span class="s1">,</span>
+            <span class="s3">&quot;no-else-break&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used in order to highlight an unnecessary block of &quot;</span>
+            <span class="s3">&quot;code following an if containing a break statement. &quot;</span>
+            <span class="s3">&quot;As such, it will warn when it encounters an else &quot;</span>
+            <span class="s3">&quot;following a chain of ifs, all of them containing a &quot;</span>
+            <span class="s3">&quot;break statement.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1724&quot;</span><span class="s1">: (</span>
+            <span class="s3">'Unnecessary &quot;%s&quot; after &quot;continue&quot;'</span><span class="s1">,</span>
+            <span class="s3">&quot;no-else-continue&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used in order to highlight an unnecessary block of &quot;</span>
+            <span class="s3">&quot;code following an if containing a continue statement. &quot;</span>
+            <span class="s3">&quot;As such, it will warn when it encounters an else &quot;</span>
+            <span class="s3">&quot;following a chain of ifs, all of them containing a &quot;</span>
+            <span class="s3">&quot;continue statement.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1725&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Consider using Python 3 style super() without arguments&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;super-with-arguments&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Emitted when calling the super() builtin with the current class &quot;</span>
+            <span class="s3">&quot;and instance. On Python 3 these arguments are the default and they can be omitted.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1728&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Consider using a generator instead '%s(%s)'&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;consider-using-generator&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;If your container can be large using &quot;</span>
+            <span class="s3">&quot;a generator will bring better performance.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1729&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Use a generator instead '%s(%s)'&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;use-a-generator&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Comprehension inside of 'any' or 'all' is unnecessary. &quot;</span>
+            <span class="s3">&quot;A generator would be sufficient and faster.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1730&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Consider using '%s' instead of unnecessary if block&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;consider-using-min-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Using the min builtin instead of a conditional improves readability and conciseness.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1731&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Consider using '%s' instead of unnecessary if block&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;consider-using-max-builtin&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Using the max builtin instead of a conditional improves readability and conciseness.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+        <span class="s3">&quot;R1732&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Consider using 'with' for resource-allocating operations&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;consider-using-with&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Emitted if a resource-allocating assignment or call may be replaced by a 'with' block. &quot;</span>
+            <span class="s3">&quot;By using 'with' the release of the allocated resources is ensured even in the case of an exception.&quot;</span><span class="s1">,</span>
+        <span class="s1">),</span>
+    <span class="s1">}</span>
+    <span class="s1">options = (</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;max-nested-blocks&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s4">5</span><span class="s1">,</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;int&gt;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Maximum number of nested blocks for function / method body&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+        <span class="s1">(</span>
+            <span class="s3">&quot;never-returning-functions&quot;</span><span class="s1">,</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;default&quot;</span><span class="s1">: (</span><span class="s3">&quot;sys.exit&quot;</span><span class="s1">, </span><span class="s3">&quot;argparse.parse_error&quot;</span><span class="s1">),</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;csv&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Complete name of functions that never returns. When checking &quot;</span>
+                <span class="s3">&quot;for inconsistent-return-statements if a never returning function is &quot;</span>
+                <span class="s3">&quot;called then it will be considered as an explicit return statement &quot;</span>
+                <span class="s3">&quot;and no message will be printed.&quot;</span><span class="s1">,</span>
+            <span class="s1">},</span>
+        <span class="s1">),</span>
+    <span class="s1">)</span>
+
+    <span class="s1">priority = </span><span class="s4">0</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, linter=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">checkers.BaseTokenChecker.__init__(self, linter)</span>
+        <span class="s1">self._return_nodes = {}</span>
+        <span class="s1">self._init()</span>
+        <span class="s1">self._never_returning_functions = </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">_init(self):</span>
+        <span class="s1">self._nested_blocks = []</span>
+        <span class="s1">self._elifs = []</span>
+        <span class="s1">self._nested_blocks_msg = </span><span class="s2">None</span>
+        <span class="s1">self._reported_swap_nodes = set()</span>
+        <span class="s1">self._can_simplify_bool_op = </span><span class="s2">False</span>
+
+    <span class="s2">def </span><span class="s1">open(self):</span>
+        <span class="s0"># do this in open since config not fully initialized in __init__</span>
+        <span class="s1">self._never_returning_functions = set(self.config.never_returning_functions)</span>
+
+    <span class="s1">@astroid.decorators.cachedproperty</span>
+    <span class="s2">def </span><span class="s1">_dummy_rgx(self):</span>
+        <span class="s2">return </span><span class="s1">lint_utils.get_global_option(self, </span><span class="s3">&quot;dummy-variables-rgx&quot;</span><span class="s1">, default=</span><span class="s2">None</span><span class="s1">)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_is_bool_const(node):</span>
+        <span class="s2">return </span><span class="s1">isinstance(node.value, astroid.Const) </span><span class="s2">and </span><span class="s1">isinstance(</span>
+            <span class="s1">node.value.value, bool</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_is_actual_elif(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Check if the given node is an actual elif 
+ 
+        This is a problem we're having with the builtin ast module, 
+        which splits `elif` branches into a separate if statement. 
+        Unfortunately we need to know the exact type in certain 
+        cases. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">isinstance(node.parent, astroid.If):</span>
+            <span class="s1">orelse = node.parent.orelse</span>
+            <span class="s0"># current if node must directly follow an &quot;else&quot;</span>
+            <span class="s2">if </span><span class="s1">orelse </span><span class="s2">and </span><span class="s1">orelse == [node]:</span>
+                <span class="s2">if </span><span class="s1">(node.lineno, node.col_offset) </span><span class="s2">in </span><span class="s1">self._elifs:</span>
+                    <span class="s2">return True</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">_check_simplifiable_if(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Check if the given if node can be simplified. 
+ 
+        The if statement can be reduced to a boolean expression 
+        in some cases. For instance, if there are two branches 
+        and both of them return a boolean value that depends on 
+        the result of the statement's test, then this can be reduced 
+        to `bool(test)` without losing any functionality. 
+        &quot;&quot;&quot;</span>
+
+        <span class="s2">if </span><span class="s1">self._is_actual_elif(node):</span>
+            <span class="s0"># Not interested in if statements with multiple branches.</span>
+            <span class="s2">return</span>
+        <span class="s2">if </span><span class="s1">len(node.orelse) != </span><span class="s4">1 </span><span class="s2">or </span><span class="s1">len(node.body) != </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># Check if both branches can be reduced.</span>
+        <span class="s1">first_branch = node.body[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s1">else_branch = node.orelse[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s2">if </span><span class="s1">isinstance(first_branch, astroid.Return):</span>
+            <span class="s2">if not </span><span class="s1">isinstance(else_branch, astroid.Return):</span>
+                <span class="s2">return</span>
+            <span class="s1">first_branch_is_bool = self._is_bool_const(first_branch)</span>
+            <span class="s1">else_branch_is_bool = self._is_bool_const(else_branch)</span>
+            <span class="s1">reduced_to = </span><span class="s3">&quot;'return bool(test)'&quot;</span>
+        <span class="s2">elif </span><span class="s1">isinstance(first_branch, astroid.Assign):</span>
+            <span class="s2">if not </span><span class="s1">isinstance(else_branch, astroid.Assign):</span>
+                <span class="s2">return</span>
+
+            <span class="s0"># Check if we assign to the same value</span>
+            <span class="s1">first_branch_targets = [</span>
+                <span class="s1">target.name</span>
+                <span class="s2">for </span><span class="s1">target </span><span class="s2">in </span><span class="s1">first_branch.targets</span>
+                <span class="s2">if </span><span class="s1">isinstance(target, astroid.AssignName)</span>
+            <span class="s1">]</span>
+            <span class="s1">else_branch_targets = [</span>
+                <span class="s1">target.name</span>
+                <span class="s2">for </span><span class="s1">target </span><span class="s2">in </span><span class="s1">else_branch.targets</span>
+                <span class="s2">if </span><span class="s1">isinstance(target, astroid.AssignName)</span>
+            <span class="s1">]</span>
+            <span class="s2">if not </span><span class="s1">first_branch_targets </span><span class="s2">or not </span><span class="s1">else_branch_targets:</span>
+                <span class="s2">return</span>
+            <span class="s2">if </span><span class="s1">sorted(first_branch_targets) != sorted(else_branch_targets):</span>
+                <span class="s2">return</span>
+
+            <span class="s1">first_branch_is_bool = self._is_bool_const(first_branch)</span>
+            <span class="s1">else_branch_is_bool = self._is_bool_const(else_branch)</span>
+            <span class="s1">reduced_to = </span><span class="s3">&quot;'var = bool(test)'&quot;</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if not </span><span class="s1">first_branch_is_bool </span><span class="s2">or not </span><span class="s1">else_branch_is_bool:</span>
+            <span class="s2">return</span>
+        <span class="s2">if not </span><span class="s1">first_branch.value.value:</span>
+            <span class="s0"># This is a case that can't be easily simplified and</span>
+            <span class="s0"># if it can be simplified, it will usually result in a</span>
+            <span class="s0"># code that's harder to understand and comprehend.</span>
+            <span class="s0"># Let's take for instance `arg and arg &lt;= 3`. This could theoretically be</span>
+            <span class="s0"># reduced to `not arg or arg &gt; 3`, but the net result is that now the</span>
+            <span class="s0"># condition is harder to understand, because it requires understanding of</span>
+            <span class="s0"># an extra clause:</span>
+            <span class="s0">#   * first, there is the negation of truthness with `not arg`</span>
+            <span class="s0">#   * the second clause is `arg &gt; 3`, which occurs when arg has a</span>
+            <span class="s0">#     a truth value, but it implies that `arg &gt; 3` is equivalent</span>
+            <span class="s0">#     with `arg and arg &gt; 3`, which means that the user must</span>
+            <span class="s0">#     think about this assumption when evaluating `arg &gt; 3`.</span>
+            <span class="s0">#     The original form is easier to grasp.</span>
+            <span class="s2">return</span>
+
+        <span class="s1">self.add_message(</span><span class="s3">&quot;simplifiable-if-statement&quot;</span><span class="s1">, node=node, args=(reduced_to,))</span>
+
+    <span class="s2">def </span><span class="s1">process_tokens(self, tokens):</span>
+        <span class="s0"># Process tokens and look for 'if' or 'elif'</span>
+        <span class="s2">for </span><span class="s1">index, token </span><span class="s2">in </span><span class="s1">enumerate(tokens):</span>
+            <span class="s1">token_string = token[</span><span class="s4">1</span><span class="s1">]</span>
+            <span class="s2">if </span><span class="s1">token_string == </span><span class="s3">&quot;elif&quot;</span><span class="s1">:</span>
+                <span class="s0"># AST exists by the time process_tokens is called, so</span>
+                <span class="s0"># it's safe to assume tokens[index+1]</span>
+                <span class="s0"># exists. tokens[index+1][2] is the elif's position as</span>
+                <span class="s0"># reported by CPython and PyPy,</span>
+                <span class="s0"># tokens[index][2] is the actual position and also is</span>
+                <span class="s0"># reported by IronPython.</span>
+                <span class="s1">self._elifs.extend([tokens[index][</span><span class="s4">2</span><span class="s1">], tokens[index + </span><span class="s4">1</span><span class="s1">][</span><span class="s4">2</span><span class="s1">]])</span>
+            <span class="s2">elif </span><span class="s1">_is_trailing_comma(tokens, index):</span>
+                <span class="s2">if </span><span class="s1">self.linter.is_message_enabled(</span><span class="s3">&quot;trailing-comma-tuple&quot;</span><span class="s1">):</span>
+                    <span class="s1">self.add_message(</span><span class="s3">&quot;trailing-comma-tuple&quot;</span><span class="s1">, line=token.start[</span><span class="s4">0</span><span class="s1">])</span>
+
+    <span class="s2">def </span><span class="s1">leave_module(self, _):</span>
+        <span class="s1">self._init()</span>
+
+    <span class="s1">@utils.check_messages(</span><span class="s3">&quot;too-many-nested-blocks&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_tryexcept(self, node):</span>
+        <span class="s1">self._check_nested_blocks(node)</span>
+
+    <span class="s1">visit_tryfinally = visit_tryexcept</span>
+    <span class="s1">visit_while = visit_tryexcept</span>
+
+    <span class="s2">def </span><span class="s1">_check_redefined_argument_from_local(self, name_node):</span>
+        <span class="s2">if </span><span class="s1">self._dummy_rgx </span><span class="s2">and </span><span class="s1">self._dummy_rgx.match(name_node.name):</span>
+            <span class="s2">return</span>
+        <span class="s2">if not </span><span class="s1">name_node.lineno:</span>
+            <span class="s0"># Unknown position, maybe it is a manually built AST?</span>
+            <span class="s2">return</span>
+
+        <span class="s1">scope = name_node.scope()</span>
+        <span class="s2">if not </span><span class="s1">isinstance(scope, astroid.FunctionDef):</span>
+            <span class="s2">return</span>
+
+        <span class="s2">for </span><span class="s1">defined_argument </span><span class="s2">in </span><span class="s1">scope.args.nodes_of_class(</span>
+            <span class="s1">astroid.AssignName, skip_klass=(astroid.Lambda,)</span>
+        <span class="s1">):</span>
+            <span class="s2">if </span><span class="s1">defined_argument.name == name_node.name:</span>
+                <span class="s1">self.add_message(</span>
+                    <span class="s3">&quot;redefined-argument-from-local&quot;</span><span class="s1">,</span>
+                    <span class="s1">node=name_node,</span>
+                    <span class="s1">args=(name_node.name,),</span>
+                <span class="s1">)</span>
+
+    <span class="s1">@utils.check_messages(</span><span class="s3">&quot;redefined-argument-from-local&quot;</span><span class="s1">, </span><span class="s3">&quot;too-many-nested-blocks&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_for(self, node):</span>
+        <span class="s1">self._check_nested_blocks(node)</span>
+
+        <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">node.target.nodes_of_class(astroid.AssignName):</span>
+            <span class="s1">self._check_redefined_argument_from_local(name)</span>
+
+    <span class="s1">@utils.check_messages(</span><span class="s3">&quot;redefined-argument-from-local&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_excepthandler(self, node):</span>
+        <span class="s2">if </span><span class="s1">node.name </span><span class="s2">and </span><span class="s1">isinstance(node.name, astroid.AssignName):</span>
+            <span class="s1">self._check_redefined_argument_from_local(node.name)</span>
+
+    <span class="s1">@utils.check_messages(</span><span class="s3">&quot;redefined-argument-from-local&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_with(self, node):</span>
+        <span class="s2">for </span><span class="s1">_, names </span><span class="s2">in </span><span class="s1">node.items:</span>
+            <span class="s2">if not </span><span class="s1">names:</span>
+                <span class="s2">continue</span>
+            <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">names.nodes_of_class(astroid.AssignName):</span>
+                <span class="s1">self._check_redefined_argument_from_local(name)</span>
+
+    <span class="s2">def </span><span class="s1">_check_superfluous_else(self, node, msg_id, returning_node_class):</span>
+        <span class="s2">if not </span><span class="s1">node.orelse:</span>
+            <span class="s0"># Not interested in if statements without else.</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">self._is_actual_elif(node):</span>
+            <span class="s0"># Not interested in elif nodes; only if</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">_if_statement_is_always_returning(node, returning_node_class):</span>
+            <span class="s1">orelse = node.orelse[</span><span class="s4">0</span><span class="s1">]</span>
+            <span class="s1">followed_by_elif = (orelse.lineno, orelse.col_offset) </span><span class="s2">in </span><span class="s1">self._elifs</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s1">msg_id, node=node, args=</span><span class="s3">&quot;elif&quot; </span><span class="s2">if </span><span class="s1">followed_by_elif </span><span class="s2">else </span><span class="s3">&quot;else&quot;</span>
+            <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_check_superfluous_else_return(self, node):</span>
+        <span class="s2">return </span><span class="s1">self._check_superfluous_else(</span>
+            <span class="s1">node, msg_id=</span><span class="s3">&quot;no-else-return&quot;</span><span class="s1">, returning_node_class=astroid.Return</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_check_superfluous_else_raise(self, node):</span>
+        <span class="s2">return </span><span class="s1">self._check_superfluous_else(</span>
+            <span class="s1">node, msg_id=</span><span class="s3">&quot;no-else-raise&quot;</span><span class="s1">, returning_node_class=astroid.Raise</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_check_superfluous_else_break(self, node):</span>
+        <span class="s2">return </span><span class="s1">self._check_superfluous_else(</span>
+            <span class="s1">node, msg_id=</span><span class="s3">&quot;no-else-break&quot;</span><span class="s1">, returning_node_class=astroid.Break</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_check_superfluous_else_continue(self, node):</span>
+        <span class="s2">return </span><span class="s1">self._check_superfluous_else(</span>
+            <span class="s1">node, msg_id=</span><span class="s3">&quot;no-else-continue&quot;</span><span class="s1">, returning_node_class=astroid.Continue</span>
+        <span class="s1">)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_type_and_name_are_equal(node_a, node_b):</span>
+        <span class="s2">for </span><span class="s1">_type </span><span class="s2">in </span><span class="s1">[astroid.Name, astroid.AssignName]:</span>
+            <span class="s2">if </span><span class="s1">all(isinstance(_node, _type) </span><span class="s2">for </span><span class="s1">_node </span><span class="s2">in </span><span class="s1">[node_a, node_b]):</span>
+                <span class="s2">return </span><span class="s1">node_a.name == node_b.name</span>
+        <span class="s2">if </span><span class="s1">all(isinstance(_node, astroid.Const) </span><span class="s2">for </span><span class="s1">_node </span><span class="s2">in </span><span class="s1">[node_a, node_b]):</span>
+            <span class="s2">return </span><span class="s1">node_a.value == node_b.value</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">_is_dict_get_block(self, node):</span>
+
+        <span class="s0"># &quot;if &lt;compare node&gt;&quot;</span>
+        <span class="s2">if not </span><span class="s1">isinstance(node.test, astroid.Compare):</span>
+            <span class="s2">return False</span>
+
+        <span class="s0"># Does not have a single statement in the guard's body</span>
+        <span class="s2">if </span><span class="s1">len(node.body) != </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s2">return False</span>
+
+        <span class="s0"># Look for a single variable assignment on the LHS and a subscript on RHS</span>
+        <span class="s1">stmt = node.body[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s2">if not </span><span class="s1">(</span>
+            <span class="s1">isinstance(stmt, astroid.Assign)</span>
+            <span class="s2">and </span><span class="s1">len(node.body[</span><span class="s4">0</span><span class="s1">].targets) == </span><span class="s4">1</span>
+            <span class="s2">and </span><span class="s1">isinstance(node.body[</span><span class="s4">0</span><span class="s1">].targets[</span><span class="s4">0</span><span class="s1">], astroid.AssignName)</span>
+            <span class="s2">and </span><span class="s1">isinstance(stmt.value, astroid.Subscript)</span>
+        <span class="s1">):</span>
+            <span class="s2">return False</span>
+
+        <span class="s0"># The subscript's slice needs to be the same as the test variable.</span>
+        <span class="s0"># Python 3.9 we no longer have the `Index` node.</span>
+        <span class="s1">slice_value = stmt.value.slice</span>
+        <span class="s2">if </span><span class="s1">isinstance(slice_value, astroid.Index):</span>
+            <span class="s1">slice_value = slice_value.value</span>
+        <span class="s2">if not </span><span class="s1">(</span>
+            <span class="s1">self._type_and_name_are_equal(stmt.value.value, node.test.ops[</span><span class="s4">0</span><span class="s1">][</span><span class="s4">1</span><span class="s1">])</span>
+            <span class="s2">and </span><span class="s1">self._type_and_name_are_equal(slice_value, node.test.left)</span>
+        <span class="s1">):</span>
+            <span class="s2">return False</span>
+
+        <span class="s0"># The object needs to be a dictionary instance</span>
+        <span class="s2">return </span><span class="s1">isinstance(utils.safe_infer(node.test.ops[</span><span class="s4">0</span><span class="s1">][</span><span class="s4">1</span><span class="s1">]), astroid.Dict)</span>
+
+    <span class="s2">def </span><span class="s1">_check_consider_get(self, node):</span>
+        <span class="s1">if_block_ok = self._is_dict_get_block(node)</span>
+        <span class="s2">if </span><span class="s1">if_block_ok </span><span class="s2">and not </span><span class="s1">node.orelse:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;consider-using-get&quot;</span><span class="s1">, node=node)</span>
+        <span class="s2">elif </span><span class="s1">(</span>
+            <span class="s1">if_block_ok</span>
+            <span class="s2">and </span><span class="s1">len(node.orelse) == </span><span class="s4">1</span>
+            <span class="s2">and </span><span class="s1">isinstance(node.orelse[</span><span class="s4">0</span><span class="s1">], astroid.Assign)</span>
+            <span class="s2">and </span><span class="s1">self._type_and_name_are_equal(</span>
+                <span class="s1">node.orelse[</span><span class="s4">0</span><span class="s1">].targets[</span><span class="s4">0</span><span class="s1">], node.body[</span><span class="s4">0</span><span class="s1">].targets[</span><span class="s4">0</span><span class="s1">]</span>
+            <span class="s1">)</span>
+            <span class="s2">and </span><span class="s1">len(node.orelse[</span><span class="s4">0</span><span class="s1">].targets) == </span><span class="s4">1</span>
+        <span class="s1">):</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;consider-using-get&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s1">@utils.check_messages(</span>
+        <span class="s3">&quot;too-many-nested-blocks&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;simplifiable-if-statement&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;no-else-return&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;no-else-raise&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;no-else-break&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;no-else-continue&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;consider-using-get&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_if(self, node):</span>
+        <span class="s1">self._check_simplifiable_if(node)</span>
+        <span class="s1">self._check_nested_blocks(node)</span>
+        <span class="s1">self._check_superfluous_else_return(node)</span>
+        <span class="s1">self._check_superfluous_else_raise(node)</span>
+        <span class="s1">self._check_superfluous_else_break(node)</span>
+        <span class="s1">self._check_superfluous_else_continue(node)</span>
+        <span class="s1">self._check_consider_get(node)</span>
+        <span class="s1">self._check_consider_using_min_max_builtin(node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_consider_using_min_max_builtin(self, node: astroid.If):</span>
+        <span class="s0">&quot;&quot;&quot;Check if the given if node can be refactored as an min/max python builtin.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self._is_actual_elif(node) </span><span class="s2">or </span><span class="s1">node.orelse:</span>
+            <span class="s0"># Not interested in if statements with multiple branches.</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">len(node.body) != </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s1">body = node.body[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s0"># Check if condition can be reduced.</span>
+        <span class="s2">if not </span><span class="s1">hasattr(body, </span><span class="s3">&quot;targets&quot;</span><span class="s1">) </span><span class="s2">or </span><span class="s1">len(body.targets) != </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s1">target = body.targets[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s2">if not </span><span class="s1">(</span>
+            <span class="s1">isinstance(node.test, astroid.Compare)</span>
+            <span class="s2">and not </span><span class="s1">isinstance(target, astroid.Subscript)</span>
+            <span class="s2">and not </span><span class="s1">isinstance(node.test.left, astroid.Subscript)</span>
+            <span class="s2">and </span><span class="s1">isinstance(body, astroid.Assign)</span>
+        <span class="s1">):</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># Check that the assignation is on the same variable.</span>
+        <span class="s2">if </span><span class="s1">hasattr(node.test.left, </span><span class="s3">&quot;name&quot;</span><span class="s1">):</span>
+            <span class="s1">left_operand = node.test.left.name</span>
+        <span class="s2">elif </span><span class="s1">hasattr(node.test.left, </span><span class="s3">&quot;attrname&quot;</span><span class="s1">):</span>
+            <span class="s1">left_operand = node.test.left.attrname</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">hasattr(target, </span><span class="s3">&quot;name&quot;</span><span class="s1">):</span>
+            <span class="s1">target_assignation = target.name</span>
+        <span class="s2">elif </span><span class="s1">hasattr(target, </span><span class="s3">&quot;attrname&quot;</span><span class="s1">):</span>
+            <span class="s1">target_assignation = target.attrname</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if not </span><span class="s1">(left_operand == target_assignation):</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">len(node.test.ops) &gt; </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if not </span><span class="s1">isinstance(body.value, (astroid.Name, astroid.Const)):</span>
+            <span class="s2">return</span>
+
+        <span class="s1">operator, right_statement = node.test.ops[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s2">if </span><span class="s1">isinstance(body.value, astroid.Name):</span>
+            <span class="s1">body_value = body.value.name</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">body_value = body.value.value</span>
+
+        <span class="s2">if </span><span class="s1">isinstance(right_statement, astroid.Name):</span>
+            <span class="s1">right_statement_value = right_statement.name</span>
+        <span class="s2">elif </span><span class="s1">isinstance(right_statement, astroid.Const):</span>
+            <span class="s1">right_statement_value = right_statement.value</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># Verify the right part of the statement is the same.</span>
+        <span class="s2">if </span><span class="s1">right_statement_value != body_value:</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">operator </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;&lt;&quot;</span><span class="s1">, </span><span class="s3">&quot;&lt;=&quot;</span><span class="s1">):</span>
+            <span class="s1">reduced_to = </span><span class="s3">&quot;{target} = max({target}, {item})&quot;</span><span class="s1">.format(</span>
+                <span class="s1">target=target_assignation, item=body_value</span>
+            <span class="s1">)</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;consider-using-max-builtin&quot;</span><span class="s1">, node=node, args=(reduced_to,)</span>
+            <span class="s1">)</span>
+        <span class="s2">elif </span><span class="s1">operator </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;&gt;&quot;</span><span class="s1">, </span><span class="s3">&quot;&gt;=&quot;</span><span class="s1">):</span>
+            <span class="s1">reduced_to = </span><span class="s3">&quot;{target} = min({target}, {item})&quot;</span><span class="s1">.format(</span>
+                <span class="s1">target=target_assignation, item=body_value</span>
+            <span class="s1">)</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;consider-using-min-builtin&quot;</span><span class="s1">, node=node, args=(reduced_to,)</span>
+            <span class="s1">)</span>
+
+    <span class="s1">@utils.check_messages(</span><span class="s3">&quot;simplifiable-if-expression&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_ifexp(self, node):</span>
+        <span class="s1">self._check_simplifiable_ifexp(node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_simplifiable_ifexp(self, node):</span>
+        <span class="s2">if not </span><span class="s1">isinstance(node.body, astroid.Const) </span><span class="s2">or not </span><span class="s1">isinstance(</span>
+            <span class="s1">node.orelse, astroid.Const</span>
+        <span class="s1">):</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if not </span><span class="s1">isinstance(node.body.value, bool) </span><span class="s2">or not </span><span class="s1">isinstance(</span>
+            <span class="s1">node.orelse.value, bool</span>
+        <span class="s1">):</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">isinstance(node.test, astroid.Compare):</span>
+            <span class="s1">test_reduced_to = </span><span class="s3">&quot;test&quot;</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">test_reduced_to = </span><span class="s3">&quot;bool(test)&quot;</span>
+
+        <span class="s2">if </span><span class="s1">(node.body.value, node.orelse.value) == (</span><span class="s2">True</span><span class="s1">, </span><span class="s2">False</span><span class="s1">):</span>
+            <span class="s1">reduced_to = </span><span class="s3">f&quot;'</span><span class="s5">{</span><span class="s1">test_reduced_to</span><span class="s5">}</span><span class="s3">'&quot;</span>
+        <span class="s2">elif </span><span class="s1">(node.body.value, node.orelse.value) == (</span><span class="s2">False</span><span class="s1">, </span><span class="s2">True</span><span class="s1">):</span>
+            <span class="s1">reduced_to = </span><span class="s3">&quot;'not test'&quot;</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s1">self.add_message(</span><span class="s3">&quot;simplifiable-if-expression&quot;</span><span class="s1">, node=node, args=(reduced_to,))</span>
+
+    <span class="s1">@utils.check_messages(</span>
+        <span class="s3">&quot;too-many-nested-blocks&quot;</span><span class="s1">, </span><span class="s3">&quot;inconsistent-return-statements&quot;</span><span class="s1">, </span><span class="s3">&quot;useless-return&quot;</span>
+    <span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">leave_functiondef(self, node):</span>
+        <span class="s0"># check left-over nested blocks stack</span>
+        <span class="s1">self._emit_nested_blocks_message_if_needed(self._nested_blocks)</span>
+        <span class="s0"># new scope = reinitialize the stack of nested blocks</span>
+        <span class="s1">self._nested_blocks = []</span>
+        <span class="s0"># check consistent return statements</span>
+        <span class="s1">self._check_consistent_returns(node)</span>
+        <span class="s0"># check for single return or return None at the end</span>
+        <span class="s1">self._check_return_at_the_end(node)</span>
+        <span class="s1">self._return_nodes[node.name] = []</span>
+
+    <span class="s1">@utils.check_messages(</span><span class="s3">&quot;stop-iteration-return&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_raise(self, node):</span>
+        <span class="s1">self._check_stop_iteration_inside_generator(node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_stop_iteration_inside_generator(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Check if an exception of type StopIteration is raised inside a generator&quot;&quot;&quot;</span>
+        <span class="s1">frame = node.frame()</span>
+        <span class="s2">if not </span><span class="s1">isinstance(frame, astroid.FunctionDef) </span><span class="s2">or not </span><span class="s1">frame.is_generator():</span>
+            <span class="s2">return</span>
+        <span class="s2">if </span><span class="s1">utils.node_ignores_exception(node, StopIteration):</span>
+            <span class="s2">return</span>
+        <span class="s2">if not </span><span class="s1">node.exc:</span>
+            <span class="s2">return</span>
+        <span class="s1">exc = utils.safe_infer(node.exc)</span>
+        <span class="s2">if not </span><span class="s1">exc </span><span class="s2">or not </span><span class="s1">isinstance(exc, (astroid.Instance, astroid.ClassDef)):</span>
+            <span class="s2">return</span>
+        <span class="s2">if </span><span class="s1">self._check_exception_inherit_from_stopiteration(exc):</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;stop-iteration-return&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_check_exception_inherit_from_stopiteration(exc):</span>
+        <span class="s0">&quot;&quot;&quot;Return True if the exception node in argument inherit from StopIteration&quot;&quot;&quot;</span>
+        <span class="s1">stopiteration_qname = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">utils.EXCEPTIONS_MODULE</span><span class="s5">}</span><span class="s3">.StopIteration&quot;</span>
+        <span class="s2">return </span><span class="s1">any(_class.qname() == stopiteration_qname </span><span class="s2">for </span><span class="s1">_class </span><span class="s2">in </span><span class="s1">exc.mro())</span>
+
+    <span class="s2">def </span><span class="s1">_check_consider_using_comprehension_constructor(self, node):</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">isinstance(node.func, astroid.Name)</span>
+            <span class="s2">and </span><span class="s1">node.args</span>
+            <span class="s2">and </span><span class="s1">isinstance(node.args[</span><span class="s4">0</span><span class="s1">], astroid.ListComp)</span>
+        <span class="s1">):</span>
+            <span class="s2">if </span><span class="s1">node.func.name == </span><span class="s3">&quot;dict&quot; </span><span class="s2">and not </span><span class="s1">isinstance(</span>
+                <span class="s1">node.args[</span><span class="s4">0</span><span class="s1">].elt, astroid.Call</span>
+            <span class="s1">):</span>
+                <span class="s1">message_name = </span><span class="s3">&quot;consider-using-dict-comprehension&quot;</span>
+                <span class="s1">self.add_message(message_name, node=node)</span>
+            <span class="s2">elif </span><span class="s1">node.func.name == </span><span class="s3">&quot;set&quot;</span><span class="s1">:</span>
+                <span class="s1">message_name = </span><span class="s3">&quot;consider-using-set-comprehension&quot;</span>
+                <span class="s1">self.add_message(message_name, node=node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_consider_using_generator(self, node):</span>
+        <span class="s0"># 'any' and 'all' definitely should use generator, while 'list' and 'tuple' need to be considered first</span>
+        <span class="s0"># See https://github.com/PyCQA/pylint/pull/3309#discussion_r576683109</span>
+        <span class="s1">checked_call = [</span><span class="s3">&quot;any&quot;</span><span class="s1">, </span><span class="s3">&quot;all&quot;</span><span class="s1">, </span><span class="s3">&quot;list&quot;</span><span class="s1">, </span><span class="s3">&quot;tuple&quot;</span><span class="s1">]</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">isinstance(node, astroid.Call)</span>
+            <span class="s2">and </span><span class="s1">node.func</span>
+            <span class="s2">and </span><span class="s1">isinstance(node.func, astroid.Name)</span>
+            <span class="s2">and </span><span class="s1">node.func.name </span><span class="s2">in </span><span class="s1">checked_call</span>
+        <span class="s1">):</span>
+            <span class="s0"># functions in checked_calls take exactly one argument</span>
+            <span class="s0"># check whether the argument is list comprehension</span>
+            <span class="s2">if </span><span class="s1">len(node.args) == </span><span class="s4">1 </span><span class="s2">and </span><span class="s1">isinstance(node.args[</span><span class="s4">0</span><span class="s1">], astroid.ListComp):</span>
+                <span class="s0"># remove square brackets '[]'</span>
+                <span class="s1">inside_comp = node.args[</span><span class="s4">0</span><span class="s1">].as_string()[</span><span class="s4">1</span><span class="s1">:-</span><span class="s4">1</span><span class="s1">]</span>
+                <span class="s1">call_name = node.func.name</span>
+                <span class="s2">if </span><span class="s1">call_name </span><span class="s2">in </span><span class="s1">[</span><span class="s3">&quot;any&quot;</span><span class="s1">, </span><span class="s3">&quot;all&quot;</span><span class="s1">]:</span>
+                    <span class="s1">self.add_message(</span>
+                        <span class="s3">&quot;use-a-generator&quot;</span><span class="s1">,</span>
+                        <span class="s1">node=node,</span>
+                        <span class="s1">args=(call_name, inside_comp),</span>
+                    <span class="s1">)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">self.add_message(</span>
+                        <span class="s3">&quot;consider-using-generator&quot;</span><span class="s1">,</span>
+                        <span class="s1">node=node,</span>
+                        <span class="s1">args=(call_name, inside_comp),</span>
+                    <span class="s1">)</span>
+
+    <span class="s1">@utils.check_messages(</span>
+        <span class="s3">&quot;stop-iteration-return&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;consider-using-dict-comprehension&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;consider-using-set-comprehension&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;consider-using-sys-exit&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;super-with-arguments&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;consider-using-generator&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;consider-using-with&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_call(self, node):</span>
+        <span class="s1">self._check_raising_stopiteration_in_generator_next_call(node)</span>
+        <span class="s1">self._check_consider_using_comprehension_constructor(node)</span>
+        <span class="s1">self._check_quit_exit_call(node)</span>
+        <span class="s1">self._check_super_with_arguments(node)</span>
+        <span class="s1">self._check_consider_using_generator(node)</span>
+        <span class="s1">self._check_consider_using_with_instead_call(node)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_has_exit_in_scope(scope):</span>
+        <span class="s1">exit_func = scope.locals.get(</span><span class="s3">&quot;exit&quot;</span><span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">bool(</span>
+            <span class="s1">exit_func </span><span class="s2">and </span><span class="s1">isinstance(exit_func[</span><span class="s4">0</span><span class="s1">], (astroid.ImportFrom, astroid.Import))</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_check_quit_exit_call(self, node):</span>
+
+        <span class="s2">if </span><span class="s1">isinstance(node.func, astroid.Name) </span><span class="s2">and </span><span class="s1">node.func.name </span><span class="s2">in </span><span class="s1">BUILTIN_EXIT_FUNCS:</span>
+            <span class="s0"># If we have `exit` imported from `sys` in the current or global scope, exempt this instance.</span>
+            <span class="s1">local_scope = node.scope()</span>
+            <span class="s2">if </span><span class="s1">self._has_exit_in_scope(local_scope) </span><span class="s2">or </span><span class="s1">self._has_exit_in_scope(</span>
+                <span class="s1">node.root()</span>
+            <span class="s1">):</span>
+                <span class="s2">return</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;consider-using-sys-exit&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_super_with_arguments(self, node):</span>
+        <span class="s2">if not </span><span class="s1">isinstance(node.func, astroid.Name) </span><span class="s2">or </span><span class="s1">node.func.name != </span><span class="s3">&quot;super&quot;</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># pylint: disable=too-many-boolean-expressions</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">len(node.args) != </span><span class="s4">2</span>
+            <span class="s2">or not </span><span class="s1">isinstance(node.args[</span><span class="s4">1</span><span class="s1">], astroid.Name)</span>
+            <span class="s2">or </span><span class="s1">node.args[</span><span class="s4">1</span><span class="s1">].name != </span><span class="s3">&quot;self&quot;</span>
+            <span class="s2">or not </span><span class="s1">isinstance(node.args[</span><span class="s4">0</span><span class="s1">], astroid.Name)</span>
+            <span class="s2">or not </span><span class="s1">isinstance(node.args[</span><span class="s4">1</span><span class="s1">], astroid.Name)</span>
+            <span class="s2">or </span><span class="s1">node_frame_class(node) </span><span class="s2">is None</span>
+            <span class="s2">or </span><span class="s1">node.args[</span><span class="s4">0</span><span class="s1">].name != node_frame_class(node).name</span>
+        <span class="s1">):</span>
+            <span class="s2">return</span>
+
+        <span class="s1">self.add_message(</span><span class="s3">&quot;super-with-arguments&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_raising_stopiteration_in_generator_next_call(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Check if a StopIteration exception is raised by the call to next function 
+ 
+        If the next value has a default value, then do not add message. 
+ 
+        :param node: Check to see if this Call node is a next function 
+        :type node: :class:`astroid.node_classes.Call` 
+        &quot;&quot;&quot;</span>
+
+        <span class="s2">def </span><span class="s1">_looks_like_infinite_iterator(param):</span>
+            <span class="s1">inferred = utils.safe_infer(param)</span>
+            <span class="s2">if </span><span class="s1">inferred:</span>
+                <span class="s2">return </span><span class="s1">inferred.qname() </span><span class="s2">in </span><span class="s1">KNOWN_INFINITE_ITERATORS</span>
+            <span class="s2">return False</span>
+
+        <span class="s2">if </span><span class="s1">isinstance(node.func, astroid.Attribute):</span>
+            <span class="s0"># A next() method, which is now what we want.</span>
+            <span class="s2">return</span>
+
+        <span class="s1">inferred = utils.safe_infer(node.func)</span>
+        <span class="s2">if </span><span class="s1">getattr(inferred, </span><span class="s3">&quot;name&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">) == </span><span class="s3">&quot;next&quot;</span><span class="s1">:</span>
+            <span class="s1">frame = node.frame()</span>
+            <span class="s0"># The next builtin can only have up to two</span>
+            <span class="s0"># positional arguments and no keyword arguments</span>
+            <span class="s1">has_sentinel_value = len(node.args) &gt; </span><span class="s4">1</span>
+            <span class="s2">if </span><span class="s1">(</span>
+                <span class="s1">isinstance(frame, astroid.FunctionDef)</span>
+                <span class="s2">and </span><span class="s1">frame.is_generator()</span>
+                <span class="s2">and not </span><span class="s1">has_sentinel_value</span>
+                <span class="s2">and not </span><span class="s1">utils.node_ignores_exception(node, StopIteration)</span>
+                <span class="s2">and not </span><span class="s1">_looks_like_infinite_iterator(node.args[</span><span class="s4">0</span><span class="s1">])</span>
+            <span class="s1">):</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;stop-iteration-return&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_nested_blocks(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Update and check the number of nested blocks&quot;&quot;&quot;</span>
+        <span class="s0"># only check block levels inside functions or methods</span>
+        <span class="s2">if not </span><span class="s1">isinstance(node.scope(), astroid.FunctionDef):</span>
+            <span class="s2">return</span>
+        <span class="s0"># messages are triggered on leaving the nested block. Here we save the</span>
+        <span class="s0"># stack in case the current node isn't nested in the previous one</span>
+        <span class="s1">nested_blocks = self._nested_blocks[:]</span>
+        <span class="s2">if </span><span class="s1">node.parent == node.scope():</span>
+            <span class="s1">self._nested_blocks = [node]</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s0"># go through ancestors from the most nested to the less</span>
+            <span class="s2">for </span><span class="s1">ancestor_node </span><span class="s2">in </span><span class="s1">reversed(self._nested_blocks):</span>
+                <span class="s2">if </span><span class="s1">ancestor_node == node.parent:</span>
+                    <span class="s2">break</span>
+                <span class="s1">self._nested_blocks.pop()</span>
+            <span class="s0"># if the node is an elif, this should not be another nesting level</span>
+            <span class="s2">if </span><span class="s1">isinstance(node, astroid.If) </span><span class="s2">and </span><span class="s1">self._is_actual_elif(node):</span>
+                <span class="s2">if </span><span class="s1">self._nested_blocks:</span>
+                    <span class="s1">self._nested_blocks.pop()</span>
+            <span class="s1">self._nested_blocks.append(node)</span>
+
+        <span class="s0"># send message only once per group of nested blocks</span>
+        <span class="s2">if </span><span class="s1">len(nested_blocks) &gt; len(self._nested_blocks):</span>
+            <span class="s1">self._emit_nested_blocks_message_if_needed(nested_blocks)</span>
+
+    <span class="s2">def </span><span class="s1">_emit_nested_blocks_message_if_needed(self, nested_blocks):</span>
+        <span class="s2">if </span><span class="s1">len(nested_blocks) &gt; self.config.max_nested_blocks:</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;too-many-nested-blocks&quot;</span><span class="s1">,</span>
+                <span class="s1">node=nested_blocks[</span><span class="s4">0</span><span class="s1">],</span>
+                <span class="s1">args=(len(nested_blocks), self.config.max_nested_blocks),</span>
+            <span class="s1">)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_duplicated_isinstance_types(node):</span>
+        <span class="s0">&quot;&quot;&quot;Get the duplicated types from the underlying isinstance calls. 
+ 
+        :param astroid.BoolOp node: Node which should contain a bunch of isinstance calls. 
+        :returns: Dictionary of the comparison objects from the isinstance calls, 
+                  to duplicate values from consecutive calls. 
+        :rtype: dict 
+        &quot;&quot;&quot;</span>
+        <span class="s1">duplicated_objects = set()</span>
+        <span class="s1">all_types = collections.defaultdict(set)</span>
+
+        <span class="s2">for </span><span class="s1">call </span><span class="s2">in </span><span class="s1">node.values:</span>
+            <span class="s2">if not </span><span class="s1">isinstance(call, astroid.Call) </span><span class="s2">or </span><span class="s1">len(call.args) != </span><span class="s4">2</span><span class="s1">:</span>
+                <span class="s2">continue</span>
+
+            <span class="s1">inferred = utils.safe_infer(call.func)</span>
+            <span class="s2">if not </span><span class="s1">inferred </span><span class="s2">or not </span><span class="s1">utils.is_builtin_object(inferred):</span>
+                <span class="s2">continue</span>
+
+            <span class="s2">if </span><span class="s1">inferred.name != </span><span class="s3">&quot;isinstance&quot;</span><span class="s1">:</span>
+                <span class="s2">continue</span>
+
+            <span class="s1">isinstance_object = call.args[</span><span class="s4">0</span><span class="s1">].as_string()</span>
+            <span class="s1">isinstance_types = call.args[</span><span class="s4">1</span><span class="s1">]</span>
+
+            <span class="s2">if </span><span class="s1">isinstance_object </span><span class="s2">in </span><span class="s1">all_types:</span>
+                <span class="s1">duplicated_objects.add(isinstance_object)</span>
+
+            <span class="s2">if </span><span class="s1">isinstance(isinstance_types, astroid.Tuple):</span>
+                <span class="s1">elems = [</span>
+                    <span class="s1">class_type.as_string() </span><span class="s2">for </span><span class="s1">class_type </span><span class="s2">in </span><span class="s1">isinstance_types.itered()</span>
+                <span class="s1">]</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">elems = [isinstance_types.as_string()]</span>
+            <span class="s1">all_types[isinstance_object].update(elems)</span>
+
+        <span class="s0"># Remove all keys which not duplicated</span>
+        <span class="s2">return </span><span class="s1">{</span>
+            <span class="s1">key: value </span><span class="s2">for </span><span class="s1">key, value </span><span class="s2">in </span><span class="s1">all_types.items() </span><span class="s2">if </span><span class="s1">key </span><span class="s2">in </span><span class="s1">duplicated_objects</span>
+        <span class="s1">}</span>
+
+    <span class="s2">def </span><span class="s1">_check_consider_merging_isinstance(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Check isinstance calls which can be merged together.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">node.op != </span><span class="s3">&quot;or&quot;</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s1">first_args = self._duplicated_isinstance_types(node)</span>
+        <span class="s2">for </span><span class="s1">duplicated_name, class_names </span><span class="s2">in </span><span class="s1">first_args.items():</span>
+            <span class="s1">names = sorted(name </span><span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">class_names)</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;consider-merging-isinstance&quot;</span><span class="s1">,</span>
+                <span class="s1">node=node,</span>
+                <span class="s1">args=(duplicated_name, </span><span class="s3">&quot;, &quot;</span><span class="s1">.join(names)),</span>
+            <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_check_consider_using_in(self, node):</span>
+        <span class="s1">allowed_ops = {</span><span class="s3">&quot;or&quot;</span><span class="s1">: </span><span class="s3">&quot;==&quot;</span><span class="s1">, </span><span class="s3">&quot;and&quot;</span><span class="s1">: </span><span class="s3">&quot;!=&quot;</span><span class="s1">}</span>
+
+        <span class="s2">if </span><span class="s1">node.op </span><span class="s2">not in </span><span class="s1">allowed_ops </span><span class="s2">or </span><span class="s1">len(node.values) &lt; </span><span class="s4">2</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s2">for </span><span class="s1">value </span><span class="s2">in </span><span class="s1">node.values:</span>
+            <span class="s2">if </span><span class="s1">(</span>
+                <span class="s2">not </span><span class="s1">isinstance(value, astroid.Compare)</span>
+                <span class="s2">or </span><span class="s1">len(value.ops) != </span><span class="s4">1</span>
+                <span class="s2">or </span><span class="s1">value.ops[</span><span class="s4">0</span><span class="s1">][</span><span class="s4">0</span><span class="s1">] </span><span class="s2">not in </span><span class="s1">allowed_ops[node.op]</span>
+            <span class="s1">):</span>
+                <span class="s2">return</span>
+            <span class="s2">for </span><span class="s1">comparable </span><span class="s2">in </span><span class="s1">value.left, value.ops[</span><span class="s4">0</span><span class="s1">][</span><span class="s4">1</span><span class="s1">]:</span>
+                <span class="s2">if </span><span class="s1">isinstance(comparable, astroid.Call):</span>
+                    <span class="s2">return</span>
+
+        <span class="s0"># Gather variables and values from comparisons</span>
+        <span class="s1">variables, values = [], []</span>
+        <span class="s2">for </span><span class="s1">value </span><span class="s2">in </span><span class="s1">node.values:</span>
+            <span class="s1">variable_set = set()</span>
+            <span class="s2">for </span><span class="s1">comparable </span><span class="s2">in </span><span class="s1">value.left, value.ops[</span><span class="s4">0</span><span class="s1">][</span><span class="s4">1</span><span class="s1">]:</span>
+                <span class="s2">if </span><span class="s1">isinstance(comparable, astroid.Name):</span>
+                    <span class="s1">variable_set.add(comparable.as_string())</span>
+                <span class="s1">values.append(comparable.as_string())</span>
+            <span class="s1">variables.append(variable_set)</span>
+
+        <span class="s0"># Look for (common-)variables that occur in all comparisons</span>
+        <span class="s1">common_variables = reduce(</span><span class="s2">lambda </span><span class="s1">a, b: a.intersection(b), variables)</span>
+
+        <span class="s2">if not </span><span class="s1">common_variables:</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># Gather information for the suggestion</span>
+        <span class="s1">common_variable = sorted(list(common_variables))[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s1">comprehension = </span><span class="s3">&quot;in&quot; </span><span class="s2">if </span><span class="s1">node.op == </span><span class="s3">&quot;or&quot; </span><span class="s2">else </span><span class="s3">&quot;not in&quot;</span>
+        <span class="s1">values = list(collections.OrderedDict.fromkeys(values))</span>
+        <span class="s1">values.remove(common_variable)</span>
+        <span class="s1">values_string = </span><span class="s3">&quot;, &quot;</span><span class="s1">.join(values) </span><span class="s2">if </span><span class="s1">len(values) != </span><span class="s4">1 </span><span class="s2">else </span><span class="s1">values[</span><span class="s4">0</span><span class="s1">] + </span><span class="s3">&quot;,&quot;</span>
+        <span class="s1">suggestion = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">common_variable</span><span class="s5">} {</span><span class="s1">comprehension</span><span class="s5">} </span><span class="s3">(</span><span class="s5">{</span><span class="s1">values_string</span><span class="s5">}</span><span class="s3">)&quot;</span>
+
+        <span class="s1">self.add_message(</span><span class="s3">&quot;consider-using-in&quot;</span><span class="s1">, node=node, args=(suggestion,))</span>
+
+    <span class="s2">def </span><span class="s1">_check_chained_comparison(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Check if there is any chained comparison in the expression. 
+ 
+        Add a refactoring message if a boolOp contains comparison like a &lt; b and b &lt; c, 
+        which can be chained as a &lt; b &lt; c. 
+ 
+        Care is taken to avoid simplifying a &lt; b &lt; c and b &lt; d. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">node.op != </span><span class="s3">&quot;and&quot; </span><span class="s2">or </span><span class="s1">len(node.values) &lt; </span><span class="s4">2</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s2">def </span><span class="s1">_find_lower_upper_bounds(comparison_node, uses):</span>
+            <span class="s1">left_operand = comparison_node.left</span>
+            <span class="s2">for </span><span class="s1">operator, right_operand </span><span class="s2">in </span><span class="s1">comparison_node.ops:</span>
+                <span class="s2">for </span><span class="s1">operand </span><span class="s2">in </span><span class="s1">(left_operand, right_operand):</span>
+                    <span class="s1">value = </span><span class="s2">None</span>
+                    <span class="s2">if </span><span class="s1">isinstance(operand, astroid.Name):</span>
+                        <span class="s1">value = operand.name</span>
+                    <span class="s2">elif </span><span class="s1">isinstance(operand, astroid.Const):</span>
+                        <span class="s1">value = operand.value</span>
+
+                    <span class="s2">if </span><span class="s1">value </span><span class="s2">is None</span><span class="s1">:</span>
+                        <span class="s2">continue</span>
+
+                    <span class="s2">if </span><span class="s1">operator </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;&lt;&quot;</span><span class="s1">, </span><span class="s3">&quot;&lt;=&quot;</span><span class="s1">):</span>
+                        <span class="s2">if </span><span class="s1">operand </span><span class="s2">is </span><span class="s1">left_operand:</span>
+                            <span class="s1">uses[value][</span><span class="s3">&quot;lower_bound&quot;</span><span class="s1">].add(comparison_node)</span>
+                        <span class="s2">elif </span><span class="s1">operand </span><span class="s2">is </span><span class="s1">right_operand:</span>
+                            <span class="s1">uses[value][</span><span class="s3">&quot;upper_bound&quot;</span><span class="s1">].add(comparison_node)</span>
+                    <span class="s2">elif </span><span class="s1">operator </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;&gt;&quot;</span><span class="s1">, </span><span class="s3">&quot;&gt;=&quot;</span><span class="s1">):</span>
+                        <span class="s2">if </span><span class="s1">operand </span><span class="s2">is </span><span class="s1">left_operand:</span>
+                            <span class="s1">uses[value][</span><span class="s3">&quot;upper_bound&quot;</span><span class="s1">].add(comparison_node)</span>
+                        <span class="s2">elif </span><span class="s1">operand </span><span class="s2">is </span><span class="s1">right_operand:</span>
+                            <span class="s1">uses[value][</span><span class="s3">&quot;lower_bound&quot;</span><span class="s1">].add(comparison_node)</span>
+                <span class="s1">left_operand = right_operand</span>
+
+        <span class="s1">uses = collections.defaultdict(</span>
+            <span class="s2">lambda</span><span class="s1">: {</span><span class="s3">&quot;lower_bound&quot;</span><span class="s1">: set(), </span><span class="s3">&quot;upper_bound&quot;</span><span class="s1">: set()}</span>
+        <span class="s1">)</span>
+        <span class="s2">for </span><span class="s1">comparison_node </span><span class="s2">in </span><span class="s1">node.values:</span>
+            <span class="s2">if </span><span class="s1">isinstance(comparison_node, astroid.Compare):</span>
+                <span class="s1">_find_lower_upper_bounds(comparison_node, uses)</span>
+
+        <span class="s2">for </span><span class="s1">_, bounds </span><span class="s2">in </span><span class="s1">uses.items():</span>
+            <span class="s1">num_shared = len(bounds[</span><span class="s3">&quot;lower_bound&quot;</span><span class="s1">].intersection(bounds[</span><span class="s3">&quot;upper_bound&quot;</span><span class="s1">]))</span>
+            <span class="s1">num_lower_bounds = len(bounds[</span><span class="s3">&quot;lower_bound&quot;</span><span class="s1">])</span>
+            <span class="s1">num_upper_bounds = len(bounds[</span><span class="s3">&quot;upper_bound&quot;</span><span class="s1">])</span>
+            <span class="s2">if </span><span class="s1">num_shared &lt; num_lower_bounds </span><span class="s2">and </span><span class="s1">num_shared &lt; num_upper_bounds:</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;chained-comparison&quot;</span><span class="s1">, node=node)</span>
+                <span class="s2">break</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_apply_boolean_simplification_rules(operator, values):</span>
+        <span class="s0">&quot;&quot;&quot;Removes irrelevant values or returns shortcircuiting values 
+ 
+        This function applies the following two rules: 
+        1) an OR expression with True in it will always be true, and the 
+           reverse for AND 
+ 
+        2) False values in OR expressions are only relevant if all values are 
+           false, and the reverse for AND&quot;&quot;&quot;</span>
+        <span class="s1">simplified_values = []</span>
+
+        <span class="s2">for </span><span class="s1">subnode </span><span class="s2">in </span><span class="s1">values:</span>
+            <span class="s1">inferred_bool = </span><span class="s2">None</span>
+            <span class="s2">if not </span><span class="s1">next(subnode.nodes_of_class(astroid.Name), </span><span class="s2">False</span><span class="s1">):</span>
+                <span class="s1">inferred = utils.safe_infer(subnode)</span>
+                <span class="s2">if </span><span class="s1">inferred:</span>
+                    <span class="s1">inferred_bool = inferred.bool_value()</span>
+
+            <span class="s2">if not </span><span class="s1">isinstance(inferred_bool, bool):</span>
+                <span class="s1">simplified_values.append(subnode)</span>
+            <span class="s2">elif </span><span class="s1">(operator == </span><span class="s3">&quot;or&quot;</span><span class="s1">) == inferred_bool:</span>
+                <span class="s2">return </span><span class="s1">[subnode]</span>
+
+        <span class="s2">return </span><span class="s1">simplified_values </span><span class="s2">or </span><span class="s1">[astroid.Const(operator == </span><span class="s3">&quot;and&quot;</span><span class="s1">)]</span>
+
+    <span class="s2">def </span><span class="s1">_simplify_boolean_operation(self, bool_op):</span>
+        <span class="s0">&quot;&quot;&quot;Attempts to simplify a boolean operation 
+ 
+        Recursively applies simplification on the operator terms, 
+        and keeps track of whether reductions have been made.&quot;&quot;&quot;</span>
+        <span class="s1">children = list(bool_op.get_children())</span>
+        <span class="s1">intermediate = [</span>
+            <span class="s1">self._simplify_boolean_operation(child)</span>
+            <span class="s2">if </span><span class="s1">isinstance(child, astroid.BoolOp)</span>
+            <span class="s2">else </span><span class="s1">child</span>
+            <span class="s2">for </span><span class="s1">child </span><span class="s2">in </span><span class="s1">children</span>
+        <span class="s1">]</span>
+        <span class="s1">result = self._apply_boolean_simplification_rules(bool_op.op, intermediate)</span>
+        <span class="s2">if </span><span class="s1">len(result) &lt; len(children):</span>
+            <span class="s1">self._can_simplify_bool_op = </span><span class="s2">True</span>
+        <span class="s2">if </span><span class="s1">len(result) == </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">result[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s1">simplified_bool_op = copy.copy(bool_op)</span>
+        <span class="s1">simplified_bool_op.postinit(result)</span>
+        <span class="s2">return </span><span class="s1">simplified_bool_op</span>
+
+    <span class="s2">def </span><span class="s1">_check_simplifiable_condition(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Check if a boolean condition can be simplified. 
+ 
+        Variables will not be simplified, even in the value can be inferred, 
+        and expressions like '3 + 4' will remain expanded.&quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">utils.is_test_condition(node):</span>
+            <span class="s2">return</span>
+
+        <span class="s1">self._can_simplify_bool_op = </span><span class="s2">False</span>
+        <span class="s1">simplified_expr = self._simplify_boolean_operation(node)</span>
+
+        <span class="s2">if not </span><span class="s1">self._can_simplify_bool_op:</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if not </span><span class="s1">next(simplified_expr.nodes_of_class(astroid.Name), </span><span class="s2">False</span><span class="s1">):</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;condition-evals-to-constant&quot;</span><span class="s1">,</span>
+                <span class="s1">node=node,</span>
+                <span class="s1">args=(node.as_string(), simplified_expr.as_string()),</span>
+            <span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;simplifiable-condition&quot;</span><span class="s1">,</span>
+                <span class="s1">node=node,</span>
+                <span class="s1">args=(node.as_string(), simplified_expr.as_string()),</span>
+            <span class="s1">)</span>
+
+    <span class="s1">@utils.check_messages(</span>
+        <span class="s3">&quot;consider-merging-isinstance&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;consider-using-in&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;chained-comparison&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;simplifiable-condition&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;condition-evals-to-constant&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_boolop(self, node):</span>
+        <span class="s1">self._check_consider_merging_isinstance(node)</span>
+        <span class="s1">self._check_consider_using_in(node)</span>
+        <span class="s1">self._check_chained_comparison(node)</span>
+        <span class="s1">self._check_simplifiable_condition(node)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_is_simple_assignment(node):</span>
+        <span class="s2">return </span><span class="s1">(</span>
+            <span class="s1">isinstance(node, astroid.Assign)</span>
+            <span class="s2">and </span><span class="s1">len(node.targets) == </span><span class="s4">1</span>
+            <span class="s2">and </span><span class="s1">isinstance(node.targets[</span><span class="s4">0</span><span class="s1">], astroid.node_classes.AssignName)</span>
+            <span class="s2">and </span><span class="s1">isinstance(node.value, astroid.node_classes.Name)</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_check_swap_variables(self, node):</span>
+        <span class="s2">if not </span><span class="s1">node.next_sibling() </span><span class="s2">or not </span><span class="s1">node.next_sibling().next_sibling():</span>
+            <span class="s2">return</span>
+        <span class="s1">assignments = [node, node.next_sibling(), node.next_sibling().next_sibling()]</span>
+        <span class="s2">if not </span><span class="s1">all(self._is_simple_assignment(node) </span><span class="s2">for </span><span class="s1">node </span><span class="s2">in </span><span class="s1">assignments):</span>
+            <span class="s2">return</span>
+        <span class="s2">if </span><span class="s1">any(node </span><span class="s2">in </span><span class="s1">self._reported_swap_nodes </span><span class="s2">for </span><span class="s1">node </span><span class="s2">in </span><span class="s1">assignments):</span>
+            <span class="s2">return</span>
+        <span class="s1">left = [node.targets[</span><span class="s4">0</span><span class="s1">].name </span><span class="s2">for </span><span class="s1">node </span><span class="s2">in </span><span class="s1">assignments]</span>
+        <span class="s1">right = [node.value.name </span><span class="s2">for </span><span class="s1">node </span><span class="s2">in </span><span class="s1">assignments]</span>
+        <span class="s2">if </span><span class="s1">left[</span><span class="s4">0</span><span class="s1">] == right[-</span><span class="s4">1</span><span class="s1">] </span><span class="s2">and </span><span class="s1">left[</span><span class="s4">1</span><span class="s1">:] == right[:-</span><span class="s4">1</span><span class="s1">]:</span>
+            <span class="s1">self._reported_swap_nodes.update(assignments)</span>
+            <span class="s1">message = </span><span class="s3">&quot;consider-swap-variables&quot;</span>
+            <span class="s1">self.add_message(message, node=node)</span>
+
+    <span class="s1">@utils.check_messages(</span>
+        <span class="s3">&quot;simplify-boolean-expression&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;consider-using-ternary&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;consider-swap-variables&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;consider-using-with&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_assign(self, node):</span>
+        <span class="s1">self._check_swap_variables(node)</span>
+        <span class="s1">self._check_consider_using_with_instead_assign(node)</span>
+        <span class="s2">if </span><span class="s1">self._is_and_or_ternary(node.value):</span>
+            <span class="s1">cond, truth_value, false_value = self._and_or_ternary_arguments(node.value)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">all(</span>
+            <span class="s1">isinstance(value, astroid.Compare) </span><span class="s2">for </span><span class="s1">value </span><span class="s2">in </span><span class="s1">(truth_value, false_value)</span>
+        <span class="s1">):</span>
+            <span class="s2">return</span>
+
+        <span class="s1">inferred_truth_value = utils.safe_infer(truth_value)</span>
+        <span class="s2">if </span><span class="s1">inferred_truth_value </span><span class="s2">in </span><span class="s1">(</span><span class="s2">None</span><span class="s1">, astroid.Uninferable):</span>
+            <span class="s1">truth_boolean_value = </span><span class="s2">True</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">truth_boolean_value = truth_value.bool_value()</span>
+
+        <span class="s2">if </span><span class="s1">truth_boolean_value </span><span class="s2">is False</span><span class="s1">:</span>
+            <span class="s1">message = </span><span class="s3">&quot;simplify-boolean-expression&quot;</span>
+            <span class="s1">suggestion = false_value.as_string()</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">message = </span><span class="s3">&quot;consider-using-ternary&quot;</span>
+            <span class="s1">suggestion = </span><span class="s3">&quot;{truth} if {cond} else {false}&quot;</span><span class="s1">.format(</span>
+                <span class="s1">truth=truth_value.as_string(),</span>
+                <span class="s1">cond=cond.as_string(),</span>
+                <span class="s1">false=false_value.as_string(),</span>
+            <span class="s1">)</span>
+        <span class="s1">self.add_message(message, node=node, args=(suggestion,))</span>
+
+    <span class="s1">visit_return = visit_assign</span>
+
+    <span class="s2">def </span><span class="s1">_check_consider_using_with_instead_assign(self, node: astroid.Assign):</span>
+        <span class="s1">assigned = node.value</span>
+        <span class="s2">if </span><span class="s1">isinstance(assigned, astroid.Call):</span>
+            <span class="s1">inferred = utils.safe_infer(assigned.func)</span>
+            <span class="s2">if </span><span class="s1">inferred </span><span class="s2">and </span><span class="s1">inferred.qname() </span><span class="s2">in </span><span class="s1">CALLS_RETURNING_CONTEXT_MANAGERS:</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;consider-using-with&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_consider_using_with_instead_call(self, node: astroid.Call):</span>
+        <span class="s1">inferred = utils.safe_infer(node.func)</span>
+        <span class="s2">if </span><span class="s1">inferred </span><span class="s2">and </span><span class="s1">inferred.qname() </span><span class="s2">in </span><span class="s1">CALLS_THAT_COULD_BE_REPLACED_BY_WITH:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;consider-using-with&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_consider_using_join(self, aug_assign):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        We start with the augmented assignment and work our way upwards. 
+        Names of variables for nodes if match successful: 
+        result = ''  # assign 
+        for number in ['1', '2', '3']  # for_loop 
+            result += number  # aug_assign 
+        &quot;&quot;&quot;</span>
+        <span class="s1">for_loop = aug_assign.parent</span>
+        <span class="s2">if not </span><span class="s1">isinstance(for_loop, astroid.For) </span><span class="s2">or </span><span class="s1">len(for_loop.body) &gt; </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s2">return</span>
+        <span class="s1">assign = for_loop.previous_sibling()</span>
+        <span class="s2">if not </span><span class="s1">isinstance(assign, astroid.Assign):</span>
+            <span class="s2">return</span>
+        <span class="s1">result_assign_names = {</span>
+            <span class="s1">target.name</span>
+            <span class="s2">for </span><span class="s1">target </span><span class="s2">in </span><span class="s1">assign.targets</span>
+            <span class="s2">if </span><span class="s1">isinstance(target, astroid.AssignName)</span>
+        <span class="s1">}</span>
+
+        <span class="s1">is_concat_loop = (</span>
+            <span class="s1">aug_assign.op == </span><span class="s3">&quot;+=&quot;</span>
+            <span class="s2">and </span><span class="s1">isinstance(aug_assign.target, astroid.AssignName)</span>
+            <span class="s2">and </span><span class="s1">len(for_loop.body) == </span><span class="s4">1</span>
+            <span class="s2">and </span><span class="s1">aug_assign.target.name </span><span class="s2">in </span><span class="s1">result_assign_names</span>
+            <span class="s2">and </span><span class="s1">isinstance(assign.value, astroid.Const)</span>
+            <span class="s2">and </span><span class="s1">isinstance(assign.value.value, str)</span>
+            <span class="s2">and </span><span class="s1">isinstance(aug_assign.value, astroid.Name)</span>
+            <span class="s2">and </span><span class="s1">aug_assign.value.name == for_loop.target.name</span>
+        <span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">is_concat_loop:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;consider-using-join&quot;</span><span class="s1">, node=aug_assign)</span>
+
+    <span class="s1">@utils.check_messages(</span><span class="s3">&quot;consider-using-join&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_augassign(self, node):</span>
+        <span class="s1">self._check_consider_using_join(node)</span>
+
+    <span class="s1">@utils.check_messages(</span><span class="s3">&quot;unnecessary-comprehension&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_comprehension(self, node):</span>
+        <span class="s1">self._check_unnecessary_comprehension(node)</span>
+
+    <span class="s2">def </span><span class="s1">_check_unnecessary_comprehension(self, node):</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">isinstance(node.parent, astroid.GeneratorExp)</span>
+            <span class="s2">or </span><span class="s1">len(node.ifs) != </span><span class="s4">0</span>
+            <span class="s2">or </span><span class="s1">len(node.parent.generators) != </span><span class="s4">1</span>
+            <span class="s2">or </span><span class="s1">node.is_async</span>
+        <span class="s1">):</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">isinstance(node.parent, astroid.DictComp)</span>
+            <span class="s2">and </span><span class="s1">isinstance(node.parent.key, astroid.Name)</span>
+            <span class="s2">and </span><span class="s1">isinstance(node.parent.value, astroid.Name)</span>
+            <span class="s2">and </span><span class="s1">isinstance(node.target, astroid.Tuple)</span>
+            <span class="s2">and </span><span class="s1">all(isinstance(elt, astroid.AssignName) </span><span class="s2">for </span><span class="s1">elt </span><span class="s2">in </span><span class="s1">node.target.elts)</span>
+        <span class="s1">):</span>
+            <span class="s1">expr_list = [node.parent.key.name, node.parent.value.name]</span>
+            <span class="s1">target_list = [elt.name </span><span class="s2">for </span><span class="s1">elt </span><span class="s2">in </span><span class="s1">node.target.elts]</span>
+
+        <span class="s2">elif </span><span class="s1">isinstance(node.parent, (astroid.ListComp, astroid.SetComp)):</span>
+            <span class="s1">expr = node.parent.elt</span>
+            <span class="s2">if </span><span class="s1">isinstance(expr, astroid.Name):</span>
+                <span class="s1">expr_list = expr.name</span>
+            <span class="s2">elif </span><span class="s1">isinstance(expr, astroid.Tuple):</span>
+                <span class="s2">if </span><span class="s1">any(</span><span class="s2">not </span><span class="s1">isinstance(elt, astroid.Name) </span><span class="s2">for </span><span class="s1">elt </span><span class="s2">in </span><span class="s1">expr.elts):</span>
+                    <span class="s2">return</span>
+                <span class="s1">expr_list = [elt.name </span><span class="s2">for </span><span class="s1">elt </span><span class="s2">in </span><span class="s1">expr.elts]</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">expr_list = []</span>
+            <span class="s1">target = node.parent.generators[</span><span class="s4">0</span><span class="s1">].target</span>
+            <span class="s1">target_list = (</span>
+                <span class="s1">target.name</span>
+                <span class="s2">if </span><span class="s1">isinstance(target, astroid.AssignName)</span>
+                <span class="s2">else </span><span class="s1">(</span>
+                    <span class="s1">[</span>
+                        <span class="s1">elt.name</span>
+                        <span class="s2">for </span><span class="s1">elt </span><span class="s2">in </span><span class="s1">target.elts</span>
+                        <span class="s2">if </span><span class="s1">isinstance(elt, astroid.AssignName)</span>
+                    <span class="s1">]</span>
+                    <span class="s2">if </span><span class="s1">isinstance(target, astroid.Tuple)</span>
+                    <span class="s2">else </span><span class="s1">[]</span>
+                <span class="s1">)</span>
+            <span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">return</span>
+        <span class="s2">if </span><span class="s1">expr_list == target_list != []:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;unnecessary-comprehension&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_is_and_or_ternary(node):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Returns true if node is 'condition and true_value or false_value' form. 
+ 
+        All of: condition, true_value and false_value should not be a complex boolean expression 
+        &quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">(</span>
+            <span class="s1">isinstance(node, astroid.BoolOp)</span>
+            <span class="s2">and </span><span class="s1">node.op == </span><span class="s3">&quot;or&quot;</span>
+            <span class="s2">and </span><span class="s1">len(node.values) == </span><span class="s4">2</span>
+            <span class="s2">and </span><span class="s1">isinstance(node.values[</span><span class="s4">0</span><span class="s1">], astroid.BoolOp)</span>
+            <span class="s2">and not </span><span class="s1">isinstance(node.values[</span><span class="s4">1</span><span class="s1">], astroid.BoolOp)</span>
+            <span class="s2">and </span><span class="s1">node.values[</span><span class="s4">0</span><span class="s1">].op == </span><span class="s3">&quot;and&quot;</span>
+            <span class="s2">and not </span><span class="s1">isinstance(node.values[</span><span class="s4">0</span><span class="s1">].values[</span><span class="s4">1</span><span class="s1">], astroid.BoolOp)</span>
+            <span class="s2">and </span><span class="s1">len(node.values[</span><span class="s4">0</span><span class="s1">].values) == </span><span class="s4">2</span>
+        <span class="s1">)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_and_or_ternary_arguments(node):</span>
+        <span class="s1">false_value = node.values[</span><span class="s4">1</span><span class="s1">]</span>
+        <span class="s1">condition, true_value = node.values[</span><span class="s4">0</span><span class="s1">].values</span>
+        <span class="s2">return </span><span class="s1">condition, true_value, false_value</span>
+
+    <span class="s2">def </span><span class="s1">visit_functiondef(self, node):</span>
+        <span class="s1">self._return_nodes[node.name] = list(</span>
+            <span class="s1">node.nodes_of_class(astroid.Return, skip_klass=astroid.FunctionDef)</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_check_consistent_returns(self, node: astroid.FunctionDef) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+        <span class="s0">&quot;&quot;&quot;Check that all return statements inside a function are consistent. 
+ 
+        Return statements are consistent if: 
+            - all returns are explicit and if there is no implicit return; 
+            - all returns are empty and if there is, possibly, an implicit return. 
+ 
+        Args: 
+            node (astroid.FunctionDef): the function holding the return statements. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># explicit return statements are those with a not None value</span>
+        <span class="s1">explicit_returns = [</span>
+            <span class="s1">_node </span><span class="s2">for </span><span class="s1">_node </span><span class="s2">in </span><span class="s1">self._return_nodes[node.name] </span><span class="s2">if </span><span class="s1">_node.value </span><span class="s2">is not None</span>
+        <span class="s1">]</span>
+        <span class="s2">if not </span><span class="s1">explicit_returns:</span>
+            <span class="s2">return</span>
+        <span class="s2">if </span><span class="s1">len(explicit_returns) == len(</span>
+            <span class="s1">self._return_nodes[node.name]</span>
+        <span class="s1">) </span><span class="s2">and </span><span class="s1">self._is_node_return_ended(node):</span>
+            <span class="s2">return</span>
+        <span class="s1">self.add_message(</span><span class="s3">&quot;inconsistent-return-statements&quot;</span><span class="s1">, node=node)</span>
+
+    <span class="s2">def </span><span class="s1">_is_if_node_return_ended(self, node: astroid.If) -&gt; bool:</span>
+        <span class="s0">&quot;&quot;&quot;Check if the If node ends with an explicit return statement. 
+ 
+        Args: 
+            node (astroid.If): If node to be checked. 
+ 
+        Returns: 
+            bool: True if the node ends with an explicit statement, False otherwise. 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># Do not check if inner function definition are return ended.</span>
+        <span class="s1">is_if_returning = any(</span>
+            <span class="s1">self._is_node_return_ended(_ifn)</span>
+            <span class="s2">for </span><span class="s1">_ifn </span><span class="s2">in </span><span class="s1">node.body</span>
+            <span class="s2">if not </span><span class="s1">isinstance(_ifn, astroid.FunctionDef)</span>
+        <span class="s1">)</span>
+        <span class="s2">if not </span><span class="s1">node.orelse:</span>
+            <span class="s0"># If there is not orelse part then the if statement is returning if :</span>
+            <span class="s0"># - there is at least one return statement in its siblings;</span>
+            <span class="s0"># - the if body is itself returning.</span>
+            <span class="s2">if not </span><span class="s1">self._has_return_in_siblings(node):</span>
+                <span class="s2">return False</span>
+            <span class="s2">return </span><span class="s1">is_if_returning</span>
+        <span class="s0"># If there is an orelse part then both if body and orelse part should return.</span>
+        <span class="s1">is_orelse_returning = any(</span>
+            <span class="s1">self._is_node_return_ended(_ore)</span>
+            <span class="s2">for </span><span class="s1">_ore </span><span class="s2">in </span><span class="s1">node.orelse</span>
+            <span class="s2">if not </span><span class="s1">isinstance(_ore, astroid.FunctionDef)</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">is_if_returning </span><span class="s2">and </span><span class="s1">is_orelse_returning</span>
+
+    <span class="s2">def </span><span class="s1">_is_raise_node_return_ended(self, node: astroid.Raise) -&gt; bool:</span>
+        <span class="s0">&quot;&quot;&quot;Check if the Raise node ends with an explicit return statement. 
+ 
+        Args: 
+            node (astroid.Raise): Raise node to be checked. 
+ 
+        Returns: 
+            bool: True if the node ends with an explicit statement, False otherwise. 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># a Raise statement doesn't need to end with a return statement</span>
+        <span class="s0"># but if the exception raised is handled, then the handler has to</span>
+        <span class="s0"># ends with a return statement</span>
+        <span class="s2">if not </span><span class="s1">node.exc:</span>
+            <span class="s0"># Ignore bare raises</span>
+            <span class="s2">return True</span>
+        <span class="s2">if not </span><span class="s1">utils.is_node_inside_try_except(node):</span>
+            <span class="s0"># If the raise statement is not inside a try/except statement</span>
+            <span class="s0"># then the exception is raised and cannot be caught. No need</span>
+            <span class="s0"># to infer it.</span>
+            <span class="s2">return True</span>
+        <span class="s1">exc = utils.safe_infer(node.exc)</span>
+        <span class="s2">if </span><span class="s1">exc </span><span class="s2">is None or </span><span class="s1">exc </span><span class="s2">is </span><span class="s1">astroid.Uninferable </span><span class="s2">or not </span><span class="s1">hasattr(exc, </span><span class="s3">&quot;pytype&quot;</span><span class="s1">):</span>
+            <span class="s2">return False</span>
+        <span class="s1">exc_name = exc.pytype().split(</span><span class="s3">&quot;.&quot;</span><span class="s1">)[-</span><span class="s4">1</span><span class="s1">]</span>
+        <span class="s1">handlers = utils.get_exception_handlers(node, exc_name)</span>
+        <span class="s1">handlers = list(handlers) </span><span class="s2">if </span><span class="s1">handlers </span><span class="s2">is not None else </span><span class="s1">[]</span>
+        <span class="s2">if </span><span class="s1">handlers:</span>
+            <span class="s0"># among all the handlers handling the exception at least one</span>
+            <span class="s0"># must end with a return statement</span>
+            <span class="s2">return </span><span class="s1">any(self._is_node_return_ended(_handler) </span><span class="s2">for </span><span class="s1">_handler </span><span class="s2">in </span><span class="s1">handlers)</span>
+        <span class="s0"># if no handlers handle the exception then it's ok</span>
+        <span class="s2">return True</span>
+
+    <span class="s2">def </span><span class="s1">_is_node_return_ended(self, node: astroid.node_classes.NodeNG) -&gt; bool:</span>
+        <span class="s0">&quot;&quot;&quot;Check if the node ends with an explicit return statement. 
+ 
+        Args: 
+            node (astroid.node_classes.NodeNG): node to be checked. 
+ 
+        Returns: 
+            bool: True if the node ends with an explicit statement, False otherwise. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># Recursion base case</span>
+        <span class="s2">if </span><span class="s1">isinstance(node, astroid.Return):</span>
+            <span class="s2">return True</span>
+        <span class="s2">if </span><span class="s1">isinstance(node, astroid.Call):</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">funcdef_node = node.func.inferred()[</span><span class="s4">0</span><span class="s1">]</span>
+                <span class="s2">if </span><span class="s1">self._is_function_def_never_returning(funcdef_node):</span>
+                    <span class="s2">return True</span>
+            <span class="s2">except </span><span class="s1">astroid.InferenceError:</span>
+                <span class="s2">pass</span>
+        <span class="s0"># Avoid the check inside while loop as we don't know</span>
+        <span class="s0"># if they will be completed</span>
+        <span class="s2">if </span><span class="s1">isinstance(node, astroid.While):</span>
+            <span class="s2">return True</span>
+        <span class="s2">if </span><span class="s1">isinstance(node, astroid.Raise):</span>
+            <span class="s2">return </span><span class="s1">self._is_raise_node_return_ended(node)</span>
+        <span class="s2">if </span><span class="s1">isinstance(node, astroid.If):</span>
+            <span class="s2">return </span><span class="s1">self._is_if_node_return_ended(node)</span>
+        <span class="s2">if </span><span class="s1">isinstance(node, astroid.TryExcept):</span>
+            <span class="s1">handlers = {</span>
+                <span class="s1">_child</span>
+                <span class="s2">for </span><span class="s1">_child </span><span class="s2">in </span><span class="s1">node.get_children()</span>
+                <span class="s2">if </span><span class="s1">isinstance(_child, astroid.ExceptHandler)</span>
+            <span class="s1">}</span>
+            <span class="s1">all_but_handler = set(node.get_children()) - handlers</span>
+            <span class="s2">return </span><span class="s1">any(</span>
+                <span class="s1">self._is_node_return_ended(_child) </span><span class="s2">for </span><span class="s1">_child </span><span class="s2">in </span><span class="s1">all_but_handler</span>
+            <span class="s1">) </span><span class="s2">and </span><span class="s1">all(self._is_node_return_ended(_child) </span><span class="s2">for </span><span class="s1">_child </span><span class="s2">in </span><span class="s1">handlers)</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">isinstance(node, astroid.Assert)</span>
+            <span class="s2">and </span><span class="s1">isinstance(node.test, astroid.Const)</span>
+            <span class="s2">and not </span><span class="s1">node.test.value</span>
+        <span class="s1">):</span>
+            <span class="s0"># consider assert False as a return node</span>
+            <span class="s2">return True</span>
+        <span class="s0"># recurses on the children of the node</span>
+        <span class="s2">return </span><span class="s1">any(self._is_node_return_ended(_child) </span><span class="s2">for </span><span class="s1">_child </span><span class="s2">in </span><span class="s1">node.get_children())</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_has_return_in_siblings(node: astroid.node_classes.NodeNG) -&gt; bool:</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Returns True if there is at least one return in the node's siblings 
+        &quot;&quot;&quot;</span>
+        <span class="s1">next_sibling = node.next_sibling()</span>
+        <span class="s2">while </span><span class="s1">next_sibling:</span>
+            <span class="s2">if </span><span class="s1">isinstance(next_sibling, astroid.Return):</span>
+                <span class="s2">return True</span>
+            <span class="s1">next_sibling = next_sibling.next_sibling()</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">_is_function_def_never_returning(self, node: astroid.FunctionDef) -&gt; bool:</span>
+        <span class="s0">&quot;&quot;&quot;Return True if the function never returns. False otherwise. 
+ 
+        Args: 
+            node (astroid.FunctionDef): function definition node to be analyzed. 
+ 
+        Returns: 
+            bool: True if the function never returns, False otherwise. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">isinstance(node, astroid.FunctionDef) </span><span class="s2">and </span><span class="s1">node.returns:</span>
+            <span class="s2">return </span><span class="s1">(</span>
+                <span class="s1">isinstance(node.returns, astroid.Attribute)</span>
+                <span class="s2">and </span><span class="s1">node.returns.attrname == </span><span class="s3">&quot;NoReturn&quot;</span>
+                <span class="s2">or </span><span class="s1">isinstance(node.returns, astroid.Name)</span>
+                <span class="s2">and </span><span class="s1">node.returns.name == </span><span class="s3">&quot;NoReturn&quot;</span>
+            <span class="s1">)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">node.qname() </span><span class="s2">in </span><span class="s1">self._never_returning_functions</span>
+        <span class="s2">except </span><span class="s1">TypeError:</span>
+            <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">_check_return_at_the_end(self, node):</span>
+        <span class="s0">&quot;&quot;&quot;Check for presence of a *single* return statement at the end of a 
+        function. &quot;return&quot; or &quot;return None&quot; are useless because None is the 
+        default return type if they are missing. 
+ 
+        NOTE: produces a message only if there is a single return statement 
+        in the function body. Otherwise _check_consistent_returns() is called! 
+        Per its implementation and PEP8 we can have a &quot;return None&quot; at the end 
+        of the function body if there are other return statements before that! 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">len(self._return_nodes[node.name]) &gt; </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s2">return</span>
+        <span class="s2">if </span><span class="s1">len(node.body) &lt;= </span><span class="s4">1</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s1">last = node.body[-</span><span class="s4">1</span><span class="s1">]</span>
+        <span class="s2">if </span><span class="s1">isinstance(last, astroid.Return):</span>
+            <span class="s0"># e.g. &quot;return&quot;</span>
+            <span class="s2">if </span><span class="s1">last.value </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;useless-return&quot;</span><span class="s1">, node=node)</span>
+            <span class="s0"># return None&quot;</span>
+            <span class="s2">elif </span><span class="s1">isinstance(last.value, astroid.Const) </span><span class="s2">and </span><span class="s1">(last.value.value </span><span class="s2">is None</span><span class="s1">):</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;useless-return&quot;</span><span class="s1">, node=node)</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,109 @@
+<html>
+<head>
+<title>brain_pytest.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_pytest.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2014-2016, 2018, 2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Jeff Quast &lt;contact@jeffquast.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Google, Inc.</span>
+<span class="s0"># Copyright (c) 2016 Florian Bruhin &lt;me@the-compiler.org&gt;</span>
+<span class="s0"># Copyright (c) 2016 Ceridwen &lt;ceridwenv@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020-2021 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;Astroid hooks for pytest.&quot;&quot;&quot;</span>
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">MANAGER, register_module_extender</span>
+<span class="s2">from </span><span class="s1">astroid.builder </span><span class="s2">import </span><span class="s1">AstroidBuilder</span>
+
+
+<span class="s2">def </span><span class="s1">pytest_transform():</span>
+    <span class="s2">return </span><span class="s1">AstroidBuilder(MANAGER).string_build(</span>
+        <span class="s3">&quot;&quot;&quot; 
+ 
+try: 
+    import _pytest.mark 
+    import _pytest.recwarn 
+    import _pytest.runner 
+    import _pytest.python 
+    import _pytest.skipping 
+    import _pytest.assertion 
+except ImportError: 
+    pass 
+else: 
+    deprecated_call = _pytest.recwarn.deprecated_call 
+    warns = _pytest.recwarn.warns 
+ 
+    exit = _pytest.runner.exit 
+    fail = _pytest.runner.fail 
+    skip = _pytest.runner.skip 
+    importorskip = _pytest.runner.importorskip 
+ 
+    xfail = _pytest.skipping.xfail 
+    mark = _pytest.mark.MarkGenerator() 
+    raises = _pytest.python.raises 
+ 
+    # New in pytest 3.0 
+    try: 
+        approx = _pytest.python.approx 
+        register_assert_rewrite = _pytest.assertion.register_assert_rewrite 
+    except AttributeError: 
+        pass 
+ 
+ 
+# Moved in pytest 3.0 
+ 
+try: 
+    import _pytest.freeze_support 
+    freeze_includes = _pytest.freeze_support.freeze_includes 
+except ImportError: 
+    try: 
+        import _pytest.genscript 
+        freeze_includes = _pytest.genscript.freeze_includes 
+    except ImportError: 
+        pass 
+ 
+try: 
+    import _pytest.debugging 
+    set_trace = _pytest.debugging.pytestPDB().set_trace 
+except ImportError: 
+    try: 
+        import _pytest.pdb 
+        set_trace = _pytest.pdb.pytestPDB().set_trace 
+    except ImportError: 
+        pass 
+ 
+try: 
+    import _pytest.fixtures 
+    fixture = _pytest.fixtures.fixture 
+    yield_fixture = _pytest.fixtures.yield_fixture 
+except ImportError: 
+    try: 
+        import _pytest.python 
+        fixture = _pytest.python.fixture 
+        yield_fixture = _pytest.python.yield_fixture 
+    except ImportError: 
+        pass 
+&quot;&quot;&quot;</span>
+    <span class="s1">)</span>
+
+
+<span class="s1">register_module_extender(MANAGER, </span><span class="s3">&quot;pytest&quot;</span><span class="s1">, pytest_transform)</span>
+<span class="s1">register_module_extender(MANAGER, </span><span class="s3">&quot;py.test&quot;</span><span class="s1">, pytest_transform)</span>
+</pre>
+</body>
+</html>

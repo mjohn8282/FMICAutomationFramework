@@ -1,0 +1,1205 @@
+<html>
+<head>
+<title>pylinter.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+.s5 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+pylinter.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s2">import </span><span class="s1">collections</span>
+<span class="s2">import </span><span class="s1">contextlib</span>
+<span class="s2">import </span><span class="s1">functools</span>
+<span class="s2">import </span><span class="s1">operator</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">tokenize</span>
+<span class="s2">import </span><span class="s1">traceback</span>
+<span class="s2">import </span><span class="s1">warnings</span>
+<span class="s2">from </span><span class="s1">io </span><span class="s2">import </span><span class="s1">TextIOWrapper</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+
+<span class="s2">from </span><span class="s1">pylint </span><span class="s2">import </span><span class="s1">checkers, config, exceptions, interfaces, reporters</span>
+<span class="s2">from </span><span class="s1">pylint.constants </span><span class="s2">import </span><span class="s1">MAIN_CHECKER_NAME, MSG_TYPES</span>
+<span class="s2">from </span><span class="s1">pylint.lint.expand_modules </span><span class="s2">import </span><span class="s1">expand_modules</span>
+<span class="s2">from </span><span class="s1">pylint.lint.parallel </span><span class="s2">import </span><span class="s1">check_parallel</span>
+<span class="s2">from </span><span class="s1">pylint.lint.report_functions </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">report_messages_by_module_stats,</span>
+    <span class="s1">report_messages_stats,</span>
+    <span class="s1">report_total_messages_stats,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">pylint.lint.utils </span><span class="s2">import </span><span class="s1">fix_import_path</span>
+<span class="s2">from </span><span class="s1">pylint.message </span><span class="s2">import </span><span class="s1">MessageDefinitionStore, MessagesHandlerMixIn</span>
+<span class="s2">from </span><span class="s1">pylint.reporters.ureports </span><span class="s2">import </span><span class="s1">nodes </span><span class="s2">as </span><span class="s1">report_nodes</span>
+<span class="s2">from </span><span class="s1">pylint.utils </span><span class="s2">import </span><span class="s1">ASTWalker, FileState, utils</span>
+<span class="s2">from </span><span class="s1">pylint.utils.pragma_parser </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">OPTION_PO,</span>
+    <span class="s1">InvalidPragmaError,</span>
+    <span class="s1">UnRecognizedOptionError,</span>
+    <span class="s1">parse_pragma,</span>
+<span class="s1">)</span>
+
+<span class="s1">MANAGER = astroid.MANAGER</span>
+
+
+<span class="s2">def </span><span class="s1">_read_stdin():</span>
+    <span class="s0"># https://mail.python.org/pipermail/python-list/2012-November/634424.html</span>
+    <span class="s1">sys.stdin = TextIOWrapper(sys.stdin.detach(), encoding=</span><span class="s3">&quot;utf-8&quot;</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">sys.stdin.read()</span>
+
+
+<span class="s0"># Python Linter class #########################################################</span>
+
+<span class="s1">MSGS = {</span>
+    <span class="s3">&quot;F0001&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;%s&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;fatal&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when an error occurred preventing the analysis of a </span><span class="s4">\ 
+              </span><span class="s3">module (unable to find it for instance).&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;F0002&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;%s: %s&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;astroid-error&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when an unexpected error occurred while building the &quot;</span>
+        <span class="s3">&quot;Astroid  representation. This is usually accompanied by a &quot;</span>
+        <span class="s3">&quot;traceback. Please report such errors !&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;F0010&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;error while code parsing: %s&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;parse-error&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when an exception occurred while building the Astroid &quot;</span>
+        <span class="s3">&quot;representation which could be handled by astroid.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;I0001&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Unable to run raw checkers on built-in module %s&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;raw-checker-failed&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used to inform that a built-in module has not been checked &quot;</span>
+        <span class="s3">&quot;using the raw checkers.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;I0010&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Unable to consider inline option %r&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;bad-inline-option&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when an inline option is either badly formatted or can't &quot;</span>
+        <span class="s3">&quot;be used inside modules.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;I0011&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Locally disabling %s (%s)&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;locally-disabled&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when an inline option disables a message or a messages category.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;I0013&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Ignoring entire file&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;file-ignored&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used to inform that the file will not be checked&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;I0020&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Suppressed %s (from line %d)&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;suppressed-message&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;A message was triggered on a line, but suppressed explicitly &quot;</span>
+        <span class="s3">&quot;by a disable= comment in the file. This message is not &quot;</span>
+        <span class="s3">&quot;generated for messages that are ignored due to configuration &quot;</span>
+        <span class="s3">&quot;settings.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;I0021&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Useless suppression of %s&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;useless-suppression&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Reported when a message is explicitly disabled for a line or &quot;</span>
+        <span class="s3">&quot;a block of code, but never triggered.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;I0022&quot;</span><span class="s1">: (</span>
+        <span class="s3">'Pragma &quot;%s&quot; is deprecated, use &quot;%s&quot; instead'</span><span class="s1">,</span>
+        <span class="s3">&quot;deprecated-pragma&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Some inline pylint options have been renamed or reworked, &quot;</span>
+        <span class="s3">&quot;only the most recent form should be used. &quot;</span>
+        <span class="s3">&quot;NOTE:skip-all is only available with pylint &gt;= 0.26&quot;</span><span class="s1">,</span>
+        <span class="s1">{</span><span class="s3">&quot;old_names&quot;</span><span class="s1">: [(</span><span class="s3">&quot;I0014&quot;</span><span class="s1">, </span><span class="s3">&quot;deprecated-disable-all&quot;</span><span class="s1">)]},</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E0001&quot;</span><span class="s1">: (</span><span class="s3">&quot;%s&quot;</span><span class="s1">, </span><span class="s3">&quot;syntax-error&quot;</span><span class="s1">, </span><span class="s3">&quot;Used when a syntax error is raised for a module.&quot;</span><span class="s1">),</span>
+    <span class="s3">&quot;E0011&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Unrecognized file option %r&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;unrecognized-inline-option&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when an unknown inline option is encountered.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+    <span class="s3">&quot;E0012&quot;</span><span class="s1">: (</span>
+        <span class="s3">&quot;Bad option value %r&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;bad-option-value&quot;</span><span class="s1">,</span>
+        <span class="s3">&quot;Used when a bad value for an inline option is encountered.&quot;</span><span class="s1">,</span>
+    <span class="s1">),</span>
+<span class="s1">}</span>
+
+
+<span class="s0"># pylint: disable=too-many-instance-attributes,too-many-public-methods</span>
+<span class="s2">class </span><span class="s1">PyLinter(</span>
+    <span class="s1">config.OptionsManagerMixIn,</span>
+    <span class="s1">MessagesHandlerMixIn,</span>
+    <span class="s1">reporters.ReportsHandlerMixIn,</span>
+    <span class="s1">checkers.BaseTokenChecker,</span>
+<span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;lint Python modules using external checkers. 
+ 
+    This is the main checker controlling the other ones and the reports 
+    generation. It is itself both a raw checker and an astroid checker in order 
+    to: 
+    * handle message activation / deactivation at the module level 
+    * handle some basic but necessary stats'data (number of classes, methods...) 
+ 
+    IDE plugin developers: you may have to call 
+    `astroid.builder.MANAGER.astroid_cache.clear()` across runs if you want 
+    to ensure the latest code version is actually checked. 
+ 
+    This class needs to support pickling for parallel linting to work. The exception 
+    is reporter member; see check_parallel function for more details. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__implements__ = (interfaces.ITokenChecker,)</span>
+
+    <span class="s1">name = MAIN_CHECKER_NAME</span>
+    <span class="s1">priority = </span><span class="s5">0</span>
+    <span class="s1">level = </span><span class="s5">0</span>
+    <span class="s1">msgs = MSGS</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">make_options():</span>
+        <span class="s2">return </span><span class="s1">(</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;ignore&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;csv&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;file&gt;[,&lt;file&gt;...]&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;dest&quot;</span><span class="s1">: </span><span class="s3">&quot;black_list&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;default&quot;</span><span class="s1">: (</span><span class="s3">&quot;CVS&quot;</span><span class="s1">,),</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Files or directories to be skipped. &quot;</span>
+                    <span class="s3">&quot;They should be base names, not paths.&quot;</span><span class="s1">,</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;ignore-patterns&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;regexp_csv&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;pattern&gt;[,&lt;pattern&gt;...]&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;dest&quot;</span><span class="s1">: </span><span class="s3">&quot;black_list_re&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;default&quot;</span><span class="s1">: (),</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Files or directories matching the regex patterns are&quot;</span>
+                    <span class="s3">&quot; skipped. The regex matches against base names, not paths.&quot;</span><span class="s1">,</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;persistent&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;yn&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;y_or_n&gt;&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;level&quot;</span><span class="s1">: </span><span class="s5">1</span><span class="s1">,</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Pickle collected data for later comparisons.&quot;</span><span class="s1">,</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;load-plugins&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;csv&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;modules&gt;&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;default&quot;</span><span class="s1">: (),</span>
+                    <span class="s3">&quot;level&quot;</span><span class="s1">: </span><span class="s5">1</span><span class="s1">,</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;List of plugins (as comma separated values of &quot;</span>
+                    <span class="s3">&quot;python module names) to load, usually to register &quot;</span>
+                    <span class="s3">&quot;additional checkers.&quot;</span><span class="s1">,</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;output-format&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s3">&quot;text&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;string&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;format&gt;&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;short&quot;</span><span class="s1">: </span><span class="s3">&quot;f&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Reports&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Set the output format. Available formats are text,&quot;</span>
+                    <span class="s3">&quot; parseable, colorized, json and msvs (visual studio).&quot;</span>
+                    <span class="s3">&quot; You can also give a reporter class, e.g. mypackage.mymodule.&quot;</span>
+                    <span class="s3">&quot;MyReporterClass.&quot;</span><span class="s1">,</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;reports&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s2">False</span><span class="s1">,</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;yn&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;y_or_n&gt;&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;short&quot;</span><span class="s1">: </span><span class="s3">&quot;r&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Reports&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Tells whether to display a full report or only the &quot;</span>
+                    <span class="s3">&quot;messages.&quot;</span><span class="s1">,</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;evaluation&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;string&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;python_expression&gt;&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Reports&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;level&quot;</span><span class="s1">: </span><span class="s5">1</span><span class="s1">,</span>
+                    <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s3">&quot;10.0 - ((float(5 * error + warning + refactor + &quot;</span>
+                    <span class="s3">&quot;convention) / statement) * 10)&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Python expression which should return a score less &quot;</span>
+                    <span class="s3">&quot;than or equal to 10. You have access to the variables &quot;</span>
+                    <span class="s3">&quot;'error', 'warning', 'refactor', and 'convention' which &quot;</span>
+                    <span class="s3">&quot;contain the number of messages in each category, as well as &quot;</span>
+                    <span class="s3">&quot;'statement' which is the total number of statements &quot;</span>
+                    <span class="s3">&quot;analyzed. This score is used by the global &quot;</span>
+                    <span class="s3">&quot;evaluation report (RP0004).&quot;</span><span class="s1">,</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;score&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;yn&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;y_or_n&gt;&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;short&quot;</span><span class="s1">: </span><span class="s3">&quot;s&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Reports&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Activate the evaluation score.&quot;</span><span class="s1">,</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;fail-under&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s5">10</span><span class="s1">,</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;float&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;score&gt;&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Specify a score threshold to be exceeded before program exits with error.&quot;</span><span class="s1">,</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;confidence&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;multiple_choice&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;levels&gt;&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s3">&quot;&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;choices&quot;</span><span class="s1">: [c.name </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">interfaces.CONFIDENCE_LEVELS],</span>
+                    <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Messages control&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Only show warnings with the listed confidence levels.&quot;</span>
+                    <span class="s3">&quot; Leave empty to show all. Valid levels: %s.&quot;</span>
+                    <span class="s1">% (</span><span class="s3">&quot;, &quot;</span><span class="s1">.join(c.name </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">interfaces.CONFIDENCE_LEVELS),),</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;enable&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;csv&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;msg ids&gt;&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;short&quot;</span><span class="s1">: </span><span class="s3">&quot;e&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Messages control&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Enable the message, report, category or checker with the &quot;</span>
+                    <span class="s3">&quot;given id(s). You can either give multiple identifier &quot;</span>
+                    <span class="s3">&quot;separated by comma (,) or put this option multiple time &quot;</span>
+                    <span class="s3">&quot;(only on the command line, not in the configuration file &quot;</span>
+                    <span class="s3">&quot;where it should appear only once). &quot;</span>
+                    <span class="s3">'See also the &quot;--disable&quot; option for examples.'</span><span class="s1">,</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;disable&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;csv&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;msg ids&gt;&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;short&quot;</span><span class="s1">: </span><span class="s3">&quot;d&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Messages control&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Disable the message, report, category or checker &quot;</span>
+                    <span class="s3">&quot;with the given id(s). You can either give multiple identifiers &quot;</span>
+                    <span class="s3">&quot;separated by comma (,) or put this option multiple times &quot;</span>
+                    <span class="s3">&quot;(only on the command line, not in the configuration file &quot;</span>
+                    <span class="s3">&quot;where it should appear only once). &quot;</span>
+                    <span class="s3">'You can also use &quot;--disable=all&quot; to disable everything first '</span>
+                    <span class="s3">&quot;and then reenable specific checks. For example, if you want &quot;</span>
+                    <span class="s3">&quot;to run only the similarities checker, you can use &quot;</span>
+                    <span class="s3">'&quot;--disable=all --enable=similarities&quot;. '</span>
+                    <span class="s3">&quot;If you want to run only the classes checker, but have no &quot;</span>
+                    <span class="s3">&quot;Warning level messages displayed, use &quot;</span>
+                    <span class="s3">'&quot;--disable=all --enable=classes --disable=W&quot;.'</span><span class="s1">,</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;msg-template&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;string&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;template&gt;&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;group&quot;</span><span class="s1">: </span><span class="s3">&quot;Reports&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: (</span>
+                        <span class="s3">&quot;Template used to display messages. &quot;</span>
+                        <span class="s3">&quot;This is a python new-style format string &quot;</span>
+                        <span class="s3">&quot;used to format the message information. &quot;</span>
+                        <span class="s3">&quot;See doc for all details.&quot;</span>
+                    <span class="s1">),</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;jobs&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;n-processes&gt;&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;short&quot;</span><span class="s1">: </span><span class="s3">&quot;j&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s5">1</span><span class="s1">,</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: </span><span class="s3">&quot;Use multiple processes to speed up Pylint. Specifying 0 will &quot;</span>
+                    <span class="s3">&quot;auto-detect the number of processors available to use.&quot;</span><span class="s1">,</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;unsafe-load-any-extension&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;yn&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;yn&gt;&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s2">False</span><span class="s1">,</span>
+                    <span class="s3">&quot;hide&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: (</span>
+                        <span class="s3">&quot;Allow loading of arbitrary C extensions. Extensions&quot;</span>
+                        <span class="s3">&quot; are imported into the active Python interpreter and&quot;</span>
+                        <span class="s3">&quot; may run arbitrary code.&quot;</span>
+                    <span class="s1">),</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;limit-inference-results&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;int&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;number-of-results&gt;&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s5">100</span><span class="s1">,</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: (</span>
+                        <span class="s3">&quot;Control the amount of potential inferred values when inferring &quot;</span>
+                        <span class="s3">&quot;a single object. This can help the performance when dealing with &quot;</span>
+                        <span class="s3">&quot;large functions or complex, nested conditions. &quot;</span>
+                    <span class="s1">),</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;extension-pkg-allow-list&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;csv&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;pkg[,pkg]&gt;&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;default&quot;</span><span class="s1">: [],</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: (</span>
+                        <span class="s3">&quot;A comma-separated list of package or module names&quot;</span>
+                        <span class="s3">&quot; from where C extensions may be loaded. Extensions are&quot;</span>
+                        <span class="s3">&quot; loading into the active Python interpreter and may run&quot;</span>
+                        <span class="s3">&quot; arbitrary code.&quot;</span>
+                    <span class="s1">),</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;extension-pkg-whitelist&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;csv&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;pkg[,pkg]&gt;&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;default&quot;</span><span class="s1">: [],</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: (</span>
+                        <span class="s3">&quot;A comma-separated list of package or module names&quot;</span>
+                        <span class="s3">&quot; from where C extensions may be loaded. Extensions are&quot;</span>
+                        <span class="s3">&quot; loading into the active Python interpreter and may run&quot;</span>
+                        <span class="s3">&quot; arbitrary code. (This is an alternative name to&quot;</span>
+                        <span class="s3">&quot; extension-pkg-allow-list for backward compatibility.)&quot;</span>
+                    <span class="s1">),</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;suggestion-mode&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;type&quot;</span><span class="s1">: </span><span class="s3">&quot;yn&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;metavar&quot;</span><span class="s1">: </span><span class="s3">&quot;&lt;yn&gt;&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;default&quot;</span><span class="s1">: </span><span class="s2">True</span><span class="s1">,</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: (</span>
+                        <span class="s3">&quot;When enabled, pylint would attempt to guess common &quot;</span>
+                        <span class="s3">&quot;misconfiguration and emit user-friendly hints instead &quot;</span>
+                        <span class="s3">&quot;of false-positive error messages.&quot;</span>
+                    <span class="s1">),</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;exit-zero&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;action&quot;</span><span class="s1">: </span><span class="s3">&quot;store_true&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: (</span>
+                        <span class="s3">&quot;Always return a 0 (non-error) status code, even if &quot;</span>
+                        <span class="s3">&quot;lint errors are found. This is primarily useful in &quot;</span>
+                        <span class="s3">&quot;continuous integration scripts.&quot;</span>
+                    <span class="s1">),</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;from-stdin&quot;</span><span class="s1">,</span>
+                <span class="s1">{</span>
+                    <span class="s3">&quot;action&quot;</span><span class="s1">: </span><span class="s3">&quot;store_true&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;help&quot;</span><span class="s1">: (</span>
+                        <span class="s3">&quot;Interpret the stdin as a python script, whose filename &quot;</span>
+                        <span class="s3">&quot;needs to be passed as the module_or_package argument.&quot;</span>
+                    <span class="s1">),</span>
+                <span class="s1">},</span>
+            <span class="s1">),</span>
+        <span class="s1">)</span>
+
+    <span class="s1">option_groups = (</span>
+        <span class="s1">(</span><span class="s3">&quot;Messages control&quot;</span><span class="s1">, </span><span class="s3">&quot;Options controlling analysis messages&quot;</span><span class="s1">),</span>
+        <span class="s1">(</span><span class="s3">&quot;Reports&quot;</span><span class="s1">, </span><span class="s3">&quot;Options related to output formatting and reporting&quot;</span><span class="s1">),</span>
+    <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, options=(), reporter=</span><span class="s2">None</span><span class="s1">, option_groups=(), pylintrc=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Some stuff has to be done before ancestors initialization... 
+        messages store / checkers / reporter / astroid manager&quot;&quot;&quot;</span>
+        <span class="s1">self.msgs_store = MessageDefinitionStore()</span>
+        <span class="s1">self.reporter = </span><span class="s2">None</span>
+        <span class="s1">self._reporter_name = </span><span class="s2">None</span>
+        <span class="s1">self._reporters = {}</span>
+        <span class="s1">self._checkers = collections.defaultdict(list)</span>
+        <span class="s1">self._pragma_lineno = {}</span>
+        <span class="s1">self._ignore_file = </span><span class="s2">False</span>
+        <span class="s0"># visit variables</span>
+        <span class="s1">self.file_state = FileState()</span>
+        <span class="s1">self.current_name = </span><span class="s2">None</span>
+        <span class="s1">self.current_file = </span><span class="s2">None</span>
+        <span class="s1">self.stats = </span><span class="s2">None</span>
+        <span class="s0"># init options</span>
+        <span class="s1">self._external_opts = options</span>
+        <span class="s1">self.options = options + PyLinter.make_options()</span>
+        <span class="s1">self.option_groups = option_groups + PyLinter.option_groups</span>
+        <span class="s1">self._options_methods = {</span><span class="s3">&quot;enable&quot;</span><span class="s1">: self.enable, </span><span class="s3">&quot;disable&quot;</span><span class="s1">: self.disable}</span>
+        <span class="s1">self._bw_options_methods = {</span>
+            <span class="s3">&quot;disable-msg&quot;</span><span class="s1">: self._options_methods[</span><span class="s3">&quot;disable&quot;</span><span class="s1">],</span>
+            <span class="s3">&quot;enable-msg&quot;</span><span class="s1">: self._options_methods[</span><span class="s3">&quot;enable&quot;</span><span class="s1">],</span>
+        <span class="s1">}</span>
+        <span class="s1">MessagesHandlerMixIn.__init__(self)</span>
+        <span class="s1">reporters.ReportsHandlerMixIn.__init__(self)</span>
+        <span class="s1">super().__init__(</span>
+            <span class="s1">usage=__doc__,</span>
+            <span class="s1">config_file=pylintrc </span><span class="s2">or </span><span class="s1">next(config.find_default_config_files(), </span><span class="s2">None</span><span class="s1">),</span>
+        <span class="s1">)</span>
+        <span class="s1">checkers.BaseTokenChecker.__init__(self)</span>
+        <span class="s0"># provided reports</span>
+        <span class="s1">self.reports = (</span>
+            <span class="s1">(</span><span class="s3">&quot;RP0001&quot;</span><span class="s1">, </span><span class="s3">&quot;Messages by category&quot;</span><span class="s1">, report_total_messages_stats),</span>
+            <span class="s1">(</span>
+                <span class="s3">&quot;RP0002&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;% errors / warnings by module&quot;</span><span class="s1">,</span>
+                <span class="s1">report_messages_by_module_stats,</span>
+            <span class="s1">),</span>
+            <span class="s1">(</span><span class="s3">&quot;RP0003&quot;</span><span class="s1">, </span><span class="s3">&quot;Messages&quot;</span><span class="s1">, report_messages_stats),</span>
+        <span class="s1">)</span>
+        <span class="s1">self.register_checker(self)</span>
+        <span class="s1">self._dynamic_plugins = set()</span>
+        <span class="s1">self._python3_porting_mode = </span><span class="s2">False</span>
+        <span class="s1">self._error_mode = </span><span class="s2">False</span>
+        <span class="s1">self.load_provider_defaults()</span>
+        <span class="s2">if </span><span class="s1">reporter:</span>
+            <span class="s1">self.set_reporter(reporter)</span>
+
+    <span class="s2">def </span><span class="s1">load_default_plugins(self):</span>
+        <span class="s1">checkers.initialize(self)</span>
+        <span class="s1">reporters.initialize(self)</span>
+        <span class="s0"># Make sure to load the default reporter, because</span>
+        <span class="s0"># the option has been set before the plugins had been loaded.</span>
+        <span class="s2">if not </span><span class="s1">self.reporter:</span>
+            <span class="s1">self._load_reporter()</span>
+
+    <span class="s2">def </span><span class="s1">load_plugin_modules(self, modnames):</span>
+        <span class="s0">&quot;&quot;&quot;take a list of module names which are pylint plugins and load 
+        and register them 
+        &quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">modname </span><span class="s2">in </span><span class="s1">modnames:</span>
+            <span class="s2">if </span><span class="s1">modname </span><span class="s2">in </span><span class="s1">self._dynamic_plugins:</span>
+                <span class="s2">continue</span>
+            <span class="s1">self._dynamic_plugins.add(modname)</span>
+            <span class="s1">module = astroid.modutils.load_module_from_name(modname)</span>
+            <span class="s1">module.register(self)</span>
+
+    <span class="s2">def </span><span class="s1">load_plugin_configuration(self):</span>
+        <span class="s0">&quot;&quot;&quot;Call the configuration hook for plugins 
+ 
+        This walks through the list of plugins, grabs the &quot;load_configuration&quot; 
+        hook, if exposed, and calls it to allow plugins to configure specific 
+        settings. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">modname </span><span class="s2">in </span><span class="s1">self._dynamic_plugins:</span>
+            <span class="s1">module = astroid.modutils.load_module_from_name(modname)</span>
+            <span class="s2">if </span><span class="s1">hasattr(module, </span><span class="s3">&quot;load_configuration&quot;</span><span class="s1">):</span>
+                <span class="s1">module.load_configuration(self)</span>
+
+    <span class="s2">def </span><span class="s1">_load_reporter(self):</span>
+        <span class="s1">name = self._reporter_name.lower()</span>
+        <span class="s2">if </span><span class="s1">name </span><span class="s2">in </span><span class="s1">self._reporters:</span>
+            <span class="s1">self.set_reporter(self._reporters[name]())</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">reporter_class = self._load_reporter_class()</span>
+            <span class="s2">except </span><span class="s1">(ImportError, AttributeError) </span><span class="s2">as </span><span class="s1">e:</span>
+                <span class="s2">raise </span><span class="s1">exceptions.InvalidReporterError(name) </span><span class="s2">from </span><span class="s1">e</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">self.set_reporter(reporter_class())</span>
+
+    <span class="s2">def </span><span class="s1">_load_reporter_class(self):</span>
+        <span class="s1">qname = self._reporter_name</span>
+        <span class="s1">module_part = astroid.modutils.get_module_part(qname)</span>
+        <span class="s1">module = astroid.modutils.load_module_from_name(module_part)</span>
+        <span class="s1">class_name = qname.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">)[-</span><span class="s5">1</span><span class="s1">]</span>
+        <span class="s1">reporter_class = getattr(module, class_name)</span>
+        <span class="s2">return </span><span class="s1">reporter_class</span>
+
+    <span class="s2">def </span><span class="s1">set_reporter(self, reporter):</span>
+        <span class="s0">&quot;&quot;&quot;set the reporter used to display messages and reports&quot;&quot;&quot;</span>
+        <span class="s1">self.reporter = reporter</span>
+        <span class="s1">reporter.linter = self</span>
+
+    <span class="s2">def </span><span class="s1">set_option(self, optname, value, action=</span><span class="s2">None</span><span class="s1">, optdict=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;overridden from config.OptionsProviderMixin to handle some 
+        special options 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">optname </span><span class="s2">in </span><span class="s1">self._options_methods </span><span class="s2">or </span><span class="s1">optname </span><span class="s2">in </span><span class="s1">self._bw_options_methods:</span>
+            <span class="s2">if </span><span class="s1">value:</span>
+                <span class="s2">try</span><span class="s1">:</span>
+                    <span class="s1">meth = self._options_methods[optname]</span>
+                <span class="s2">except </span><span class="s1">KeyError:</span>
+                    <span class="s1">meth = self._bw_options_methods[optname]</span>
+                    <span class="s1">warnings.warn(</span>
+                        <span class="s3">&quot;%s is deprecated, replace it by %s&quot;</span>
+                        <span class="s1">% (optname, optname.split(</span><span class="s3">&quot;-&quot;</span><span class="s1">)[</span><span class="s5">0</span><span class="s1">]),</span>
+                        <span class="s1">DeprecationWarning,</span>
+                    <span class="s1">)</span>
+                <span class="s1">value = utils._check_csv(value)</span>
+                <span class="s2">if </span><span class="s1">isinstance(value, (list, tuple)):</span>
+                    <span class="s2">for </span><span class="s1">_id </span><span class="s2">in </span><span class="s1">value:</span>
+                        <span class="s1">meth(_id, ignore_unknown=</span><span class="s2">True</span><span class="s1">)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">meth(value)</span>
+                <span class="s2">return  </span><span class="s0"># no need to call set_option, disable/enable methods do it</span>
+        <span class="s2">elif </span><span class="s1">optname == </span><span class="s3">&quot;output-format&quot;</span><span class="s1">:</span>
+            <span class="s1">self._reporter_name = value</span>
+            <span class="s0"># If the reporters are already available, load</span>
+            <span class="s0"># the reporter class.</span>
+            <span class="s2">if </span><span class="s1">self._reporters:</span>
+                <span class="s1">self._load_reporter()</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">checkers.BaseTokenChecker.set_option(self, optname, value, action, optdict)</span>
+        <span class="s2">except </span><span class="s1">config.UnsupportedAction:</span>
+            <span class="s1">print(</span><span class="s3">&quot;option %s can't be read from config file&quot; </span><span class="s1">% optname, file=sys.stderr)</span>
+
+    <span class="s2">def </span><span class="s1">register_reporter(self, reporter_class):</span>
+        <span class="s1">self._reporters[reporter_class.name] = reporter_class</span>
+
+    <span class="s2">def </span><span class="s1">report_order(self):</span>
+        <span class="s1">reports = sorted(self._reports, key=</span><span class="s2">lambda </span><span class="s1">x: getattr(x, </span><span class="s3">&quot;name&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">))</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s0"># Remove the current reporter and add it</span>
+            <span class="s0"># at the end of the list.</span>
+            <span class="s1">reports.pop(reports.index(self))</span>
+        <span class="s2">except </span><span class="s1">ValueError:</span>
+            <span class="s2">pass</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">reports.append(self)</span>
+        <span class="s2">return </span><span class="s1">reports</span>
+
+    <span class="s0"># checkers manipulation methods ############################################</span>
+
+    <span class="s2">def </span><span class="s1">register_checker(self, checker):</span>
+        <span class="s0">&quot;&quot;&quot;register a new checker 
+ 
+        checker is an object implementing IRawChecker or / and IAstroidChecker 
+        &quot;&quot;&quot;</span>
+        <span class="s2">assert </span><span class="s1">checker.priority &lt;= </span><span class="s5">0</span><span class="s1">, </span><span class="s3">&quot;checker priority can't be &gt;= 0&quot;</span>
+        <span class="s1">self._checkers[checker.name].append(checker)</span>
+        <span class="s2">for </span><span class="s1">r_id, r_title, r_cb </span><span class="s2">in </span><span class="s1">checker.reports:</span>
+            <span class="s1">self.register_report(r_id, r_title, r_cb, checker)</span>
+        <span class="s1">self.register_options_provider(checker)</span>
+        <span class="s2">if </span><span class="s1">hasattr(checker, </span><span class="s3">&quot;msgs&quot;</span><span class="s1">):</span>
+            <span class="s1">self.msgs_store.register_messages_from_checker(checker)</span>
+        <span class="s1">checker.load_defaults()</span>
+
+        <span class="s0"># Register the checker, but disable all of its messages.</span>
+        <span class="s2">if not </span><span class="s1">getattr(checker, </span><span class="s3">&quot;enabled&quot;</span><span class="s1">, </span><span class="s2">True</span><span class="s1">):</span>
+            <span class="s1">self.disable(checker.name)</span>
+
+    <span class="s2">def </span><span class="s1">disable_noerror_messages(self):</span>
+        <span class="s2">for </span><span class="s1">msgcat, msgids </span><span class="s2">in </span><span class="s1">self.msgs_store._msgs_by_category.items():</span>
+            <span class="s0"># enable only messages with 'error' severity and above ('fatal')</span>
+            <span class="s2">if </span><span class="s1">msgcat </span><span class="s2">in </span><span class="s1">[</span><span class="s3">&quot;E&quot;</span><span class="s1">, </span><span class="s3">&quot;F&quot;</span><span class="s1">]:</span>
+                <span class="s2">for </span><span class="s1">msgid </span><span class="s2">in </span><span class="s1">msgids:</span>
+                    <span class="s1">self.enable(msgid)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">for </span><span class="s1">msgid </span><span class="s2">in </span><span class="s1">msgids:</span>
+                    <span class="s1">self.disable(msgid)</span>
+
+    <span class="s2">def </span><span class="s1">disable_reporters(self):</span>
+        <span class="s0">&quot;&quot;&quot;disable all reporters&quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">_reporters </span><span class="s2">in </span><span class="s1">self._reports.values():</span>
+            <span class="s2">for </span><span class="s1">report_id, _, _ </span><span class="s2">in </span><span class="s1">_reporters:</span>
+                <span class="s1">self.disable_report(report_id)</span>
+
+    <span class="s2">def </span><span class="s1">error_mode(self):</span>
+        <span class="s0">&quot;&quot;&quot;error mode: enable only errors; no reports, no persistent&quot;&quot;&quot;</span>
+        <span class="s1">self._error_mode = </span><span class="s2">True</span>
+        <span class="s1">self.disable_noerror_messages()</span>
+        <span class="s1">self.disable(</span><span class="s3">&quot;miscellaneous&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">self._python3_porting_mode:</span>
+            <span class="s1">self.disable(</span><span class="s3">&quot;all&quot;</span><span class="s1">)</span>
+            <span class="s2">for </span><span class="s1">msg_id </span><span class="s2">in </span><span class="s1">self._checker_messages(</span><span class="s3">&quot;python3&quot;</span><span class="s1">):</span>
+                <span class="s2">if </span><span class="s1">msg_id.startswith(</span><span class="s3">&quot;E&quot;</span><span class="s1">):</span>
+                    <span class="s1">self.enable(msg_id)</span>
+            <span class="s1">config_parser = self.cfgfile_parser</span>
+            <span class="s2">if </span><span class="s1">config_parser.has_option(</span><span class="s3">&quot;MESSAGES CONTROL&quot;</span><span class="s1">, </span><span class="s3">&quot;disable&quot;</span><span class="s1">):</span>
+                <span class="s1">value = config_parser.get(</span><span class="s3">&quot;MESSAGES CONTROL&quot;</span><span class="s1">, </span><span class="s3">&quot;disable&quot;</span><span class="s1">)</span>
+                <span class="s1">self.global_set_option(</span><span class="s3">&quot;disable&quot;</span><span class="s1">, value)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.disable(</span><span class="s3">&quot;python3&quot;</span><span class="s1">)</span>
+        <span class="s1">self.set_option(</span><span class="s3">&quot;reports&quot;</span><span class="s1">, </span><span class="s2">False</span><span class="s1">)</span>
+        <span class="s1">self.set_option(</span><span class="s3">&quot;persistent&quot;</span><span class="s1">, </span><span class="s2">False</span><span class="s1">)</span>
+        <span class="s1">self.set_option(</span><span class="s3">&quot;score&quot;</span><span class="s1">, </span><span class="s2">False</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">python3_porting_mode(self):</span>
+        <span class="s0">&quot;&quot;&quot;Disable all other checkers and enable Python 3 warnings.&quot;&quot;&quot;</span>
+        <span class="s1">self.disable(</span><span class="s3">&quot;all&quot;</span><span class="s1">)</span>
+        <span class="s0"># re-enable some errors, or 'print', 'raise', 'async', 'await' will mistakenly lint fine</span>
+        <span class="s1">self.enable(</span><span class="s3">&quot;fatal&quot;</span><span class="s1">)  </span><span class="s0"># F0001</span>
+        <span class="s1">self.enable(</span><span class="s3">&quot;astroid-error&quot;</span><span class="s1">)  </span><span class="s0"># F0002</span>
+        <span class="s1">self.enable(</span><span class="s3">&quot;parse-error&quot;</span><span class="s1">)  </span><span class="s0"># F0010</span>
+        <span class="s1">self.enable(</span><span class="s3">&quot;syntax-error&quot;</span><span class="s1">)  </span><span class="s0"># E0001</span>
+        <span class="s1">self.enable(</span><span class="s3">&quot;python3&quot;</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">self._error_mode:</span>
+            <span class="s0"># The error mode was activated, using the -E flag.</span>
+            <span class="s0"># So we'll need to enable only the errors from the</span>
+            <span class="s0"># Python 3 porting checker.</span>
+            <span class="s2">for </span><span class="s1">msg_id </span><span class="s2">in </span><span class="s1">self._checker_messages(</span><span class="s3">&quot;python3&quot;</span><span class="s1">):</span>
+                <span class="s2">if </span><span class="s1">msg_id.startswith(</span><span class="s3">&quot;E&quot;</span><span class="s1">):</span>
+                    <span class="s1">self.enable(msg_id)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">self.disable(msg_id)</span>
+        <span class="s1">config_parser = self.cfgfile_parser</span>
+        <span class="s2">if </span><span class="s1">config_parser.has_option(</span><span class="s3">&quot;MESSAGES CONTROL&quot;</span><span class="s1">, </span><span class="s3">&quot;disable&quot;</span><span class="s1">):</span>
+            <span class="s1">value = config_parser.get(</span><span class="s3">&quot;MESSAGES CONTROL&quot;</span><span class="s1">, </span><span class="s3">&quot;disable&quot;</span><span class="s1">)</span>
+            <span class="s1">self.global_set_option(</span><span class="s3">&quot;disable&quot;</span><span class="s1">, value)</span>
+        <span class="s1">self._python3_porting_mode = </span><span class="s2">True</span>
+
+    <span class="s2">def </span><span class="s1">list_messages_enabled(self):</span>
+        <span class="s1">enabled = [</span>
+            <span class="s3">f&quot;  </span><span class="s4">{</span><span class="s1">message.symbol</span><span class="s4">} </span><span class="s3">(</span><span class="s4">{</span><span class="s1">message.msgid</span><span class="s4">}</span><span class="s3">)&quot;</span>
+            <span class="s2">for </span><span class="s1">message </span><span class="s2">in </span><span class="s1">self.msgs_store.messages</span>
+            <span class="s2">if </span><span class="s1">self.is_message_enabled(message.msgid)</span>
+        <span class="s1">]</span>
+        <span class="s1">disabled = [</span>
+            <span class="s3">f&quot;  </span><span class="s4">{</span><span class="s1">message.symbol</span><span class="s4">} </span><span class="s3">(</span><span class="s4">{</span><span class="s1">message.msgid</span><span class="s4">}</span><span class="s3">)&quot;</span>
+            <span class="s2">for </span><span class="s1">message </span><span class="s2">in </span><span class="s1">self.msgs_store.messages</span>
+            <span class="s2">if not </span><span class="s1">self.is_message_enabled(message.msgid)</span>
+        <span class="s1">]</span>
+        <span class="s1">print(</span><span class="s3">&quot;Enabled messages:&quot;</span><span class="s1">)</span>
+        <span class="s2">for </span><span class="s1">msg </span><span class="s2">in </span><span class="s1">sorted(enabled):</span>
+            <span class="s1">print(msg)</span>
+        <span class="s1">print(</span><span class="s3">&quot;</span><span class="s4">\n</span><span class="s3">Disabled messages:&quot;</span><span class="s1">)</span>
+        <span class="s2">for </span><span class="s1">msg </span><span class="s2">in </span><span class="s1">sorted(disabled):</span>
+            <span class="s1">print(msg)</span>
+        <span class="s1">print(</span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+
+    <span class="s0"># block level option handling #############################################</span>
+    <span class="s0"># see func_block_disable_msg.py test case for expected behaviour</span>
+
+    <span class="s2">def </span><span class="s1">process_tokens(self, tokens):</span>
+        <span class="s0">&quot;&quot;&quot;Process tokens from the current module to search for module/block level 
+        options.&quot;&quot;&quot;</span>
+        <span class="s1">control_pragmas = {</span><span class="s3">&quot;disable&quot;</span><span class="s1">, </span><span class="s3">&quot;enable&quot;</span><span class="s1">}</span>
+        <span class="s1">prev_line = </span><span class="s2">None</span>
+        <span class="s1">saw_newline = </span><span class="s2">True</span>
+        <span class="s1">seen_newline = </span><span class="s2">True</span>
+        <span class="s2">for </span><span class="s1">(tok_type, content, start, _, _) </span><span class="s2">in </span><span class="s1">tokens:</span>
+            <span class="s2">if </span><span class="s1">prev_line </span><span class="s2">and </span><span class="s1">prev_line != start[</span><span class="s5">0</span><span class="s1">]:</span>
+                <span class="s1">saw_newline = seen_newline</span>
+                <span class="s1">seen_newline = </span><span class="s2">False</span>
+
+            <span class="s1">prev_line = start[</span><span class="s5">0</span><span class="s1">]</span>
+            <span class="s2">if </span><span class="s1">tok_type </span><span class="s2">in </span><span class="s1">(tokenize.NL, tokenize.NEWLINE):</span>
+                <span class="s1">seen_newline = </span><span class="s2">True</span>
+
+            <span class="s2">if </span><span class="s1">tok_type != tokenize.COMMENT:</span>
+                <span class="s2">continue</span>
+            <span class="s1">match = OPTION_PO.search(content)</span>
+            <span class="s2">if </span><span class="s1">match </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s2">continue</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s2">for </span><span class="s1">pragma_repr </span><span class="s2">in </span><span class="s1">parse_pragma(match.group(</span><span class="s5">2</span><span class="s1">)):</span>
+                    <span class="s2">if </span><span class="s1">pragma_repr.action </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;disable-all&quot;</span><span class="s1">, </span><span class="s3">&quot;skip-file&quot;</span><span class="s1">):</span>
+                        <span class="s2">if </span><span class="s1">pragma_repr.action == </span><span class="s3">&quot;disable-all&quot;</span><span class="s1">:</span>
+                            <span class="s1">self.add_message(</span>
+                                <span class="s3">&quot;deprecated-pragma&quot;</span><span class="s1">,</span>
+                                <span class="s1">line=start[</span><span class="s5">0</span><span class="s1">],</span>
+                                <span class="s1">args=(</span><span class="s3">&quot;disable-all&quot;</span><span class="s1">, </span><span class="s3">&quot;skip-file&quot;</span><span class="s1">),</span>
+                            <span class="s1">)</span>
+                        <span class="s1">self.add_message(</span><span class="s3">&quot;file-ignored&quot;</span><span class="s1">, line=start[</span><span class="s5">0</span><span class="s1">])</span>
+                        <span class="s1">self._ignore_file = </span><span class="s2">True</span>
+                        <span class="s2">return</span>
+                    <span class="s2">try</span><span class="s1">:</span>
+                        <span class="s1">meth = self._options_methods[pragma_repr.action]</span>
+                    <span class="s2">except </span><span class="s1">KeyError:</span>
+                        <span class="s1">meth = self._bw_options_methods[pragma_repr.action]</span>
+                        <span class="s0"># found a &quot;(dis|en)able-msg&quot; pragma deprecated suppression</span>
+                        <span class="s1">self.add_message(</span>
+                            <span class="s3">&quot;deprecated-pragma&quot;</span><span class="s1">,</span>
+                            <span class="s1">line=start[</span><span class="s5">0</span><span class="s1">],</span>
+                            <span class="s1">args=(</span>
+                                <span class="s1">pragma_repr.action,</span>
+                                <span class="s1">pragma_repr.action.replace(</span><span class="s3">&quot;-msg&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">),</span>
+                            <span class="s1">),</span>
+                        <span class="s1">)</span>
+                    <span class="s2">for </span><span class="s1">msgid </span><span class="s2">in </span><span class="s1">pragma_repr.messages:</span>
+                        <span class="s0"># Add the line where a control pragma was encountered.</span>
+                        <span class="s2">if </span><span class="s1">pragma_repr.action </span><span class="s2">in </span><span class="s1">control_pragmas:</span>
+                            <span class="s1">self._pragma_lineno[msgid] = start[</span><span class="s5">0</span><span class="s1">]</span>
+
+                        <span class="s2">if </span><span class="s1">(pragma_repr.action, msgid) == (</span><span class="s3">&quot;disable&quot;</span><span class="s1">, </span><span class="s3">&quot;all&quot;</span><span class="s1">):</span>
+                            <span class="s1">self.add_message(</span>
+                                <span class="s3">&quot;deprecated-pragma&quot;</span><span class="s1">,</span>
+                                <span class="s1">line=start[</span><span class="s5">0</span><span class="s1">],</span>
+                                <span class="s1">args=(</span><span class="s3">&quot;disable=all&quot;</span><span class="s1">, </span><span class="s3">&quot;skip-file&quot;</span><span class="s1">),</span>
+                            <span class="s1">)</span>
+                            <span class="s1">self.add_message(</span><span class="s3">&quot;file-ignored&quot;</span><span class="s1">, line=start[</span><span class="s5">0</span><span class="s1">])</span>
+                            <span class="s1">self._ignore_file = </span><span class="s2">True</span>
+                            <span class="s2">return</span>
+                            <span class="s0"># If we did not see a newline between the previous line and now,</span>
+                            <span class="s0"># we saw a backslash so treat the two lines as one.</span>
+                        <span class="s1">l_start = start[</span><span class="s5">0</span><span class="s1">]</span>
+                        <span class="s2">if not </span><span class="s1">saw_newline:</span>
+                            <span class="s1">l_start -= </span><span class="s5">1</span>
+                        <span class="s2">try</span><span class="s1">:</span>
+                            <span class="s1">meth(msgid, </span><span class="s3">&quot;module&quot;</span><span class="s1">, l_start)</span>
+                        <span class="s2">except </span><span class="s1">exceptions.UnknownMessageError:</span>
+                            <span class="s1">self.add_message(</span>
+                                <span class="s3">&quot;bad-option-value&quot;</span><span class="s1">, args=msgid, line=start[</span><span class="s5">0</span><span class="s1">]</span>
+                            <span class="s1">)</span>
+            <span class="s2">except </span><span class="s1">UnRecognizedOptionError </span><span class="s2">as </span><span class="s1">err:</span>
+                <span class="s1">self.add_message(</span>
+                    <span class="s3">&quot;unrecognized-inline-option&quot;</span><span class="s1">, args=err.token, line=start[</span><span class="s5">0</span><span class="s1">]</span>
+                <span class="s1">)</span>
+                <span class="s2">continue</span>
+            <span class="s2">except </span><span class="s1">InvalidPragmaError </span><span class="s2">as </span><span class="s1">err:</span>
+                <span class="s1">self.add_message(</span><span class="s3">&quot;bad-inline-option&quot;</span><span class="s1">, args=err.token, line=start[</span><span class="s5">0</span><span class="s1">])</span>
+                <span class="s2">continue</span>
+
+    <span class="s0"># code checking methods ###################################################</span>
+
+    <span class="s2">def </span><span class="s1">get_checkers(self):</span>
+        <span class="s0">&quot;&quot;&quot;return all available checkers as a list&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">[self] + [</span>
+            <span class="s1">c</span>
+            <span class="s2">for </span><span class="s1">_checkers </span><span class="s2">in </span><span class="s1">self._checkers.values()</span>
+            <span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">_checkers</span>
+            <span class="s2">if </span><span class="s1">c </span><span class="s2">is not </span><span class="s1">self</span>
+        <span class="s1">]</span>
+
+    <span class="s2">def </span><span class="s1">get_checker_names(self):</span>
+        <span class="s0">&quot;&quot;&quot;Get all the checker names that this linter knows about.&quot;&quot;&quot;</span>
+        <span class="s1">current_checkers = self.get_checkers()</span>
+        <span class="s2">return </span><span class="s1">sorted(</span>
+            <span class="s1">{</span>
+                <span class="s1">checker.name</span>
+                <span class="s2">for </span><span class="s1">checker </span><span class="s2">in </span><span class="s1">current_checkers</span>
+                <span class="s2">if </span><span class="s1">checker.name != MAIN_CHECKER_NAME</span>
+            <span class="s1">}</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">prepare_checkers(self):</span>
+        <span class="s0">&quot;&quot;&quot;return checkers needed for activated messages and reports&quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">self.config.reports:</span>
+            <span class="s1">self.disable_reporters()</span>
+        <span class="s0"># get needed checkers</span>
+        <span class="s1">needed_checkers = [self]</span>
+        <span class="s2">for </span><span class="s1">checker </span><span class="s2">in </span><span class="s1">self.get_checkers()[</span><span class="s5">1</span><span class="s1">:]:</span>
+            <span class="s1">messages = {msg </span><span class="s2">for </span><span class="s1">msg </span><span class="s2">in </span><span class="s1">checker.msgs </span><span class="s2">if </span><span class="s1">self.is_message_enabled(msg)}</span>
+            <span class="s2">if </span><span class="s1">messages </span><span class="s2">or </span><span class="s1">any(self.report_is_enabled(r[</span><span class="s5">0</span><span class="s1">]) </span><span class="s2">for </span><span class="s1">r </span><span class="s2">in </span><span class="s1">checker.reports):</span>
+                <span class="s1">needed_checkers.append(checker)</span>
+        <span class="s0"># Sort checkers by priority</span>
+        <span class="s1">needed_checkers = sorted(</span>
+            <span class="s1">needed_checkers, key=operator.attrgetter(</span><span class="s3">&quot;priority&quot;</span><span class="s1">), reverse=</span><span class="s2">True</span>
+        <span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">needed_checkers</span>
+
+    <span class="s0"># pylint: disable=unused-argument</span>
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">should_analyze_file(modname, path, is_argument=</span><span class="s2">False</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Returns whether or not a module should be checked. 
+ 
+        This implementation returns True for all python source file, indicating 
+        that all files should be linted. 
+ 
+        Subclasses may override this method to indicate that modules satisfying 
+        certain conditions should not be linted. 
+ 
+        :param str modname: The name of the module to be checked. 
+        :param str path: The full path to the source code of the module. 
+        :param bool is_argument: Whether the file is an argument to pylint or not. 
+                                 Files which respect this property are always 
+                                 checked, since the user requested it explicitly. 
+        :returns: True if the module should be checked. 
+        :rtype: bool 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">is_argument:</span>
+            <span class="s2">return True</span>
+        <span class="s2">return </span><span class="s1">path.endswith(</span><span class="s3">&quot;.py&quot;</span><span class="s1">)</span>
+
+    <span class="s0"># pylint: enable=unused-argument</span>
+
+    <span class="s2">def </span><span class="s1">initialize(self):</span>
+        <span class="s0">&quot;&quot;&quot;Initialize linter for linting 
+ 
+        This method is called before any linting is done. 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># initialize msgs_state now that all messages have been registered into</span>
+        <span class="s0"># the store</span>
+        <span class="s2">for </span><span class="s1">msg </span><span class="s2">in </span><span class="s1">self.msgs_store.messages:</span>
+            <span class="s2">if not </span><span class="s1">msg.may_be_emitted():</span>
+                <span class="s1">self._msgs_state[msg.msgid] = </span><span class="s2">False</span>
+
+    <span class="s2">def </span><span class="s1">check(self, files_or_modules):</span>
+        <span class="s0">&quot;&quot;&quot;main checking entry: check a list of files or modules from their name. 
+ 
+        files_or_modules is either a string or list of strings presenting modules to check. 
+        &quot;&quot;&quot;</span>
+
+        <span class="s1">self.initialize()</span>
+
+        <span class="s2">if not </span><span class="s1">isinstance(files_or_modules, (list, tuple)):</span>
+            <span class="s1">files_or_modules = (files_or_modules,)</span>
+
+        <span class="s2">if </span><span class="s1">self.config.from_stdin:</span>
+            <span class="s2">if </span><span class="s1">len(files_or_modules) != </span><span class="s5">1</span><span class="s1">:</span>
+                <span class="s2">raise </span><span class="s1">exceptions.InvalidArgsError(</span>
+                    <span class="s3">&quot;Missing filename required for --from-stdin&quot;</span>
+                <span class="s1">)</span>
+
+            <span class="s1">filepath = files_or_modules[</span><span class="s5">0</span><span class="s1">]</span>
+            <span class="s2">with </span><span class="s1">fix_import_path(files_or_modules):</span>
+                <span class="s1">self._check_files(</span>
+                    <span class="s1">functools.partial(self.get_ast, data=_read_stdin()),</span>
+                    <span class="s1">[self._get_file_descr_from_stdin(filepath)],</span>
+                <span class="s1">)</span>
+        <span class="s2">elif </span><span class="s1">self.config.jobs == </span><span class="s5">1</span><span class="s1">:</span>
+            <span class="s2">with </span><span class="s1">fix_import_path(files_or_modules):</span>
+                <span class="s1">self._check_files(</span>
+                    <span class="s1">self.get_ast, self._iterate_file_descrs(files_or_modules)</span>
+                <span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">check_parallel(</span>
+                <span class="s1">self,</span>
+                <span class="s1">self.config.jobs,</span>
+                <span class="s1">self._iterate_file_descrs(files_or_modules),</span>
+                <span class="s1">files_or_modules,</span>
+            <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">check_single_file(self, name, filepath, modname):</span>
+        <span class="s0">&quot;&quot;&quot;Check single file 
+ 
+        The arguments are the same that are documented in _check_files 
+ 
+        The initialize() method should be called before calling this method 
+        &quot;&quot;&quot;</span>
+        <span class="s2">with </span><span class="s1">self._astroid_module_checker() </span><span class="s2">as </span><span class="s1">check_astroid_module:</span>
+            <span class="s1">self._check_file(</span>
+                <span class="s1">self.get_ast, check_astroid_module, name, filepath, modname</span>
+            <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_check_files(self, get_ast, file_descrs):</span>
+        <span class="s0">&quot;&quot;&quot;Check all files from file_descrs 
+ 
+        The file_descrs should be iterable of tuple (name, filepath, modname) 
+        where 
+        - name: full name of the module 
+        - filepath: path of the file 
+        - modname: module name 
+        &quot;&quot;&quot;</span>
+        <span class="s2">with </span><span class="s1">self._astroid_module_checker() </span><span class="s2">as </span><span class="s1">check_astroid_module:</span>
+            <span class="s2">for </span><span class="s1">name, filepath, modname </span><span class="s2">in </span><span class="s1">file_descrs:</span>
+                <span class="s1">self._check_file(get_ast, check_astroid_module, name, filepath, modname)</span>
+
+    <span class="s2">def </span><span class="s1">_check_file(self, get_ast, check_astroid_module, name, filepath, modname):</span>
+        <span class="s0">&quot;&quot;&quot;Check a file using the passed utility functions (get_ast and check_astroid_module) 
+ 
+        :param callable get_ast: callable returning AST from defined file taking the following arguments 
+        - filepath: path to the file to check 
+        - name: Python module name 
+        :param callable check_astroid_module: callable checking an AST taking the following arguments 
+        - ast: AST of the module 
+        :param str name: full name of the module 
+        :param str filepath: path to checked file 
+        :param str modname: name of the checked Python module 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.set_current_module(name, filepath)</span>
+        <span class="s0"># get the module representation</span>
+        <span class="s1">ast_node = get_ast(filepath, name)</span>
+        <span class="s2">if </span><span class="s1">ast_node </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">return</span>
+
+        <span class="s1">self._ignore_file = </span><span class="s2">False</span>
+
+        <span class="s1">self.file_state = FileState(modname)</span>
+        <span class="s0"># fix the current file (if the source file was not available or</span>
+        <span class="s0"># if it's actually a c extension)</span>
+        <span class="s1">self.current_file = ast_node.file  </span><span class="s0"># pylint: disable=maybe-no-member</span>
+        <span class="s1">check_astroid_module(ast_node)</span>
+        <span class="s0"># warn about spurious inline messages handling</span>
+        <span class="s1">spurious_messages = self.file_state.iter_spurious_suppression_messages(</span>
+            <span class="s1">self.msgs_store</span>
+        <span class="s1">)</span>
+        <span class="s2">for </span><span class="s1">msgid, line, args </span><span class="s2">in </span><span class="s1">spurious_messages:</span>
+            <span class="s1">self.add_message(msgid, line, </span><span class="s2">None</span><span class="s1">, args)</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_get_file_descr_from_stdin(filepath):</span>
+        <span class="s0">&quot;&quot;&quot;Return file description (tuple of module name, file path, base name) from given file path 
+ 
+        This method is used for creating suitable file description for _check_files when the 
+        source is standard input. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s0"># Note that this function does not really perform an</span>
+            <span class="s0"># __import__ but may raise an ImportError exception, which</span>
+            <span class="s0"># we want to catch here.</span>
+            <span class="s1">modname = </span><span class="s3">&quot;.&quot;</span><span class="s1">.join(astroid.modutils.modpath_from_file(filepath))</span>
+        <span class="s2">except </span><span class="s1">ImportError:</span>
+            <span class="s1">modname = os.path.splitext(os.path.basename(filepath))[</span><span class="s5">0</span><span class="s1">]</span>
+
+        <span class="s2">return </span><span class="s1">(modname, filepath, filepath)</span>
+
+    <span class="s2">def </span><span class="s1">_iterate_file_descrs(self, files_or_modules):</span>
+        <span class="s0">&quot;&quot;&quot;Return generator yielding file descriptions (tuples of module name, file path, base name) 
+ 
+        The returned generator yield one item for each Python module that should be linted. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">descr </span><span class="s2">in </span><span class="s1">self._expand_files(files_or_modules):</span>
+            <span class="s1">name, filepath, is_arg = descr[</span><span class="s3">&quot;name&quot;</span><span class="s1">], descr[</span><span class="s3">&quot;path&quot;</span><span class="s1">], descr[</span><span class="s3">&quot;isarg&quot;</span><span class="s1">]</span>
+            <span class="s2">if </span><span class="s1">self.should_analyze_file(name, filepath, is_argument=is_arg):</span>
+                <span class="s2">yield </span><span class="s1">(name, filepath, descr[</span><span class="s3">&quot;basename&quot;</span><span class="s1">])</span>
+
+    <span class="s2">def </span><span class="s1">_expand_files(self, modules):</span>
+        <span class="s0">&quot;&quot;&quot;get modules and errors from a list of modules and handle errors&quot;&quot;&quot;</span>
+        <span class="s1">result, errors = expand_modules(</span>
+            <span class="s1">modules, self.config.black_list, self.config.black_list_re</span>
+        <span class="s1">)</span>
+        <span class="s2">for </span><span class="s1">error </span><span class="s2">in </span><span class="s1">errors:</span>
+            <span class="s1">message = modname = error[</span><span class="s3">&quot;mod&quot;</span><span class="s1">]</span>
+            <span class="s1">key = error[</span><span class="s3">&quot;key&quot;</span><span class="s1">]</span>
+            <span class="s1">self.set_current_module(modname)</span>
+            <span class="s2">if </span><span class="s1">key == </span><span class="s3">&quot;fatal&quot;</span><span class="s1">:</span>
+                <span class="s1">message = str(error[</span><span class="s3">&quot;ex&quot;</span><span class="s1">]).replace(os.getcwd() + os.sep, </span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+            <span class="s1">self.add_message(key, args=message)</span>
+        <span class="s2">return </span><span class="s1">result</span>
+
+    <span class="s2">def </span><span class="s1">set_current_module(self, modname, filepath=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;set the name of the currently analyzed module and 
+        init statistics for it 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">modname </span><span class="s2">and </span><span class="s1">filepath </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">return</span>
+        <span class="s1">self.reporter.on_set_current_module(modname, filepath)</span>
+        <span class="s1">self.current_name = modname</span>
+        <span class="s1">self.current_file = filepath </span><span class="s2">or </span><span class="s1">modname</span>
+        <span class="s1">self.stats[</span><span class="s3">&quot;by_module&quot;</span><span class="s1">][modname] = {}</span>
+        <span class="s1">self.stats[</span><span class="s3">&quot;by_module&quot;</span><span class="s1">][modname][</span><span class="s3">&quot;statement&quot;</span><span class="s1">] = </span><span class="s5">0</span>
+        <span class="s2">for </span><span class="s1">msg_cat </span><span class="s2">in </span><span class="s1">MSG_TYPES.values():</span>
+            <span class="s1">self.stats[</span><span class="s3">&quot;by_module&quot;</span><span class="s1">][modname][msg_cat] = </span><span class="s5">0</span>
+
+    <span class="s1">@contextlib.contextmanager</span>
+    <span class="s2">def </span><span class="s1">_astroid_module_checker(self):</span>
+        <span class="s0">&quot;&quot;&quot;Context manager for checking ASTs 
+ 
+        The value in the context is callable accepting AST as its only argument. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">walker = ASTWalker(self)</span>
+        <span class="s1">_checkers = self.prepare_checkers()</span>
+        <span class="s1">tokencheckers = [</span>
+            <span class="s1">c</span>
+            <span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">_checkers</span>
+            <span class="s2">if </span><span class="s1">interfaces.implements(c, interfaces.ITokenChecker) </span><span class="s2">and </span><span class="s1">c </span><span class="s2">is not </span><span class="s1">self</span>
+        <span class="s1">]</span>
+        <span class="s1">rawcheckers = [</span>
+            <span class="s1">c </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">_checkers </span><span class="s2">if </span><span class="s1">interfaces.implements(c, interfaces.IRawChecker)</span>
+        <span class="s1">]</span>
+        <span class="s0"># notify global begin</span>
+        <span class="s2">for </span><span class="s1">checker </span><span class="s2">in </span><span class="s1">_checkers:</span>
+            <span class="s1">checker.open()</span>
+            <span class="s2">if </span><span class="s1">interfaces.implements(checker, interfaces.IAstroidChecker):</span>
+                <span class="s1">walker.add_checker(checker)</span>
+
+        <span class="s2">yield </span><span class="s1">functools.partial(</span>
+            <span class="s1">self.check_astroid_module,</span>
+            <span class="s1">walker=walker,</span>
+            <span class="s1">tokencheckers=tokencheckers,</span>
+            <span class="s1">rawcheckers=rawcheckers,</span>
+        <span class="s1">)</span>
+
+        <span class="s0"># notify global end</span>
+        <span class="s1">self.stats[</span><span class="s3">&quot;statement&quot;</span><span class="s1">] = walker.nbstatements</span>
+        <span class="s2">for </span><span class="s1">checker </span><span class="s2">in </span><span class="s1">reversed(_checkers):</span>
+            <span class="s1">checker.close()</span>
+
+    <span class="s2">def </span><span class="s1">get_ast(self, filepath, modname, data=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Return an ast(roid) representation of a module or a string. 
+ 
+        :param str filepath: path to checked file. 
+        :param str modname: The name of the module to be checked. 
+        :param str data: optional contents of the checked file. 
+        :returns: the AST 
+        :rtype: astroid.nodes.Module 
+        &quot;&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">data </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s2">return </span><span class="s1">MANAGER.ast_from_file(filepath, modname, source=</span><span class="s2">True</span><span class="s1">)</span>
+            <span class="s2">return </span><span class="s1">astroid.builder.AstroidBuilder(MANAGER).string_build(</span>
+                <span class="s1">data, modname, filepath</span>
+            <span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">astroid.AstroidSyntaxError </span><span class="s2">as </span><span class="s1">ex:</span>
+            <span class="s0"># pylint: disable=no-member</span>
+            <span class="s1">self.add_message(</span>
+                <span class="s3">&quot;syntax-error&quot;</span><span class="s1">,</span>
+                <span class="s1">line=getattr(ex.error, </span><span class="s3">&quot;lineno&quot;</span><span class="s1">, </span><span class="s5">0</span><span class="s1">),</span>
+                <span class="s1">col_offset=getattr(ex.error, </span><span class="s3">&quot;offset&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+                <span class="s1">args=str(ex.error),</span>
+            <span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">astroid.AstroidBuildingException </span><span class="s2">as </span><span class="s1">ex:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;parse-error&quot;</span><span class="s1">, args=ex)</span>
+        <span class="s2">except </span><span class="s1">Exception </span><span class="s2">as </span><span class="s1">ex:  </span><span class="s0"># pylint: disable=broad-except</span>
+            <span class="s1">traceback.print_exc()</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;astroid-error&quot;</span><span class="s1">, args=(ex.__class__, ex))</span>
+        <span class="s2">return None</span>
+
+    <span class="s2">def </span><span class="s1">check_astroid_module(self, ast_node, walker, rawcheckers, tokencheckers):</span>
+        <span class="s0">&quot;&quot;&quot;Check a module from its astroid representation. 
+ 
+        For return value see _check_astroid_module 
+        &quot;&quot;&quot;</span>
+        <span class="s1">before_check_statements = walker.nbstatements</span>
+
+        <span class="s1">retval = self._check_astroid_module(</span>
+            <span class="s1">ast_node, walker, rawcheckers, tokencheckers</span>
+        <span class="s1">)</span>
+
+        <span class="s1">self.stats[</span><span class="s3">&quot;by_module&quot;</span><span class="s1">][self.current_name][</span><span class="s3">&quot;statement&quot;</span><span class="s1">] = (</span>
+            <span class="s1">walker.nbstatements - before_check_statements</span>
+        <span class="s1">)</span>
+
+        <span class="s2">return </span><span class="s1">retval</span>
+
+    <span class="s2">def </span><span class="s1">_check_astroid_module(self, ast_node, walker, rawcheckers, tokencheckers):</span>
+        <span class="s0">&quot;&quot;&quot;Check given AST node with given walker and checkers 
+ 
+        :param astroid.nodes.Module ast_node: AST node of the module to check 
+        :param pylint.utils.ast_walker.ASTWalker walker: AST walker 
+        :param list rawcheckers: List of token checkers to use 
+        :param list tokencheckers: List of raw checkers to use 
+ 
+        :returns: True if the module was checked, False if ignored, 
+            None if the module contents could not be parsed 
+        :rtype: bool 
+        &quot;&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">tokens = utils.tokenize_module(ast_node)</span>
+        <span class="s2">except </span><span class="s1">tokenize.TokenError </span><span class="s2">as </span><span class="s1">ex:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;syntax-error&quot;</span><span class="s1">, line=ex.args[</span><span class="s5">1</span><span class="s1">][</span><span class="s5">0</span><span class="s1">], args=ex.args[</span><span class="s5">0</span><span class="s1">])</span>
+            <span class="s2">return None</span>
+
+        <span class="s2">if not </span><span class="s1">ast_node.pure_python:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;raw-checker-failed&quot;</span><span class="s1">, args=ast_node.name)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s0"># assert astroid.file.endswith('.py')</span>
+            <span class="s0"># invoke ITokenChecker interface on self to fetch module/block</span>
+            <span class="s0"># level options</span>
+            <span class="s1">self.process_tokens(tokens)</span>
+            <span class="s2">if </span><span class="s1">self._ignore_file:</span>
+                <span class="s2">return False</span>
+            <span class="s0"># walk ast to collect line numbers</span>
+            <span class="s1">self.file_state.collect_block_lines(self.msgs_store, ast_node)</span>
+            <span class="s0"># run raw and tokens checkers</span>
+            <span class="s2">for </span><span class="s1">checker </span><span class="s2">in </span><span class="s1">rawcheckers:</span>
+                <span class="s1">checker.process_module(ast_node)</span>
+            <span class="s2">for </span><span class="s1">checker </span><span class="s2">in </span><span class="s1">tokencheckers:</span>
+                <span class="s1">checker.process_tokens(tokens)</span>
+        <span class="s0"># generate events to astroid checkers</span>
+        <span class="s1">walker.walk(ast_node)</span>
+        <span class="s2">return True</span>
+
+    <span class="s0"># IAstroidChecker interface #################################################</span>
+
+    <span class="s2">def </span><span class="s1">open(self):</span>
+        <span class="s0">&quot;&quot;&quot;initialize counters&quot;&quot;&quot;</span>
+        <span class="s1">self.stats = {</span><span class="s3">&quot;by_module&quot;</span><span class="s1">: {}, </span><span class="s3">&quot;by_msg&quot;</span><span class="s1">: {}}</span>
+        <span class="s1">MANAGER.always_load_extensions = self.config.unsafe_load_any_extension</span>
+        <span class="s1">MANAGER.max_inferable_values = self.config.limit_inference_results</span>
+        <span class="s1">MANAGER.extension_package_whitelist.update(self.config.extension_pkg_allow_list)</span>
+        <span class="s2">if </span><span class="s1">self.config.extension_pkg_whitelist:</span>
+            <span class="s1">MANAGER.extension_package_whitelist.update(</span>
+                <span class="s1">self.config.extension_pkg_whitelist</span>
+            <span class="s1">)</span>
+        <span class="s2">for </span><span class="s1">msg_cat </span><span class="s2">in </span><span class="s1">MSG_TYPES.values():</span>
+            <span class="s1">self.stats[msg_cat] = </span><span class="s5">0</span>
+
+    <span class="s2">def </span><span class="s1">generate_reports(self):</span>
+        <span class="s0">&quot;&quot;&quot;close the whole package /module, it's time to make reports ! 
+ 
+        if persistent run, pickle results for later comparison 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># Display whatever messages are left on the reporter.</span>
+        <span class="s1">self.reporter.display_messages(report_nodes.Section())</span>
+
+        <span class="s2">if </span><span class="s1">self.file_state.base_name </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s0"># load previous results if any</span>
+            <span class="s1">previous_stats = config.load_results(self.file_state.base_name)</span>
+            <span class="s1">self.reporter.on_close(self.stats, previous_stats)</span>
+            <span class="s2">if </span><span class="s1">self.config.reports:</span>
+                <span class="s1">sect = self.make_reports(self.stats, previous_stats)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">sect = report_nodes.Section()</span>
+
+            <span class="s2">if </span><span class="s1">self.config.reports:</span>
+                <span class="s1">self.reporter.display_reports(sect)</span>
+            <span class="s1">score_value = self._report_evaluation()</span>
+            <span class="s0"># save results if persistent run</span>
+            <span class="s2">if </span><span class="s1">self.config.persistent:</span>
+                <span class="s1">config.save_results(self.stats, self.file_state.base_name)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.reporter.on_close(self.stats, {})</span>
+            <span class="s1">score_value = </span><span class="s2">None</span>
+        <span class="s2">return </span><span class="s1">score_value</span>
+
+    <span class="s2">def </span><span class="s1">_report_evaluation(self):</span>
+        <span class="s0">&quot;&quot;&quot;make the global evaluation report&quot;&quot;&quot;</span>
+        <span class="s0"># check with at least check 1 statements (usually 0 when there is a</span>
+        <span class="s0"># syntax error preventing pylint from further processing)</span>
+        <span class="s1">note = </span><span class="s2">None</span>
+        <span class="s1">previous_stats = config.load_results(self.file_state.base_name)</span>
+        <span class="s2">if </span><span class="s1">self.stats[</span><span class="s3">&quot;statement&quot;</span><span class="s1">] == </span><span class="s5">0</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">note</span>
+
+        <span class="s0"># get a global note for the code</span>
+        <span class="s1">evaluation = self.config.evaluation</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">note = eval(evaluation, {}, self.stats)  </span><span class="s0"># pylint: disable=eval-used</span>
+        <span class="s2">except </span><span class="s1">Exception </span><span class="s2">as </span><span class="s1">ex:  </span><span class="s0"># pylint: disable=broad-except</span>
+            <span class="s1">msg = </span><span class="s3">&quot;An exception occurred while rating: %s&quot; </span><span class="s1">% ex</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.stats[</span><span class="s3">&quot;global_note&quot;</span><span class="s1">] = note</span>
+            <span class="s1">msg = </span><span class="s3">&quot;Your code has been rated at %.2f/10&quot; </span><span class="s1">% note</span>
+            <span class="s1">pnote = previous_stats.get(</span><span class="s3">&quot;global_note&quot;</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">pnote </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s1">msg += </span><span class="s3">&quot; (previous run: {:.2f}/10, {:+.2f})&quot;</span><span class="s1">.format(pnote, note - pnote)</span>
+
+        <span class="s2">if </span><span class="s1">self.config.score:</span>
+            <span class="s1">sect = report_nodes.EvaluationSection(msg)</span>
+            <span class="s1">self.reporter.display_reports(sect)</span>
+        <span class="s2">return </span><span class="s1">note</span>
+</pre>
+</body>
+</html>

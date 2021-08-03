@@ -1,0 +1,38 @@
+<html>
+<head>
+<title>quitserver.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+quitserver.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># -*- coding: utf-8 -*-</span>
+<span class="s0">&quot;&quot;&quot; 
+ 
+  send a &quot;quit&quot; signal to a remote server 
+ 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">socket</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s1">hostport = sys.argv[</span><span class="s3">1</span><span class="s1">]</span>
+<span class="s1">host, port = hostport.split(</span><span class="s4">&quot;:&quot;</span><span class="s1">)</span>
+<span class="s1">hostport = (host, int(port))</span>
+
+<span class="s1">sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)</span>
+<span class="s1">sock.connect(hostport)</span>
+<span class="s1">sock.sendall(</span><span class="s4">'&quot;raise KeyboardInterrupt&quot;</span><span class="s5">\n</span><span class="s4">'</span><span class="s1">)</span>
+</pre>
+</body>
+</html>

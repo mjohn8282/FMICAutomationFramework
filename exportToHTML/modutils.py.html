@@ -1,0 +1,678 @@
+<html>
+<head>
+<title>modutils.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+modutils.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2014-2018, 2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014 Google, Inc.</span>
+<span class="s0"># Copyright (c) 2014 Denis Laxalde &lt;denis.laxalde@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2014 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2014 Eevee (Alex Munroe) &lt;amunroe@yelp.com&gt;</span>
+<span class="s0"># Copyright (c) 2015 Florian Bruhin &lt;me@the-compiler.org&gt;</span>
+<span class="s0"># Copyright (c) 2015 Radosław Ganczarek &lt;radoslaw@ganczarek.in&gt;</span>
+<span class="s0"># Copyright (c) 2016 Derek Gustafson &lt;degustaf@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016 Jakub Wilk &lt;jwilk@jwilk.net&gt;</span>
+<span class="s0"># Copyright (c) 2016 Ceridwen &lt;ceridwenv@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Ville Skyttä &lt;ville.skytta@iki.fi&gt;</span>
+<span class="s0"># Copyright (c) 2018 Mario Corchero &lt;mcorcherojim@bloomberg.net&gt;</span>
+<span class="s0"># Copyright (c) 2018 Mario Corchero &lt;mariocj89@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Anthony Sottile &lt;asottile@umich.edu&gt;</span>
+<span class="s0"># Copyright (c) 2019 Hugo van Kemenade &lt;hugovk@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 markmcclain &lt;markmcclain@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 BasPH &lt;BasPH@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Peter Kolbus &lt;peter.kolbus@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;Python modules manipulation utility functions. 
+ 
+:type PY_SOURCE_EXTS: tuple(str) 
+:var PY_SOURCE_EXTS: list of possible python source file extension 
+ 
+:type STD_LIB_DIRS: set of str 
+:var STD_LIB_DIRS: directories where standard modules are located 
+ 
+:type BUILTIN_MODULES: dict 
+:var BUILTIN_MODULES: dictionary with builtin module names has key 
+&quot;&quot;&quot;</span>
+
+<span class="s0"># We disable the import-error so pylint can work without distutils installed.</span>
+<span class="s0"># pylint: disable=no-name-in-module,useless-suppression</span>
+
+<span class="s2">import </span><span class="s1">importlib.util</span>
+<span class="s2">import </span><span class="s1">itertools</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">platform</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">from </span><span class="s1">distutils.errors </span><span class="s2">import </span><span class="s1">DistutilsPlatformError  </span><span class="s0"># pylint: disable=import-error</span>
+<span class="s2">from </span><span class="s1">distutils.sysconfig </span><span class="s2">import </span><span class="s1">get_python_lib  </span><span class="s0"># pylint: disable=import-error</span>
+
+<span class="s2">from </span><span class="s1">astroid.interpreter._import </span><span class="s2">import </span><span class="s1">spec, util</span>
+
+<span class="s0"># distutils is replaced by virtualenv with a module that does</span>
+<span class="s0"># weird path manipulations in order to get to the</span>
+<span class="s0"># real distutils module.</span>
+
+
+<span class="s2">if </span><span class="s1">sys.platform.startswith(</span><span class="s3">&quot;win&quot;</span><span class="s1">):</span>
+    <span class="s1">PY_SOURCE_EXTS = (</span><span class="s3">&quot;py&quot;</span><span class="s1">, </span><span class="s3">&quot;pyw&quot;</span><span class="s1">)</span>
+    <span class="s1">PY_COMPILED_EXTS = (</span><span class="s3">&quot;dll&quot;</span><span class="s1">, </span><span class="s3">&quot;pyd&quot;</span><span class="s1">)</span>
+<span class="s2">else</span><span class="s1">:</span>
+    <span class="s1">PY_SOURCE_EXTS = (</span><span class="s3">&quot;py&quot;</span><span class="s1">,)</span>
+    <span class="s1">PY_COMPILED_EXTS = (</span><span class="s3">&quot;so&quot;</span><span class="s1">,)</span>
+
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s0"># The explicit sys.prefix is to work around a patch in virtualenv that</span>
+    <span class="s0"># replaces the 'real' sys.prefix (i.e. the location of the binary)</span>
+    <span class="s0"># with the prefix from which the virtualenv was created. This throws</span>
+    <span class="s0"># off the detection logic for standard library modules, thus the</span>
+    <span class="s0"># workaround.</span>
+    <span class="s1">STD_LIB_DIRS = {</span>
+        <span class="s1">get_python_lib(standard_lib=</span><span class="s2">True</span><span class="s1">, prefix=sys.prefix),</span>
+        <span class="s0"># Take care of installations where exec_prefix != prefix.</span>
+        <span class="s1">get_python_lib(standard_lib=</span><span class="s2">True</span><span class="s1">, prefix=sys.exec_prefix),</span>
+        <span class="s1">get_python_lib(standard_lib=</span><span class="s2">True</span><span class="s1">),</span>
+    <span class="s1">}</span>
+<span class="s0"># get_python_lib(standard_lib=1) is not available on pypy, set STD_LIB_DIR to</span>
+<span class="s0"># non-valid path, see https://bugs.pypy.org/issue1164</span>
+<span class="s2">except </span><span class="s1">DistutilsPlatformError:</span>
+    <span class="s1">STD_LIB_DIRS = set()</span>
+
+<span class="s2">if </span><span class="s1">os.name == </span><span class="s3">&quot;nt&quot;</span><span class="s1">:</span>
+    <span class="s1">STD_LIB_DIRS.add(os.path.join(sys.prefix, </span><span class="s3">&quot;dlls&quot;</span><span class="s1">))</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s0"># real_prefix is defined when running inside virtual environments,</span>
+        <span class="s0"># created with the **virtualenv** library.</span>
+        <span class="s1">STD_LIB_DIRS.add(os.path.join(sys.real_prefix, </span><span class="s3">&quot;dlls&quot;</span><span class="s1">))</span>
+    <span class="s2">except </span><span class="s1">AttributeError:</span>
+        <span class="s0"># sys.base_exec_prefix is always defined, but in a virtual environment</span>
+        <span class="s0"># created with the stdlib **venv** module, it points to the original</span>
+        <span class="s0"># installation, if the virtual env is activated.</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">STD_LIB_DIRS.add(os.path.join(sys.base_exec_prefix, </span><span class="s3">&quot;dlls&quot;</span><span class="s1">))</span>
+        <span class="s2">except </span><span class="s1">AttributeError:</span>
+            <span class="s2">pass</span>
+
+<span class="s2">if </span><span class="s1">platform.python_implementation() == </span><span class="s3">&quot;PyPy&quot;</span><span class="s1">:</span>
+    <span class="s0"># The get_python_lib(standard_lib=True) function does not give valid</span>
+    <span class="s0"># result with pypy in a virtualenv.</span>
+    <span class="s0"># In a virtual environment, with CPython implementation the call to this function returns a path toward</span>
+    <span class="s0"># the binary (its libraries) which has been used to create the virtual environment.</span>
+    <span class="s0"># Not with pypy implementation.</span>
+    <span class="s0"># The only way to retrieve such information is to use the sys.base_prefix hint.</span>
+    <span class="s0"># It's worth noticing that under CPython implementation the return values of</span>
+    <span class="s0"># get_python_lib(standard_lib=True) and get_python_lib(santdard_lib=True, prefix=sys.base_prefix)</span>
+    <span class="s0"># are the same.</span>
+    <span class="s0"># In the lines above, we could have replace the call to get_python_lib(standard=True)</span>
+    <span class="s0"># with the one using prefix=sys.base_prefix but we prefer modifying only what deals with pypy.</span>
+    <span class="s1">STD_LIB_DIRS.add(get_python_lib(standard_lib=</span><span class="s2">True</span><span class="s1">, prefix=sys.base_prefix))</span>
+    <span class="s1">_root = os.path.join(sys.prefix, </span><span class="s3">&quot;lib_pypy&quot;</span><span class="s1">)</span>
+    <span class="s1">STD_LIB_DIRS.add(_root)</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s0"># real_prefix is defined when running inside virtualenv.</span>
+        <span class="s1">STD_LIB_DIRS.add(os.path.join(sys.base_prefix, </span><span class="s3">&quot;lib_pypy&quot;</span><span class="s1">))</span>
+    <span class="s2">except </span><span class="s1">AttributeError:</span>
+        <span class="s2">pass</span>
+    <span class="s2">del </span><span class="s1">_root</span>
+<span class="s2">if </span><span class="s1">os.name == </span><span class="s3">&quot;posix&quot;</span><span class="s1">:</span>
+    <span class="s0"># Need the real prefix is we're under a virtualenv, otherwise</span>
+    <span class="s0"># the usual one will do.</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">prefix = sys.real_prefix</span>
+    <span class="s2">except </span><span class="s1">AttributeError:</span>
+        <span class="s1">prefix = sys.prefix</span>
+
+    <span class="s2">def </span><span class="s1">_posix_path(path):</span>
+        <span class="s1">base_python = </span><span class="s3">&quot;python%d.%d&quot; </span><span class="s1">% sys.version_info[:</span><span class="s4">2</span><span class="s1">]</span>
+        <span class="s2">return </span><span class="s1">os.path.join(prefix, path, base_python)</span>
+
+    <span class="s1">STD_LIB_DIRS.add(_posix_path(</span><span class="s3">&quot;lib&quot;</span><span class="s1">))</span>
+    <span class="s2">if </span><span class="s1">sys.maxsize &gt; </span><span class="s4">2 </span><span class="s1">** </span><span class="s4">32</span><span class="s1">:</span>
+        <span class="s0"># This tries to fix a problem with /usr/lib64 builds,</span>
+        <span class="s0"># where systems are running both 32-bit and 64-bit code</span>
+        <span class="s0"># on the same machine, which reflects into the places where</span>
+        <span class="s0"># standard library could be found. More details can be found</span>
+        <span class="s0"># here http://bugs.python.org/issue1294959.</span>
+        <span class="s0"># An easy reproducing case would be</span>
+        <span class="s0"># https://github.com/PyCQA/pylint/issues/712#issuecomment-163178753</span>
+        <span class="s1">STD_LIB_DIRS.add(_posix_path(</span><span class="s3">&quot;lib64&quot;</span><span class="s1">))</span>
+
+<span class="s1">EXT_LIB_DIRS = {get_python_lib(), get_python_lib(</span><span class="s2">True</span><span class="s1">)}</span>
+<span class="s1">IS_JYTHON = platform.python_implementation() == </span><span class="s3">&quot;Jython&quot;</span>
+<span class="s1">BUILTIN_MODULES = dict.fromkeys(sys.builtin_module_names, </span><span class="s2">True</span><span class="s1">)</span>
+
+
+<span class="s2">class </span><span class="s1">NoSourceFile(Exception):</span>
+    <span class="s0">&quot;&quot;&quot;exception raised when we are not able to get a python 
+    source file for a precompiled file 
+    &quot;&quot;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">_normalize_path(path):</span>
+    <span class="s2">return </span><span class="s1">os.path.normcase(os.path.abspath(path))</span>
+
+
+<span class="s2">def </span><span class="s1">_canonicalize_path(path):</span>
+    <span class="s2">return </span><span class="s1">os.path.realpath(os.path.expanduser(path))</span>
+
+
+<span class="s2">def </span><span class="s1">_path_from_filename(filename, is_jython=IS_JYTHON):</span>
+    <span class="s2">if not </span><span class="s1">is_jython:</span>
+        <span class="s2">return </span><span class="s1">filename</span>
+    <span class="s1">head, has_pyclass, _ = filename.partition(</span><span class="s3">&quot;$py.class&quot;</span><span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">has_pyclass:</span>
+        <span class="s2">return </span><span class="s1">head + </span><span class="s3">&quot;.py&quot;</span>
+    <span class="s2">return </span><span class="s1">filename</span>
+
+
+<span class="s2">def </span><span class="s1">_handle_blacklist(blacklist, dirnames, filenames):</span>
+    <span class="s0">&quot;&quot;&quot;remove files/directories in the black list 
+ 
+    dirnames/filenames are usually from os.walk 
+    &quot;&quot;&quot;</span>
+    <span class="s2">for </span><span class="s1">norecurs </span><span class="s2">in </span><span class="s1">blacklist:</span>
+        <span class="s2">if </span><span class="s1">norecurs </span><span class="s2">in </span><span class="s1">dirnames:</span>
+            <span class="s1">dirnames.remove(norecurs)</span>
+        <span class="s2">elif </span><span class="s1">norecurs </span><span class="s2">in </span><span class="s1">filenames:</span>
+            <span class="s1">filenames.remove(norecurs)</span>
+
+
+<span class="s1">_NORM_PATH_CACHE = {}</span>
+
+
+<span class="s2">def </span><span class="s1">_cache_normalize_path(path):</span>
+    <span class="s0">&quot;&quot;&quot;abspath with caching&quot;&quot;&quot;</span>
+    <span class="s0"># _module_file calls abspath on every path in sys.path every time it's</span>
+    <span class="s0"># called; on a larger codebase this easily adds up to half a second just</span>
+    <span class="s0"># assembling path components. This cache alleviates that.</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">_NORM_PATH_CACHE[path]</span>
+    <span class="s2">except </span><span class="s1">KeyError:</span>
+        <span class="s2">if not </span><span class="s1">path:  </span><span class="s0"># don't cache result for ''</span>
+            <span class="s2">return </span><span class="s1">_normalize_path(path)</span>
+        <span class="s1">result = _NORM_PATH_CACHE[path] = _normalize_path(path)</span>
+        <span class="s2">return </span><span class="s1">result</span>
+
+
+<span class="s2">def </span><span class="s1">load_module_from_name(dotted_name):</span>
+    <span class="s0">&quot;&quot;&quot;Load a Python module from its name. 
+ 
+    :type dotted_name: str 
+    :param dotted_name: python name of a module or package 
+ 
+    :raise ImportError: if the module or package is not found 
+ 
+    :rtype: module 
+    :return: the loaded module 
+    &quot;&quot;&quot;</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">sys.modules[dotted_name]</span>
+    <span class="s2">except </span><span class="s1">KeyError:</span>
+        <span class="s2">pass</span>
+
+    <span class="s2">return </span><span class="s1">importlib.import_module(dotted_name)</span>
+
+
+<span class="s2">def </span><span class="s1">load_module_from_modpath(parts):</span>
+    <span class="s0">&quot;&quot;&quot;Load a python module from its split name. 
+ 
+    :type parts: list(str) or tuple(str) 
+    :param parts: 
+      python name of a module or package split on '.' 
+ 
+    :raise ImportError: if the module or package is not found 
+ 
+    :rtype: module 
+    :return: the loaded module 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">load_module_from_name(</span><span class="s3">&quot;.&quot;</span><span class="s1">.join(parts))</span>
+
+
+<span class="s2">def </span><span class="s1">load_module_from_file(filepath: str):</span>
+    <span class="s0">&quot;&quot;&quot;Load a Python module from it's path. 
+ 
+    :type filepath: str 
+    :param filepath: path to the python module or package 
+ 
+    :raise ImportError: if the module or package is not found 
+ 
+    :rtype: module 
+    :return: the loaded module 
+    &quot;&quot;&quot;</span>
+    <span class="s1">modpath = modpath_from_file(filepath)</span>
+    <span class="s2">return </span><span class="s1">load_module_from_modpath(modpath)</span>
+
+
+<span class="s2">def </span><span class="s1">check_modpath_has_init(path, mod_path):</span>
+    <span class="s0">&quot;&quot;&quot;check there are some __init__.py all along the way&quot;&quot;&quot;</span>
+    <span class="s1">modpath = []</span>
+    <span class="s2">for </span><span class="s1">part </span><span class="s2">in </span><span class="s1">mod_path:</span>
+        <span class="s1">modpath.append(part)</span>
+        <span class="s1">path = os.path.join(path, part)</span>
+        <span class="s2">if not </span><span class="s1">_has_init(path):</span>
+            <span class="s1">old_namespace = util.is_namespace(</span><span class="s3">&quot;.&quot;</span><span class="s1">.join(modpath))</span>
+            <span class="s2">if not </span><span class="s1">old_namespace:</span>
+                <span class="s2">return False</span>
+    <span class="s2">return True</span>
+
+
+<span class="s2">def </span><span class="s1">_get_relative_base_path(filename, path_to_check):</span>
+    <span class="s0">&quot;&quot;&quot;Extracts the relative mod path of the file to import from 
+ 
+    Check if a file is within the passed in path and if so, returns the 
+    relative mod path from the one passed in. 
+ 
+    If the filename is no in path_to_check, returns None 
+ 
+    Note this function will look for both abs and realpath of the file, 
+    this allows to find the relative base path even if the file is a 
+    symlink of a file in the passed in path 
+ 
+    Examples: 
+        _get_relative_base_path(&quot;/a/b/c/d.py&quot;, &quot;/a/b&quot;) -&gt;  [&quot;c&quot;,&quot;d&quot;] 
+        _get_relative_base_path(&quot;/a/b/c/d.py&quot;, &quot;/dev&quot;) -&gt;  None 
+    &quot;&quot;&quot;</span>
+    <span class="s1">importable_path = </span><span class="s2">None</span>
+    <span class="s1">path_to_check = os.path.normcase(path_to_check)</span>
+    <span class="s1">abs_filename = os.path.abspath(filename)</span>
+    <span class="s2">if </span><span class="s1">os.path.normcase(abs_filename).startswith(path_to_check):</span>
+        <span class="s1">importable_path = abs_filename</span>
+
+    <span class="s1">real_filename = os.path.realpath(filename)</span>
+    <span class="s2">if </span><span class="s1">os.path.normcase(real_filename).startswith(path_to_check):</span>
+        <span class="s1">importable_path = real_filename</span>
+
+    <span class="s2">if </span><span class="s1">importable_path:</span>
+        <span class="s1">base_path = os.path.splitext(importable_path)[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s1">relative_base_path = base_path[len(path_to_check) :]</span>
+        <span class="s2">return </span><span class="s1">[pkg </span><span class="s2">for </span><span class="s1">pkg </span><span class="s2">in </span><span class="s1">relative_base_path.split(os.sep) </span><span class="s2">if </span><span class="s1">pkg]</span>
+
+    <span class="s2">return None</span>
+
+
+<span class="s2">def </span><span class="s1">modpath_from_file_with_callback(filename, path=</span><span class="s2">None</span><span class="s1">, is_package_cb=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s1">filename = os.path.expanduser(_path_from_filename(filename))</span>
+    <span class="s2">for </span><span class="s1">pathname </span><span class="s2">in </span><span class="s1">itertools.chain(</span>
+        <span class="s1">path </span><span class="s2">or </span><span class="s1">[], map(_canonicalize_path, sys.path), sys.path</span>
+    <span class="s1">):</span>
+        <span class="s1">pathname = _cache_normalize_path(pathname)</span>
+        <span class="s2">if not </span><span class="s1">pathname:</span>
+            <span class="s2">continue</span>
+        <span class="s1">modpath = _get_relative_base_path(filename, pathname)</span>
+        <span class="s2">if not </span><span class="s1">modpath:</span>
+            <span class="s2">continue</span>
+        <span class="s2">if </span><span class="s1">is_package_cb(pathname, modpath[:-</span><span class="s4">1</span><span class="s1">]):</span>
+            <span class="s2">return </span><span class="s1">modpath</span>
+
+    <span class="s2">raise </span><span class="s1">ImportError(</span>
+        <span class="s3">&quot;Unable to find module for {} in {}&quot;</span><span class="s1">.format(filename, </span><span class="s3">&quot;, </span><span class="s5">\n</span><span class="s3">&quot;</span><span class="s1">.join(sys.path))</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">modpath_from_file(filename, path=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Get the corresponding split module's name from a filename 
+ 
+    This function will return the name of a module or package split on `.`. 
+ 
+    :type filename: str 
+    :param filename: file's path for which we want the module's name 
+ 
+    :type Optional[List[str]] path: 
+      Optional list of path where the module or package should be 
+      searched (use sys.path if nothing or None is given) 
+ 
+    :raise ImportError: 
+      if the corresponding module's name has not been found 
+ 
+    :rtype: list(str) 
+    :return: the corresponding split module's name 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">modpath_from_file_with_callback(filename, path, check_modpath_has_init)</span>
+
+
+<span class="s2">def </span><span class="s1">file_from_modpath(modpath, path=</span><span class="s2">None</span><span class="s1">, context_file=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s2">return </span><span class="s1">file_info_from_modpath(modpath, path, context_file).location</span>
+
+
+<span class="s2">def </span><span class="s1">file_info_from_modpath(modpath, path=</span><span class="s2">None</span><span class="s1">, context_file=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;given a mod path (i.e. split module / package name), return the 
+    corresponding file, giving priority to source file over precompiled 
+    file if it exists 
+ 
+    :type modpath: list or tuple 
+    :param modpath: 
+      split module's name (i.e name of a module or package split 
+      on '.') 
+      (this means explicit relative imports that start with dots have 
+      empty strings in this list!) 
+ 
+    :type path: list or None 
+    :param path: 
+      optional list of path where the module or package should be 
+      searched (use sys.path if nothing or None is given) 
+ 
+    :type context_file: str or None 
+    :param context_file: 
+      context file to consider, necessary if the identifier has been 
+      introduced using a relative import unresolvable in the actual 
+      context (i.e. modutils) 
+ 
+    :raise ImportError: if there is no such module in the directory 
+ 
+    :rtype: (str or None, import type) 
+    :return: 
+      the path to the module's file or None if it's an integrated 
+      builtin module such as 'sys' 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">context_file </span><span class="s2">is not None</span><span class="s1">:</span>
+        <span class="s1">context = os.path.dirname(context_file)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">context = context_file</span>
+    <span class="s2">if </span><span class="s1">modpath[</span><span class="s4">0</span><span class="s1">] == </span><span class="s3">&quot;xml&quot;</span><span class="s1">:</span>
+        <span class="s0"># handle _xmlplus</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">_spec_from_modpath([</span><span class="s3">&quot;_xmlplus&quot;</span><span class="s1">] + modpath[</span><span class="s4">1</span><span class="s1">:], path, context)</span>
+        <span class="s2">except </span><span class="s1">ImportError:</span>
+            <span class="s2">return </span><span class="s1">_spec_from_modpath(modpath, path, context)</span>
+    <span class="s2">elif </span><span class="s1">modpath == [</span><span class="s3">&quot;os&quot;</span><span class="s1">, </span><span class="s3">&quot;path&quot;</span><span class="s1">]:</span>
+        <span class="s0"># FIXME: currently ignoring search_path...</span>
+        <span class="s2">return </span><span class="s1">spec.ModuleSpec(</span>
+            <span class="s1">name=</span><span class="s3">&quot;os.path&quot;</span><span class="s1">,</span>
+            <span class="s1">location=os.path.__file__,</span>
+            <span class="s1">module_type=spec.ModuleType.PY_SOURCE,</span>
+        <span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">_spec_from_modpath(modpath, path, context)</span>
+
+
+<span class="s2">def </span><span class="s1">get_module_part(dotted_name, context_file=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;given a dotted name return the module part of the name : 
+ 
+    &gt;&gt;&gt; get_module_part('astroid.as_string.dump') 
+    'astroid.as_string' 
+ 
+    :type dotted_name: str 
+    :param dotted_name: full name of the identifier we are interested in 
+ 
+    :type context_file: str or None 
+    :param context_file: 
+      context file to consider, necessary if the identifier has been 
+      introduced using a relative import unresolvable in the actual 
+      context (i.e. modutils) 
+ 
+ 
+    :raise ImportError: if there is no such module in the directory 
+ 
+    :rtype: str or None 
+    :return: 
+      the module part of the name or None if we have not been able at 
+      all to import the given name 
+ 
+    XXX: deprecated, since it doesn't handle package precedence over module 
+    (see #10066) 
+    &quot;&quot;&quot;</span>
+    <span class="s0"># os.path trick</span>
+    <span class="s2">if </span><span class="s1">dotted_name.startswith(</span><span class="s3">&quot;os.path&quot;</span><span class="s1">):</span>
+        <span class="s2">return </span><span class="s3">&quot;os.path&quot;</span>
+    <span class="s1">parts = dotted_name.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">context_file </span><span class="s2">is not None</span><span class="s1">:</span>
+        <span class="s0"># first check for builtin module which won't be considered latter</span>
+        <span class="s0"># in that case (path != None)</span>
+        <span class="s2">if </span><span class="s1">parts[</span><span class="s4">0</span><span class="s1">] </span><span class="s2">in </span><span class="s1">BUILTIN_MODULES:</span>
+            <span class="s2">if </span><span class="s1">len(parts) &gt; </span><span class="s4">2</span><span class="s1">:</span>
+                <span class="s2">raise </span><span class="s1">ImportError(dotted_name)</span>
+            <span class="s2">return </span><span class="s1">parts[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s0"># don't use += or insert, we want a new list to be created !</span>
+    <span class="s1">path = </span><span class="s2">None</span>
+    <span class="s1">starti = </span><span class="s4">0</span>
+    <span class="s2">if </span><span class="s1">parts[</span><span class="s4">0</span><span class="s1">] == </span><span class="s3">&quot;&quot;</span><span class="s1">:</span>
+        <span class="s2">assert </span><span class="s1">(</span>
+            <span class="s1">context_file </span><span class="s2">is not None</span>
+        <span class="s1">), </span><span class="s3">&quot;explicit relative import, but no context_file?&quot;</span>
+        <span class="s1">path = []  </span><span class="s0"># prevent resolving the import non-relatively</span>
+        <span class="s1">starti = </span><span class="s4">1</span>
+    <span class="s2">while </span><span class="s1">parts[starti] == </span><span class="s3">&quot;&quot;</span><span class="s1">:  </span><span class="s0"># for all further dots: change context</span>
+        <span class="s1">starti += </span><span class="s4">1</span>
+        <span class="s1">context_file = os.path.dirname(context_file)</span>
+    <span class="s2">for </span><span class="s1">i </span><span class="s2">in </span><span class="s1">range(starti, len(parts)):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">file_from_modpath(</span>
+                <span class="s1">parts[starti : i + </span><span class="s4">1</span><span class="s1">], path=path, context_file=context_file</span>
+            <span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">ImportError:</span>
+            <span class="s2">if </span><span class="s1">i &lt; max(</span><span class="s4">1</span><span class="s1">, len(parts) - </span><span class="s4">2</span><span class="s1">):</span>
+                <span class="s2">raise</span>
+            <span class="s2">return </span><span class="s3">&quot;.&quot;</span><span class="s1">.join(parts[:i])</span>
+    <span class="s2">return </span><span class="s1">dotted_name</span>
+
+
+<span class="s2">def </span><span class="s1">get_module_files(src_directory, blacklist, list_all=</span><span class="s2">False</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;given a package directory return a list of all available python 
+    module's files in the package and its subpackages 
+ 
+    :type src_directory: str 
+    :param src_directory: 
+      path of the directory corresponding to the package 
+ 
+    :type blacklist: list or tuple 
+    :param blacklist: iterable 
+      list of files or directories to ignore. 
+ 
+    :type list_all: bool 
+    :param list_all: 
+        get files from all paths, including ones without __init__.py 
+ 
+    :rtype: list 
+    :return: 
+      the list of all available python module's files in the package and 
+      its subpackages 
+    &quot;&quot;&quot;</span>
+    <span class="s1">files = []</span>
+    <span class="s2">for </span><span class="s1">directory, dirnames, filenames </span><span class="s2">in </span><span class="s1">os.walk(src_directory):</span>
+        <span class="s2">if </span><span class="s1">directory </span><span class="s2">in </span><span class="s1">blacklist:</span>
+            <span class="s2">continue</span>
+        <span class="s1">_handle_blacklist(blacklist, dirnames, filenames)</span>
+        <span class="s0"># check for __init__.py</span>
+        <span class="s2">if not </span><span class="s1">list_all </span><span class="s2">and </span><span class="s3">&quot;__init__.py&quot; </span><span class="s2">not in </span><span class="s1">filenames:</span>
+            <span class="s1">dirnames[:] = ()</span>
+            <span class="s2">continue</span>
+        <span class="s2">for </span><span class="s1">filename </span><span class="s2">in </span><span class="s1">filenames:</span>
+            <span class="s2">if </span><span class="s1">_is_python_file(filename):</span>
+                <span class="s1">src = os.path.join(directory, filename)</span>
+                <span class="s1">files.append(src)</span>
+    <span class="s2">return </span><span class="s1">files</span>
+
+
+<span class="s2">def </span><span class="s1">get_source_file(filename, include_no_ext=</span><span class="s2">False</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;given a python module's file name return the matching source file 
+    name (the filename will be returned identically if it's already an 
+    absolute path to a python source file...) 
+ 
+    :type filename: str 
+    :param filename: python module's file name 
+ 
+ 
+    :raise NoSourceFile: if no source file exists on the file system 
+ 
+    :rtype: str 
+    :return: the absolute path of the source file if it exists 
+    &quot;&quot;&quot;</span>
+    <span class="s1">filename = os.path.abspath(_path_from_filename(filename))</span>
+    <span class="s1">base, orig_ext = os.path.splitext(filename)</span>
+    <span class="s2">for </span><span class="s1">ext </span><span class="s2">in </span><span class="s1">PY_SOURCE_EXTS:</span>
+        <span class="s1">source_path = </span><span class="s3">f&quot;</span><span class="s5">{</span><span class="s1">base</span><span class="s5">}</span><span class="s3">.</span><span class="s5">{</span><span class="s1">ext</span><span class="s5">}</span><span class="s3">&quot;</span>
+        <span class="s2">if </span><span class="s1">os.path.exists(source_path):</span>
+            <span class="s2">return </span><span class="s1">source_path</span>
+    <span class="s2">if </span><span class="s1">include_no_ext </span><span class="s2">and not </span><span class="s1">orig_ext </span><span class="s2">and </span><span class="s1">os.path.exists(base):</span>
+        <span class="s2">return </span><span class="s1">base</span>
+    <span class="s2">raise </span><span class="s1">NoSourceFile(filename)</span>
+
+
+<span class="s2">def </span><span class="s1">is_python_source(filename):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    rtype: bool 
+    return: True if the filename is a python source file 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">os.path.splitext(filename)[</span><span class="s4">1</span><span class="s1">][</span><span class="s4">1</span><span class="s1">:] </span><span class="s2">in </span><span class="s1">PY_SOURCE_EXTS</span>
+
+
+<span class="s2">def </span><span class="s1">is_standard_module(modname, std_path=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;try to guess if a module is a standard python module (by default, 
+    see `std_path` parameter's description) 
+ 
+    :type modname: str 
+    :param modname: name of the module we are interested in 
+ 
+    :type std_path: list(str) or tuple(str) 
+    :param std_path: list of path considered has standard 
+ 
+ 
+    :rtype: bool 
+    :return: 
+      true if the module: 
+      - is located on the path listed in one of the directory in `std_path` 
+      - is a built-in module 
+    &quot;&quot;&quot;</span>
+    <span class="s1">modname = modname.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">filename = file_from_modpath([modname])</span>
+    <span class="s2">except </span><span class="s1">ImportError:</span>
+        <span class="s0"># import failed, i'm probably not so wrong by supposing it's</span>
+        <span class="s0"># not standard...</span>
+        <span class="s2">return False</span>
+    <span class="s0"># modules which are not living in a file are considered standard</span>
+    <span class="s0"># (sys and __builtin__ for instance)</span>
+    <span class="s2">if </span><span class="s1">filename </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s0"># we assume there are no namespaces in stdlib</span>
+        <span class="s2">return not </span><span class="s1">util.is_namespace(modname)</span>
+    <span class="s1">filename = _normalize_path(filename)</span>
+    <span class="s2">for </span><span class="s1">path </span><span class="s2">in </span><span class="s1">EXT_LIB_DIRS:</span>
+        <span class="s2">if </span><span class="s1">filename.startswith(_cache_normalize_path(path)):</span>
+            <span class="s2">return False</span>
+    <span class="s2">if </span><span class="s1">std_path </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s1">std_path = STD_LIB_DIRS</span>
+    <span class="s2">for </span><span class="s1">path </span><span class="s2">in </span><span class="s1">std_path:</span>
+        <span class="s2">if </span><span class="s1">filename.startswith(_cache_normalize_path(path)):</span>
+            <span class="s2">return True</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">is_relative(modname, from_file):</span>
+    <span class="s0">&quot;&quot;&quot;return true if the given module name is relative to the given 
+    file name 
+ 
+    :type modname: str 
+    :param modname: name of the module we are interested in 
+ 
+    :type from_file: str 
+    :param from_file: 
+      path of the module from which modname has been imported 
+ 
+    :rtype: bool 
+    :return: 
+      true if the module has been imported relatively to `from_file` 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if not </span><span class="s1">os.path.isdir(from_file):</span>
+        <span class="s1">from_file = os.path.dirname(from_file)</span>
+    <span class="s2">if </span><span class="s1">from_file </span><span class="s2">in </span><span class="s1">sys.path:</span>
+        <span class="s2">return False</span>
+    <span class="s1">name = os.path.basename(from_file)</span>
+    <span class="s1">file_path = os.path.dirname(from_file)</span>
+    <span class="s1">parent_spec = importlib.util.find_spec(name, from_file)</span>
+    <span class="s2">while </span><span class="s1">parent_spec </span><span class="s2">is None and </span><span class="s1">len(file_path) &gt; </span><span class="s4">0</span><span class="s1">:</span>
+        <span class="s1">name = os.path.basename(file_path) + </span><span class="s3">&quot;.&quot; </span><span class="s1">+ name</span>
+        <span class="s1">file_path = os.path.dirname(file_path)</span>
+        <span class="s1">parent_spec = importlib.util.find_spec(name, from_file)</span>
+
+    <span class="s2">if </span><span class="s1">parent_spec </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s2">return False</span>
+
+    <span class="s1">submodule_spec = importlib.util.find_spec(</span>
+        <span class="s1">name + </span><span class="s3">&quot;.&quot; </span><span class="s1">+ modname.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">], parent_spec.submodule_search_locations</span>
+    <span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">submodule_spec </span><span class="s2">is not None</span>
+
+
+<span class="s0"># internal only functions #####################################################</span>
+
+
+<span class="s2">def </span><span class="s1">_spec_from_modpath(modpath, path=</span><span class="s2">None</span><span class="s1">, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;given a mod path (i.e. split module / package name), return the 
+    corresponding spec 
+ 
+    this function is used internally, see `file_from_modpath`'s 
+    documentation for more information 
+    &quot;&quot;&quot;</span>
+    <span class="s2">assert </span><span class="s1">modpath</span>
+    <span class="s1">location = </span><span class="s2">None</span>
+    <span class="s2">if </span><span class="s1">context </span><span class="s2">is not None</span><span class="s1">:</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">found_spec = spec.find_spec(modpath, [context])</span>
+            <span class="s1">location = found_spec.location</span>
+        <span class="s2">except </span><span class="s1">ImportError:</span>
+            <span class="s1">found_spec = spec.find_spec(modpath, path)</span>
+            <span class="s1">location = found_spec.location</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">found_spec = spec.find_spec(modpath, path)</span>
+    <span class="s2">if </span><span class="s1">found_spec.type == spec.ModuleType.PY_COMPILED:</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">location = get_source_file(found_spec.location)</span>
+            <span class="s2">return </span><span class="s1">found_spec._replace(</span>
+                <span class="s1">location=location, type=spec.ModuleType.PY_SOURCE</span>
+            <span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">NoSourceFile:</span>
+            <span class="s2">return </span><span class="s1">found_spec._replace(location=location)</span>
+    <span class="s2">elif </span><span class="s1">found_spec.type == spec.ModuleType.C_BUILTIN:</span>
+        <span class="s0"># integrated builtin module</span>
+        <span class="s2">return </span><span class="s1">found_spec._replace(location=</span><span class="s2">None</span><span class="s1">)</span>
+    <span class="s2">elif </span><span class="s1">found_spec.type == spec.ModuleType.PKG_DIRECTORY:</span>
+        <span class="s1">location = _has_init(found_spec.location)</span>
+        <span class="s2">return </span><span class="s1">found_spec._replace(location=location, type=spec.ModuleType.PY_SOURCE)</span>
+    <span class="s2">return </span><span class="s1">found_spec</span>
+
+
+<span class="s2">def </span><span class="s1">_is_python_file(filename):</span>
+    <span class="s0">&quot;&quot;&quot;return true if the given filename should be considered as a python file 
+ 
+    .pyc and .pyo are ignored 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">filename.endswith((</span><span class="s3">&quot;.py&quot;</span><span class="s1">, </span><span class="s3">&quot;.so&quot;</span><span class="s1">, </span><span class="s3">&quot;.pyd&quot;</span><span class="s1">, </span><span class="s3">&quot;.pyw&quot;</span><span class="s1">))</span>
+
+
+<span class="s2">def </span><span class="s1">_has_init(directory):</span>
+    <span class="s0">&quot;&quot;&quot;if the given directory has a valid __init__ file, return its path, 
+    else return None 
+    &quot;&quot;&quot;</span>
+    <span class="s1">mod_or_pack = os.path.join(directory, </span><span class="s3">&quot;__init__&quot;</span><span class="s1">)</span>
+    <span class="s2">for </span><span class="s1">ext </span><span class="s2">in </span><span class="s1">PY_SOURCE_EXTS + (</span><span class="s3">&quot;pyc&quot;</span><span class="s1">, </span><span class="s3">&quot;pyo&quot;</span><span class="s1">):</span>
+        <span class="s2">if </span><span class="s1">os.path.exists(mod_or_pack + </span><span class="s3">&quot;.&quot; </span><span class="s1">+ ext):</span>
+            <span class="s2">return </span><span class="s1">mod_or_pack + </span><span class="s3">&quot;.&quot; </span><span class="s1">+ ext</span>
+    <span class="s2">return None</span>
+
+
+<span class="s2">def </span><span class="s1">is_namespace(specobj):</span>
+    <span class="s2">return </span><span class="s1">specobj.type == spec.ModuleType.PY_NAMESPACE</span>
+
+
+<span class="s2">def </span><span class="s1">is_directory(specobj):</span>
+    <span class="s2">return </span><span class="s1">specobj.type == spec.ModuleType.PKG_DIRECTORY</span>
+</pre>
+</body>
+</html>

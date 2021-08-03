@@ -1,0 +1,382 @@
+<html>
+<head>
+<title>misc.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+misc.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;Miscellaneous stuff for coverage.py.&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">errno</span>
+<span class="s2">import </span><span class="s1">hashlib</span>
+<span class="s2">import </span><span class="s1">inspect</span>
+<span class="s2">import </span><span class="s1">locale</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">os.path</span>
+<span class="s2">import </span><span class="s1">random</span>
+<span class="s2">import </span><span class="s1">re</span>
+<span class="s2">import </span><span class="s1">socket</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">types</span>
+
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">env</span>
+<span class="s2">from </span><span class="s1">coverage.backward </span><span class="s2">import </span><span class="s1">to_bytes, unicode_class</span>
+
+<span class="s1">ISOLATED_MODULES = {}</span>
+
+
+<span class="s2">def </span><span class="s1">isolate_module(mod):</span>
+    <span class="s0">&quot;&quot;&quot;Copy a module so that we are isolated from aggressive mocking. 
+ 
+    If a test suite mocks os.path.exists (for example), and then we need to use 
+    it during the test, everything will get tangled up if we use their mock. 
+    Making a copy of the module when we import it will isolate coverage.py from 
+    those complications. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">mod </span><span class="s2">not in </span><span class="s1">ISOLATED_MODULES:</span>
+        <span class="s1">new_mod = types.ModuleType(mod.__name__)</span>
+        <span class="s1">ISOLATED_MODULES[mod] = new_mod</span>
+        <span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">dir(mod):</span>
+            <span class="s1">value = getattr(mod, name)</span>
+            <span class="s2">if </span><span class="s1">isinstance(value, types.ModuleType):</span>
+                <span class="s1">value = isolate_module(value)</span>
+            <span class="s1">setattr(new_mod, name, value)</span>
+    <span class="s2">return </span><span class="s1">ISOLATED_MODULES[mod]</span>
+
+<span class="s1">os = isolate_module(os)</span>
+
+
+<span class="s2">def </span><span class="s1">dummy_decorator_with_args(*args_unused, **kwargs_unused):</span>
+    <span class="s0">&quot;&quot;&quot;Dummy no-op implementation of a decorator with arguments.&quot;&quot;&quot;</span>
+    <span class="s2">def </span><span class="s1">_decorator(func):</span>
+        <span class="s2">return </span><span class="s1">func</span>
+    <span class="s2">return </span><span class="s1">_decorator</span>
+
+
+<span class="s0"># Environment COVERAGE_NO_CONTRACTS=1 can turn off contracts while debugging</span>
+<span class="s0"># tests to remove noise from stack traces.</span>
+<span class="s0"># $set_env.py: COVERAGE_NO_CONTRACTS - Disable PyContracts to simplify stack traces.</span>
+<span class="s1">USE_CONTRACTS = env.TESTING </span><span class="s2">and not </span><span class="s1">bool(int(os.environ.get(</span><span class="s3">&quot;COVERAGE_NO_CONTRACTS&quot;</span><span class="s1">, </span><span class="s4">0</span><span class="s1">)))</span>
+
+<span class="s0"># Use PyContracts for assertion testing on parameters and returns, but only if</span>
+<span class="s0"># we are running our own test suite.</span>
+<span class="s2">if </span><span class="s1">USE_CONTRACTS:</span>
+    <span class="s2">from </span><span class="s1">contracts </span><span class="s2">import </span><span class="s1">contract              </span><span class="s0"># pylint: disable=unused-import</span>
+    <span class="s2">from </span><span class="s1">contracts </span><span class="s2">import </span><span class="s1">new_contract </span><span class="s2">as </span><span class="s1">raw_new_contract</span>
+
+    <span class="s2">def </span><span class="s1">new_contract(*args, **kwargs):</span>
+        <span class="s0">&quot;&quot;&quot;A proxy for contracts.new_contract that doesn't mind happening twice.&quot;&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">raw_new_contract(*args, **kwargs)</span>
+        <span class="s2">except </span><span class="s1">ValueError:</span>
+            <span class="s0"># During meta-coverage, this module is imported twice, and</span>
+            <span class="s0"># PyContracts doesn't like redefining contracts. It's OK.</span>
+            <span class="s2">pass</span>
+
+    <span class="s0"># Define contract words that PyContract doesn't have.</span>
+    <span class="s1">new_contract(</span><span class="s3">'bytes'</span><span class="s1">, </span><span class="s2">lambda </span><span class="s1">v: isinstance(v, bytes))</span>
+    <span class="s2">if </span><span class="s1">env.PY3:</span>
+        <span class="s1">new_contract(</span><span class="s3">'unicode'</span><span class="s1">, </span><span class="s2">lambda </span><span class="s1">v: isinstance(v, unicode_class))</span>
+
+    <span class="s2">def </span><span class="s1">one_of(argnames):</span>
+        <span class="s0">&quot;&quot;&quot;Ensure that only one of the argnames is non-None.&quot;&quot;&quot;</span>
+        <span class="s2">def </span><span class="s1">_decorator(func):</span>
+            <span class="s1">argnameset = {name.strip() </span><span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">argnames.split(</span><span class="s3">&quot;,&quot;</span><span class="s1">)}</span>
+            <span class="s2">def </span><span class="s1">_wrapper(*args, **kwargs):</span>
+                <span class="s1">vals = [kwargs.get(name) </span><span class="s2">for </span><span class="s1">name </span><span class="s2">in </span><span class="s1">argnameset]</span>
+                <span class="s2">assert </span><span class="s1">sum(val </span><span class="s2">is not None for </span><span class="s1">val </span><span class="s2">in </span><span class="s1">vals) == </span><span class="s4">1</span>
+                <span class="s2">return </span><span class="s1">func(*args, **kwargs)</span>
+            <span class="s2">return </span><span class="s1">_wrapper</span>
+        <span class="s2">return </span><span class="s1">_decorator</span>
+<span class="s2">else</span><span class="s1">:                                           </span><span class="s0"># pragma: not testing</span>
+    <span class="s0"># We aren't using real PyContracts, so just define our decorators as</span>
+    <span class="s0"># stunt-double no-ops.</span>
+    <span class="s1">contract = dummy_decorator_with_args</span>
+    <span class="s1">one_of = dummy_decorator_with_args</span>
+
+    <span class="s2">def </span><span class="s1">new_contract(*args_unused, **kwargs_unused):</span>
+        <span class="s0">&quot;&quot;&quot;Dummy no-op implementation of `new_contract`.&quot;&quot;&quot;</span>
+        <span class="s2">pass</span>
+
+
+<span class="s2">def </span><span class="s1">nice_pair(pair):</span>
+    <span class="s0">&quot;&quot;&quot;Make a nice string representation of a pair of numbers. 
+ 
+    If the numbers are equal, just return the number, otherwise return the pair 
+    with a dash between them, indicating the range. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">start, end = pair</span>
+    <span class="s2">if </span><span class="s1">start == end:</span>
+        <span class="s2">return </span><span class="s3">&quot;%d&quot; </span><span class="s1">% start</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s3">&quot;%d-%d&quot; </span><span class="s1">% (start, end)</span>
+
+
+<span class="s2">def </span><span class="s1">expensive(fn):</span>
+    <span class="s0">&quot;&quot;&quot;A decorator to indicate that a method shouldn't be called more than once. 
+ 
+    Normally, this does nothing.  During testing, this raises an exception if 
+    called more than once. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">env.TESTING:</span>
+        <span class="s1">attr = </span><span class="s3">&quot;_once_&quot; </span><span class="s1">+ fn.__name__</span>
+
+        <span class="s2">def </span><span class="s1">_wrapper(self):</span>
+            <span class="s2">if </span><span class="s1">hasattr(self, attr):</span>
+                <span class="s2">raise </span><span class="s1">AssertionError(</span><span class="s3">&quot;Shouldn't have called %s more than once&quot; </span><span class="s1">% fn.__name__)</span>
+            <span class="s1">setattr(self, attr, </span><span class="s2">True</span><span class="s1">)</span>
+            <span class="s2">return </span><span class="s1">fn(self)</span>
+        <span class="s2">return </span><span class="s1">_wrapper</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">fn                   </span><span class="s0"># pragma: not testing</span>
+
+
+<span class="s2">def </span><span class="s1">bool_or_none(b):</span>
+    <span class="s0">&quot;&quot;&quot;Return bool(b), but preserve None.&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">b </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s2">return None</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">bool(b)</span>
+
+
+<span class="s2">def </span><span class="s1">join_regex(regexes):</span>
+    <span class="s0">&quot;&quot;&quot;Combine a list of regexes into one that matches any of them.&quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s3">&quot;|&quot;</span><span class="s1">.join(</span><span class="s3">&quot;(?:%s)&quot; </span><span class="s1">% r </span><span class="s2">for </span><span class="s1">r </span><span class="s2">in </span><span class="s1">regexes)</span>
+
+
+<span class="s2">def </span><span class="s1">file_be_gone(path):</span>
+    <span class="s0">&quot;&quot;&quot;Remove a file, and don't get annoyed if it doesn't exist.&quot;&quot;&quot;</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">os.remove(path)</span>
+    <span class="s2">except </span><span class="s1">OSError </span><span class="s2">as </span><span class="s1">e:</span>
+        <span class="s2">if </span><span class="s1">e.errno != errno.ENOENT:</span>
+            <span class="s2">raise</span>
+
+
+<span class="s2">def </span><span class="s1">ensure_dir(directory):</span>
+    <span class="s0">&quot;&quot;&quot;Make sure the directory exists. 
+ 
+    If `directory` is None or empty, do nothing. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">directory </span><span class="s2">and not </span><span class="s1">os.path.isdir(directory):</span>
+        <span class="s1">os.makedirs(directory)</span>
+
+
+<span class="s2">def </span><span class="s1">ensure_dir_for_file(path):</span>
+    <span class="s0">&quot;&quot;&quot;Make sure the directory for the path exists.&quot;&quot;&quot;</span>
+    <span class="s1">ensure_dir(os.path.dirname(path))</span>
+
+
+<span class="s2">def </span><span class="s1">output_encoding(outfile=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Determine the encoding to use for output written to `outfile` or stdout.&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">outfile </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s1">outfile = sys.stdout</span>
+    <span class="s1">encoding = (</span>
+        <span class="s1">getattr(outfile, </span><span class="s3">&quot;encoding&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">) </span><span class="s2">or</span>
+        <span class="s1">getattr(sys.__stdout__, </span><span class="s3">&quot;encoding&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">) </span><span class="s2">or</span>
+        <span class="s1">locale.getpreferredencoding()</span>
+    <span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">encoding</span>
+
+
+<span class="s2">def </span><span class="s1">filename_suffix(suffix):</span>
+    <span class="s0">&quot;&quot;&quot;Compute a filename suffix for a data file. 
+ 
+    If `suffix` is a string or None, simply return it. If `suffix` is True, 
+    then build a suffix incorporating the hostname, process id, and a random 
+    number. 
+ 
+    Returns a string or None. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">suffix </span><span class="s2">is True</span><span class="s1">:</span>
+        <span class="s0"># If data_suffix was a simple true value, then make a suffix with</span>
+        <span class="s0"># plenty of distinguishing information.  We do this here in</span>
+        <span class="s0"># `save()` at the last minute so that the pid will be correct even</span>
+        <span class="s0"># if the process forks.</span>
+        <span class="s1">dice = random.Random(os.urandom(</span><span class="s4">8</span><span class="s1">)).randint(</span><span class="s4">0</span><span class="s1">, </span><span class="s4">999999</span><span class="s1">)</span>
+        <span class="s1">suffix = </span><span class="s3">&quot;%s.%s.%06d&quot; </span><span class="s1">% (socket.gethostname(), os.getpid(), dice)</span>
+    <span class="s2">return </span><span class="s1">suffix</span>
+
+
+<span class="s2">class </span><span class="s1">Hasher(object):</span>
+    <span class="s0">&quot;&quot;&quot;Hashes Python data into md5.&quot;&quot;&quot;</span>
+    <span class="s2">def </span><span class="s1">__init__(self):</span>
+        <span class="s1">self.md5 = hashlib.md5()</span>
+
+    <span class="s2">def </span><span class="s1">update(self, v):</span>
+        <span class="s0">&quot;&quot;&quot;Add `v` to the hash, recursively if needed.&quot;&quot;&quot;</span>
+        <span class="s1">self.md5.update(to_bytes(str(type(v))))</span>
+        <span class="s2">if </span><span class="s1">isinstance(v, unicode_class):</span>
+            <span class="s1">self.md5.update(v.encode(</span><span class="s3">'utf8'</span><span class="s1">))</span>
+        <span class="s2">elif </span><span class="s1">isinstance(v, bytes):</span>
+            <span class="s1">self.md5.update(v)</span>
+        <span class="s2">elif </span><span class="s1">v </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">pass</span>
+        <span class="s2">elif </span><span class="s1">isinstance(v, (int, float)):</span>
+            <span class="s1">self.md5.update(to_bytes(str(v)))</span>
+        <span class="s2">elif </span><span class="s1">isinstance(v, (tuple, list)):</span>
+            <span class="s2">for </span><span class="s1">e </span><span class="s2">in </span><span class="s1">v:</span>
+                <span class="s1">self.update(e)</span>
+        <span class="s2">elif </span><span class="s1">isinstance(v, dict):</span>
+            <span class="s1">keys = v.keys()</span>
+            <span class="s2">for </span><span class="s1">k </span><span class="s2">in </span><span class="s1">sorted(keys):</span>
+                <span class="s1">self.update(k)</span>
+                <span class="s1">self.update(v[k])</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">for </span><span class="s1">k </span><span class="s2">in </span><span class="s1">dir(v):</span>
+                <span class="s2">if </span><span class="s1">k.startswith(</span><span class="s3">'__'</span><span class="s1">):</span>
+                    <span class="s2">continue</span>
+                <span class="s1">a = getattr(v, k)</span>
+                <span class="s2">if </span><span class="s1">inspect.isroutine(a):</span>
+                    <span class="s2">continue</span>
+                <span class="s1">self.update(k)</span>
+                <span class="s1">self.update(a)</span>
+        <span class="s1">self.md5.update(</span><span class="s3">b'.'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">hexdigest(self):</span>
+        <span class="s0">&quot;&quot;&quot;Retrieve the hex digest of the hash.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.md5.hexdigest()</span>
+
+
+<span class="s2">def </span><span class="s1">_needs_to_implement(that, func_name):</span>
+    <span class="s0">&quot;&quot;&quot;Helper to raise NotImplementedError in interface stubs.&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">hasattr(that, </span><span class="s3">&quot;_coverage_plugin_name&quot;</span><span class="s1">):</span>
+        <span class="s1">thing = </span><span class="s3">&quot;Plugin&quot;</span>
+        <span class="s1">name = that._coverage_plugin_name</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">thing = </span><span class="s3">&quot;Class&quot;</span>
+        <span class="s1">klass = that.__class__</span>
+        <span class="s1">name = </span><span class="s3">&quot;{klass.__module__}.{klass.__name__}&quot;</span><span class="s1">.format(klass=klass)</span>
+
+    <span class="s2">raise </span><span class="s1">NotImplementedError(</span>
+        <span class="s3">&quot;{thing} {name!r} needs to implement {func_name}()&quot;</span><span class="s1">.format(</span>
+            <span class="s1">thing=thing, name=name, func_name=func_name</span>
+            <span class="s1">)</span>
+        <span class="s1">)</span>
+
+
+<span class="s2">class </span><span class="s1">DefaultValue(object):</span>
+    <span class="s0">&quot;&quot;&quot;A sentinel object to use for unusual default-value needs. 
+ 
+    Construct with a string that will be used as the repr, for display in help 
+    and Sphinx output. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">def </span><span class="s1">__init__(self, display_as):</span>
+        <span class="s1">self.display_as = display_as</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s1">self.display_as</span>
+
+
+<span class="s2">def </span><span class="s1">substitute_variables(text, variables):</span>
+    <span class="s0">&quot;&quot;&quot;Substitute ``${VAR}`` variables in `text` with their values. 
+ 
+    Variables in the text can take a number of shell-inspired forms:: 
+ 
+        $VAR 
+        ${VAR} 
+        ${VAR?}             strict: an error if VAR isn't defined. 
+        ${VAR-missing}      defaulted: &quot;missing&quot; if VAR isn't defined. 
+        $$                  just a dollar sign. 
+ 
+    `variables` is a dictionary of variable values. 
+ 
+    Returns the resulting text with values substituted. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">dollar_pattern = </span><span class="s3">r&quot;&quot;&quot;(?x)   # Use extended regex syntax 
+        \$                      # A dollar sign, 
+        (?:                     # then 
+            (?P&lt;dollar&gt;\$) |        # a dollar sign, or 
+            (?P&lt;word1&gt;\w+) |        # a plain word, or 
+            {                       # a {-wrapped 
+                (?P&lt;word2&gt;\w+)          # word, 
+                (?: 
+                    (?P&lt;strict&gt;\?) |        # with a strict marker 
+                    -(?P&lt;defval&gt;[^}]*)      # or a default value 
+                )?                      # maybe. 
+            } 
+        ) 
+        &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">dollar_replace(match):</span>
+        <span class="s0">&quot;&quot;&quot;Called for each $replacement.&quot;&quot;&quot;</span>
+        <span class="s0"># Only one of the groups will have matched, just get its text.</span>
+        <span class="s1">word = next(g </span><span class="s2">for </span><span class="s1">g </span><span class="s2">in </span><span class="s1">match.group(</span><span class="s3">'dollar'</span><span class="s1">, </span><span class="s3">'word1'</span><span class="s1">, </span><span class="s3">'word2'</span><span class="s1">) </span><span class="s2">if </span><span class="s1">g)</span>
+        <span class="s2">if </span><span class="s1">word == </span><span class="s3">&quot;$&quot;</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s3">&quot;$&quot;</span>
+        <span class="s2">elif </span><span class="s1">word </span><span class="s2">in </span><span class="s1">variables:</span>
+            <span class="s2">return </span><span class="s1">variables[word]</span>
+        <span class="s2">elif </span><span class="s1">match.group(</span><span class="s3">'strict'</span><span class="s1">):</span>
+            <span class="s1">msg = </span><span class="s3">&quot;Variable {} is undefined: {!r}&quot;</span><span class="s1">.format(word, text)</span>
+            <span class="s2">raise </span><span class="s1">CoverageException(msg)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">match.group(</span><span class="s3">'defval'</span><span class="s1">)</span>
+
+    <span class="s1">text = re.sub(dollar_pattern, dollar_replace, text)</span>
+    <span class="s2">return </span><span class="s1">text</span>
+
+
+<span class="s2">class </span><span class="s1">BaseCoverageException(Exception):</span>
+    <span class="s0">&quot;&quot;&quot;The base of all Coverage exceptions.&quot;&quot;&quot;</span>
+    <span class="s2">pass</span>
+
+
+<span class="s2">class </span><span class="s1">CoverageException(BaseCoverageException):</span>
+    <span class="s0">&quot;&quot;&quot;An exception raised by a coverage.py function.&quot;&quot;&quot;</span>
+    <span class="s2">pass</span>
+
+
+<span class="s2">class </span><span class="s1">NoSource(CoverageException):</span>
+    <span class="s0">&quot;&quot;&quot;We couldn't find the source for a module.&quot;&quot;&quot;</span>
+    <span class="s2">pass</span>
+
+
+<span class="s2">class </span><span class="s1">NoCode(NoSource):</span>
+    <span class="s0">&quot;&quot;&quot;We couldn't find any code at all.&quot;&quot;&quot;</span>
+    <span class="s2">pass</span>
+
+
+<span class="s2">class </span><span class="s1">NotPython(CoverageException):</span>
+    <span class="s0">&quot;&quot;&quot;A source file turned out not to be parsable Python.&quot;&quot;&quot;</span>
+    <span class="s2">pass</span>
+
+
+<span class="s2">class </span><span class="s1">ExceptionDuringRun(CoverageException):</span>
+    <span class="s0">&quot;&quot;&quot;An exception happened while running customer code. 
+ 
+    Construct it with three arguments, the values from `sys.exc_info`. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">pass</span>
+
+
+<span class="s2">class </span><span class="s1">StopEverything(BaseCoverageException):</span>
+    <span class="s0">&quot;&quot;&quot;An exception that means everything should stop. 
+ 
+    The CoverageTest class converts these to SkipTest, so that when running 
+    tests, raising this exception will automatically skip the test. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">pass</span>
+</pre>
+</body>
+</html>

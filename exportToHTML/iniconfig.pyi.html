@@ -1,0 +1,51 @@
+<html>
+<head>
+<title>iniconfig.pyi</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+.s3 { color: #5c6370;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+iniconfig.pyi</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Callable, Iterator, Mapping, Optional, Tuple, TypeVar, Union</span>
+<span class="s0">from </span><span class="s1">typing_extensions </span><span class="s0">import </span><span class="s1">Final</span>
+
+<span class="s1">_D = TypeVar(</span><span class="s2">'_D'</span><span class="s1">)</span>
+<span class="s1">_T = TypeVar(</span><span class="s2">'_T'</span><span class="s1">)</span>
+
+<span class="s0">class </span><span class="s1">ParseError(Exception):</span>
+    <span class="s3"># Private __init__.</span>
+    <span class="s1">path: Final[str]</span>
+    <span class="s1">lineno: Final[int]</span>
+    <span class="s1">msg: Final[str]</span>
+
+<span class="s0">class </span><span class="s1">SectionWrapper:</span>
+    <span class="s3"># Private __init__.</span>
+    <span class="s1">config: Final[IniConfig]</span>
+    <span class="s1">name: Final[str]</span>
+    <span class="s0">def </span><span class="s1">__getitem__(self, key: str) -&gt; str: ...</span>
+    <span class="s0">def </span><span class="s1">__iter__(self) -&gt; Iterator[str]: ...</span>
+    <span class="s0">def </span><span class="s1">get(self, key: str, default: _D = ..., convert: Callable[[str], _T] = ...) -&gt; Union[_T, _D]: ...</span>
+    <span class="s0">def </span><span class="s1">items(self) -&gt; Iterator[Tuple[str, str]]: ...</span>
+    <span class="s0">def </span><span class="s1">lineof(self, name: str) -&gt; Optional[int]: ...</span>
+
+<span class="s0">class </span><span class="s1">IniConfig:</span>
+    <span class="s1">path: Final[str]</span>
+    <span class="s1">sections: Final[Mapping[str, Mapping[str, str]]]</span>
+    <span class="s0">def </span><span class="s1">__init__(self, path: str, data: Optional[str] = </span><span class="s0">None</span><span class="s1">): ...</span>
+    <span class="s0">def </span><span class="s1">__contains__(self, arg: str) -&gt; bool: ...</span>
+    <span class="s0">def </span><span class="s1">__getitem__(self, name: str) -&gt; SectionWrapper: ...</span>
+    <span class="s0">def </span><span class="s1">__iter__(self) -&gt; Iterator[SectionWrapper]: ...</span>
+    <span class="s0">def </span><span class="s1">get(self, section: str, name: str, default: _D = ..., convert: Callable[[str], _T] = ...) -&gt; Union[_T, _D]: ...</span>
+    <span class="s0">def </span><span class="s1">lineof(self, section: str, name: Optional[str] = ...) -&gt; Optional[int]: ...</span>
+</pre>
+</body>
+</html>

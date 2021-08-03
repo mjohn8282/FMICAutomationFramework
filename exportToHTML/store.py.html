@@ -1,0 +1,145 @@
+<html>
+<head>
+<title>store.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+.s3 { color: #5c6370;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+store.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Any</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">cast</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Dict</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Generic</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">TypeVar</span>
+<span class="s0">from </span><span class="s1">typing </span><span class="s0">import </span><span class="s1">Union</span>
+
+
+<span class="s1">__all__ = [</span><span class="s2">&quot;Store&quot;</span><span class="s1">, </span><span class="s2">&quot;StoreKey&quot;</span><span class="s1">]</span>
+
+
+<span class="s1">T = TypeVar(</span><span class="s2">&quot;T&quot;</span><span class="s1">)</span>
+<span class="s1">D = TypeVar(</span><span class="s2">&quot;D&quot;</span><span class="s1">)</span>
+
+
+<span class="s0">class </span><span class="s1">StoreKey(Generic[T]):</span>
+    <span class="s3">&quot;&quot;&quot;StoreKey is an object used as a key to a Store. 
+ 
+    A StoreKey is associated with the type T of the value of the key. 
+ 
+    A StoreKey is unique and cannot conflict with another key. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__slots__ = ()</span>
+
+
+<span class="s0">class </span><span class="s1">Store:</span>
+    <span class="s3">&quot;&quot;&quot;Store is a type-safe heterogenous mutable mapping that 
+    allows keys and value types to be defined separately from 
+    where it (the Store) is created. 
+ 
+    Usually you will be given an object which has a ``Store``: 
+ 
+    .. code-block:: python 
+ 
+        store: Store = some_object.store 
+ 
+    If a module wants to store data in this Store, it creates StoreKeys 
+    for its keys (at the module level): 
+ 
+    .. code-block:: python 
+ 
+        some_str_key = StoreKey[str]() 
+        some_bool_key = StoreKey[bool]() 
+ 
+    To store information: 
+ 
+    .. code-block:: python 
+ 
+        # Value type must match the key. 
+        store[some_str_key] = &quot;value&quot; 
+        store[some_bool_key] = True 
+ 
+    To retrieve the information: 
+ 
+    .. code-block:: python 
+ 
+        # The static type of some_str is str. 
+        some_str = store[some_str_key] 
+        # The static type of some_bool is bool. 
+        some_bool = store[some_bool_key] 
+ 
+    Why use this? 
+    ------------- 
+ 
+    Problem: module Internal defines an object. Module External, which 
+    module Internal doesn't know about, receives the object and wants to 
+    attach information to it, to be retrieved later given the object. 
+ 
+    Bad solution 1: Module External assigns private attributes directly on 
+    the object. This doesn't work well because the type checker doesn't 
+    know about these attributes and it complains about undefined attributes. 
+ 
+    Bad solution 2: module Internal adds a ``Dict[str, Any]`` attribute to 
+    the object. Module External stores its data in private keys of this dict. 
+    This doesn't work well because retrieved values are untyped. 
+ 
+    Good solution: module Internal adds a ``Store`` to the object. Module 
+    External mints StoreKeys for its own keys. Module External stores and 
+    retrieves its data using these keys. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">__slots__ = (</span><span class="s2">&quot;_store&quot;</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self) -&gt; </span><span class="s0">None</span><span class="s1">:</span>
+        <span class="s1">self._store: Dict[StoreKey[Any], object] = {}</span>
+
+    <span class="s0">def </span><span class="s1">__setitem__(self, key: StoreKey[T], value: T) -&gt; </span><span class="s0">None</span><span class="s1">:</span>
+        <span class="s3">&quot;&quot;&quot;Set a value for key.&quot;&quot;&quot;</span>
+        <span class="s1">self._store[key] = value</span>
+
+    <span class="s0">def </span><span class="s1">__getitem__(self, key: StoreKey[T]) -&gt; T:</span>
+        <span class="s3">&quot;&quot;&quot;Get the value for key. 
+ 
+        Raises ``KeyError`` if the key wasn't set before. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">cast(T, self._store[key])</span>
+
+    <span class="s0">def </span><span class="s1">get(self, key: StoreKey[T], default: D) -&gt; Union[T, D]:</span>
+        <span class="s3">&quot;&quot;&quot;Get the value for key, or return default if the key wasn't set 
+        before.&quot;&quot;&quot;</span>
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">self[key]</span>
+        <span class="s0">except </span><span class="s1">KeyError:</span>
+            <span class="s0">return </span><span class="s1">default</span>
+
+    <span class="s0">def </span><span class="s1">setdefault(self, key: StoreKey[T], default: T) -&gt; T:</span>
+        <span class="s3">&quot;&quot;&quot;Return the value of key if already set, otherwise set the value 
+        of key to default and return default.&quot;&quot;&quot;</span>
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">self[key]</span>
+        <span class="s0">except </span><span class="s1">KeyError:</span>
+            <span class="s1">self[key] = default</span>
+            <span class="s0">return </span><span class="s1">default</span>
+
+    <span class="s0">def </span><span class="s1">__delitem__(self, key: StoreKey[T]) -&gt; </span><span class="s0">None</span><span class="s1">:</span>
+        <span class="s3">&quot;&quot;&quot;Delete the value for key. 
+ 
+        Raises ``KeyError`` if the key wasn't set before. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">del </span><span class="s1">self._store[key]</span>
+
+    <span class="s0">def </span><span class="s1">__contains__(self, key: StoreKey[T]) -&gt; bool:</span>
+        <span class="s3">&quot;&quot;&quot;Return whether key was set.&quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">key </span><span class="s0">in </span><span class="s1">self._store</span>
+</pre>
+</body>
+</html>

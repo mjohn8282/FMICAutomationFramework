@@ -1,0 +1,48 @@
+<html>
+<head>
+<title>brain_boto3.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_boto3.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;Astroid hooks for understanding boto3.ServiceRequest()&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">astroid</span>
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">MANAGER, extract_node</span>
+
+<span class="s1">BOTO_SERVICE_FACTORY_QUALIFIED_NAME = </span><span class="s3">&quot;boto3.resources.base.ServiceResource&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">service_request_transform(node):</span>
+    <span class="s0">&quot;&quot;&quot;Transform ServiceResource to look like dynamic classes&quot;&quot;&quot;</span>
+    <span class="s1">code = </span><span class="s3">&quot;&quot;&quot; 
+    def __getattr__(self, attr): 
+        return 0 
+    &quot;&quot;&quot;</span>
+    <span class="s1">func_getattr = extract_node(code)</span>
+    <span class="s1">node.locals[</span><span class="s3">&quot;__getattr__&quot;</span><span class="s1">] = [func_getattr]</span>
+    <span class="s2">return </span><span class="s1">node</span>
+
+
+<span class="s2">def </span><span class="s1">_looks_like_boto3_service_request(node):</span>
+    <span class="s2">return </span><span class="s1">node.qname() == BOTO_SERVICE_FACTORY_QUALIFIED_NAME</span>
+
+
+<span class="s1">MANAGER.register_transform(</span>
+    <span class="s1">astroid.ClassDef, service_request_transform, _looks_like_boto3_service_request</span>
+<span class="s1">)</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,949 @@
+<html>
+<head>
+<title>brain_builtin_inference.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_builtin_inference.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2014-2021 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2014-2015 LOGILAB S.A. (Paris, FRANCE) &lt;contact@logilab.fr&gt;</span>
+<span class="s0"># Copyright (c) 2015-2016 Ceridwen &lt;ceridwenv@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015 Rene Zhang &lt;rz99@cornell.edu&gt;</span>
+<span class="s0"># Copyright (c) 2018 Bryce Guinta &lt;bryce.paul.guinta@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Ville Skyttä &lt;ville.skytta@iki.fi&gt;</span>
+<span class="s0"># Copyright (c) 2019-2020 Bryce Guinta &lt;bryce.guinta@protonmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Stanislav Levin &lt;slev@altlinux.org&gt;</span>
+<span class="s0"># Copyright (c) 2019 David Liu &lt;david@cs.toronto.edu&gt;</span>
+<span class="s0"># Copyright (c) 2019 Frédéric Chapoton &lt;fchapoton2@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020-2021 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 David Gilman &lt;davidgilman1@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Ram Rachum &lt;ram@rachum.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Marc Mueller &lt;30130371+cdce8p@users.noreply.github.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;Astroid hooks for various builtins.&quot;&quot;&quot;</span>
+
+<span class="s2">from </span><span class="s1">functools </span><span class="s2">import </span><span class="s1">partial</span>
+
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">MANAGER,</span>
+    <span class="s1">AstroidTypeError,</span>
+    <span class="s1">AttributeInferenceError,</span>
+    <span class="s1">InferenceError,</span>
+    <span class="s1">MroError,</span>
+    <span class="s1">NameInferenceError,</span>
+    <span class="s1">UseInferenceDefault,</span>
+    <span class="s1">arguments,</span>
+    <span class="s1">helpers,</span>
+    <span class="s1">inference_tip,</span>
+    <span class="s1">nodes,</span>
+    <span class="s1">objects,</span>
+    <span class="s1">scoped_nodes,</span>
+    <span class="s1">util,</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">astroid.builder </span><span class="s2">import </span><span class="s1">AstroidBuilder</span>
+
+<span class="s1">OBJECT_DUNDER_NEW = </span><span class="s3">&quot;object.__new__&quot;</span>
+
+<span class="s1">STR_CLASS = </span><span class="s3">&quot;&quot;&quot; 
+class whatever(object): 
+    def join(self, iterable): 
+        return {rvalue} 
+    def replace(self, old, new, count=None): 
+        return {rvalue} 
+    def format(self, *args, **kwargs): 
+        return {rvalue} 
+    def encode(self, encoding='ascii', errors=None): 
+        return b'' 
+    def decode(self, encoding='ascii', errors=None): 
+        return u'' 
+    def capitalize(self): 
+        return {rvalue} 
+    def title(self): 
+        return {rvalue} 
+    def lower(self): 
+        return {rvalue} 
+    def upper(self): 
+        return {rvalue} 
+    def swapcase(self): 
+        return {rvalue} 
+    def index(self, sub, start=None, end=None): 
+        return 0 
+    def find(self, sub, start=None, end=None): 
+        return 0 
+    def count(self, sub, start=None, end=None): 
+        return 0 
+    def strip(self, chars=None): 
+        return {rvalue} 
+    def lstrip(self, chars=None): 
+        return {rvalue} 
+    def rstrip(self, chars=None): 
+        return {rvalue} 
+    def rjust(self, width, fillchar=None): 
+        return {rvalue} 
+    def center(self, width, fillchar=None): 
+        return {rvalue} 
+    def ljust(self, width, fillchar=None): 
+        return {rvalue} 
+&quot;&quot;&quot;</span>
+
+
+<span class="s1">BYTES_CLASS = </span><span class="s3">&quot;&quot;&quot; 
+class whatever(object): 
+    def join(self, iterable): 
+        return {rvalue} 
+    def replace(self, old, new, count=None): 
+        return {rvalue} 
+    def decode(self, encoding='ascii', errors=None): 
+        return u'' 
+    def capitalize(self): 
+        return {rvalue} 
+    def title(self): 
+        return {rvalue} 
+    def lower(self): 
+        return {rvalue} 
+    def upper(self): 
+        return {rvalue} 
+    def swapcase(self): 
+        return {rvalue} 
+    def index(self, sub, start=None, end=None): 
+        return 0 
+    def find(self, sub, start=None, end=None): 
+        return 0 
+    def count(self, sub, start=None, end=None): 
+        return 0 
+    def strip(self, chars=None): 
+        return {rvalue} 
+    def lstrip(self, chars=None): 
+        return {rvalue} 
+    def rstrip(self, chars=None): 
+        return {rvalue} 
+    def rjust(self, width, fillchar=None): 
+        return {rvalue} 
+    def center(self, width, fillchar=None): 
+        return {rvalue} 
+    def ljust(self, width, fillchar=None): 
+        return {rvalue} 
+&quot;&quot;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">_extend_string_class(class_node, code, rvalue):</span>
+    <span class="s0">&quot;&quot;&quot;function to extend builtin str/unicode class&quot;&quot;&quot;</span>
+    <span class="s1">code = code.format(rvalue=rvalue)</span>
+    <span class="s1">fake = AstroidBuilder(MANAGER).string_build(code)[</span><span class="s3">&quot;whatever&quot;</span><span class="s1">]</span>
+    <span class="s2">for </span><span class="s1">method </span><span class="s2">in </span><span class="s1">fake.mymethods():</span>
+        <span class="s1">method.parent = class_node</span>
+        <span class="s1">method.lineno = </span><span class="s2">None</span>
+        <span class="s1">method.col_offset = </span><span class="s2">None</span>
+        <span class="s2">if </span><span class="s3">&quot;__class__&quot; </span><span class="s2">in </span><span class="s1">method.locals:</span>
+            <span class="s1">method.locals[</span><span class="s3">&quot;__class__&quot;</span><span class="s1">] = [class_node]</span>
+        <span class="s1">class_node.locals[method.name] = [method]</span>
+        <span class="s1">method.parent = class_node</span>
+
+
+<span class="s2">def </span><span class="s1">_extend_builtins(class_transforms):</span>
+    <span class="s1">builtin_ast = MANAGER.builtins_module</span>
+    <span class="s2">for </span><span class="s1">class_name, transform </span><span class="s2">in </span><span class="s1">class_transforms.items():</span>
+        <span class="s1">transform(builtin_ast[class_name])</span>
+
+
+<span class="s1">_extend_builtins(</span>
+    <span class="s1">{</span>
+        <span class="s3">&quot;bytes&quot;</span><span class="s1">: partial(_extend_string_class, code=BYTES_CLASS, rvalue=</span><span class="s3">&quot;b''&quot;</span><span class="s1">),</span>
+        <span class="s3">&quot;str&quot;</span><span class="s1">: partial(_extend_string_class, code=STR_CLASS, rvalue=</span><span class="s3">&quot;''&quot;</span><span class="s1">),</span>
+    <span class="s1">}</span>
+<span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_builtin_filter_predicate(node, builtin_name):</span>
+    <span class="s2">if </span><span class="s1">(</span>
+        <span class="s1">builtin_name == </span><span class="s3">&quot;type&quot;</span>
+        <span class="s2">and </span><span class="s1">node.root().name == </span><span class="s3">&quot;re&quot;</span>
+        <span class="s2">and </span><span class="s1">isinstance(node.func, nodes.Name)</span>
+        <span class="s2">and </span><span class="s1">node.func.name == </span><span class="s3">&quot;type&quot;</span>
+        <span class="s2">and </span><span class="s1">isinstance(node.parent, nodes.Assign)</span>
+        <span class="s2">and </span><span class="s1">len(node.parent.targets) == </span><span class="s4">1</span>
+        <span class="s2">and </span><span class="s1">isinstance(node.parent.targets[</span><span class="s4">0</span><span class="s1">], nodes.AssignName)</span>
+        <span class="s2">and </span><span class="s1">node.parent.targets[</span><span class="s4">0</span><span class="s1">].name </span><span class="s2">in </span><span class="s1">(</span><span class="s3">&quot;Pattern&quot;</span><span class="s1">, </span><span class="s3">&quot;Match&quot;</span><span class="s1">)</span>
+    <span class="s1">):</span>
+        <span class="s0"># Handle re.Pattern and re.Match in brain_re</span>
+        <span class="s0"># Match these patterns from stdlib/re.py</span>
+        <span class="s0"># ```py</span>
+        <span class="s0"># Pattern = type(...)</span>
+        <span class="s0"># Match = type(...)</span>
+        <span class="s0"># ```</span>
+        <span class="s2">return False</span>
+    <span class="s2">if </span><span class="s1">isinstance(node.func, nodes.Name) </span><span class="s2">and </span><span class="s1">node.func.name == builtin_name:</span>
+        <span class="s2">return True</span>
+    <span class="s2">if </span><span class="s1">isinstance(node.func, nodes.Attribute):</span>
+        <span class="s2">return </span><span class="s1">(</span>
+            <span class="s1">node.func.attrname == </span><span class="s3">&quot;fromkeys&quot;</span>
+            <span class="s2">and </span><span class="s1">isinstance(node.func.expr, nodes.Name)</span>
+            <span class="s2">and </span><span class="s1">node.func.expr.name == </span><span class="s3">&quot;dict&quot;</span>
+        <span class="s1">)</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">register_builtin_transform(transform, builtin_name):</span>
+    <span class="s0">&quot;&quot;&quot;Register a new transform function for the given *builtin_name*. 
+ 
+    The transform function must accept two parameters, a node and 
+    an optional context. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">_transform_wrapper(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">result = transform(node, context=context)</span>
+        <span class="s2">if </span><span class="s1">result:</span>
+            <span class="s2">if not </span><span class="s1">result.parent:</span>
+                <span class="s0"># Let the transformation function determine</span>
+                <span class="s0"># the parent for its result. Otherwise,</span>
+                <span class="s0"># we set it to be the node we transformed from.</span>
+                <span class="s1">result.parent = node</span>
+
+            <span class="s2">if </span><span class="s1">result.lineno </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s1">result.lineno = node.lineno</span>
+            <span class="s2">if </span><span class="s1">result.col_offset </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s1">result.col_offset = node.col_offset</span>
+        <span class="s2">return </span><span class="s1">iter([result])</span>
+
+    <span class="s1">MANAGER.register_transform(</span>
+        <span class="s1">nodes.Call,</span>
+        <span class="s1">inference_tip(_transform_wrapper),</span>
+        <span class="s1">partial(_builtin_filter_predicate, builtin_name=builtin_name),</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_container_generic_inference(node, context, node_type, transform):</span>
+    <span class="s1">args = node.args</span>
+    <span class="s2">if not </span><span class="s1">args:</span>
+        <span class="s2">return </span><span class="s1">node_type()</span>
+    <span class="s2">if </span><span class="s1">len(node.args) &gt; </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault()</span>
+
+    <span class="s1">(arg,) = args</span>
+    <span class="s1">transformed = transform(arg)</span>
+    <span class="s2">if not </span><span class="s1">transformed:</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">inferred = next(arg.infer(context=context))</span>
+        <span class="s2">except </span><span class="s1">(InferenceError, StopIteration) </span><span class="s2">as </span><span class="s1">exc:</span>
+            <span class="s2">raise </span><span class="s1">UseInferenceDefault </span><span class="s2">from </span><span class="s1">exc</span>
+        <span class="s2">if </span><span class="s1">inferred </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+            <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+        <span class="s1">transformed = transform(inferred)</span>
+    <span class="s2">if not </span><span class="s1">transformed </span><span class="s2">or </span><span class="s1">transformed </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+    <span class="s2">return </span><span class="s1">transformed</span>
+
+
+<span class="s2">def </span><span class="s1">_container_generic_transform(  </span><span class="s0"># pylint: disable=inconsistent-return-statements</span>
+    <span class="s1">arg, context, klass, iterables, build_elts</span>
+<span class="s1">):</span>
+    <span class="s2">if </span><span class="s1">isinstance(arg, klass):</span>
+        <span class="s2">return </span><span class="s1">arg</span>
+    <span class="s2">if </span><span class="s1">isinstance(arg, iterables):</span>
+        <span class="s2">if </span><span class="s1">all(isinstance(elt, nodes.Const) </span><span class="s2">for </span><span class="s1">elt </span><span class="s2">in </span><span class="s1">arg.elts):</span>
+            <span class="s1">elts = [elt.value </span><span class="s2">for </span><span class="s1">elt </span><span class="s2">in </span><span class="s1">arg.elts]</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s0"># TODO: Does not handle deduplication for sets.</span>
+            <span class="s1">elts = []</span>
+            <span class="s2">for </span><span class="s1">element </span><span class="s2">in </span><span class="s1">arg.elts:</span>
+                <span class="s2">if not </span><span class="s1">element:</span>
+                    <span class="s2">continue</span>
+                <span class="s1">inferred = helpers.safe_infer(element, context=context)</span>
+                <span class="s2">if </span><span class="s1">inferred:</span>
+                    <span class="s1">evaluated_object = nodes.EvaluatedObject(</span>
+                        <span class="s1">original=element, value=inferred</span>
+                    <span class="s1">)</span>
+                    <span class="s1">elts.append(evaluated_object)</span>
+    <span class="s2">elif </span><span class="s1">isinstance(arg, nodes.Dict):</span>
+        <span class="s0"># Dicts need to have consts as strings already.</span>
+        <span class="s2">if not </span><span class="s1">all(isinstance(elt[</span><span class="s4">0</span><span class="s1">], nodes.Const) </span><span class="s2">for </span><span class="s1">elt </span><span class="s2">in </span><span class="s1">arg.items):</span>
+            <span class="s2">raise </span><span class="s1">UseInferenceDefault()</span>
+        <span class="s1">elts = [item[</span><span class="s4">0</span><span class="s1">].value </span><span class="s2">for </span><span class="s1">item </span><span class="s2">in </span><span class="s1">arg.items]</span>
+    <span class="s2">elif </span><span class="s1">isinstance(arg, nodes.Const) </span><span class="s2">and </span><span class="s1">isinstance(arg.value, (str, bytes)):</span>
+        <span class="s1">elts = arg.value</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">return</span>
+    <span class="s2">return </span><span class="s1">klass.from_elements(elts=build_elts(elts))</span>
+
+
+<span class="s2">def </span><span class="s1">_infer_builtin_container(</span>
+    <span class="s1">node, context, klass=</span><span class="s2">None</span><span class="s1">, iterables=</span><span class="s2">None</span><span class="s1">, build_elts=</span><span class="s2">None</span>
+<span class="s1">):</span>
+    <span class="s1">transform_func = partial(</span>
+        <span class="s1">_container_generic_transform,</span>
+        <span class="s1">context=context,</span>
+        <span class="s1">klass=klass,</span>
+        <span class="s1">iterables=iterables,</span>
+        <span class="s1">build_elts=build_elts,</span>
+    <span class="s1">)</span>
+
+    <span class="s2">return </span><span class="s1">_container_generic_inference(node, context, klass, transform_func)</span>
+
+
+<span class="s0"># pylint: disable=invalid-name</span>
+<span class="s1">infer_tuple = partial(</span>
+    <span class="s1">_infer_builtin_container,</span>
+    <span class="s1">klass=nodes.Tuple,</span>
+    <span class="s1">iterables=(</span>
+        <span class="s1">nodes.List,</span>
+        <span class="s1">nodes.Set,</span>
+        <span class="s1">objects.FrozenSet,</span>
+        <span class="s1">objects.DictItems,</span>
+        <span class="s1">objects.DictKeys,</span>
+        <span class="s1">objects.DictValues,</span>
+    <span class="s1">),</span>
+    <span class="s1">build_elts=tuple,</span>
+<span class="s1">)</span>
+
+<span class="s1">infer_list = partial(</span>
+    <span class="s1">_infer_builtin_container,</span>
+    <span class="s1">klass=nodes.List,</span>
+    <span class="s1">iterables=(</span>
+        <span class="s1">nodes.Tuple,</span>
+        <span class="s1">nodes.Set,</span>
+        <span class="s1">objects.FrozenSet,</span>
+        <span class="s1">objects.DictItems,</span>
+        <span class="s1">objects.DictKeys,</span>
+        <span class="s1">objects.DictValues,</span>
+    <span class="s1">),</span>
+    <span class="s1">build_elts=list,</span>
+<span class="s1">)</span>
+
+<span class="s1">infer_set = partial(</span>
+    <span class="s1">_infer_builtin_container,</span>
+    <span class="s1">klass=nodes.Set,</span>
+    <span class="s1">iterables=(nodes.List, nodes.Tuple, objects.FrozenSet, objects.DictKeys),</span>
+    <span class="s1">build_elts=set,</span>
+<span class="s1">)</span>
+
+<span class="s1">infer_frozenset = partial(</span>
+    <span class="s1">_infer_builtin_container,</span>
+    <span class="s1">klass=objects.FrozenSet,</span>
+    <span class="s1">iterables=(nodes.List, nodes.Tuple, nodes.Set, objects.FrozenSet, objects.DictKeys),</span>
+    <span class="s1">build_elts=frozenset,</span>
+<span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_get_elts(arg, context):</span>
+    <span class="s1">is_iterable = </span><span class="s2">lambda </span><span class="s1">n: isinstance(n, (nodes.List, nodes.Tuple, nodes.Set))</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">inferred = next(arg.infer(context))</span>
+    <span class="s2">except </span><span class="s1">(InferenceError, NameInferenceError) </span><span class="s2">as </span><span class="s1">exc:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault </span><span class="s2">from </span><span class="s1">exc</span>
+    <span class="s2">if </span><span class="s1">isinstance(inferred, nodes.Dict):</span>
+        <span class="s1">items = inferred.items</span>
+    <span class="s2">elif </span><span class="s1">is_iterable(inferred):</span>
+        <span class="s1">items = []</span>
+        <span class="s2">for </span><span class="s1">elt </span><span class="s2">in </span><span class="s1">inferred.elts:</span>
+            <span class="s0"># If an item is not a pair of two items,</span>
+            <span class="s0"># then fallback to the default inference.</span>
+            <span class="s0"># Also, take in consideration only hashable items,</span>
+            <span class="s0"># tuples and consts. We are choosing Names as well.</span>
+            <span class="s2">if not </span><span class="s1">is_iterable(elt):</span>
+                <span class="s2">raise </span><span class="s1">UseInferenceDefault()</span>
+            <span class="s2">if </span><span class="s1">len(elt.elts) != </span><span class="s4">2</span><span class="s1">:</span>
+                <span class="s2">raise </span><span class="s1">UseInferenceDefault()</span>
+            <span class="s2">if not </span><span class="s1">isinstance(elt.elts[</span><span class="s4">0</span><span class="s1">], (nodes.Tuple, nodes.Const, nodes.Name)):</span>
+                <span class="s2">raise </span><span class="s1">UseInferenceDefault()</span>
+            <span class="s1">items.append(tuple(elt.elts))</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault()</span>
+    <span class="s2">return </span><span class="s1">items</span>
+
+
+<span class="s2">def </span><span class="s1">infer_dict(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Try to infer a dict call to a Dict node. 
+ 
+    The function treats the following cases: 
+ 
+        * dict() 
+        * dict(mapping) 
+        * dict(iterable) 
+        * dict(iterable, **kwargs) 
+        * dict(mapping, **kwargs) 
+        * dict(**kwargs) 
+ 
+    If a case can't be inferred, we'll fallback to default inference. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">call = arguments.CallSite.from_call(node, context=context)</span>
+    <span class="s2">if </span><span class="s1">call.has_invalid_arguments() </span><span class="s2">or </span><span class="s1">call.has_invalid_keywords():</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+
+    <span class="s1">args = call.positional_arguments</span>
+    <span class="s1">kwargs = list(call.keyword_arguments.items())</span>
+
+    <span class="s2">if not </span><span class="s1">args </span><span class="s2">and not </span><span class="s1">kwargs:</span>
+        <span class="s0"># dict()</span>
+        <span class="s2">return </span><span class="s1">nodes.Dict()</span>
+    <span class="s2">if </span><span class="s1">kwargs </span><span class="s2">and not </span><span class="s1">args:</span>
+        <span class="s0"># dict(a=1, b=2, c=4)</span>
+        <span class="s1">items = [(nodes.Const(key), value) </span><span class="s2">for </span><span class="s1">key, value </span><span class="s2">in </span><span class="s1">kwargs]</span>
+    <span class="s2">elif </span><span class="s1">len(args) == </span><span class="s4">1 </span><span class="s2">and </span><span class="s1">kwargs:</span>
+        <span class="s0"># dict(some_iterable, b=2, c=4)</span>
+        <span class="s1">elts = _get_elts(args[</span><span class="s4">0</span><span class="s1">], context)</span>
+        <span class="s1">keys = [(nodes.Const(key), value) </span><span class="s2">for </span><span class="s1">key, value </span><span class="s2">in </span><span class="s1">kwargs]</span>
+        <span class="s1">items = elts + keys</span>
+    <span class="s2">elif </span><span class="s1">len(args) == </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s1">items = _get_elts(args[</span><span class="s4">0</span><span class="s1">], context)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault()</span>
+    <span class="s1">value = nodes.Dict(</span>
+        <span class="s1">col_offset=node.col_offset, lineno=node.lineno, parent=node.parent</span>
+    <span class="s1">)</span>
+    <span class="s1">value.postinit(items)</span>
+    <span class="s2">return </span><span class="s1">value</span>
+
+
+<span class="s2">def </span><span class="s1">infer_super(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Understand super calls. 
+ 
+    There are some restrictions for what can be understood: 
+ 
+        * unbounded super (one argument form) is not understood. 
+ 
+        * if the super call is not inside a function (classmethod or method), 
+          then the default inference will be used. 
+ 
+        * if the super arguments can't be inferred, the default inference 
+          will be used. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">len(node.args) == </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s0"># Ignore unbounded super.</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+
+    <span class="s1">scope = node.scope()</span>
+    <span class="s2">if not </span><span class="s1">isinstance(scope, nodes.FunctionDef):</span>
+        <span class="s0"># Ignore non-method uses of super.</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+    <span class="s2">if </span><span class="s1">scope.type </span><span class="s2">not in </span><span class="s1">(</span><span class="s3">&quot;classmethod&quot;</span><span class="s1">, </span><span class="s3">&quot;method&quot;</span><span class="s1">):</span>
+        <span class="s0"># Not interested in staticmethods.</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+
+    <span class="s1">cls = scoped_nodes.get_wrapping_class(scope)</span>
+    <span class="s2">if not </span><span class="s1">node.args:</span>
+        <span class="s1">mro_pointer = cls</span>
+        <span class="s0"># In we are in a classmethod, the interpreter will fill</span>
+        <span class="s0"># automatically the class as the second argument, not an instance.</span>
+        <span class="s2">if </span><span class="s1">scope.type == </span><span class="s3">&quot;classmethod&quot;</span><span class="s1">:</span>
+            <span class="s1">mro_type = cls</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">mro_type = cls.instantiate_class()</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">mro_pointer = next(node.args[</span><span class="s4">0</span><span class="s1">].infer(context=context))</span>
+        <span class="s2">except </span><span class="s1">InferenceError </span><span class="s2">as </span><span class="s1">exc:</span>
+            <span class="s2">raise </span><span class="s1">UseInferenceDefault </span><span class="s2">from </span><span class="s1">exc</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">mro_type = next(node.args[</span><span class="s4">1</span><span class="s1">].infer(context=context))</span>
+        <span class="s2">except </span><span class="s1">InferenceError </span><span class="s2">as </span><span class="s1">exc:</span>
+            <span class="s2">raise </span><span class="s1">UseInferenceDefault </span><span class="s2">from </span><span class="s1">exc</span>
+
+    <span class="s2">if </span><span class="s1">mro_pointer </span><span class="s2">is </span><span class="s1">util.Uninferable </span><span class="s2">or </span><span class="s1">mro_type </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+        <span class="s0"># No way we could understand this.</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+
+    <span class="s1">super_obj = objects.Super(</span>
+        <span class="s1">mro_pointer=mro_pointer, mro_type=mro_type, self_class=cls, scope=scope</span>
+    <span class="s1">)</span>
+    <span class="s1">super_obj.parent = node</span>
+    <span class="s2">return </span><span class="s1">super_obj</span>
+
+
+<span class="s2">def </span><span class="s1">_infer_getattr_args(node, context):</span>
+    <span class="s2">if </span><span class="s1">len(node.args) </span><span class="s2">not in </span><span class="s1">(</span><span class="s4">2</span><span class="s1">, </span><span class="s4">3</span><span class="s1">):</span>
+        <span class="s0"># Not a valid getattr call.</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">obj = next(node.args[</span><span class="s4">0</span><span class="s1">].infer(context=context))</span>
+        <span class="s1">attr = next(node.args[</span><span class="s4">1</span><span class="s1">].infer(context=context))</span>
+    <span class="s2">except </span><span class="s1">InferenceError </span><span class="s2">as </span><span class="s1">exc:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault </span><span class="s2">from </span><span class="s1">exc</span>
+
+    <span class="s2">if </span><span class="s1">obj </span><span class="s2">is </span><span class="s1">util.Uninferable </span><span class="s2">or </span><span class="s1">attr </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+        <span class="s0"># If one of the arguments is something we can't infer,</span>
+        <span class="s0"># then also make the result of the getattr call something</span>
+        <span class="s0"># which is unknown.</span>
+        <span class="s2">return </span><span class="s1">util.Uninferable, util.Uninferable</span>
+
+    <span class="s1">is_string = isinstance(attr, nodes.Const) </span><span class="s2">and </span><span class="s1">isinstance(attr.value, str)</span>
+    <span class="s2">if not </span><span class="s1">is_string:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+
+    <span class="s2">return </span><span class="s1">obj, attr.value</span>
+
+
+<span class="s2">def </span><span class="s1">infer_getattr(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Understand getattr calls 
+ 
+    If one of the arguments is an Uninferable object, then the 
+    result will be an Uninferable object. Otherwise, the normal attribute 
+    lookup will be done. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">obj, attr = _infer_getattr_args(node, context)</span>
+    <span class="s2">if </span><span class="s1">(</span>
+        <span class="s1">obj </span><span class="s2">is </span><span class="s1">util.Uninferable</span>
+        <span class="s2">or </span><span class="s1">attr </span><span class="s2">is </span><span class="s1">util.Uninferable</span>
+        <span class="s2">or not </span><span class="s1">hasattr(obj, </span><span class="s3">&quot;igetattr&quot;</span><span class="s1">)</span>
+    <span class="s1">):</span>
+        <span class="s2">return </span><span class="s1">util.Uninferable</span>
+
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">next(obj.igetattr(attr, context=context))</span>
+    <span class="s2">except </span><span class="s1">(StopIteration, InferenceError, AttributeInferenceError):</span>
+        <span class="s2">if </span><span class="s1">len(node.args) == </span><span class="s4">3</span><span class="s1">:</span>
+            <span class="s0"># Try to infer the default and return it instead.</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s2">return </span><span class="s1">next(node.args[</span><span class="s4">2</span><span class="s1">].infer(context=context))</span>
+            <span class="s2">except </span><span class="s1">InferenceError </span><span class="s2">as </span><span class="s1">exc:</span>
+                <span class="s2">raise </span><span class="s1">UseInferenceDefault </span><span class="s2">from </span><span class="s1">exc</span>
+
+    <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+
+
+<span class="s2">def </span><span class="s1">infer_hasattr(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Understand hasattr calls 
+ 
+    This always guarantees three possible outcomes for calling 
+    hasattr: Const(False) when we are sure that the object 
+    doesn't have the intended attribute, Const(True) when 
+    we know that the object has the attribute and Uninferable 
+    when we are unsure of the outcome of the function call. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">obj, attr = _infer_getattr_args(node, context)</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">obj </span><span class="s2">is </span><span class="s1">util.Uninferable</span>
+            <span class="s2">or </span><span class="s1">attr </span><span class="s2">is </span><span class="s1">util.Uninferable</span>
+            <span class="s2">or not </span><span class="s1">hasattr(obj, </span><span class="s3">&quot;getattr&quot;</span><span class="s1">)</span>
+        <span class="s1">):</span>
+            <span class="s2">return </span><span class="s1">util.Uninferable</span>
+        <span class="s1">obj.getattr(attr, context=context)</span>
+    <span class="s2">except </span><span class="s1">UseInferenceDefault:</span>
+        <span class="s0"># Can't infer something from this function call.</span>
+        <span class="s2">return </span><span class="s1">util.Uninferable</span>
+    <span class="s2">except </span><span class="s1">AttributeInferenceError:</span>
+        <span class="s0"># Doesn't have it.</span>
+        <span class="s2">return </span><span class="s1">nodes.Const(</span><span class="s2">False</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">nodes.Const(</span><span class="s2">True</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">infer_callable(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Understand callable calls 
+ 
+    This follows Python's semantics, where an object 
+    is callable if it provides an attribute __call__, 
+    even though that attribute is something which can't be 
+    called. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">len(node.args) != </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s0"># Invalid callable call.</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+
+    <span class="s1">argument = node.args[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">inferred = next(argument.infer(context=context))</span>
+    <span class="s2">except </span><span class="s1">InferenceError:</span>
+        <span class="s2">return </span><span class="s1">util.Uninferable</span>
+    <span class="s2">if </span><span class="s1">inferred </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+        <span class="s2">return </span><span class="s1">util.Uninferable</span>
+    <span class="s2">return </span><span class="s1">nodes.Const(inferred.callable())</span>
+
+
+<span class="s2">def </span><span class="s1">infer_property(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Understand `property` class 
+ 
+    This only infers the output of `property` 
+    call, not the arguments themselves. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">len(node.args) &lt; </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s0"># Invalid property call.</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+
+    <span class="s1">getter = node.args[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">inferred = next(getter.infer(context=context))</span>
+    <span class="s2">except </span><span class="s1">InferenceError </span><span class="s2">as </span><span class="s1">exc:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault </span><span class="s2">from </span><span class="s1">exc</span>
+
+    <span class="s2">if not </span><span class="s1">isinstance(inferred, (nodes.FunctionDef, nodes.Lambda)):</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+
+    <span class="s2">return </span><span class="s1">objects.Property(</span>
+        <span class="s1">function=inferred,</span>
+        <span class="s1">name=inferred.name,</span>
+        <span class="s1">doc=getattr(inferred, </span><span class="s3">&quot;doc&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">),</span>
+        <span class="s1">lineno=node.lineno,</span>
+        <span class="s1">parent=node,</span>
+        <span class="s1">col_offset=node.col_offset,</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">infer_bool(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Understand bool calls.&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">len(node.args) &gt; </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s0"># Invalid bool call.</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+
+    <span class="s2">if not </span><span class="s1">node.args:</span>
+        <span class="s2">return </span><span class="s1">nodes.Const(</span><span class="s2">False</span><span class="s1">)</span>
+
+    <span class="s1">argument = node.args[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">inferred = next(argument.infer(context=context))</span>
+    <span class="s2">except </span><span class="s1">InferenceError:</span>
+        <span class="s2">return </span><span class="s1">util.Uninferable</span>
+    <span class="s2">if </span><span class="s1">inferred </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+        <span class="s2">return </span><span class="s1">util.Uninferable</span>
+
+    <span class="s1">bool_value = inferred.bool_value(context=context)</span>
+    <span class="s2">if </span><span class="s1">bool_value </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+        <span class="s2">return </span><span class="s1">util.Uninferable</span>
+    <span class="s2">return </span><span class="s1">nodes.Const(bool_value)</span>
+
+
+<span class="s2">def </span><span class="s1">infer_type(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Understand the one-argument form of *type*.&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">len(node.args) != </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+
+    <span class="s2">return </span><span class="s1">helpers.object_type(node.args[</span><span class="s4">0</span><span class="s1">], context)</span>
+
+
+<span class="s2">def </span><span class="s1">infer_slice(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Understand `slice` calls.&quot;&quot;&quot;</span>
+    <span class="s1">args = node.args</span>
+    <span class="s2">if not </span><span class="s4">0 </span><span class="s1">&lt; len(args) &lt;= </span><span class="s4">3</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+
+    <span class="s1">infer_func = partial(helpers.safe_infer, context=context)</span>
+    <span class="s1">args = [infer_func(arg) </span><span class="s2">for </span><span class="s1">arg </span><span class="s2">in </span><span class="s1">args]</span>
+    <span class="s2">for </span><span class="s1">arg </span><span class="s2">in </span><span class="s1">args:</span>
+        <span class="s2">if not </span><span class="s1">arg </span><span class="s2">or </span><span class="s1">arg </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+            <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+        <span class="s2">if not </span><span class="s1">isinstance(arg, nodes.Const):</span>
+            <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+        <span class="s2">if not </span><span class="s1">isinstance(arg.value, (type(</span><span class="s2">None</span><span class="s1">), int)):</span>
+            <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+
+    <span class="s2">if </span><span class="s1">len(args) &lt; </span><span class="s4">3</span><span class="s1">:</span>
+        <span class="s0"># Make sure we have 3 arguments.</span>
+        <span class="s1">args.extend([</span><span class="s2">None</span><span class="s1">] * (</span><span class="s4">3 </span><span class="s1">- len(args)))</span>
+
+    <span class="s1">slice_node = nodes.Slice(</span>
+        <span class="s1">lineno=node.lineno, col_offset=node.col_offset, parent=node.parent</span>
+    <span class="s1">)</span>
+    <span class="s1">slice_node.postinit(*args)</span>
+    <span class="s2">return </span><span class="s1">slice_node</span>
+
+
+<span class="s2">def </span><span class="s1">_infer_object__new__decorator(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0"># Instantiate class immediately</span>
+    <span class="s0"># since that's what @object.__new__ does</span>
+    <span class="s2">return </span><span class="s1">iter((node.instantiate_class(),))</span>
+
+
+<span class="s2">def </span><span class="s1">_infer_object__new__decorator_check(node):</span>
+    <span class="s0">&quot;&quot;&quot;Predicate before inference_tip 
+ 
+    Check if the given ClassDef has an @object.__new__ decorator 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if not </span><span class="s1">node.decorators:</span>
+        <span class="s2">return False</span>
+
+    <span class="s2">for </span><span class="s1">decorator </span><span class="s2">in </span><span class="s1">node.decorators.nodes:</span>
+        <span class="s2">if </span><span class="s1">isinstance(decorator, nodes.Attribute):</span>
+            <span class="s2">if </span><span class="s1">decorator.as_string() == OBJECT_DUNDER_NEW:</span>
+                <span class="s2">return True</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">infer_issubclass(callnode, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Infer issubclass() calls 
+ 
+    :param nodes.Call callnode: an `issubclass` call 
+    :param InferenceContext: the context for the inference 
+    :rtype nodes.Const: Boolean Const value of the `issubclass` call 
+    :raises UseInferenceDefault: If the node cannot be inferred 
+    &quot;&quot;&quot;</span>
+    <span class="s1">call = arguments.CallSite.from_call(callnode, context=context)</span>
+    <span class="s2">if </span><span class="s1">call.keyword_arguments:</span>
+        <span class="s0"># issubclass doesn't support keyword arguments</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault(</span><span class="s3">&quot;TypeError: issubclass() takes no keyword arguments&quot;</span><span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">len(call.positional_arguments) != </span><span class="s4">2</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault(</span>
+            <span class="s3">&quot;Expected two arguments, got {count}&quot;</span><span class="s1">.format(</span>
+                <span class="s1">count=len(call.positional_arguments)</span>
+            <span class="s1">)</span>
+        <span class="s1">)</span>
+    <span class="s0"># The left hand argument is the obj to be checked</span>
+    <span class="s1">obj_node, class_or_tuple_node = call.positional_arguments</span>
+
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">obj_type = next(obj_node.infer(context=context))</span>
+    <span class="s2">except </span><span class="s1">InferenceError </span><span class="s2">as </span><span class="s1">exc:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault </span><span class="s2">from </span><span class="s1">exc</span>
+    <span class="s2">if not </span><span class="s1">isinstance(obj_type, nodes.ClassDef):</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault(</span><span class="s3">&quot;TypeError: arg 1 must be class&quot;</span><span class="s1">)</span>
+
+    <span class="s0"># The right hand argument is the class(es) that the given</span>
+    <span class="s0"># object is to be checked against.</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">class_container = _class_or_tuple_to_container(</span>
+            <span class="s1">class_or_tuple_node, context=context</span>
+        <span class="s1">)</span>
+    <span class="s2">except </span><span class="s1">InferenceError </span><span class="s2">as </span><span class="s1">exc:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault </span><span class="s2">from </span><span class="s1">exc</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">issubclass_bool = helpers.object_issubclass(obj_type, class_container, context)</span>
+    <span class="s2">except </span><span class="s1">AstroidTypeError </span><span class="s2">as </span><span class="s1">exc:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault(</span><span class="s3">&quot;TypeError: &quot; </span><span class="s1">+ str(exc)) </span><span class="s2">from </span><span class="s1">exc</span>
+    <span class="s2">except </span><span class="s1">MroError </span><span class="s2">as </span><span class="s1">exc:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault </span><span class="s2">from </span><span class="s1">exc</span>
+    <span class="s2">return </span><span class="s1">nodes.Const(issubclass_bool)</span>
+
+
+<span class="s2">def </span><span class="s1">infer_isinstance(callnode, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Infer isinstance calls 
+ 
+    :param nodes.Call callnode: an isinstance call 
+    :param InferenceContext: context for call 
+        (currently unused but is a common interface for inference) 
+    :rtype nodes.Const: Boolean Const value of isinstance call 
+ 
+    :raises UseInferenceDefault: If the node cannot be inferred 
+    &quot;&quot;&quot;</span>
+    <span class="s1">call = arguments.CallSite.from_call(callnode, context=context)</span>
+    <span class="s2">if </span><span class="s1">call.keyword_arguments:</span>
+        <span class="s0"># isinstance doesn't support keyword arguments</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault(</span><span class="s3">&quot;TypeError: isinstance() takes no keyword arguments&quot;</span><span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">len(call.positional_arguments) != </span><span class="s4">2</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault(</span>
+            <span class="s3">&quot;Expected two arguments, got {count}&quot;</span><span class="s1">.format(</span>
+                <span class="s1">count=len(call.positional_arguments)</span>
+            <span class="s1">)</span>
+        <span class="s1">)</span>
+    <span class="s0"># The left hand argument is the obj to be checked</span>
+    <span class="s1">obj_node, class_or_tuple_node = call.positional_arguments</span>
+    <span class="s0"># The right hand argument is the class(es) that the given</span>
+    <span class="s0"># obj is to be check is an instance of</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">class_container = _class_or_tuple_to_container(</span>
+            <span class="s1">class_or_tuple_node, context=context</span>
+        <span class="s1">)</span>
+    <span class="s2">except </span><span class="s1">InferenceError </span><span class="s2">as </span><span class="s1">exc:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault </span><span class="s2">from </span><span class="s1">exc</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">isinstance_bool = helpers.object_isinstance(obj_node, class_container, context)</span>
+    <span class="s2">except </span><span class="s1">AstroidTypeError </span><span class="s2">as </span><span class="s1">exc:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault(</span><span class="s3">&quot;TypeError: &quot; </span><span class="s1">+ str(exc)) </span><span class="s2">from </span><span class="s1">exc</span>
+    <span class="s2">except </span><span class="s1">MroError </span><span class="s2">as </span><span class="s1">exc:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault </span><span class="s2">from </span><span class="s1">exc</span>
+    <span class="s2">if </span><span class="s1">isinstance_bool </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+    <span class="s2">return </span><span class="s1">nodes.Const(isinstance_bool)</span>
+
+
+<span class="s2">def </span><span class="s1">_class_or_tuple_to_container(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0"># Move inferences results into container</span>
+    <span class="s0"># to simplify later logic</span>
+    <span class="s0"># raises InferenceError if any of the inferences fall through</span>
+    <span class="s1">node_infer = next(node.infer(context=context))</span>
+    <span class="s0"># arg2 MUST be a type or a TUPLE of types</span>
+    <span class="s0"># for isinstance</span>
+    <span class="s2">if </span><span class="s1">isinstance(node_infer, nodes.Tuple):</span>
+        <span class="s1">class_container = [</span>
+            <span class="s1">next(node.infer(context=context)) </span><span class="s2">for </span><span class="s1">node </span><span class="s2">in </span><span class="s1">node_infer.elts</span>
+        <span class="s1">]</span>
+        <span class="s1">class_container = [</span>
+            <span class="s1">klass_node </span><span class="s2">for </span><span class="s1">klass_node </span><span class="s2">in </span><span class="s1">class_container </span><span class="s2">if </span><span class="s1">klass_node </span><span class="s2">is not None</span>
+        <span class="s1">]</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">class_container = [node_infer]</span>
+    <span class="s2">return </span><span class="s1">class_container</span>
+
+
+<span class="s2">def </span><span class="s1">infer_len(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Infer length calls 
+ 
+    :param nodes.Call node: len call to infer 
+    :param context.InferenceContext: node context 
+    :rtype nodes.Const: a Const node with the inferred length, if possible 
+    &quot;&quot;&quot;</span>
+    <span class="s1">call = arguments.CallSite.from_call(node, context=context)</span>
+    <span class="s2">if </span><span class="s1">call.keyword_arguments:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault(</span><span class="s3">&quot;TypeError: len() must take no keyword arguments&quot;</span><span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">len(call.positional_arguments) != </span><span class="s4">1</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault(</span>
+            <span class="s3">&quot;TypeError: len() must take exactly one argument &quot;</span>
+            <span class="s3">&quot;({len}) given&quot;</span><span class="s1">.format(len=len(call.positional_arguments))</span>
+        <span class="s1">)</span>
+    <span class="s1">[argument_node] = call.positional_arguments</span>
+
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">nodes.Const(helpers.object_len(argument_node, context=context))</span>
+    <span class="s2">except </span><span class="s1">(AstroidTypeError, InferenceError) </span><span class="s2">as </span><span class="s1">exc:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault(str(exc)) </span><span class="s2">from </span><span class="s1">exc</span>
+
+
+<span class="s2">def </span><span class="s1">infer_str(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Infer str() calls 
+ 
+    :param nodes.Call node: str() call to infer 
+    :param context.InferenceContext: node context 
+    :rtype nodes.Const: a Const containing an empty string 
+    &quot;&quot;&quot;</span>
+    <span class="s1">call = arguments.CallSite.from_call(node, context=context)</span>
+    <span class="s2">if </span><span class="s1">call.keyword_arguments:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault(</span><span class="s3">&quot;TypeError: str() must take no keyword arguments&quot;</span><span class="s1">)</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">nodes.Const(</span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+    <span class="s2">except </span><span class="s1">(AstroidTypeError, InferenceError) </span><span class="s2">as </span><span class="s1">exc:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault(str(exc)) </span><span class="s2">from </span><span class="s1">exc</span>
+
+
+<span class="s2">def </span><span class="s1">infer_int(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Infer int() calls 
+ 
+    :param nodes.Call node: int() call to infer 
+    :param context.InferenceContext: node context 
+    :rtype nodes.Const: a Const containing the integer value of the int() call 
+    &quot;&quot;&quot;</span>
+    <span class="s1">call = arguments.CallSite.from_call(node, context=context)</span>
+    <span class="s2">if </span><span class="s1">call.keyword_arguments:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault(</span><span class="s3">&quot;TypeError: int() must take no keyword arguments&quot;</span><span class="s1">)</span>
+
+    <span class="s2">if </span><span class="s1">call.positional_arguments:</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">first_value = next(call.positional_arguments[</span><span class="s4">0</span><span class="s1">].infer(context=context))</span>
+        <span class="s2">except </span><span class="s1">(InferenceError, StopIteration) </span><span class="s2">as </span><span class="s1">exc:</span>
+            <span class="s2">raise </span><span class="s1">UseInferenceDefault(str(exc)) </span><span class="s2">from </span><span class="s1">exc</span>
+
+        <span class="s2">if </span><span class="s1">first_value </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+            <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+
+        <span class="s2">if </span><span class="s1">isinstance(first_value, nodes.Const) </span><span class="s2">and </span><span class="s1">isinstance(</span>
+            <span class="s1">first_value.value, (int, str)</span>
+        <span class="s1">):</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s1">actual_value = int(first_value.value)</span>
+            <span class="s2">except </span><span class="s1">ValueError:</span>
+                <span class="s2">return </span><span class="s1">nodes.Const(</span><span class="s4">0</span><span class="s1">)</span>
+            <span class="s2">return </span><span class="s1">nodes.Const(actual_value)</span>
+
+    <span class="s2">return </span><span class="s1">nodes.Const(</span><span class="s4">0</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">infer_dict_fromkeys(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Infer dict.fromkeys 
+ 
+    :param nodes.Call node: dict.fromkeys() call to infer 
+    :param context.InferenceContext: node context 
+    :rtype nodes.Dict: 
+        a Dictionary containing the values that astroid was able to infer. 
+        In case the inference failed for any reason, an empty dictionary 
+        will be inferred instead. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">_build_dict_with_elements(elements):</span>
+        <span class="s1">new_node = nodes.Dict(</span>
+            <span class="s1">col_offset=node.col_offset, lineno=node.lineno, parent=node.parent</span>
+        <span class="s1">)</span>
+        <span class="s1">new_node.postinit(elements)</span>
+        <span class="s2">return </span><span class="s1">new_node</span>
+
+    <span class="s1">call = arguments.CallSite.from_call(node, context=context)</span>
+    <span class="s2">if </span><span class="s1">call.keyword_arguments:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault(</span><span class="s3">&quot;TypeError: int() must take no keyword arguments&quot;</span><span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">len(call.positional_arguments) </span><span class="s2">not in </span><span class="s1">{</span><span class="s4">1</span><span class="s1">, </span><span class="s4">2</span><span class="s1">}:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault(</span>
+            <span class="s3">&quot;TypeError: Needs between 1 and 2 positional arguments&quot;</span>
+        <span class="s1">)</span>
+
+    <span class="s1">default = nodes.Const(</span><span class="s2">None</span><span class="s1">)</span>
+    <span class="s1">values = call.positional_arguments[</span><span class="s4">0</span><span class="s1">]</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">inferred_values = next(values.infer(context=context))</span>
+    <span class="s2">except </span><span class="s1">InferenceError:</span>
+        <span class="s2">return </span><span class="s1">_build_dict_with_elements([])</span>
+    <span class="s2">if </span><span class="s1">inferred_values </span><span class="s2">is </span><span class="s1">util.Uninferable:</span>
+        <span class="s2">return </span><span class="s1">_build_dict_with_elements([])</span>
+
+    <span class="s0"># Limit to a couple of potential values, as this can become pretty complicated</span>
+    <span class="s1">accepted_iterable_elements = (nodes.Const,)</span>
+    <span class="s2">if </span><span class="s1">isinstance(inferred_values, (nodes.List, nodes.Set, nodes.Tuple)):</span>
+        <span class="s1">elements = inferred_values.elts</span>
+        <span class="s2">for </span><span class="s1">element </span><span class="s2">in </span><span class="s1">elements:</span>
+            <span class="s2">if not </span><span class="s1">isinstance(element, accepted_iterable_elements):</span>
+                <span class="s0"># Fallback to an empty dict</span>
+                <span class="s2">return </span><span class="s1">_build_dict_with_elements([])</span>
+
+        <span class="s1">elements_with_value = [(element, default) </span><span class="s2">for </span><span class="s1">element </span><span class="s2">in </span><span class="s1">elements]</span>
+        <span class="s2">return </span><span class="s1">_build_dict_with_elements(elements_with_value)</span>
+    <span class="s2">if </span><span class="s1">isinstance(inferred_values, nodes.Const) </span><span class="s2">and </span><span class="s1">isinstance(</span>
+        <span class="s1">inferred_values.value, (str, bytes)</span>
+    <span class="s1">):</span>
+        <span class="s1">elements = [</span>
+            <span class="s1">(nodes.Const(element), default) </span><span class="s2">for </span><span class="s1">element </span><span class="s2">in </span><span class="s1">inferred_values.value</span>
+        <span class="s1">]</span>
+        <span class="s2">return </span><span class="s1">_build_dict_with_elements(elements)</span>
+    <span class="s2">if </span><span class="s1">isinstance(inferred_values, nodes.Dict):</span>
+        <span class="s1">keys = inferred_values.itered()</span>
+        <span class="s2">for </span><span class="s1">key </span><span class="s2">in </span><span class="s1">keys:</span>
+            <span class="s2">if not </span><span class="s1">isinstance(key, accepted_iterable_elements):</span>
+                <span class="s0"># Fallback to an empty dict</span>
+                <span class="s2">return </span><span class="s1">_build_dict_with_elements([])</span>
+
+        <span class="s1">elements_with_value = [(element, default) </span><span class="s2">for </span><span class="s1">element </span><span class="s2">in </span><span class="s1">keys]</span>
+        <span class="s2">return </span><span class="s1">_build_dict_with_elements(elements_with_value)</span>
+
+    <span class="s0"># Fallback to an empty dictionary</span>
+    <span class="s2">return </span><span class="s1">_build_dict_with_elements([])</span>
+
+
+<span class="s0"># Builtins inference</span>
+<span class="s1">register_builtin_transform(infer_bool, </span><span class="s3">&quot;bool&quot;</span><span class="s1">)</span>
+<span class="s1">register_builtin_transform(infer_super, </span><span class="s3">&quot;super&quot;</span><span class="s1">)</span>
+<span class="s1">register_builtin_transform(infer_callable, </span><span class="s3">&quot;callable&quot;</span><span class="s1">)</span>
+<span class="s1">register_builtin_transform(infer_property, </span><span class="s3">&quot;property&quot;</span><span class="s1">)</span>
+<span class="s1">register_builtin_transform(infer_getattr, </span><span class="s3">&quot;getattr&quot;</span><span class="s1">)</span>
+<span class="s1">register_builtin_transform(infer_hasattr, </span><span class="s3">&quot;hasattr&quot;</span><span class="s1">)</span>
+<span class="s1">register_builtin_transform(infer_tuple, </span><span class="s3">&quot;tuple&quot;</span><span class="s1">)</span>
+<span class="s1">register_builtin_transform(infer_set, </span><span class="s3">&quot;set&quot;</span><span class="s1">)</span>
+<span class="s1">register_builtin_transform(infer_list, </span><span class="s3">&quot;list&quot;</span><span class="s1">)</span>
+<span class="s1">register_builtin_transform(infer_dict, </span><span class="s3">&quot;dict&quot;</span><span class="s1">)</span>
+<span class="s1">register_builtin_transform(infer_frozenset, </span><span class="s3">&quot;frozenset&quot;</span><span class="s1">)</span>
+<span class="s1">register_builtin_transform(infer_type, </span><span class="s3">&quot;type&quot;</span><span class="s1">)</span>
+<span class="s1">register_builtin_transform(infer_slice, </span><span class="s3">&quot;slice&quot;</span><span class="s1">)</span>
+<span class="s1">register_builtin_transform(infer_isinstance, </span><span class="s3">&quot;isinstance&quot;</span><span class="s1">)</span>
+<span class="s1">register_builtin_transform(infer_issubclass, </span><span class="s3">&quot;issubclass&quot;</span><span class="s1">)</span>
+<span class="s1">register_builtin_transform(infer_len, </span><span class="s3">&quot;len&quot;</span><span class="s1">)</span>
+<span class="s1">register_builtin_transform(infer_str, </span><span class="s3">&quot;str&quot;</span><span class="s1">)</span>
+<span class="s1">register_builtin_transform(infer_int, </span><span class="s3">&quot;int&quot;</span><span class="s1">)</span>
+<span class="s1">register_builtin_transform(infer_dict_fromkeys, </span><span class="s3">&quot;dict.fromkeys&quot;</span><span class="s1">)</span>
+
+
+<span class="s0"># Infer object.__new__ calls</span>
+<span class="s1">MANAGER.register_transform(</span>
+    <span class="s1">nodes.ClassDef,</span>
+    <span class="s1">inference_tip(_infer_object__new__decorator),</span>
+    <span class="s1">_infer_object__new__decorator_check,</span>
+<span class="s1">)</span>
+</pre>
+</body>
+</html>

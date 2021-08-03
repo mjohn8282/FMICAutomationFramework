@@ -1,0 +1,102 @@
+<html>
+<head>
+<title>filewrapper.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+filewrapper.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">io </span><span class="s0">import </span><span class="s1">BytesIO</span>
+
+
+<span class="s0">class </span><span class="s1">CallbackFileWrapper(object):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Small wrapper around a fp object which will tee everything read into a 
+    buffer, and when that file is closed it will execute a callback with the 
+    contents of that buffer. 
+ 
+    All attributes are proxied to the underlying file object. 
+ 
+    This class uses members with a double underscore (__) leading prefix so as 
+    not to accidentally shadow an attribute. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, fp, callback):</span>
+        <span class="s1">self.__buf = BytesIO()</span>
+        <span class="s1">self.__fp = fp</span>
+        <span class="s1">self.__callback = callback</span>
+
+    <span class="s0">def </span><span class="s1">__getattr__(self, name):</span>
+        <span class="s2"># The vaguaries of garbage collection means that self.__fp is</span>
+        <span class="s2"># not always set.  By using __getattribute__ and the private</span>
+        <span class="s2"># name[0] allows looking up the attribute value and raising an</span>
+        <span class="s2"># AttributeError when it doesn't exist. This stop thigns from</span>
+        <span class="s2"># infinitely recursing calls to getattr in the case where</span>
+        <span class="s2"># self.__fp hasn't been set.</span>
+        <span class="s2">#</span>
+        <span class="s2"># [0] https://docs.python.org/2/reference/expressions.html#atom-identifiers</span>
+        <span class="s1">fp = self.__getattribute__(</span><span class="s3">&quot;_CallbackFileWrapper__fp&quot;</span><span class="s1">)</span>
+        <span class="s0">return </span><span class="s1">getattr(fp, name)</span>
+
+    <span class="s0">def </span><span class="s1">__is_fp_closed(self):</span>
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">self.__fp.fp </span><span class="s0">is None</span>
+
+        <span class="s0">except </span><span class="s1">AttributeError:</span>
+            <span class="s0">pass</span>
+
+        <span class="s0">try</span><span class="s1">:</span>
+            <span class="s0">return </span><span class="s1">self.__fp.closed</span>
+
+        <span class="s0">except </span><span class="s1">AttributeError:</span>
+            <span class="s0">pass</span>
+
+        <span class="s2"># We just don't cache it then.</span>
+        <span class="s2"># TODO: Add some logging here...</span>
+        <span class="s0">return False</span>
+
+    <span class="s0">def </span><span class="s1">_close(self):</span>
+        <span class="s0">if </span><span class="s1">self.__callback:</span>
+            <span class="s1">self.__callback(self.__buf.getvalue())</span>
+
+        <span class="s2"># We assign this to None here, because otherwise we can get into</span>
+        <span class="s2"># really tricky problems where the CPython interpreter dead locks</span>
+        <span class="s2"># because the callback is holding a reference to something which</span>
+        <span class="s2"># has a __del__ method. Setting this to None breaks the cycle</span>
+        <span class="s2"># and allows the garbage collector to do it's thing normally.</span>
+        <span class="s1">self.__callback = </span><span class="s0">None</span>
+
+    <span class="s0">def </span><span class="s1">read(self, amt=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">data = self.__fp.read(amt)</span>
+        <span class="s1">self.__buf.write(data)</span>
+        <span class="s0">if </span><span class="s1">self.__is_fp_closed():</span>
+            <span class="s1">self._close()</span>
+
+        <span class="s0">return </span><span class="s1">data</span>
+
+    <span class="s0">def </span><span class="s1">_safe_read(self, amt):</span>
+        <span class="s1">data = self.__fp._safe_read(amt)</span>
+        <span class="s0">if </span><span class="s1">amt == </span><span class="s4">2 </span><span class="s0">and </span><span class="s1">data == </span><span class="s3">b&quot;</span><span class="s5">\r\n</span><span class="s3">&quot;</span><span class="s1">:</span>
+            <span class="s2"># urllib executes this read to toss the CRLF at the end</span>
+            <span class="s2"># of the chunk.</span>
+            <span class="s0">return </span><span class="s1">data</span>
+
+        <span class="s1">self.__buf.write(data)</span>
+        <span class="s0">if </span><span class="s1">self.__is_fp_closed():</span>
+            <span class="s1">self._close()</span>
+
+        <span class="s0">return </span><span class="s1">data</span>
+</pre>
+</body>
+</html>

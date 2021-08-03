@@ -1,0 +1,45 @@
+<html>
+<head>
+<title>brain_numpy_core_fromnumeric.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_numpy_core_fromnumeric.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2019-2021 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+
+<span class="s0">&quot;&quot;&quot;Astroid hooks for numpy.core.fromnumeric module.&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+
+
+<span class="s2">def </span><span class="s1">numpy_core_fromnumeric_transform():</span>
+    <span class="s2">return </span><span class="s1">astroid.parse(</span>
+        <span class="s3">&quot;&quot;&quot; 
+    def sum(a, axis=None, dtype=None, out=None, keepdims=None, initial=None): 
+        return numpy.ndarray([0, 0]) 
+    &quot;&quot;&quot;</span>
+    <span class="s1">)</span>
+
+
+<span class="s1">astroid.register_module_extender(</span>
+    <span class="s1">astroid.MANAGER, </span><span class="s3">&quot;numpy.core.fromnumeric&quot;</span><span class="s1">, numpy_core_fromnumeric_transform</span>
+<span class="s1">)</span>
+</pre>
+</body>
+</html>

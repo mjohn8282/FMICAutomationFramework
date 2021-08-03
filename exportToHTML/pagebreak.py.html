@@ -1,0 +1,103 @@
+<html>
+<head>
+<title>pagebreak.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+pagebreak.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">Sequence,</span>
+<span class="s1">)</span>
+
+
+<span class="s0">class </span><span class="s1">Break(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;brk&quot;</span>
+
+    <span class="s1">id = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">min = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">max = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">man = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">pt = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">id=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">min=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">max=</span><span class="s4">16383</span><span class="s1">,</span>
+                 <span class="s1">man=</span><span class="s0">True</span><span class="s1">,</span>
+                 <span class="s1">pt=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.id = id</span>
+        <span class="s1">self.min = min</span>
+        <span class="s1">self.max = max</span>
+        <span class="s1">self.man = man</span>
+        <span class="s1">self.pt = pt</span>
+
+
+<span class="s0">class </span><span class="s1">PageBreak(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;rowBreaks&quot;</span>
+
+    <span class="s1">count = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">manualBreakCount = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">brk = Sequence(expected_type=Break, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'brk'</span><span class="s1">,)</span>
+    <span class="s1">__attrs__ = (</span><span class="s3">&quot;count&quot;</span><span class="s1">, </span><span class="s3">&quot;manualBreakCount&quot;</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">count=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">manualBreakCount=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">brk=(),</span>
+                <span class="s1">):</span>
+        <span class="s1">self.brk = brk</span>
+
+
+    <span class="s0">def </span><span class="s1">__bool__(self):</span>
+        <span class="s0">return </span><span class="s1">len(self.brk) &gt; </span><span class="s4">0</span>
+
+    <span class="s1">__nonzero__ = __bool__</span>
+
+    <span class="s0">def </span><span class="s1">__len__(self):</span>
+        <span class="s0">return </span><span class="s1">len(self.brk)</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">count(self):</span>
+        <span class="s0">return </span><span class="s1">len(self)</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">manualBreakCount(self):</span>
+        <span class="s0">return </span><span class="s1">len(self)</span>
+
+
+    <span class="s0">def </span><span class="s1">append(self, brk=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Add a page break 
+        &quot;&quot;&quot;</span>
+        <span class="s1">vals = list(self.brk)</span>
+        <span class="s0">if not </span><span class="s1">isinstance(brk, Break):</span>
+            <span class="s1">brk = Break(id=self.count+</span><span class="s4">1</span><span class="s1">)</span>
+        <span class="s1">vals.append(brk)</span>
+        <span class="s1">self.brk = vals</span>
+</pre>
+</body>
+</html>

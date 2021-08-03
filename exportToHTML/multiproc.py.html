@@ -1,0 +1,132 @@
+<html>
+<head>
+<title>multiproc.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+multiproc.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;Monkey-patching to add multiprocessing support for coverage.py&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">multiprocessing</span>
+<span class="s2">import </span><span class="s1">multiprocessing.process</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">os.path</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">traceback</span>
+
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">env</span>
+<span class="s2">from </span><span class="s1">coverage.misc </span><span class="s2">import </span><span class="s1">contract</span>
+
+<span class="s0"># An attribute that will be set on the module to indicate that it has been</span>
+<span class="s0"># monkey-patched.</span>
+<span class="s1">PATCHED_MARKER = </span><span class="s3">&quot;_coverage$patched&quot;</span>
+
+
+<span class="s2">if </span><span class="s1">env.PYVERSION &gt;= (</span><span class="s4">3</span><span class="s1">, </span><span class="s4">4</span><span class="s1">):</span>
+    <span class="s1">OriginalProcess = multiprocessing.process.BaseProcess</span>
+<span class="s2">else</span><span class="s1">:</span>
+    <span class="s1">OriginalProcess = multiprocessing.Process</span>
+
+<span class="s1">original_bootstrap = OriginalProcess._bootstrap</span>
+
+<span class="s2">class </span><span class="s1">ProcessWithCoverage(OriginalProcess):         </span><span class="s0"># pylint: disable=abstract-method</span>
+    <span class="s0">&quot;&quot;&quot;A replacement for multiprocess.Process that starts coverage.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">_bootstrap(self, *args, **kwargs):</span>
+        <span class="s0">&quot;&quot;&quot;Wrapper around _bootstrap to start coverage.&quot;&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">Coverage       </span><span class="s0"># avoid circular import</span>
+            <span class="s1">cov = Coverage(data_suffix=</span><span class="s2">True</span><span class="s1">)</span>
+            <span class="s1">cov._warn_preimported_source = </span><span class="s2">False</span>
+            <span class="s1">cov.start()</span>
+            <span class="s1">debug = cov._debug</span>
+            <span class="s2">if </span><span class="s1">debug.should(</span><span class="s3">&quot;multiproc&quot;</span><span class="s1">):</span>
+                <span class="s1">debug.write(</span><span class="s3">&quot;Calling multiprocessing bootstrap&quot;</span><span class="s1">)</span>
+        <span class="s2">except </span><span class="s1">Exception:</span>
+            <span class="s1">print(</span><span class="s3">&quot;Exception during multiprocessing bootstrap init:&quot;</span><span class="s1">)</span>
+            <span class="s1">traceback.print_exc(file=sys.stdout)</span>
+            <span class="s1">sys.stdout.flush()</span>
+            <span class="s2">raise</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">original_bootstrap(self, *args, **kwargs)</span>
+        <span class="s2">finally</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">debug.should(</span><span class="s3">&quot;multiproc&quot;</span><span class="s1">):</span>
+                <span class="s1">debug.write(</span><span class="s3">&quot;Finished multiprocessing bootstrap&quot;</span><span class="s1">)</span>
+            <span class="s1">cov.stop()</span>
+            <span class="s1">cov.save()</span>
+            <span class="s2">if </span><span class="s1">debug.should(</span><span class="s3">&quot;multiproc&quot;</span><span class="s1">):</span>
+                <span class="s1">debug.write(</span><span class="s3">&quot;Saved multiprocessing data&quot;</span><span class="s1">)</span>
+
+<span class="s2">class </span><span class="s1">Stowaway(object):</span>
+    <span class="s0">&quot;&quot;&quot;An object to pickle, so when it is unpickled, it can apply the monkey-patch.&quot;&quot;&quot;</span>
+    <span class="s2">def </span><span class="s1">__init__(self, rcfile):</span>
+        <span class="s1">self.rcfile = rcfile</span>
+
+    <span class="s2">def </span><span class="s1">__getstate__(self):</span>
+        <span class="s2">return </span><span class="s1">{</span><span class="s3">'rcfile'</span><span class="s1">: self.rcfile}</span>
+
+    <span class="s2">def </span><span class="s1">__setstate__(self, state):</span>
+        <span class="s1">patch_multiprocessing(state[</span><span class="s3">'rcfile'</span><span class="s1">])</span>
+
+
+<span class="s1">@contract(rcfile=str)</span>
+<span class="s2">def </span><span class="s1">patch_multiprocessing(rcfile):</span>
+    <span class="s0">&quot;&quot;&quot;Monkey-patch the multiprocessing module. 
+ 
+    This enables coverage measurement of processes started by multiprocessing. 
+    This involves aggressive monkey-patching. 
+ 
+    `rcfile` is the path to the rcfile being used. 
+ 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">if </span><span class="s1">hasattr(multiprocessing, PATCHED_MARKER):</span>
+        <span class="s2">return</span>
+
+    <span class="s2">if </span><span class="s1">env.PYVERSION &gt;= (</span><span class="s4">3</span><span class="s1">, </span><span class="s4">4</span><span class="s1">):</span>
+        <span class="s1">OriginalProcess._bootstrap = ProcessWithCoverage._bootstrap</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">multiprocessing.Process = ProcessWithCoverage</span>
+
+    <span class="s0"># Set the value in ProcessWithCoverage that will be pickled into the child</span>
+    <span class="s0"># process.</span>
+    <span class="s1">os.environ[</span><span class="s3">&quot;COVERAGE_RCFILE&quot;</span><span class="s1">] = os.path.abspath(rcfile)</span>
+
+    <span class="s0"># When spawning processes rather than forking them, we have no state in the</span>
+    <span class="s0"># new process.  We sneak in there with a Stowaway: we stuff one of our own</span>
+    <span class="s0"># objects into the data that gets pickled and sent to the sub-process. When</span>
+    <span class="s0"># the Stowaway is unpickled, it's __setstate__ method is called, which</span>
+    <span class="s0"># re-applies the monkey-patch.</span>
+    <span class="s0"># Windows only spawns, so this is needed to keep Windows working.</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">from </span><span class="s1">multiprocessing </span><span class="s2">import </span><span class="s1">spawn</span>
+        <span class="s1">original_get_preparation_data = spawn.get_preparation_data</span>
+    <span class="s2">except </span><span class="s1">(ImportError, AttributeError):</span>
+        <span class="s2">pass</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">def </span><span class="s1">get_preparation_data_with_stowaway(name):</span>
+            <span class="s0">&quot;&quot;&quot;Get the original preparation data, and also insert our stowaway.&quot;&quot;&quot;</span>
+            <span class="s1">d = original_get_preparation_data(name)</span>
+            <span class="s1">d[</span><span class="s3">'stowaway'</span><span class="s1">] = Stowaway(rcfile)</span>
+            <span class="s2">return </span><span class="s1">d</span>
+
+        <span class="s1">spawn.get_preparation_data = get_preparation_data_with_stowaway</span>
+
+    <span class="s1">setattr(multiprocessing, PATCHED_MARKER, </span><span class="s2">True</span><span class="s1">)</span>
+</pre>
+</body>
+</html>

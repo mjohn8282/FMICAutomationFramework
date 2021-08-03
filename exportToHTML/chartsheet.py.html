@@ -1,0 +1,130 @@
+<html>
+<head>
+<title>chartsheet.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+chartsheet.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">weakref </span><span class="s0">import </span><span class="s1">ref</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">Typed, Set, Alias</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">ExtensionList</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.drawing.spreadsheet_drawing </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">AbsoluteAnchor,</span>
+    <span class="s1">SpreadsheetDrawing,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.worksheet.page </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">PageMargins,</span>
+    <span class="s1">PrintPageSetup</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.packaging.relationship </span><span class="s0">import </span><span class="s1">Relationship, RelationshipList</span>
+<span class="s0">from </span><span class="s1">openpyexcel.worksheet.drawing </span><span class="s0">import </span><span class="s1">Drawing</span>
+<span class="s0">from </span><span class="s1">openpyexcel.worksheet.header_footer </span><span class="s0">import </span><span class="s1">HeaderFooter</span>
+<span class="s0">from </span><span class="s1">openpyexcel.workbook.child </span><span class="s0">import </span><span class="s1">_WorkbookChild</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">SHEET_MAIN_NS, REL_NS</span>
+
+<span class="s0">from </span><span class="s1">.relation </span><span class="s0">import </span><span class="s1">DrawingHF, SheetBackgroundPicture</span>
+<span class="s0">from </span><span class="s1">.properties </span><span class="s0">import </span><span class="s1">ChartsheetProperties</span>
+<span class="s0">from </span><span class="s1">.protection </span><span class="s0">import </span><span class="s1">ChartsheetProtection</span>
+<span class="s0">from </span><span class="s1">.views </span><span class="s0">import </span><span class="s1">ChartsheetViewList</span>
+<span class="s0">from </span><span class="s1">.custom </span><span class="s0">import </span><span class="s1">CustomChartsheetViews</span>
+<span class="s0">from </span><span class="s1">.publish </span><span class="s0">import </span><span class="s1">WebPublishItems</span>
+
+
+<span class="s0">class </span><span class="s1">Chartsheet(_WorkbookChild, Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;chartsheet&quot;</span>
+    <span class="s1">_default_title = </span><span class="s3">&quot;Chart&quot;</span>
+    <span class="s1">_rel_type = </span><span class="s3">&quot;chartsheet&quot;</span>
+    <span class="s1">_path = </span><span class="s3">&quot;/xl/chartsheets/sheet{0}.xml&quot;</span>
+    <span class="s1">mime_type = </span><span class="s3">&quot;application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml&quot;</span>
+
+    <span class="s1">sheetPr = Typed(expected_type=ChartsheetProperties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">sheetViews = Typed(expected_type=ChartsheetViewList)</span>
+    <span class="s1">sheetProtection = Typed(expected_type=ChartsheetProtection, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">customSheetViews = Typed(expected_type=CustomChartsheetViews, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">pageMargins = Typed(expected_type=PageMargins, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">pageSetup = Typed(expected_type=PrintPageSetup, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">drawing = Typed(expected_type=Drawing, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">drawingHF = Typed(expected_type=DrawingHF, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">picture = Typed(expected_type=SheetBackgroundPicture, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">webPublishItems = Typed(expected_type=WebPublishItems, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">sheet_state = Set(values=(</span><span class="s3">'visible'</span><span class="s1">, </span><span class="s3">'hidden'</span><span class="s1">, </span><span class="s3">'veryHidden'</span><span class="s1">))</span>
+    <span class="s1">headerFooter = Typed(expected_type=HeaderFooter)</span>
+    <span class="s1">HeaderFooter = Alias(</span><span class="s3">'headerFooter'</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span>
+        <span class="s3">'sheetPr'</span><span class="s1">, </span><span class="s3">'sheetViews'</span><span class="s1">, </span><span class="s3">'sheetProtection'</span><span class="s1">, </span><span class="s3">'customSheetViews'</span><span class="s1">,</span>
+        <span class="s3">'pageMargins'</span><span class="s1">, </span><span class="s3">'pageSetup'</span><span class="s1">, </span><span class="s3">'headerFooter'</span><span class="s1">, </span><span class="s3">'drawing'</span><span class="s1">, </span><span class="s3">'drawingHF'</span><span class="s1">,</span>
+        <span class="s3">'picture'</span><span class="s1">, </span><span class="s3">'webPublishItems'</span><span class="s1">)</span>
+
+    <span class="s1">__attrs__ = ()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">sheetPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sheetViews=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sheetProtection=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">customSheetViews=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pageMargins=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pageSetup=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">headerFooter=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">drawing=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">drawingHF=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">picture=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">webPublishItems=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">parent=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">title=</span><span class="s3">&quot;&quot;</span><span class="s1">,</span>
+                 <span class="s1">sheet_state=</span><span class="s3">'visible'</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">super(Chartsheet, self).__init__(parent, title)</span>
+        <span class="s1">self._charts = []</span>
+        <span class="s1">self.sheetPr = sheetPr</span>
+        <span class="s0">if </span><span class="s1">sheetViews </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">sheetViews = ChartsheetViewList()</span>
+        <span class="s1">self.sheetViews = sheetViews</span>
+        <span class="s1">self.sheetProtection = sheetProtection</span>
+        <span class="s1">self.customSheetViews = customSheetViews</span>
+        <span class="s1">self.pageMargins = pageMargins</span>
+        <span class="s1">self.pageSetup = pageSetup</span>
+        <span class="s0">if </span><span class="s1">headerFooter </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s1">self.headerFooter = headerFooter</span>
+        <span class="s1">self.drawing = Drawing(</span><span class="s3">&quot;rId1&quot;</span><span class="s1">)</span>
+        <span class="s1">self.drawingHF = drawingHF</span>
+        <span class="s1">self.picture = picture</span>
+        <span class="s1">self.webPublishItems = webPublishItems</span>
+        <span class="s1">self.sheet_state = sheet_state</span>
+
+
+    <span class="s0">def </span><span class="s1">add_chart(self, chart):</span>
+        <span class="s1">chart.anchor = AbsoluteAnchor()</span>
+        <span class="s1">self._charts.append(chart)</span>
+
+
+    <span class="s0">def </span><span class="s1">to_tree(self):</span>
+        <span class="s1">self._drawing = SpreadsheetDrawing()</span>
+        <span class="s1">self._drawing.charts = self._charts</span>
+        <span class="s1">tree = super(Chartsheet, self).to_tree()</span>
+        <span class="s0">if not </span><span class="s1">self.headerFooter:</span>
+            <span class="s1">el = tree.find(</span><span class="s3">'headerFooter'</span><span class="s1">)</span>
+            <span class="s1">tree.remove(el)</span>
+        <span class="s1">tree.set(</span><span class="s3">&quot;xmlns&quot;</span><span class="s1">, SHEET_MAIN_NS)</span>
+        <span class="s0">return </span><span class="s1">tree</span>
+</pre>
+</body>
+</html>

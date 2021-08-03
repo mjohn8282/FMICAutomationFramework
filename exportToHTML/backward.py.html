@@ -1,0 +1,288 @@
+<html>
+<head>
+<title>backward.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+backward.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;Add things to old Pythons so I can pretend they are newer.&quot;&quot;&quot;</span>
+
+<span class="s0"># This file's purpose is to provide modules to be imported from here.</span>
+<span class="s0"># pylint: disable=unused-import</span>
+
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s2">from </span><span class="s1">datetime </span><span class="s2">import </span><span class="s1">datetime</span>
+
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">env</span>
+
+
+<span class="s0"># Pythons 2 and 3 differ on where to get StringIO.</span>
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s2">from </span><span class="s1">cStringIO </span><span class="s2">import </span><span class="s1">StringIO</span>
+<span class="s2">except </span><span class="s1">ImportError:</span>
+    <span class="s2">from </span><span class="s1">io </span><span class="s2">import </span><span class="s1">StringIO</span>
+
+<span class="s0"># In py3, ConfigParser was renamed to the more-standard configparser.</span>
+<span class="s0"># But there's a py3 backport that installs &quot;configparser&quot; in py2, and I don't</span>
+<span class="s0"># want it because it has annoying deprecation warnings. So try the real py2</span>
+<span class="s0"># import first.</span>
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s2">import </span><span class="s1">ConfigParser </span><span class="s2">as </span><span class="s1">configparser</span>
+<span class="s2">except </span><span class="s1">ImportError:</span>
+    <span class="s2">import </span><span class="s1">configparser</span>
+
+<span class="s0"># What's a string called?</span>
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s1">string_class = basestring</span>
+<span class="s2">except </span><span class="s1">NameError:</span>
+    <span class="s1">string_class = str</span>
+
+<span class="s0"># What's a Unicode string called?</span>
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s1">unicode_class = unicode</span>
+<span class="s2">except </span><span class="s1">NameError:</span>
+    <span class="s1">unicode_class = str</span>
+
+<span class="s0"># range or xrange?</span>
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s1">range = xrange      </span><span class="s0"># pylint: disable=redefined-builtin</span>
+<span class="s2">except </span><span class="s1">NameError:</span>
+    <span class="s1">range = range</span>
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s2">from </span><span class="s1">itertools </span><span class="s2">import </span><span class="s1">zip_longest</span>
+<span class="s2">except </span><span class="s1">ImportError:</span>
+    <span class="s2">from </span><span class="s1">itertools </span><span class="s2">import </span><span class="s1">izip_longest </span><span class="s2">as </span><span class="s1">zip_longest</span>
+
+<span class="s0"># Where do we get the thread id from?</span>
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s2">from </span><span class="s1">thread </span><span class="s2">import </span><span class="s1">get_ident </span><span class="s2">as </span><span class="s1">get_thread_id</span>
+<span class="s2">except </span><span class="s1">ImportError:</span>
+    <span class="s2">from </span><span class="s1">threading </span><span class="s2">import </span><span class="s1">get_ident </span><span class="s2">as </span><span class="s1">get_thread_id</span>
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s1">os.PathLike</span>
+<span class="s2">except </span><span class="s1">AttributeError:</span>
+    <span class="s0"># This is Python 2 and 3</span>
+    <span class="s1">path_types = (bytes, string_class, unicode_class)</span>
+<span class="s2">else</span><span class="s1">:</span>
+    <span class="s0"># 3.6+</span>
+    <span class="s1">path_types = (bytes, str, os.PathLike)</span>
+
+<span class="s0"># shlex.quote is new, but there's an undocumented implementation in &quot;pipes&quot;,</span>
+<span class="s0"># who knew!?</span>
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s2">from </span><span class="s1">shlex </span><span class="s2">import </span><span class="s1">quote </span><span class="s2">as </span><span class="s1">shlex_quote</span>
+<span class="s2">except </span><span class="s1">ImportError:</span>
+    <span class="s0"># Useful function, available under a different (undocumented) name</span>
+    <span class="s0"># in Python versions earlier than 3.3.</span>
+    <span class="s2">from </span><span class="s1">pipes </span><span class="s2">import </span><span class="s1">quote </span><span class="s2">as </span><span class="s1">shlex_quote</span>
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s2">import </span><span class="s1">reprlib</span>
+<span class="s2">except </span><span class="s1">ImportError:             </span><span class="s0"># pragma: not covered</span>
+    <span class="s0"># We need this on Python 2, but in testing environments, a backport is</span>
+    <span class="s0"># installed, so this import isn't used.</span>
+    <span class="s2">import </span><span class="s1">repr </span><span class="s2">as </span><span class="s1">reprlib</span>
+
+<span class="s0"># A function to iterate listlessly over a dict's items, and one to get the</span>
+<span class="s0"># items as a list.</span>
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s1">{}.iteritems</span>
+<span class="s2">except </span><span class="s1">AttributeError:</span>
+    <span class="s0"># Python 3</span>
+    <span class="s2">def </span><span class="s1">iitems(d):</span>
+        <span class="s0">&quot;&quot;&quot;Produce the items from dict `d`.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">d.items()</span>
+
+    <span class="s2">def </span><span class="s1">litems(d):</span>
+        <span class="s0">&quot;&quot;&quot;Return a list of items from dict `d`.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">list(d.items())</span>
+<span class="s2">else</span><span class="s1">:</span>
+    <span class="s0"># Python 2</span>
+    <span class="s2">def </span><span class="s1">iitems(d):</span>
+        <span class="s0">&quot;&quot;&quot;Produce the items from dict `d`.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">d.iteritems()</span>
+
+    <span class="s2">def </span><span class="s1">litems(d):</span>
+        <span class="s0">&quot;&quot;&quot;Return a list of items from dict `d`.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">d.items()</span>
+
+<span class="s0"># Getting the `next` function from an iterator is different in 2 and 3.</span>
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s1">iter([]).next</span>
+<span class="s2">except </span><span class="s1">AttributeError:</span>
+    <span class="s2">def </span><span class="s1">iternext(seq):</span>
+        <span class="s0">&quot;&quot;&quot;Get the `next` function for iterating over `seq`.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">iter(seq).__next__</span>
+<span class="s2">else</span><span class="s1">:</span>
+    <span class="s2">def </span><span class="s1">iternext(seq):</span>
+        <span class="s0">&quot;&quot;&quot;Get the `next` function for iterating over `seq`.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">iter(seq).next</span>
+
+<span class="s0"># Python 3.x is picky about bytes and strings, so provide methods to</span>
+<span class="s0"># get them right, and make them no-ops in 2.x</span>
+<span class="s2">if </span><span class="s1">env.PY3:</span>
+    <span class="s2">def </span><span class="s1">to_bytes(s):</span>
+        <span class="s0">&quot;&quot;&quot;Convert string `s` to bytes.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">s.encode(</span><span class="s3">'utf8'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">to_string(b):</span>
+        <span class="s0">&quot;&quot;&quot;Convert bytes `b` to string.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">b.decode(</span><span class="s3">'utf8'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">binary_bytes(byte_values):</span>
+        <span class="s0">&quot;&quot;&quot;Produce a byte string with the ints from `byte_values`.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">bytes(byte_values)</span>
+
+    <span class="s2">def </span><span class="s1">byte_to_int(byte):</span>
+        <span class="s0">&quot;&quot;&quot;Turn a byte indexed from a bytes object into an int.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">byte</span>
+
+    <span class="s2">def </span><span class="s1">bytes_to_ints(bytes_value):</span>
+        <span class="s0">&quot;&quot;&quot;Turn a bytes object into a sequence of ints.&quot;&quot;&quot;</span>
+        <span class="s0"># In Python 3, iterating bytes gives ints.</span>
+        <span class="s2">return </span><span class="s1">bytes_value</span>
+
+<span class="s2">else</span><span class="s1">:</span>
+    <span class="s2">def </span><span class="s1">to_bytes(s):</span>
+        <span class="s0">&quot;&quot;&quot;Convert string `s` to bytes (no-op in 2.x).&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">s</span>
+
+    <span class="s2">def </span><span class="s1">to_string(b):</span>
+        <span class="s0">&quot;&quot;&quot;Convert bytes `b` to string.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">b</span>
+
+    <span class="s2">def </span><span class="s1">binary_bytes(byte_values):</span>
+        <span class="s0">&quot;&quot;&quot;Produce a byte string with the ints from `byte_values`.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s3">&quot;&quot;</span><span class="s1">.join(chr(b) </span><span class="s2">for </span><span class="s1">b </span><span class="s2">in </span><span class="s1">byte_values)</span>
+
+    <span class="s2">def </span><span class="s1">byte_to_int(byte):</span>
+        <span class="s0">&quot;&quot;&quot;Turn a byte indexed from a bytes object into an int.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">ord(byte)</span>
+
+    <span class="s2">def </span><span class="s1">bytes_to_ints(bytes_value):</span>
+        <span class="s0">&quot;&quot;&quot;Turn a bytes object into a sequence of ints.&quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">byte </span><span class="s2">in </span><span class="s1">bytes_value:</span>
+            <span class="s2">yield </span><span class="s1">ord(byte)</span>
+
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s0"># In Python 2.x, the builtins were in __builtin__</span>
+    <span class="s1">BUILTINS = sys.modules[</span><span class="s3">'__builtin__'</span><span class="s1">]</span>
+<span class="s2">except </span><span class="s1">KeyError:</span>
+    <span class="s0"># In Python 3.x, they're in builtins</span>
+    <span class="s1">BUILTINS = sys.modules[</span><span class="s3">'builtins'</span><span class="s1">]</span>
+
+
+<span class="s0"># imp was deprecated in Python 3.3</span>
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s2">import </span><span class="s1">importlib</span>
+    <span class="s2">import </span><span class="s1">importlib.util</span>
+    <span class="s1">imp = </span><span class="s2">None</span>
+<span class="s2">except </span><span class="s1">ImportError:</span>
+    <span class="s1">importlib = </span><span class="s2">None</span>
+
+<span class="s0"># We only want to use importlib if it has everything we need.</span>
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s1">importlib_util_find_spec = importlib.util.find_spec</span>
+<span class="s2">except </span><span class="s1">Exception:</span>
+    <span class="s2">import </span><span class="s1">imp</span>
+    <span class="s1">importlib_util_find_spec = </span><span class="s2">None</span>
+
+<span class="s0"># What is the .pyc magic number for this version of Python?</span>
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s1">PYC_MAGIC_NUMBER = importlib.util.MAGIC_NUMBER</span>
+<span class="s2">except </span><span class="s1">AttributeError:</span>
+    <span class="s1">PYC_MAGIC_NUMBER = imp.get_magic()</span>
+
+
+<span class="s2">def </span><span class="s1">code_object(fn):</span>
+    <span class="s0">&quot;&quot;&quot;Get the code object from a function.&quot;&quot;&quot;</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">fn.func_code</span>
+    <span class="s2">except </span><span class="s1">AttributeError:</span>
+        <span class="s2">return </span><span class="s1">fn.__code__</span>
+
+
+<span class="s2">try</span><span class="s1">:</span>
+    <span class="s2">from </span><span class="s1">types </span><span class="s2">import </span><span class="s1">SimpleNamespace</span>
+<span class="s2">except </span><span class="s1">ImportError:</span>
+    <span class="s0"># The code from https://docs.python.org/3/library/types.html#types.SimpleNamespace</span>
+    <span class="s2">class </span><span class="s1">SimpleNamespace:</span>
+        <span class="s0">&quot;&quot;&quot;Python implementation of SimpleNamespace, for Python 2.&quot;&quot;&quot;</span>
+        <span class="s2">def </span><span class="s1">__init__(self, **kwargs):</span>
+            <span class="s1">self.__dict__.update(kwargs)</span>
+
+        <span class="s2">def </span><span class="s1">__repr__(self):</span>
+            <span class="s1">keys = sorted(self.__dict__)</span>
+            <span class="s1">items = (</span><span class="s3">&quot;{}={!r}&quot;</span><span class="s1">.format(k, self.__dict__[k]) </span><span class="s2">for </span><span class="s1">k </span><span class="s2">in </span><span class="s1">keys)</span>
+            <span class="s2">return </span><span class="s3">&quot;{}({})&quot;</span><span class="s1">.format(type(self).__name__, </span><span class="s3">&quot;, &quot;</span><span class="s1">.join(items))</span>
+
+
+<span class="s2">def </span><span class="s1">format_local_datetime(dt):</span>
+    <span class="s0">&quot;&quot;&quot;Return a string with local timezone representing the date. 
+    If python version is lower than 3.6, the time zone is not included. 
+    &quot;&quot;&quot;</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">dt.astimezone().strftime(</span><span class="s3">'%Y-%m-%d %H:%M %z'</span><span class="s1">)</span>
+    <span class="s2">except </span><span class="s1">(TypeError, ValueError):</span>
+        <span class="s0"># Datetime.astimezone in Python 3.5 can not handle naive datetime</span>
+        <span class="s2">return </span><span class="s1">dt.strftime(</span><span class="s3">'%Y-%m-%d %H:%M'</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">invalidate_import_caches():</span>
+    <span class="s0">&quot;&quot;&quot;Invalidate any import caches that may or may not exist.&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">importlib </span><span class="s2">and </span><span class="s1">hasattr(importlib, </span><span class="s3">&quot;invalidate_caches&quot;</span><span class="s1">):</span>
+        <span class="s1">importlib.invalidate_caches()</span>
+
+
+<span class="s2">def </span><span class="s1">import_local_file(modname, modfile=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Import a local file as a module. 
+ 
+    Opens a file in the current directory named `modname`.py, imports it 
+    as `modname`, and returns the module object.  `modfile` is the file to 
+    import if it isn't in the current directory. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s2">import </span><span class="s1">importlib.util </span><span class="s2">as </span><span class="s1">importlib_util</span>
+    <span class="s2">except </span><span class="s1">ImportError:</span>
+        <span class="s1">importlib_util = </span><span class="s2">None</span>
+
+    <span class="s2">if </span><span class="s1">modfile </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s1">modfile = modname + </span><span class="s3">'.py'</span>
+    <span class="s2">if </span><span class="s1">importlib_util:</span>
+        <span class="s1">spec = importlib_util.spec_from_file_location(modname, modfile)</span>
+        <span class="s1">mod = importlib_util.module_from_spec(spec)</span>
+        <span class="s1">sys.modules[modname] = mod</span>
+        <span class="s1">spec.loader.exec_module(mod)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">for </span><span class="s1">suff </span><span class="s2">in </span><span class="s1">imp.get_suffixes():                 </span><span class="s0"># pragma: part covered</span>
+            <span class="s2">if </span><span class="s1">suff[</span><span class="s4">0</span><span class="s1">] == </span><span class="s3">'.py'</span><span class="s1">:</span>
+                <span class="s2">break</span>
+
+        <span class="s2">with </span><span class="s1">open(modfile, </span><span class="s3">'r'</span><span class="s1">) </span><span class="s2">as </span><span class="s1">f:</span>
+            <span class="s0"># pylint: disable=undefined-loop-variable</span>
+            <span class="s1">mod = imp.load_module(modname, f, modfile, suff)</span>
+
+    <span class="s2">return </span><span class="s1">mod</span>
+</pre>
+</body>
+</html>

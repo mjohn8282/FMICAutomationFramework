@@ -1,0 +1,149 @@
+<html>
+<head>
+<title>sequence.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+sequence.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">safe_string</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s0">import </span><span class="s1">Element</span>
+<span class="s0">from </span><span class="s1">openpyexcel.utils.indexed_list </span><span class="s0">import </span><span class="s1">IndexedList</span>
+
+<span class="s0">from </span><span class="s1">.base </span><span class="s0">import </span><span class="s1">Descriptor, Alias, _convert</span>
+<span class="s0">from </span><span class="s1">.namespace </span><span class="s0">import </span><span class="s1">namespaced</span>
+
+
+<span class="s0">class </span><span class="s1">Sequence(Descriptor):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    A sequence (list or tuple) that may only contain objects of the declared 
+    type 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">expected_type = type(</span><span class="s0">None</span><span class="s1">)</span>
+    <span class="s1">seq_types = (list, tuple)</span>
+    <span class="s1">idx_base = </span><span class="s3">0</span>
+    <span class="s1">unique = </span><span class="s0">False</span>
+
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, seq):</span>
+        <span class="s0">if not </span><span class="s1">isinstance(seq, self.seq_types):</span>
+            <span class="s0">raise </span><span class="s1">TypeError(</span><span class="s4">&quot;Value must be a sequence&quot;</span><span class="s1">)</span>
+        <span class="s1">seq = [_convert(self.expected_type, value) </span><span class="s0">for </span><span class="s1">value </span><span class="s0">in </span><span class="s1">seq]</span>
+        <span class="s0">if </span><span class="s1">self.unique:</span>
+            <span class="s1">seq = IndexedList(seq)</span>
+
+        <span class="s1">super(Sequence, self).__set__(instance, seq)</span>
+
+
+    <span class="s0">def </span><span class="s1">to_tree(self, tagname, obj, namespace=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Convert the sequence represented by the descriptor to an XML element 
+        &quot;&quot;&quot;</span>
+        <span class="s0">for </span><span class="s1">idx, v </span><span class="s0">in </span><span class="s1">enumerate(obj, self.idx_base):</span>
+            <span class="s0">if </span><span class="s1">hasattr(v, </span><span class="s4">&quot;to_tree&quot;</span><span class="s1">):</span>
+                <span class="s1">el = v.to_tree(tagname, idx)</span>
+            <span class="s0">else</span><span class="s1">:</span>
+                <span class="s1">tagname = namespaced(obj, tagname, namespace)</span>
+                <span class="s1">el = Element(tagname)</span>
+                <span class="s1">el.text = safe_string(v)</span>
+            <span class="s0">yield </span><span class="s1">el</span>
+
+
+<span class="s0">class </span><span class="s1">ValueSequence(Sequence):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    A sequence of primitive types that are stored as a single attribute. 
+    &quot;val&quot; is the default attribute 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">attribute = </span><span class="s4">&quot;val&quot;</span>
+
+
+    <span class="s0">def </span><span class="s1">to_tree(self, tagname, obj, namespace=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">tagname = namespaced(self, tagname, namespace)</span>
+        <span class="s0">for </span><span class="s1">v </span><span class="s0">in </span><span class="s1">obj:</span>
+            <span class="s0">yield </span><span class="s1">Element(tagname, {self.attribute:safe_string(v)})</span>
+
+
+    <span class="s0">def </span><span class="s1">from_tree(self, node):</span>
+
+        <span class="s0">return </span><span class="s1">node.get(self.attribute)</span>
+
+
+<span class="s0">class </span><span class="s1">NestedSequence(Sequence):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Wrap a sequence in an containing object 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">count = </span><span class="s0">False</span>
+
+    <span class="s0">def </span><span class="s1">to_tree(self, tagname, obj, namespace=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s1">tagname = namespaced(self, tagname, namespace)</span>
+        <span class="s1">container = Element(tagname)</span>
+        <span class="s0">if </span><span class="s1">self.count:</span>
+            <span class="s1">container.set(</span><span class="s4">'count'</span><span class="s1">, str(len(obj)))</span>
+        <span class="s0">for </span><span class="s1">v </span><span class="s0">in </span><span class="s1">obj:</span>
+            <span class="s1">container.append(v.to_tree())</span>
+        <span class="s0">return </span><span class="s1">container</span>
+
+
+    <span class="s0">def </span><span class="s1">from_tree(self, node):</span>
+        <span class="s0">return </span><span class="s1">[self.expected_type.from_tree(el) </span><span class="s0">for </span><span class="s1">el </span><span class="s0">in </span><span class="s1">node]</span>
+
+
+<span class="s0">class </span><span class="s1">MultiSequence(Sequence):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Sequences can contain objects with different tags 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, seq):</span>
+        <span class="s0">if not </span><span class="s1">isinstance(seq, (tuple, list)):</span>
+            <span class="s0">raise </span><span class="s1">ValueError(</span><span class="s4">&quot;Value must be a sequence&quot;</span><span class="s1">)</span>
+        <span class="s1">seq = list(seq)</span>
+        <span class="s1">Descriptor.__set__(self, instance, seq)</span>
+
+
+    <span class="s0">def </span><span class="s1">to_tree(self, tagname, obj, namespace=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Convert the sequence represented by the descriptor to an XML element 
+        &quot;&quot;&quot;</span>
+        <span class="s0">for </span><span class="s1">v </span><span class="s0">in </span><span class="s1">obj:</span>
+            <span class="s1">el = v.to_tree(namespace=namespace)</span>
+            <span class="s0">yield </span><span class="s1">el</span>
+
+
+<span class="s0">class </span><span class="s1">MultiSequencePart(Alias):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Allow a multisequence to be built up from parts 
+ 
+    Excluded from the instance __elements__ or __attrs__ as is effectively an Alias 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, expected_type, store):</span>
+        <span class="s1">self.expected_type = expected_type</span>
+        <span class="s1">self.store = store</span>
+
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s1">value = _convert(self.expected_type, value)</span>
+        <span class="s1">instance.__dict__[self.store].append(value)</span>
+
+
+    <span class="s0">def </span><span class="s1">__get__(self, instance, cls):</span>
+        <span class="s0">return </span><span class="s1">self</span>
+</pre>
+</body>
+</html>

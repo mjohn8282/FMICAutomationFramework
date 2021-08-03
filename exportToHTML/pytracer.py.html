@@ -1,0 +1,296 @@
+<html>
+<head>
+<title>pytracer.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+pytracer.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;Raw data collector for coverage.py.&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">atexit</span>
+<span class="s2">import </span><span class="s1">dis</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">env</span>
+
+<span class="s0"># We need the YIELD_VALUE opcode below, in a comparison-friendly form.</span>
+<span class="s1">YIELD_VALUE = dis.opmap[</span><span class="s3">'YIELD_VALUE'</span><span class="s1">]</span>
+<span class="s2">if </span><span class="s1">env.PY2:</span>
+    <span class="s1">YIELD_VALUE = chr(YIELD_VALUE)</span>
+
+<span class="s0"># When running meta-coverage, this file can try to trace itself, which confuses</span>
+<span class="s0"># everything.  Don't trace ourselves.</span>
+
+<span class="s1">THIS_FILE = __file__.rstrip(</span><span class="s3">&quot;co&quot;</span><span class="s1">)</span>
+
+
+<span class="s2">class </span><span class="s1">PyTracer(object):</span>
+    <span class="s0">&quot;&quot;&quot;Python implementation of the raw data tracer.&quot;&quot;&quot;</span>
+
+    <span class="s0"># Because of poor implementations of trace-function-manipulating tools,</span>
+    <span class="s0"># the Python trace function must be kept very simple.  In particular, there</span>
+    <span class="s0"># must be only one function ever set as the trace function, both through</span>
+    <span class="s0"># sys.settrace, and as the return value from the trace function.  Put</span>
+    <span class="s0"># another way, the trace function must always return itself.  It cannot</span>
+    <span class="s0"># swap in other functions, or return None to avoid tracing a particular</span>
+    <span class="s0"># frame.</span>
+    <span class="s0">#</span>
+    <span class="s0"># The trace manipulator that introduced this restriction is DecoratorTools,</span>
+    <span class="s0"># which sets a trace function, and then later restores the pre-existing one</span>
+    <span class="s0"># by calling sys.settrace with a function it found in the current frame.</span>
+    <span class="s0">#</span>
+    <span class="s0"># Systems that use DecoratorTools (or similar trace manipulations) must use</span>
+    <span class="s0"># PyTracer to get accurate results.  The command-line --timid argument is</span>
+    <span class="s0"># used to force the use of this tracer.</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self):</span>
+        <span class="s0"># Attributes set from the collector:</span>
+        <span class="s1">self.data = </span><span class="s2">None</span>
+        <span class="s1">self.trace_arcs = </span><span class="s2">False</span>
+        <span class="s1">self.should_trace = </span><span class="s2">None</span>
+        <span class="s1">self.should_trace_cache = </span><span class="s2">None</span>
+        <span class="s1">self.should_start_context = </span><span class="s2">None</span>
+        <span class="s1">self.warn = </span><span class="s2">None</span>
+        <span class="s0"># The threading module to use, if any.</span>
+        <span class="s1">self.threading = </span><span class="s2">None</span>
+
+        <span class="s1">self.cur_file_dict = </span><span class="s2">None</span>
+        <span class="s1">self.last_line = </span><span class="s4">0          </span><span class="s0"># int, but uninitialized.</span>
+        <span class="s1">self.cur_file_name = </span><span class="s2">None</span>
+        <span class="s1">self.context = </span><span class="s2">None</span>
+        <span class="s1">self.started_context = </span><span class="s2">False</span>
+
+        <span class="s1">self.data_stack = []</span>
+        <span class="s1">self.last_exc_back = </span><span class="s2">None</span>
+        <span class="s1">self.last_exc_firstlineno = </span><span class="s4">0</span>
+        <span class="s1">self.thread = </span><span class="s2">None</span>
+        <span class="s1">self.stopped = </span><span class="s2">False</span>
+        <span class="s1">self._activity = </span><span class="s2">False</span>
+
+        <span class="s1">self.in_atexit = </span><span class="s2">False</span>
+        <span class="s0"># On exit, self.in_atexit = True</span>
+        <span class="s1">atexit.register(setattr, self, </span><span class="s3">'in_atexit'</span><span class="s1">, </span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">&quot;&lt;PyTracer at {}: {} lines in {} files&gt;&quot;</span><span class="s1">.format(</span>
+            <span class="s1">id(self),</span>
+            <span class="s1">sum(len(v) </span><span class="s2">for </span><span class="s1">v </span><span class="s2">in </span><span class="s1">self.data.values()),</span>
+            <span class="s1">len(self.data),</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">log(self, marker, *args):</span>
+        <span class="s0">&quot;&quot;&quot;For hard-core logging of what this tracer is doing.&quot;&quot;&quot;</span>
+        <span class="s2">with </span><span class="s1">open(</span><span class="s3">&quot;/tmp/debug_trace.txt&quot;</span><span class="s1">, </span><span class="s3">&quot;a&quot;</span><span class="s1">) </span><span class="s2">as </span><span class="s1">f:</span>
+            <span class="s1">f.write(</span><span class="s3">&quot;{} {}[{}]&quot;</span><span class="s1">.format(</span>
+                <span class="s1">marker,</span>
+                <span class="s1">id(self),</span>
+                <span class="s1">len(self.data_stack),</span>
+            <span class="s1">))</span>
+            <span class="s2">if </span><span class="s4">0</span><span class="s1">:</span>
+                <span class="s1">f.write(</span><span class="s3">&quot;.{:x}.{:x}&quot;</span><span class="s1">.format(</span>
+                    <span class="s1">self.thread.ident,</span>
+                    <span class="s1">self.threading.currentThread().ident,</span>
+                <span class="s1">))</span>
+            <span class="s1">f.write(</span><span class="s3">&quot; {}&quot;</span><span class="s1">.format(</span><span class="s3">&quot; &quot;</span><span class="s1">.join(map(str, args))))</span>
+            <span class="s2">if </span><span class="s4">0</span><span class="s1">:</span>
+                <span class="s1">f.write(</span><span class="s3">&quot; | &quot;</span><span class="s1">)</span>
+                <span class="s1">stack = </span><span class="s3">&quot; / &quot;</span><span class="s1">.join(</span>
+                    <span class="s1">(fname </span><span class="s2">or </span><span class="s3">&quot;???&quot;</span><span class="s1">).rpartition(</span><span class="s3">&quot;/&quot;</span><span class="s1">)[-</span><span class="s4">1</span><span class="s1">]</span>
+                    <span class="s2">for </span><span class="s1">_, fname, _, _ </span><span class="s2">in </span><span class="s1">self.data_stack</span>
+                <span class="s1">)</span>
+                <span class="s1">f.write(stack)</span>
+            <span class="s1">f.write(</span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_trace(self, frame, event, arg_unused):</span>
+        <span class="s0">&quot;&quot;&quot;The trace function passed to sys.settrace.&quot;&quot;&quot;</span>
+
+        <span class="s2">if </span><span class="s1">THIS_FILE </span><span class="s2">in </span><span class="s1">frame.f_code.co_filename:</span>
+            <span class="s2">return None</span>
+
+        <span class="s0">#self.log(&quot;:&quot;, frame.f_code.co_filename, frame.f_lineno, frame.f_code.co_name + &quot;()&quot;, event)</span>
+
+        <span class="s2">if </span><span class="s1">(self.stopped </span><span class="s2">and </span><span class="s1">sys.gettrace() == self._trace):    </span><span class="s0"># pylint: disable=comparison-with-callable</span>
+            <span class="s0"># The PyTrace.stop() method has been called, possibly by another</span>
+            <span class="s0"># thread, let's deactivate ourselves now.</span>
+            <span class="s2">if </span><span class="s4">0</span><span class="s1">:</span>
+                <span class="s1">self.log(</span><span class="s3">&quot;---</span><span class="s5">\n</span><span class="s3">X&quot;</span><span class="s1">, frame.f_code.co_filename, frame.f_lineno)</span>
+                <span class="s1">f = frame</span>
+                <span class="s2">while </span><span class="s1">f:</span>
+                    <span class="s1">self.log(</span><span class="s3">&quot;&gt;&quot;</span><span class="s1">, f.f_code.co_filename, f.f_lineno, f.f_code.co_name, f.f_trace)</span>
+                    <span class="s1">f = f.f_back</span>
+            <span class="s1">sys.settrace(</span><span class="s2">None</span><span class="s1">)</span>
+            <span class="s1">self.cur_file_dict, self.cur_file_name, self.last_line, self.started_context = (</span>
+                <span class="s1">self.data_stack.pop()</span>
+            <span class="s1">)</span>
+            <span class="s2">return None</span>
+
+        <span class="s2">if </span><span class="s1">self.last_exc_back:</span>
+            <span class="s2">if </span><span class="s1">frame == self.last_exc_back:</span>
+                <span class="s0"># Someone forgot a return event.</span>
+                <span class="s2">if </span><span class="s1">self.trace_arcs </span><span class="s2">and </span><span class="s1">self.cur_file_dict:</span>
+                    <span class="s1">pair = (self.last_line, -self.last_exc_firstlineno)</span>
+                    <span class="s1">self.cur_file_dict[pair] = </span><span class="s2">None</span>
+                <span class="s1">self.cur_file_dict, self.cur_file_name, self.last_line, self.started_context = (</span>
+                    <span class="s1">self.data_stack.pop()</span>
+                <span class="s1">)</span>
+            <span class="s1">self.last_exc_back = </span><span class="s2">None</span>
+
+        <span class="s0"># if event != 'call' and frame.f_code.co_filename != self.cur_file_name:</span>
+        <span class="s0">#     self.log(&quot;---\n*&quot;, frame.f_code.co_filename, self.cur_file_name, frame.f_lineno)</span>
+
+        <span class="s2">if </span><span class="s1">event == </span><span class="s3">'call'</span><span class="s1">:</span>
+            <span class="s0"># Should we start a new context?</span>
+            <span class="s2">if </span><span class="s1">self.should_start_context </span><span class="s2">and </span><span class="s1">self.context </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s1">context_maybe = self.should_start_context(frame)</span>
+                <span class="s2">if </span><span class="s1">context_maybe </span><span class="s2">is not None</span><span class="s1">:</span>
+                    <span class="s1">self.context = context_maybe</span>
+                    <span class="s1">self.started_context = </span><span class="s2">True</span>
+                    <span class="s1">self.switch_context(self.context)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">self.started_context = </span><span class="s2">False</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">self.started_context = </span><span class="s2">False</span>
+
+            <span class="s0"># Entering a new frame.  Decide if we should trace</span>
+            <span class="s0"># in this file.</span>
+            <span class="s1">self._activity = </span><span class="s2">True</span>
+            <span class="s1">self.data_stack.append(</span>
+                <span class="s1">(</span>
+                    <span class="s1">self.cur_file_dict,</span>
+                    <span class="s1">self.cur_file_name,</span>
+                    <span class="s1">self.last_line,</span>
+                    <span class="s1">self.started_context,</span>
+                <span class="s1">)</span>
+            <span class="s1">)</span>
+            <span class="s1">filename = frame.f_code.co_filename</span>
+            <span class="s1">self.cur_file_name = filename</span>
+            <span class="s1">disp = self.should_trace_cache.get(filename)</span>
+            <span class="s2">if </span><span class="s1">disp </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s1">disp = self.should_trace(filename, frame)</span>
+                <span class="s1">self.should_trace_cache[filename] = disp</span>
+
+            <span class="s1">self.cur_file_dict = </span><span class="s2">None</span>
+            <span class="s2">if </span><span class="s1">disp.trace:</span>
+                <span class="s1">tracename = disp.source_filename</span>
+                <span class="s2">if </span><span class="s1">tracename </span><span class="s2">not in </span><span class="s1">self.data:</span>
+                    <span class="s1">self.data[tracename] = {}</span>
+                <span class="s1">self.cur_file_dict = self.data[tracename]</span>
+            <span class="s0"># The call event is really a &quot;start frame&quot; event, and happens for</span>
+            <span class="s0"># function calls and re-entering generators.  The f_lasti field is</span>
+            <span class="s0"># -1 for calls, and a real offset for generators.  Use &lt;0 as the</span>
+            <span class="s0"># line number for calls, and the real line number for generators.</span>
+            <span class="s2">if </span><span class="s1">getattr(frame, </span><span class="s3">'f_lasti'</span><span class="s1">, -</span><span class="s4">1</span><span class="s1">) &lt; </span><span class="s4">0</span><span class="s1">:</span>
+                <span class="s1">self.last_line = -frame.f_code.co_firstlineno</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">self.last_line = frame.f_lineno</span>
+        <span class="s2">elif </span><span class="s1">event == </span><span class="s3">'line'</span><span class="s1">:</span>
+            <span class="s0"># Record an executed line.</span>
+            <span class="s2">if </span><span class="s1">self.cur_file_dict </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s1">lineno = frame.f_lineno</span>
+
+                <span class="s2">if </span><span class="s1">self.trace_arcs:</span>
+                    <span class="s1">self.cur_file_dict[(self.last_line, lineno)] = </span><span class="s2">None</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">self.cur_file_dict[lineno] = </span><span class="s2">None</span>
+                <span class="s1">self.last_line = lineno</span>
+        <span class="s2">elif </span><span class="s1">event == </span><span class="s3">'return'</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">self.trace_arcs </span><span class="s2">and </span><span class="s1">self.cur_file_dict:</span>
+                <span class="s0"># Record an arc leaving the function, but beware that a</span>
+                <span class="s0"># &quot;return&quot; event might just mean yielding from a generator.</span>
+                <span class="s0"># Jython seems to have an empty co_code, so just assume return.</span>
+                <span class="s1">code = frame.f_code.co_code</span>
+                <span class="s2">if </span><span class="s1">(</span><span class="s2">not </span><span class="s1">code) </span><span class="s2">or </span><span class="s1">code[frame.f_lasti] != YIELD_VALUE:</span>
+                    <span class="s1">first = frame.f_code.co_firstlineno</span>
+                    <span class="s1">self.cur_file_dict[(self.last_line, -first)] = </span><span class="s2">None</span>
+            <span class="s0"># Leaving this function, pop the filename stack.</span>
+            <span class="s1">self.cur_file_dict, self.cur_file_name, self.last_line, self.started_context = (</span>
+                <span class="s1">self.data_stack.pop()</span>
+            <span class="s1">)</span>
+            <span class="s0"># Leaving a context?</span>
+            <span class="s2">if </span><span class="s1">self.started_context:</span>
+                <span class="s1">self.context = </span><span class="s2">None</span>
+                <span class="s1">self.switch_context(</span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s2">elif </span><span class="s1">event == </span><span class="s3">'exception'</span><span class="s1">:</span>
+            <span class="s1">self.last_exc_back = frame.f_back</span>
+            <span class="s1">self.last_exc_firstlineno = frame.f_code.co_firstlineno</span>
+        <span class="s2">return </span><span class="s1">self._trace</span>
+
+    <span class="s2">def </span><span class="s1">start(self):</span>
+        <span class="s0">&quot;&quot;&quot;Start this Tracer. 
+ 
+        Return a Python function suitable for use with sys.settrace(). 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.stopped = </span><span class="s2">False</span>
+        <span class="s2">if </span><span class="s1">self.threading:</span>
+            <span class="s2">if </span><span class="s1">self.thread </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s1">self.thread = self.threading.currentThread()</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">if </span><span class="s1">self.thread.ident != self.threading.currentThread().ident:</span>
+                    <span class="s0"># Re-starting from a different thread!? Don't set the trace</span>
+                    <span class="s0"># function, but we are marked as running again, so maybe it</span>
+                    <span class="s0"># will be ok?</span>
+                    <span class="s0">#self.log(&quot;~&quot;, &quot;starting on different threads&quot;)</span>
+                    <span class="s2">return </span><span class="s1">self._trace</span>
+
+        <span class="s1">sys.settrace(self._trace)</span>
+        <span class="s2">return </span><span class="s1">self._trace</span>
+
+    <span class="s2">def </span><span class="s1">stop(self):</span>
+        <span class="s0">&quot;&quot;&quot;Stop this Tracer.&quot;&quot;&quot;</span>
+        <span class="s0"># Get the active tracer callback before setting the stop flag to be</span>
+        <span class="s0"># able to detect if the tracer was changed prior to stopping it.</span>
+        <span class="s1">tf = sys.gettrace()</span>
+
+        <span class="s0"># Set the stop flag. The actual call to sys.settrace(None) will happen</span>
+        <span class="s0"># in the self._trace callback itself to make sure to call it from the</span>
+        <span class="s0"># right thread.</span>
+        <span class="s1">self.stopped = </span><span class="s2">True</span>
+
+        <span class="s2">if </span><span class="s1">self.threading </span><span class="s2">and </span><span class="s1">self.thread.ident != self.threading.currentThread().ident:</span>
+            <span class="s0"># Called on a different thread than started us: we can't unhook</span>
+            <span class="s0"># ourselves, but we've set the flag that we should stop, so we</span>
+            <span class="s0"># won't do any more tracing.</span>
+            <span class="s0">#self.log(&quot;~&quot;, &quot;stopping on different threads&quot;)</span>
+            <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">self.warn:</span>
+            <span class="s0"># PyPy clears the trace function before running atexit functions,</span>
+            <span class="s0"># so don't warn if we are in atexit on PyPy and the trace function</span>
+            <span class="s0"># has changed to None.</span>
+            <span class="s1">dont_warn = (env.PYPY </span><span class="s2">and </span><span class="s1">env.PYPYVERSION &gt;= (</span><span class="s4">5</span><span class="s1">, </span><span class="s4">4</span><span class="s1">) </span><span class="s2">and </span><span class="s1">self.in_atexit </span><span class="s2">and </span><span class="s1">tf </span><span class="s2">is None</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">(</span><span class="s2">not </span><span class="s1">dont_warn) </span><span class="s2">and </span><span class="s1">tf != self._trace:   </span><span class="s0"># pylint: disable=comparison-with-callable</span>
+                <span class="s1">self.warn(</span>
+                    <span class="s3">&quot;Trace function changed, measurement is likely wrong: %r&quot; </span><span class="s1">% (tf,),</span>
+                    <span class="s1">slug=</span><span class="s3">&quot;trace-changed&quot;</span><span class="s1">,</span>
+                <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">activity(self):</span>
+        <span class="s0">&quot;&quot;&quot;Has there been any activity?&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self._activity</span>
+
+    <span class="s2">def </span><span class="s1">reset_activity(self):</span>
+        <span class="s0">&quot;&quot;&quot;Reset the activity() flag.&quot;&quot;&quot;</span>
+        <span class="s1">self._activity = </span><span class="s2">False</span>
+
+    <span class="s2">def </span><span class="s1">get_stats(self):</span>
+        <span class="s0">&quot;&quot;&quot;Return a dictionary of statistics, or None.&quot;&quot;&quot;</span>
+        <span class="s2">return None</span>
+</pre>
+</body>
+</html>

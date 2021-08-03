@@ -1,0 +1,116 @@
+<html>
+<head>
+<title>differential.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+differential.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Sequence,</span>
+    <span class="s1">Alias,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.styles </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Font,</span>
+    <span class="s1">Fill,</span>
+    <span class="s1">GradientFill,</span>
+    <span class="s1">PatternFill,</span>
+    <span class="s1">Border,</span>
+    <span class="s1">Alignment,</span>
+    <span class="s1">Protection,</span>
+    <span class="s1">)</span>
+<span class="s0">from </span><span class="s1">.numbers </span><span class="s0">import </span><span class="s1">NumberFormat</span>
+
+
+<span class="s0">class </span><span class="s1">DifferentialStyle(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;dxf&quot;</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">&quot;font&quot;</span><span class="s1">, </span><span class="s3">&quot;numFmt&quot;</span><span class="s1">, </span><span class="s3">&quot;fill&quot;</span><span class="s1">, </span><span class="s3">&quot;alignment&quot;</span><span class="s1">, </span><span class="s3">&quot;border&quot;</span><span class="s1">, </span><span class="s3">&quot;protection&quot;</span><span class="s1">)</span>
+
+    <span class="s1">font = Typed(expected_type=Font, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">numFmt = Typed(expected_type=NumberFormat, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">fill = Typed(expected_type=Fill, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">alignment = Typed(expected_type=Alignment, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">border = Typed(expected_type=Border, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">protection = Typed(expected_type=Protection, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">font=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">numFmt=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">fill=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">alignment=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">border=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">protection=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.font = font</span>
+        <span class="s1">self.numFmt = numFmt</span>
+        <span class="s1">self.fill = fill</span>
+        <span class="s1">self.alignment = alignment</span>
+        <span class="s1">self.border = border</span>
+        <span class="s1">self.protection = protection</span>
+        <span class="s1">self.extLst = extLst</span>
+
+
+<span class="s0">class </span><span class="s1">DifferentialStyleList(Serialisable):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Deduping container for differential styles. 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;dxfs&quot;</span>
+
+    <span class="s1">dxf = Sequence(expected_type=DifferentialStyle)</span>
+    <span class="s1">styles = Alias(</span><span class="s3">&quot;dxf&quot;</span><span class="s1">)</span>
+
+
+    <span class="s0">def </span><span class="s1">__init__(self, dxf=()):</span>
+        <span class="s1">self.dxf = dxf</span>
+
+
+    <span class="s0">def </span><span class="s1">append(self, dxf):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Check to see whether style already exists and append it if does not. 
+        &quot;&quot;&quot;</span>
+        <span class="s0">if not </span><span class="s1">isinstance(dxf, DifferentialStyle):</span>
+            <span class="s0">raise </span><span class="s1">TypeError(</span><span class="s3">'expected ' </span><span class="s1">+ str(DifferentialStyle))</span>
+        <span class="s0">if </span><span class="s1">dxf </span><span class="s0">in </span><span class="s1">self.styles:</span>
+            <span class="s0">return</span>
+        <span class="s1">self.styles.append(dxf)</span>
+
+
+    <span class="s0">def </span><span class="s1">add(self, dxf):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Add a differential style and return its index 
+        &quot;&quot;&quot;</span>
+        <span class="s1">self.append(dxf)</span>
+        <span class="s0">return </span><span class="s1">self.styles.index(dxf)</span>
+
+
+    <span class="s0">def </span><span class="s1">__bool__(self):</span>
+        <span class="s0">return </span><span class="s1">bool(self.styles)</span>
+
+    <span class="s1">__nonzero__ = __bool__</span>
+
+
+    <span class="s0">def </span><span class="s1">__getitem__(self, idx):</span>
+        <span class="s0">return </span><span class="s1">self.styles[idx]</span>
+</pre>
+</body>
+</html>

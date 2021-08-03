@@ -1,0 +1,82 @@
+<html>
+<head>
+<title>json_reporter.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+json_reporter.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2014 Vlad Temian &lt;vladtemian@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015-2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2015 Ionel Cristian Maries &lt;contact@ionelmc.ro&gt;</span>
+<span class="s0"># Copyright (c) 2017 guillaume2 &lt;guillaume.peillex@gmail.col&gt;</span>
+<span class="s0"># Copyright (c) 2019-2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Hugo van Kemenade &lt;hugovk@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020 Clément Pit-Claudel &lt;cpitclaudel@users.noreply.github.com&gt;</span>
+
+<span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;JSON reporter&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">json</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s2">from </span><span class="s1">pylint.interfaces </span><span class="s2">import </span><span class="s1">IReporter</span>
+<span class="s2">from </span><span class="s1">pylint.reporters.base_reporter </span><span class="s2">import </span><span class="s1">BaseReporter</span>
+
+
+<span class="s2">class </span><span class="s1">JSONReporter(BaseReporter):</span>
+    <span class="s0">&quot;&quot;&quot;Report messages and layouts in JSON.&quot;&quot;&quot;</span>
+
+    <span class="s1">__implements__ = IReporter</span>
+    <span class="s1">name = </span><span class="s3">&quot;json&quot;</span>
+    <span class="s1">extension = </span><span class="s3">&quot;json&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, output=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">BaseReporter.__init__(self, output </span><span class="s2">or </span><span class="s1">sys.stdout)</span>
+        <span class="s1">self.messages = []</span>
+
+    <span class="s2">def </span><span class="s1">handle_message(self, msg):</span>
+        <span class="s0">&quot;&quot;&quot;Manage message of different type and in the context of path.&quot;&quot;&quot;</span>
+        <span class="s1">self.messages.append(</span>
+            <span class="s1">{</span>
+                <span class="s3">&quot;type&quot;</span><span class="s1">: msg.category,</span>
+                <span class="s3">&quot;module&quot;</span><span class="s1">: msg.module,</span>
+                <span class="s3">&quot;obj&quot;</span><span class="s1">: msg.obj,</span>
+                <span class="s3">&quot;line&quot;</span><span class="s1">: msg.line,</span>
+                <span class="s3">&quot;column&quot;</span><span class="s1">: msg.column,</span>
+                <span class="s3">&quot;path&quot;</span><span class="s1">: msg.path,</span>
+                <span class="s3">&quot;symbol&quot;</span><span class="s1">: msg.symbol,</span>
+                <span class="s3">&quot;message&quot;</span><span class="s1">: msg.msg </span><span class="s2">or </span><span class="s3">&quot;&quot;</span><span class="s1">,</span>
+                <span class="s3">&quot;message-id&quot;</span><span class="s1">: msg.msg_id,</span>
+            <span class="s1">}</span>
+        <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">display_messages(self, layout):</span>
+        <span class="s0">&quot;&quot;&quot;Launch layouts display&quot;&quot;&quot;</span>
+        <span class="s1">print(json.dumps(self.messages, indent=</span><span class="s4">4</span><span class="s1">), file=self.out)</span>
+
+    <span class="s2">def </span><span class="s1">display_reports(self, layout):</span>
+        <span class="s0">&quot;&quot;&quot;Don't do anything in this reporter.&quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">_display(self, layout):</span>
+        <span class="s0">&quot;&quot;&quot;Do nothing.&quot;&quot;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">register(linter):</span>
+    <span class="s0">&quot;&quot;&quot;Register the reporter classes with the linter.&quot;&quot;&quot;</span>
+    <span class="s1">linter.register_reporter(JSONReporter)</span>
+</pre>
+</body>
+</html>

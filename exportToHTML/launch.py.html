@@ -1,0 +1,58 @@
+<html>
+<head>
+<title>launch.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+launch.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot; 
+Launch the Python script on the command line after 
+setuptools is bootstrapped via import. 
+&quot;&quot;&quot;</span>
+
+<span class="s0"># Note that setuptools gets imported implicitly by the</span>
+<span class="s0"># invocation of this script using python -m setuptools.launch</span>
+
+<span class="s2">import </span><span class="s1">tokenize</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+
+<span class="s2">def </span><span class="s1">run():</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Run the script in sys.argv[1] as if it had 
+    been invoked naturally. 
+    &quot;&quot;&quot;</span>
+    <span class="s1">__builtins__</span>
+    <span class="s1">script_name = sys.argv[</span><span class="s3">1</span><span class="s1">]</span>
+    <span class="s1">namespace = dict(</span>
+        <span class="s1">__file__=script_name,</span>
+        <span class="s1">__name__=</span><span class="s4">'__main__'</span><span class="s1">,</span>
+        <span class="s1">__doc__=</span><span class="s2">None</span><span class="s1">,</span>
+    <span class="s1">)</span>
+    <span class="s1">sys.argv[:] = sys.argv[</span><span class="s3">1</span><span class="s1">:]</span>
+
+    <span class="s1">open_ = getattr(tokenize, </span><span class="s4">'open'</span><span class="s1">, open)</span>
+    <span class="s2">with </span><span class="s1">open_(script_name) </span><span class="s2">as </span><span class="s1">fid:</span>
+        <span class="s1">script = fid.read()</span>
+    <span class="s1">norm_script = script.replace(</span><span class="s4">'</span><span class="s5">\\</span><span class="s4">r</span><span class="s5">\\</span><span class="s4">n'</span><span class="s1">, </span><span class="s4">'</span><span class="s5">\\</span><span class="s4">n'</span><span class="s1">)</span>
+    <span class="s1">code = compile(norm_script, script_name, </span><span class="s4">'exec'</span><span class="s1">)</span>
+    <span class="s1">exec(code, namespace)</span>
+
+
+<span class="s2">if </span><span class="s1">__name__ == </span><span class="s4">'__main__'</span><span class="s1">:</span>
+    <span class="s1">run()</span>
+</pre>
+</body>
+</html>

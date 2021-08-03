@@ -1,0 +1,149 @@
+<html>
+<head>
+<title>brain_collections.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_collections.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2016, 2018, 2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2016-2017 Łukasz Rogalski &lt;rogalski.91@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Derek Gustafson &lt;degustaf@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Ioana Tagirta &lt;ioana.tagirta@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2019 Hugo van Kemenade &lt;hugovk@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2020-2021 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+
+<span class="s1">PY39 = sys.version_info &gt;= (</span><span class="s3">3</span><span class="s1">, </span><span class="s3">9</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_collections_transform():</span>
+    <span class="s2">return </span><span class="s1">astroid.parse(</span>
+        <span class="s4">&quot;&quot;&quot; 
+    class defaultdict(dict): 
+        default_factory = None 
+        def __missing__(self, key): pass 
+        def __getitem__(self, key): return default_factory 
+ 
+    &quot;&quot;&quot;</span>
+        <span class="s1">+ _deque_mock()</span>
+        <span class="s1">+ _ordered_dict_mock()</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_deque_mock():</span>
+    <span class="s1">base_deque_class = </span><span class="s4">&quot;&quot;&quot; 
+    class deque(object): 
+        maxlen = 0 
+        def __init__(self, iterable=None, maxlen=None): 
+            self.iterable = iterable or [] 
+        def append(self, x): pass 
+        def appendleft(self, x): pass 
+        def clear(self): pass 
+        def count(self, x): return 0 
+        def extend(self, iterable): pass 
+        def extendleft(self, iterable): pass 
+        def pop(self): return self.iterable[0] 
+        def popleft(self): return self.iterable[0] 
+        def remove(self, value): pass 
+        def reverse(self): return reversed(self.iterable) 
+        def rotate(self, n=1): return self 
+        def __iter__(self): return self 
+        def __reversed__(self): return self.iterable[::-1] 
+        def __getitem__(self, index): return self.iterable[index] 
+        def __setitem__(self, index, value): pass 
+        def __delitem__(self, index): pass 
+        def __bool__(self): return bool(self.iterable) 
+        def __nonzero__(self): return bool(self.iterable) 
+        def __contains__(self, o): return o in self.iterable 
+        def __len__(self): return len(self.iterable) 
+        def __copy__(self): return deque(self.iterable) 
+        def copy(self): return deque(self.iterable) 
+        def index(self, x, start=0, end=0): return 0 
+        def insert(self, x, i): pass 
+        def __add__(self, other): pass 
+        def __iadd__(self, other): pass 
+        def __mul__(self, other): pass 
+        def __imul__(self, other): pass 
+        def __rmul__(self, other): pass&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">PY39:</span>
+        <span class="s1">base_deque_class += </span><span class="s4">&quot;&quot;&quot; 
+        @classmethod 
+        def __class_getitem__(self, item): return cls&quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">base_deque_class</span>
+
+
+<span class="s2">def </span><span class="s1">_ordered_dict_mock():</span>
+    <span class="s1">base_ordered_dict_class = </span><span class="s4">&quot;&quot;&quot; 
+    class OrderedDict(dict): 
+        def __reversed__(self): return self[::-1] 
+        def move_to_end(self, key, last=False): pass&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">PY39:</span>
+        <span class="s1">base_ordered_dict_class += </span><span class="s4">&quot;&quot;&quot; 
+        @classmethod 
+        def __class_getitem__(cls, item): return cls&quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">base_ordered_dict_class</span>
+
+
+<span class="s1">astroid.register_module_extender(astroid.MANAGER, </span><span class="s4">&quot;collections&quot;</span><span class="s1">, _collections_transform)</span>
+
+
+<span class="s2">def </span><span class="s1">_looks_like_subscriptable(node: astroid.nodes.ClassDef) -&gt; bool:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Returns True if the node corresponds to a ClassDef of the Collections.abc module that 
+    supports subscripting 
+ 
+    :param node: ClassDef node 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">node.qname().startswith(</span><span class="s4">&quot;_collections&quot;</span><span class="s1">) </span><span class="s2">or </span><span class="s1">node.qname().startswith(</span>
+        <span class="s4">&quot;collections&quot;</span>
+    <span class="s1">):</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">node.getattr(</span><span class="s4">&quot;__class_getitem__&quot;</span><span class="s1">)</span>
+            <span class="s2">return True</span>
+        <span class="s2">except </span><span class="s1">astroid.AttributeInferenceError:</span>
+            <span class="s2">pass</span>
+    <span class="s2">return False</span>
+
+
+<span class="s1">CLASS_GET_ITEM_TEMPLATE = </span><span class="s4">&quot;&quot;&quot; 
+@classmethod 
+def __class_getitem__(cls, item): 
+    return cls 
+&quot;&quot;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">easy_class_getitem_inference(node, context=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0"># Here __class_getitem__ exists but is quite a mess to infer thus</span>
+    <span class="s0"># put an easy inference tip</span>
+    <span class="s1">func_to_add = astroid.extract_node(CLASS_GET_ITEM_TEMPLATE)</span>
+    <span class="s1">node.locals[</span><span class="s4">&quot;__class_getitem__&quot;</span><span class="s1">] = [func_to_add]</span>
+
+
+<span class="s2">if </span><span class="s1">PY39:</span>
+    <span class="s0"># Starting with Python39 some objects of the collection module are subscriptable</span>
+    <span class="s0"># thanks to the __class_getitem__ method but the way it is implemented in</span>
+    <span class="s0"># _collection_abc makes it difficult to infer. (We would have to handle AssignName inference in the</span>
+    <span class="s0"># getitem method of the ClassDef class) Instead we put here a mock of the __class_getitem__ method</span>
+    <span class="s1">astroid.MANAGER.register_transform(</span>
+        <span class="s1">astroid.nodes.ClassDef, easy_class_getitem_inference, _looks_like_subscriptable</span>
+    <span class="s1">)</span>
+</pre>
+</body>
+</html>

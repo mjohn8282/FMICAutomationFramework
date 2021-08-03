@@ -1,0 +1,54 @@
+<html>
+<head>
+<title>brain_sqlalchemy.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_sqlalchemy.py</font>
+</center></td></tr></table>
+<pre><span class="s0">import </span><span class="s1">astroid</span>
+
+
+<span class="s0">def </span><span class="s1">_session_transform():</span>
+    <span class="s0">return </span><span class="s1">astroid.parse(</span>
+        <span class="s2">&quot;&quot;&quot; 
+    from sqlalchemy.orm.session import Session 
+ 
+    class sessionmaker: 
+        def __init__( 
+            self, 
+            bind=None, 
+            class_=Session, 
+            autoflush=True, 
+            autocommit=False, 
+            expire_on_commit=True, 
+            info=None, 
+            **kw 
+        ): 
+            return 
+ 
+        def __call__(self, **local_kw): 
+            return Session() 
+ 
+        def configure(self, **new_kw): 
+            return 
+ 
+        return Session() 
+    &quot;&quot;&quot;</span>
+    <span class="s1">)</span>
+
+
+<span class="s1">astroid.register_module_extender(</span>
+    <span class="s1">astroid.MANAGER, </span><span class="s2">&quot;sqlalchemy.orm.session&quot;</span><span class="s1">, _session_transform</span>
+<span class="s1">)</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,253 @@
+<html>
+<head>
+<title>stylesheet.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+stylesheet.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s2">import </span><span class="s1">Serialisable</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">Alias,</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Sequence</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.sequence </span><span class="s2">import </span><span class="s1">NestedSequence</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s2">import </span><span class="s1">ExtensionList</span>
+<span class="s2">from </span><span class="s1">openpyexcel.utils.indexed_list </span><span class="s2">import </span><span class="s1">IndexedList</span>
+<span class="s2">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s2">import </span><span class="s1">ARC_STYLE, SHEET_MAIN_NS</span>
+<span class="s2">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s2">import </span><span class="s1">fromstring</span>
+
+<span class="s2">from </span><span class="s1">.colors </span><span class="s2">import </span><span class="s1">ColorList, COLOR_INDEX</span>
+<span class="s2">from </span><span class="s1">.differential </span><span class="s2">import </span><span class="s1">DifferentialStyle</span>
+<span class="s2">from </span><span class="s1">.table </span><span class="s2">import </span><span class="s1">TableStyleList</span>
+<span class="s2">from </span><span class="s1">.borders </span><span class="s2">import </span><span class="s1">Border</span>
+<span class="s2">from </span><span class="s1">.fills </span><span class="s2">import </span><span class="s1">Fill</span>
+<span class="s2">from </span><span class="s1">.fonts </span><span class="s2">import </span><span class="s1">Font</span>
+<span class="s2">from </span><span class="s1">.numbers </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">NumberFormatList,</span>
+    <span class="s1">BUILTIN_FORMATS,</span>
+    <span class="s1">BUILTIN_FORMATS_REVERSE</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">.alignment </span><span class="s2">import </span><span class="s1">Alignment</span>
+<span class="s2">from </span><span class="s1">.protection </span><span class="s2">import </span><span class="s1">Protection</span>
+<span class="s2">from </span><span class="s1">.named_styles </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">NamedStyle,</span>
+    <span class="s1">_NamedCellStyle,</span>
+    <span class="s1">_NamedCellStyleList</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">.cell_style </span><span class="s2">import </span><span class="s1">CellStyle, CellStyleList</span>
+
+
+<span class="s2">class </span><span class="s1">Stylesheet(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;styleSheet&quot;</span>
+
+    <span class="s1">numFmts = Typed(expected_type=NumberFormatList)</span>
+    <span class="s1">fonts = NestedSequence(expected_type=Font, count=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">fills = NestedSequence(expected_type=Fill, count=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">borders = NestedSequence(expected_type=Border, count=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">cellStyleXfs = Typed(expected_type=CellStyleList)</span>
+    <span class="s1">cellXfs = Typed(expected_type=CellStyleList)</span>
+    <span class="s1">cellStyles = Typed(expected_type=_NamedCellStyleList)</span>
+    <span class="s1">dxfs = NestedSequence(expected_type=DifferentialStyle, count=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">tableStyles = Typed(expected_type=TableStyleList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">colors = Typed(expected_type=ColorList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'numFmts'</span><span class="s1">, </span><span class="s3">'fonts'</span><span class="s1">, </span><span class="s3">'fills'</span><span class="s1">, </span><span class="s3">'borders'</span><span class="s1">, </span><span class="s3">'cellStyleXfs'</span><span class="s1">,</span>
+                    <span class="s3">'cellXfs'</span><span class="s1">, </span><span class="s3">'cellStyles'</span><span class="s1">, </span><span class="s3">'dxfs'</span><span class="s1">, </span><span class="s3">'tableStyles'</span><span class="s1">, </span><span class="s3">'colors'</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">numFmts=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">fonts=(),</span>
+                 <span class="s1">fills=(),</span>
+                 <span class="s1">borders=(),</span>
+                 <span class="s1">cellStyleXfs=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">cellXfs=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">cellStyles=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">dxfs=(),</span>
+                 <span class="s1">tableStyles=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">colors=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s2">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s2">if </span><span class="s1">numFmts </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">numFmts = NumberFormatList()</span>
+        <span class="s1">self.numFmts = numFmts</span>
+        <span class="s1">self.number_formats = IndexedList()</span>
+        <span class="s1">self.fonts = fonts</span>
+        <span class="s1">self.fills = fills</span>
+        <span class="s1">self.borders = borders</span>
+        <span class="s2">if </span><span class="s1">cellStyleXfs </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">cellStyleXfs = CellStyleList()</span>
+        <span class="s1">self.cellStyleXfs = cellStyleXfs</span>
+        <span class="s2">if </span><span class="s1">cellXfs </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">cellXfs = CellStyleList()</span>
+        <span class="s1">self.cellXfs = cellXfs</span>
+        <span class="s2">if </span><span class="s1">cellStyles </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">cellStyles = _NamedCellStyleList()</span>
+        <span class="s1">self.cellStyles = cellStyles</span>
+
+        <span class="s1">self.dxfs = dxfs</span>
+        <span class="s1">self.tableStyles = tableStyles</span>
+        <span class="s1">self.colors = colors</span>
+
+        <span class="s1">self.cell_styles = self.cellXfs._to_array()</span>
+        <span class="s1">self.alignments = self.cellXfs.alignments</span>
+        <span class="s1">self.protections = self.cellXfs.prots</span>
+        <span class="s1">self._normalise_numbers()</span>
+        <span class="s1">self.named_styles = self._merge_named_styles()</span>
+
+
+    <span class="s1">@classmethod</span>
+    <span class="s2">def </span><span class="s1">from_tree(cls, node):</span>
+        <span class="s0"># strip all attribs</span>
+        <span class="s1">attrs = dict(node.attrib)</span>
+        <span class="s2">for </span><span class="s1">k </span><span class="s2">in </span><span class="s1">attrs:</span>
+            <span class="s2">del </span><span class="s1">node.attrib[k]</span>
+        <span class="s2">return </span><span class="s1">super(Stylesheet, cls).from_tree(node)</span>
+
+
+    <span class="s2">def </span><span class="s1">_merge_named_styles(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Merge named style names &quot;cellStyles&quot; with their associated styles 
+        &quot;cellStyleXfs&quot; 
+        &quot;&quot;&quot;</span>
+        <span class="s1">named_styles = self.cellStyles.names</span>
+
+        <span class="s2">for </span><span class="s1">style </span><span class="s2">in </span><span class="s1">named_styles:</span>
+            <span class="s1">self._expand_named_style(style)</span>
+
+        <span class="s2">return </span><span class="s1">named_styles</span>
+
+
+    <span class="s2">def </span><span class="s1">_expand_named_style(self, named_style):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Bind format definitions for a named style from the associated style 
+        record 
+        &quot;&quot;&quot;</span>
+        <span class="s1">xf = self.cellStyleXfs[named_style.xfId]</span>
+        <span class="s1">named_style.font = self.fonts[xf.fontId]</span>
+        <span class="s1">named_style.fill = self.fills[xf.fillId]</span>
+        <span class="s1">named_style.border = self.borders[xf.borderId]</span>
+        <span class="s2">if </span><span class="s1">xf.numFmtId </span><span class="s2">in </span><span class="s1">self.custom_formats:</span>
+            <span class="s1">named_style.number_format = self.custom_formats[xf.numFmtId]</span>
+        <span class="s2">if </span><span class="s1">xf.alignment:</span>
+            <span class="s1">named_style.alignment = xf.alignment</span>
+        <span class="s2">if </span><span class="s1">xf.protection:</span>
+            <span class="s1">named_style.protection = xf.protection</span>
+
+
+    <span class="s2">def </span><span class="s1">_split_named_styles(self, wb):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Convert NamedStyle into separate CellStyle and Xf objects 
+        &quot;&quot;&quot;</span>
+        <span class="s2">for </span><span class="s1">style </span><span class="s2">in </span><span class="s1">wb._named_styles:</span>
+            <span class="s1">self.cellStyles.cellStyle.append(style.as_name())</span>
+            <span class="s1">self.cellStyleXfs.xf.append(style.as_xf())</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">custom_formats(self):</span>
+        <span class="s2">return </span><span class="s1">dict([(n.numFmtId, n.formatCode) </span><span class="s2">for </span><span class="s1">n </span><span class="s2">in </span><span class="s1">self.numFmts.numFmt])</span>
+
+
+    <span class="s2">def </span><span class="s1">_normalise_numbers(self):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Rebase numFmtIds with a floor of 164 
+        &quot;&quot;&quot;</span>
+        <span class="s1">custom = self.custom_formats</span>
+        <span class="s1">formats = self.number_formats</span>
+        <span class="s2">for </span><span class="s1">style </span><span class="s2">in </span><span class="s1">self.cell_styles:</span>
+            <span class="s2">if </span><span class="s1">style.numFmtId </span><span class="s2">in </span><span class="s1">custom:</span>
+                <span class="s1">fmt = custom[style.numFmtId]</span>
+                <span class="s2">if </span><span class="s1">fmt </span><span class="s2">in </span><span class="s1">BUILTIN_FORMATS_REVERSE: </span><span class="s0"># remove builtins</span>
+                    <span class="s1">style.numFmtId = BUILTIN_FORMATS_REVERSE[fmt]</span>
+                    <span class="s2">continue</span>
+                <span class="s1">style.numFmtId = formats.add(fmt) + </span><span class="s4">164</span>
+
+
+    <span class="s2">def </span><span class="s1">to_tree(self, tagname=</span><span class="s2">None</span><span class="s1">, idx=</span><span class="s2">None</span><span class="s1">, namespace=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">tree = super(Stylesheet, self).to_tree(tagname, idx, namespace)</span>
+        <span class="s1">tree.set(</span><span class="s3">&quot;xmlns&quot;</span><span class="s1">, SHEET_MAIN_NS)</span>
+        <span class="s2">return </span><span class="s1">tree</span>
+
+
+<span class="s2">def </span><span class="s1">apply_stylesheet(archive, wb):</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Add styles to workbook if present 
+    &quot;&quot;&quot;</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">src = archive.read(ARC_STYLE)</span>
+    <span class="s2">except </span><span class="s1">KeyError:</span>
+        <span class="s2">return </span><span class="s1">wb</span>
+
+    <span class="s1">node = fromstring(src)</span>
+    <span class="s1">stylesheet = Stylesheet.from_tree(node)</span>
+
+    <span class="s1">wb._borders = IndexedList(stylesheet.borders)</span>
+    <span class="s1">wb._fonts = IndexedList(stylesheet.fonts)</span>
+    <span class="s1">wb._fills = IndexedList(stylesheet.fills)</span>
+    <span class="s1">wb._differential_styles.styles = stylesheet.dxfs</span>
+    <span class="s1">wb._number_formats = stylesheet.number_formats</span>
+    <span class="s1">wb._protections = stylesheet.protections</span>
+    <span class="s1">wb._alignments = stylesheet.alignments</span>
+    <span class="s1">wb._table_styles = stylesheet.tableStyles</span>
+
+    <span class="s0"># need to overwrite openpyexcel defaults in case workbook has different ones</span>
+    <span class="s1">wb._cell_styles = stylesheet.cell_styles</span>
+    <span class="s1">wb._named_styles = stylesheet.named_styles</span>
+
+    <span class="s2">for </span><span class="s1">ns </span><span class="s2">in </span><span class="s1">wb._named_styles:</span>
+        <span class="s1">ns.bind(wb)</span>
+
+    <span class="s2">if </span><span class="s1">stylesheet.colors </span><span class="s2">is not None</span><span class="s1">:</span>
+        <span class="s1">wb._colors = stylesheet.colors.index</span>
+
+
+<span class="s2">def </span><span class="s1">write_stylesheet(wb):</span>
+    <span class="s1">stylesheet = Stylesheet()</span>
+    <span class="s1">stylesheet.fonts = wb._fonts</span>
+    <span class="s1">stylesheet.fills = wb._fills</span>
+    <span class="s1">stylesheet.borders = wb._borders</span>
+    <span class="s1">stylesheet.dxfs = wb._differential_styles.styles</span>
+
+    <span class="s2">from </span><span class="s1">.numbers </span><span class="s2">import </span><span class="s1">NumberFormat</span>
+    <span class="s1">fmts = []</span>
+    <span class="s2">for </span><span class="s1">idx, code </span><span class="s2">in </span><span class="s1">enumerate(wb._number_formats, </span><span class="s4">164</span><span class="s1">):</span>
+        <span class="s1">fmt = NumberFormat(idx, code)</span>
+        <span class="s1">fmts.append(fmt)</span>
+
+    <span class="s1">stylesheet.numFmts.numFmt = fmts</span>
+
+    <span class="s1">xfs = []</span>
+    <span class="s2">for </span><span class="s1">style </span><span class="s2">in </span><span class="s1">wb._cell_styles:</span>
+        <span class="s1">xf = CellStyle.from_array(style)</span>
+
+        <span class="s2">if </span><span class="s1">style.alignmentId:</span>
+            <span class="s1">xf.alignment = wb._alignments[style.alignmentId]</span>
+
+        <span class="s2">if </span><span class="s1">style.protectionId:</span>
+            <span class="s1">xf.protection = wb._protections[style.protectionId]</span>
+        <span class="s1">xfs.append(xf)</span>
+    <span class="s1">stylesheet.cellXfs = CellStyleList(xf=xfs)</span>
+
+    <span class="s1">stylesheet._split_named_styles(wb)</span>
+    <span class="s1">stylesheet.tableStyles = wb._table_styles</span>
+
+    <span class="s2">return </span><span class="s1">stylesheet.to_tree()</span>
+</pre>
+</body>
+</html>

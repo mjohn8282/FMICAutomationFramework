@@ -1,0 +1,384 @@
+<html>
+<head>
+<title>execfile.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+execfile.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;Execute files of Python code.&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">inspect</span>
+<span class="s2">import </span><span class="s1">marshal</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">struct</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">types</span>
+
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">env</span>
+<span class="s2">from </span><span class="s1">coverage.backward </span><span class="s2">import </span><span class="s1">BUILTINS</span>
+<span class="s2">from </span><span class="s1">coverage.backward </span><span class="s2">import </span><span class="s1">PYC_MAGIC_NUMBER, imp, importlib_util_find_spec</span>
+<span class="s2">from </span><span class="s1">coverage.files </span><span class="s2">import </span><span class="s1">canonical_filename, python_reported_file</span>
+<span class="s2">from </span><span class="s1">coverage.misc </span><span class="s2">import </span><span class="s1">CoverageException, ExceptionDuringRun, NoCode, NoSource, isolate_module</span>
+<span class="s2">from </span><span class="s1">coverage.phystokens </span><span class="s2">import </span><span class="s1">compile_unicode</span>
+<span class="s2">from </span><span class="s1">coverage.python </span><span class="s2">import </span><span class="s1">get_python_source</span>
+
+<span class="s1">os = isolate_module(os)</span>
+
+
+<span class="s2">class </span><span class="s1">DummyLoader(object):</span>
+    <span class="s0">&quot;&quot;&quot;A shim for the pep302 __loader__, emulating pkgutil.ImpLoader. 
+ 
+    Currently only implements the .fullname attribute 
+    &quot;&quot;&quot;</span>
+    <span class="s2">def </span><span class="s1">__init__(self, fullname, *_args):</span>
+        <span class="s1">self.fullname = fullname</span>
+
+
+<span class="s2">if </span><span class="s1">importlib_util_find_spec:</span>
+    <span class="s2">def </span><span class="s1">find_module(modulename):</span>
+        <span class="s0">&quot;&quot;&quot;Find the module named `modulename`. 
+ 
+        Returns the file path of the module, the name of the enclosing 
+        package, and the spec. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">spec = importlib_util_find_spec(modulename)</span>
+        <span class="s2">except </span><span class="s1">ImportError </span><span class="s2">as </span><span class="s1">err:</span>
+            <span class="s2">raise </span><span class="s1">NoSource(str(err))</span>
+        <span class="s2">if not </span><span class="s1">spec:</span>
+            <span class="s2">raise </span><span class="s1">NoSource(</span><span class="s3">&quot;No module named %r&quot; </span><span class="s1">% (modulename,))</span>
+        <span class="s1">pathname = spec.origin</span>
+        <span class="s1">packagename = spec.name</span>
+        <span class="s2">if </span><span class="s1">spec.submodule_search_locations:</span>
+            <span class="s1">mod_main = modulename + </span><span class="s3">&quot;.__main__&quot;</span>
+            <span class="s1">spec = importlib_util_find_spec(mod_main)</span>
+            <span class="s2">if not </span><span class="s1">spec:</span>
+                <span class="s2">raise </span><span class="s1">NoSource(</span>
+                    <span class="s3">&quot;No module named %s; &quot;</span>
+                    <span class="s3">&quot;%r is a package and cannot be directly executed&quot;</span>
+                    <span class="s1">% (mod_main, modulename)</span>
+                <span class="s1">)</span>
+            <span class="s1">pathname = spec.origin</span>
+            <span class="s1">packagename = spec.name</span>
+        <span class="s1">packagename = packagename.rpartition(</span><span class="s3">&quot;.&quot;</span><span class="s1">)[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s2">return </span><span class="s1">pathname, packagename, spec</span>
+<span class="s2">else</span><span class="s1">:</span>
+    <span class="s2">def </span><span class="s1">find_module(modulename):</span>
+        <span class="s0">&quot;&quot;&quot;Find the module named `modulename`. 
+ 
+        Returns the file path of the module, the name of the enclosing 
+        package, and None (where a spec would have been). 
+        &quot;&quot;&quot;</span>
+        <span class="s1">openfile = </span><span class="s2">None</span>
+        <span class="s1">glo, loc = globals(), locals()</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s0"># Search for the module - inside its parent package, if any - using</span>
+            <span class="s0"># standard import mechanics.</span>
+            <span class="s2">if </span><span class="s3">'.' </span><span class="s2">in </span><span class="s1">modulename:</span>
+                <span class="s1">packagename, name = modulename.rsplit(</span><span class="s3">'.'</span><span class="s1">, </span><span class="s4">1</span><span class="s1">)</span>
+                <span class="s1">package = __import__(packagename, glo, loc, [</span><span class="s3">'__path__'</span><span class="s1">])</span>
+                <span class="s1">searchpath = package.__path__</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">packagename, name = </span><span class="s2">None</span><span class="s1">, modulename</span>
+                <span class="s1">searchpath = </span><span class="s2">None  </span><span class="s0"># &quot;top-level search&quot; in imp.find_module()</span>
+            <span class="s1">openfile, pathname, _ = imp.find_module(name, searchpath)</span>
+
+            <span class="s0"># Complain if this is a magic non-file module.</span>
+            <span class="s2">if </span><span class="s1">openfile </span><span class="s2">is None and </span><span class="s1">pathname </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s2">raise </span><span class="s1">NoSource(</span>
+                    <span class="s3">&quot;module does not live in a file: %r&quot; </span><span class="s1">% modulename</span>
+                    <span class="s1">)</span>
+
+            <span class="s0"># If `modulename` is actually a package, not a mere module, then we</span>
+            <span class="s0"># pretend to be Python 2.7 and try running its __main__.py script.</span>
+            <span class="s2">if </span><span class="s1">openfile </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s1">packagename = modulename</span>
+                <span class="s1">name = </span><span class="s3">'__main__'</span>
+                <span class="s1">package = __import__(packagename, glo, loc, [</span><span class="s3">'__path__'</span><span class="s1">])</span>
+                <span class="s1">searchpath = package.__path__</span>
+                <span class="s1">openfile, pathname, _ = imp.find_module(name, searchpath)</span>
+        <span class="s2">except </span><span class="s1">ImportError </span><span class="s2">as </span><span class="s1">err:</span>
+            <span class="s2">raise </span><span class="s1">NoSource(str(err))</span>
+        <span class="s2">finally</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">openfile:</span>
+                <span class="s1">openfile.close()</span>
+
+        <span class="s2">return </span><span class="s1">pathname, packagename, </span><span class="s2">None</span>
+
+
+<span class="s2">class </span><span class="s1">PyRunner(object):</span>
+    <span class="s0">&quot;&quot;&quot;Multi-stage execution of Python code. 
+ 
+    This is meant to emulate real Python execution as closely as possible. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">def </span><span class="s1">__init__(self, args, as_module=</span><span class="s2">False</span><span class="s1">):</span>
+        <span class="s1">self.args = args</span>
+        <span class="s1">self.as_module = as_module</span>
+
+        <span class="s1">self.arg0 = args[</span><span class="s4">0</span><span class="s1">]</span>
+        <span class="s1">self.package = self.modulename = self.pathname = self.loader = self.spec = </span><span class="s2">None</span>
+
+    <span class="s2">def </span><span class="s1">prepare(self):</span>
+        <span class="s0">&quot;&quot;&quot;Set sys.path properly. 
+ 
+        This needs to happen before any importing, and without importing anything. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.as_module:</span>
+            <span class="s2">if </span><span class="s1">env.PYBEHAVIOR.actual_syspath0_dash_m:</span>
+                <span class="s1">path0 = os.getcwd()</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">path0 = </span><span class="s3">&quot;&quot;</span>
+        <span class="s2">elif </span><span class="s1">os.path.isdir(self.arg0):</span>
+            <span class="s0"># Running a directory means running the __main__.py file in that</span>
+            <span class="s0"># directory.</span>
+            <span class="s1">path0 = self.arg0</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">path0 = os.path.abspath(os.path.dirname(self.arg0))</span>
+
+        <span class="s2">if </span><span class="s1">os.path.isdir(sys.path[</span><span class="s4">0</span><span class="s1">]):</span>
+            <span class="s0"># sys.path fakery.  If we are being run as a command, then sys.path[0]</span>
+            <span class="s0"># is the directory of the &quot;coverage&quot; script.  If this is so, replace</span>
+            <span class="s0"># sys.path[0] with the directory of the file we're running, or the</span>
+            <span class="s0"># current directory when running modules.  If it isn't so, then we</span>
+            <span class="s0"># don't know what's going on, and just leave it alone.</span>
+            <span class="s1">top_file = inspect.stack()[-</span><span class="s4">1</span><span class="s1">][</span><span class="s4">0</span><span class="s1">].f_code.co_filename</span>
+            <span class="s1">sys_path_0_abs = os.path.abspath(sys.path[</span><span class="s4">0</span><span class="s1">])</span>
+            <span class="s1">top_file_dir_abs = os.path.abspath(os.path.dirname(top_file))</span>
+            <span class="s1">sys_path_0_abs = canonical_filename(sys_path_0_abs)</span>
+            <span class="s1">top_file_dir_abs = canonical_filename(top_file_dir_abs)</span>
+            <span class="s2">if </span><span class="s1">sys_path_0_abs != top_file_dir_abs:</span>
+                <span class="s1">path0 = </span><span class="s2">None</span>
+
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s0"># sys.path[0] is a file. Is the next entry the directory containing</span>
+            <span class="s0"># that file?</span>
+            <span class="s2">if </span><span class="s1">sys.path[</span><span class="s4">1</span><span class="s1">] == os.path.dirname(sys.path[</span><span class="s4">0</span><span class="s1">]):</span>
+                <span class="s0"># Can it be right to always remove that?</span>
+                <span class="s2">del </span><span class="s1">sys.path[</span><span class="s4">1</span><span class="s1">]</span>
+
+        <span class="s2">if </span><span class="s1">path0 </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">sys.path[</span><span class="s4">0</span><span class="s1">] = python_reported_file(path0)</span>
+
+    <span class="s2">def </span><span class="s1">_prepare2(self):</span>
+        <span class="s0">&quot;&quot;&quot;Do more preparation to run Python code. 
+ 
+        Includes finding the module to run and adjusting sys.argv[0]. 
+        This method is allowed to import code. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.as_module:</span>
+            <span class="s1">self.modulename = self.arg0</span>
+            <span class="s1">pathname, self.package, self.spec = find_module(self.modulename)</span>
+            <span class="s2">if </span><span class="s1">self.spec </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s1">self.modulename = self.spec.name</span>
+            <span class="s1">self.loader = DummyLoader(self.modulename)</span>
+            <span class="s1">self.pathname = os.path.abspath(pathname)</span>
+            <span class="s1">self.args[</span><span class="s4">0</span><span class="s1">] = self.arg0 = self.pathname</span>
+        <span class="s2">elif </span><span class="s1">os.path.isdir(self.arg0):</span>
+            <span class="s0"># Running a directory means running the __main__.py file in that</span>
+            <span class="s0"># directory.</span>
+            <span class="s2">for </span><span class="s1">ext </span><span class="s2">in </span><span class="s1">[</span><span class="s3">&quot;.py&quot;</span><span class="s1">, </span><span class="s3">&quot;.pyc&quot;</span><span class="s1">, </span><span class="s3">&quot;.pyo&quot;</span><span class="s1">]:</span>
+                <span class="s1">try_filename = os.path.join(self.arg0, </span><span class="s3">&quot;__main__&quot; </span><span class="s1">+ ext)</span>
+                <span class="s2">if </span><span class="s1">os.path.exists(try_filename):</span>
+                    <span class="s1">self.arg0 = try_filename</span>
+                    <span class="s2">break</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s2">raise </span><span class="s1">NoSource(</span><span class="s3">&quot;Can't find '__main__' module in '%s'&quot; </span><span class="s1">% self.arg0)</span>
+
+            <span class="s2">if </span><span class="s1">env.PY2:</span>
+                <span class="s1">self.arg0 = os.path.abspath(self.arg0)</span>
+
+            <span class="s0"># Make a spec. I don't know if this is the right way to do it.</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s2">import </span><span class="s1">importlib.machinery</span>
+            <span class="s2">except </span><span class="s1">ImportError:</span>
+                <span class="s2">pass</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">try_filename = python_reported_file(try_filename)</span>
+                <span class="s1">self.spec = importlib.machinery.ModuleSpec(</span><span class="s3">&quot;__main__&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">, origin=try_filename)</span>
+                <span class="s1">self.spec.has_location = </span><span class="s2">True</span>
+            <span class="s1">self.package = </span><span class="s3">&quot;&quot;</span>
+            <span class="s1">self.loader = DummyLoader(</span><span class="s3">&quot;__main__&quot;</span><span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">env.PY3:</span>
+                <span class="s1">self.loader = DummyLoader(</span><span class="s3">&quot;__main__&quot;</span><span class="s1">)</span>
+
+        <span class="s1">self.arg0 = python_reported_file(self.arg0)</span>
+
+    <span class="s2">def </span><span class="s1">run(self):</span>
+        <span class="s0">&quot;&quot;&quot;Run the Python code!&quot;&quot;&quot;</span>
+
+        <span class="s1">self._prepare2()</span>
+
+        <span class="s0"># Create a module to serve as __main__</span>
+        <span class="s1">main_mod = types.ModuleType(</span><span class="s3">'__main__'</span><span class="s1">)</span>
+
+        <span class="s1">from_pyc = self.arg0.endswith((</span><span class="s3">&quot;.pyc&quot;</span><span class="s1">, </span><span class="s3">&quot;.pyo&quot;</span><span class="s1">))</span>
+        <span class="s1">main_mod.__file__ = self.arg0</span>
+        <span class="s2">if </span><span class="s1">from_pyc:</span>
+            <span class="s1">main_mod.__file__ = main_mod.__file__[:-</span><span class="s4">1</span><span class="s1">]</span>
+        <span class="s2">if </span><span class="s1">self.package </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">main_mod.__package__ = self.package</span>
+        <span class="s1">main_mod.__loader__ = self.loader</span>
+        <span class="s2">if </span><span class="s1">self.spec </span><span class="s2">is not None</span><span class="s1">:</span>
+            <span class="s1">main_mod.__spec__ = self.spec</span>
+
+        <span class="s1">main_mod.__builtins__ = BUILTINS</span>
+
+        <span class="s1">sys.modules[</span><span class="s3">'__main__'</span><span class="s1">] = main_mod</span>
+
+        <span class="s0"># Set sys.argv properly.</span>
+        <span class="s1">sys.argv = self.args</span>
+
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s0"># Make a code object somehow.</span>
+            <span class="s2">if </span><span class="s1">from_pyc:</span>
+                <span class="s1">code = make_code_from_pyc(self.arg0)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">code = make_code_from_py(self.arg0)</span>
+        <span class="s2">except </span><span class="s1">CoverageException:</span>
+            <span class="s2">raise</span>
+        <span class="s2">except </span><span class="s1">Exception </span><span class="s2">as </span><span class="s1">exc:</span>
+            <span class="s1">msg = </span><span class="s3">&quot;Couldn't run '{filename}' as Python code: {exc.__class__.__name__}: {exc}&quot;</span>
+            <span class="s2">raise </span><span class="s1">CoverageException(msg.format(filename=self.arg0, exc=exc))</span>
+
+        <span class="s0"># Execute the code object.</span>
+        <span class="s0"># Return to the original directory in case the test code exits in</span>
+        <span class="s0"># a non-existent directory.</span>
+        <span class="s1">cwd = os.getcwd()</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">exec(code, main_mod.__dict__)</span>
+        <span class="s2">except </span><span class="s1">SystemExit:                          </span><span class="s0"># pylint: disable=try-except-raise</span>
+            <span class="s0"># The user called sys.exit().  Just pass it along to the upper</span>
+            <span class="s0"># layers, where it will be handled.</span>
+            <span class="s2">raise</span>
+        <span class="s2">except </span><span class="s1">Exception:</span>
+            <span class="s0"># Something went wrong while executing the user code.</span>
+            <span class="s0"># Get the exc_info, and pack them into an exception that we can</span>
+            <span class="s0"># throw up to the outer loop.  We peel one layer off the traceback</span>
+            <span class="s0"># so that the coverage.py code doesn't appear in the final printed</span>
+            <span class="s0"># traceback.</span>
+            <span class="s1">typ, err, tb = sys.exc_info()</span>
+
+            <span class="s0"># PyPy3 weirdness.  If I don't access __context__, then somehow it</span>
+            <span class="s0"># is non-None when the exception is reported at the upper layer,</span>
+            <span class="s0"># and a nested exception is shown to the user.  This getattr fixes</span>
+            <span class="s0"># it somehow? https://bitbucket.org/pypy/pypy/issue/1903</span>
+            <span class="s1">getattr(err, </span><span class="s3">'__context__'</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+
+            <span class="s0"># Call the excepthook.</span>
+            <span class="s2">try</span><span class="s1">:</span>
+                <span class="s2">if </span><span class="s1">hasattr(err, </span><span class="s3">&quot;__traceback__&quot;</span><span class="s1">):</span>
+                    <span class="s1">err.__traceback__ = err.__traceback__.tb_next</span>
+                <span class="s1">sys.excepthook(typ, err, tb.tb_next)</span>
+            <span class="s2">except </span><span class="s1">SystemExit:                      </span><span class="s0"># pylint: disable=try-except-raise</span>
+                <span class="s2">raise</span>
+            <span class="s2">except </span><span class="s1">Exception:</span>
+                <span class="s0"># Getting the output right in the case of excepthook</span>
+                <span class="s0"># shenanigans is kind of involved.</span>
+                <span class="s1">sys.stderr.write(</span><span class="s3">&quot;Error in sys.excepthook:</span><span class="s5">\n</span><span class="s3">&quot;</span><span class="s1">)</span>
+                <span class="s1">typ2, err2, tb2 = sys.exc_info()</span>
+                <span class="s1">err2.__suppress_context__ = </span><span class="s2">True</span>
+                <span class="s2">if </span><span class="s1">hasattr(err2, </span><span class="s3">&quot;__traceback__&quot;</span><span class="s1">):</span>
+                    <span class="s1">err2.__traceback__ = err2.__traceback__.tb_next</span>
+                <span class="s1">sys.__excepthook__(typ2, err2, tb2.tb_next)</span>
+                <span class="s1">sys.stderr.write(</span><span class="s3">&quot;</span><span class="s5">\n</span><span class="s3">Original exception was:</span><span class="s5">\n</span><span class="s3">&quot;</span><span class="s1">)</span>
+                <span class="s2">raise </span><span class="s1">ExceptionDuringRun(typ, err, tb.tb_next)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">sys.exit(</span><span class="s4">1</span><span class="s1">)</span>
+        <span class="s2">finally</span><span class="s1">:</span>
+            <span class="s1">os.chdir(cwd)</span>
+
+
+<span class="s2">def </span><span class="s1">run_python_module(args):</span>
+    <span class="s0">&quot;&quot;&quot;Run a Python module, as though with ``python -m name args...``. 
+ 
+    `args` is the argument array to present as sys.argv, including the first 
+    element naming the module being executed. 
+ 
+    This is a helper for tests, to encapsulate how to use PyRunner. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">runner = PyRunner(args, as_module=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">runner.prepare()</span>
+    <span class="s1">runner.run()</span>
+
+
+<span class="s2">def </span><span class="s1">run_python_file(args):</span>
+    <span class="s0">&quot;&quot;&quot;Run a Python file as if it were the main program on the command line. 
+ 
+    `args` is the argument array to present as sys.argv, including the first 
+    element naming the file being executed.  `package` is the name of the 
+    enclosing package, if any. 
+ 
+    This is a helper for tests, to encapsulate how to use PyRunner. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">runner = PyRunner(args, as_module=</span><span class="s2">False</span><span class="s1">)</span>
+    <span class="s1">runner.prepare()</span>
+    <span class="s1">runner.run()</span>
+
+
+<span class="s2">def </span><span class="s1">make_code_from_py(filename):</span>
+    <span class="s0">&quot;&quot;&quot;Get source from `filename` and make a code object of it.&quot;&quot;&quot;</span>
+    <span class="s0"># Open the source file.</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">source = get_python_source(filename)</span>
+    <span class="s2">except </span><span class="s1">(IOError, NoSource):</span>
+        <span class="s2">raise </span><span class="s1">NoSource(</span><span class="s3">&quot;No file to run: '%s'&quot; </span><span class="s1">% filename)</span>
+
+    <span class="s1">code = compile_unicode(source, filename, </span><span class="s3">&quot;exec&quot;</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">code</span>
+
+
+<span class="s2">def </span><span class="s1">make_code_from_pyc(filename):</span>
+    <span class="s0">&quot;&quot;&quot;Get a code object from a .pyc file.&quot;&quot;&quot;</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">fpyc = open(filename, </span><span class="s3">&quot;rb&quot;</span><span class="s1">)</span>
+    <span class="s2">except </span><span class="s1">IOError:</span>
+        <span class="s2">raise </span><span class="s1">NoCode(</span><span class="s3">&quot;No file to run: '%s'&quot; </span><span class="s1">% filename)</span>
+
+    <span class="s2">with </span><span class="s1">fpyc:</span>
+        <span class="s0"># First four bytes are a version-specific magic number.  It has to</span>
+        <span class="s0"># match or we won't run the file.</span>
+        <span class="s1">magic = fpyc.read(</span><span class="s4">4</span><span class="s1">)</span>
+        <span class="s2">if </span><span class="s1">magic != PYC_MAGIC_NUMBER:</span>
+            <span class="s2">raise </span><span class="s1">NoCode(</span><span class="s3">&quot;Bad magic number in .pyc file: {} != {}&quot;</span><span class="s1">.format(magic, PYC_MAGIC_NUMBER))</span>
+
+        <span class="s1">date_based = </span><span class="s2">True</span>
+        <span class="s2">if </span><span class="s1">env.PYBEHAVIOR.hashed_pyc_pep552:</span>
+            <span class="s1">flags = struct.unpack(</span><span class="s3">'&lt;L'</span><span class="s1">, fpyc.read(</span><span class="s4">4</span><span class="s1">))[</span><span class="s4">0</span><span class="s1">]</span>
+            <span class="s1">hash_based = flags &amp; </span><span class="s4">0x01</span>
+            <span class="s2">if </span><span class="s1">hash_based:</span>
+                <span class="s1">fpyc.read(</span><span class="s4">8</span><span class="s1">)    </span><span class="s0"># Skip the hash.</span>
+                <span class="s1">date_based = </span><span class="s2">False</span>
+        <span class="s2">if </span><span class="s1">date_based:</span>
+            <span class="s0"># Skip the junk in the header that we don't need.</span>
+            <span class="s1">fpyc.read(</span><span class="s4">4</span><span class="s1">)            </span><span class="s0"># Skip the moddate.</span>
+            <span class="s2">if </span><span class="s1">env.PYBEHAVIOR.size_in_pyc:</span>
+                <span class="s0"># 3.3 added another long to the header (size), skip it.</span>
+                <span class="s1">fpyc.read(</span><span class="s4">4</span><span class="s1">)</span>
+
+        <span class="s0"># The rest of the file is the code object we want.</span>
+        <span class="s1">code = marshal.load(fpyc)</span>
+
+    <span class="s2">return </span><span class="s1">code</span>
+</pre>
+</body>
+</html>

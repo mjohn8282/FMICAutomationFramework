@@ -1,0 +1,542 @@
+<html>
+<head>
+<title>html.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+.s5 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+html.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;HTML reporting for coverage.py.&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">datetime</span>
+<span class="s2">import </span><span class="s1">json</span>
+<span class="s2">import </span><span class="s1">os</span>
+<span class="s2">import </span><span class="s1">re</span>
+<span class="s2">import </span><span class="s1">shutil</span>
+
+<span class="s2">import </span><span class="s1">coverage</span>
+<span class="s2">from </span><span class="s1">coverage </span><span class="s2">import </span><span class="s1">env</span>
+<span class="s2">from </span><span class="s1">coverage.backward </span><span class="s2">import </span><span class="s1">iitems, SimpleNamespace, format_local_datetime</span>
+<span class="s2">from </span><span class="s1">coverage.data </span><span class="s2">import </span><span class="s1">add_data_to_hash</span>
+<span class="s2">from </span><span class="s1">coverage.files </span><span class="s2">import </span><span class="s1">flat_rootname</span>
+<span class="s2">from </span><span class="s1">coverage.misc </span><span class="s2">import </span><span class="s1">CoverageException, ensure_dir, file_be_gone, Hasher, isolate_module</span>
+<span class="s2">from </span><span class="s1">coverage.report </span><span class="s2">import </span><span class="s1">get_analysis_to_report</span>
+<span class="s2">from </span><span class="s1">coverage.results </span><span class="s2">import </span><span class="s1">Numbers</span>
+<span class="s2">from </span><span class="s1">coverage.templite </span><span class="s2">import </span><span class="s1">Templite</span>
+
+<span class="s1">os = isolate_module(os)</span>
+
+
+<span class="s0"># Static files are looked for in a list of places.</span>
+<span class="s1">STATIC_PATH = [</span>
+    <span class="s0"># The place Debian puts system Javascript libraries.</span>
+    <span class="s3">&quot;/usr/share/javascript&quot;</span><span class="s1">,</span>
+
+    <span class="s0"># Our htmlfiles directory.</span>
+    <span class="s1">os.path.join(os.path.dirname(__file__), </span><span class="s3">&quot;htmlfiles&quot;</span><span class="s1">),</span>
+<span class="s1">]</span>
+
+
+<span class="s2">def </span><span class="s1">data_filename(fname, pkgdir=</span><span class="s3">&quot;&quot;</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Return the path to a data file of ours. 
+ 
+    The file is searched for on `STATIC_PATH`, and the first place it's found, 
+    is returned. 
+ 
+    Each directory in `STATIC_PATH` is searched as-is, and also, if `pkgdir` 
+    is provided, at that sub-directory. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">tried = []</span>
+    <span class="s2">for </span><span class="s1">static_dir </span><span class="s2">in </span><span class="s1">STATIC_PATH:</span>
+        <span class="s1">static_filename = os.path.join(static_dir, fname)</span>
+        <span class="s2">if </span><span class="s1">os.path.exists(static_filename):</span>
+            <span class="s2">return </span><span class="s1">static_filename</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">tried.append(static_filename)</span>
+        <span class="s2">if </span><span class="s1">pkgdir:</span>
+            <span class="s1">static_filename = os.path.join(static_dir, pkgdir, fname)</span>
+            <span class="s2">if </span><span class="s1">os.path.exists(static_filename):</span>
+                <span class="s2">return </span><span class="s1">static_filename</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">tried.append(static_filename)</span>
+    <span class="s2">raise </span><span class="s1">CoverageException(</span>
+        <span class="s3">&quot;Couldn't find static file %r from %r, tried: %r&quot; </span><span class="s1">% (fname, os.getcwd(), tried)</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">read_data(fname):</span>
+    <span class="s0">&quot;&quot;&quot;Return the contents of a data file of ours.&quot;&quot;&quot;</span>
+    <span class="s2">with </span><span class="s1">open(data_filename(fname)) </span><span class="s2">as </span><span class="s1">data_file:</span>
+        <span class="s2">return </span><span class="s1">data_file.read()</span>
+
+
+<span class="s2">def </span><span class="s1">write_html(fname, html):</span>
+    <span class="s0">&quot;&quot;&quot;Write `html` to `fname`, properly encoded.&quot;&quot;&quot;</span>
+    <span class="s1">html = re.sub(</span><span class="s3">r&quot;(\A\s+)|(\s+$)&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">, html, flags=re.MULTILINE) + </span><span class="s3">&quot;</span><span class="s4">\n</span><span class="s3">&quot;</span>
+    <span class="s2">with </span><span class="s1">open(fname, </span><span class="s3">&quot;wb&quot;</span><span class="s1">) </span><span class="s2">as </span><span class="s1">fout:</span>
+        <span class="s1">fout.write(html.encode(</span><span class="s3">'ascii'</span><span class="s1">, </span><span class="s3">'xmlcharrefreplace'</span><span class="s1">))</span>
+
+
+<span class="s2">class </span><span class="s1">HtmlDataGeneration(object):</span>
+    <span class="s0">&quot;&quot;&quot;Generate structured data to be turned into HTML reports.&quot;&quot;&quot;</span>
+
+    <span class="s1">EMPTY = </span><span class="s3">&quot;(empty)&quot;</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, cov):</span>
+        <span class="s1">self.coverage = cov</span>
+        <span class="s1">self.config = self.coverage.config</span>
+        <span class="s1">data = self.coverage.get_data()</span>
+        <span class="s1">self.has_arcs = data.has_arcs()</span>
+        <span class="s2">if </span><span class="s1">self.config.show_contexts:</span>
+            <span class="s2">if </span><span class="s1">data.measured_contexts() == {</span><span class="s3">&quot;&quot;</span><span class="s1">}:</span>
+                <span class="s1">self.coverage._warn(</span><span class="s3">&quot;No contexts were measured&quot;</span><span class="s1">)</span>
+        <span class="s1">data.set_query_contexts(self.config.report_contexts)</span>
+
+    <span class="s2">def </span><span class="s1">data_for_file(self, fr, analysis):</span>
+        <span class="s0">&quot;&quot;&quot;Produce the data needed for one file's report.&quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">self.has_arcs:</span>
+            <span class="s1">missing_branch_arcs = analysis.missing_branch_arcs()</span>
+            <span class="s1">arcs_executed = analysis.arcs_executed()</span>
+
+        <span class="s2">if </span><span class="s1">self.config.show_contexts:</span>
+            <span class="s1">contexts_by_lineno = analysis.data.contexts_by_lineno(analysis.filename)</span>
+
+        <span class="s1">lines = []</span>
+
+        <span class="s2">for </span><span class="s1">lineno, tokens </span><span class="s2">in </span><span class="s1">enumerate(fr.source_token_lines(), start=</span><span class="s5">1</span><span class="s1">):</span>
+            <span class="s0"># Figure out how to mark this line.</span>
+            <span class="s1">category = </span><span class="s2">None</span>
+            <span class="s1">short_annotations = []</span>
+            <span class="s1">long_annotations = []</span>
+
+            <span class="s2">if </span><span class="s1">lineno </span><span class="s2">in </span><span class="s1">analysis.excluded:</span>
+                <span class="s1">category = </span><span class="s3">'exc'</span>
+            <span class="s2">elif </span><span class="s1">lineno </span><span class="s2">in </span><span class="s1">analysis.missing:</span>
+                <span class="s1">category = </span><span class="s3">'mis'</span>
+            <span class="s2">elif </span><span class="s1">self.has_arcs </span><span class="s2">and </span><span class="s1">lineno </span><span class="s2">in </span><span class="s1">missing_branch_arcs:</span>
+                <span class="s1">category = </span><span class="s3">'par'</span>
+                <span class="s2">for </span><span class="s1">b </span><span class="s2">in </span><span class="s1">missing_branch_arcs[lineno]:</span>
+                    <span class="s2">if </span><span class="s1">b &lt; </span><span class="s5">0</span><span class="s1">:</span>
+                        <span class="s1">short_annotations.append(</span><span class="s3">&quot;exit&quot;</span><span class="s1">)</span>
+                    <span class="s2">else</span><span class="s1">:</span>
+                        <span class="s1">short_annotations.append(b)</span>
+                    <span class="s1">long_annotations.append(fr.missing_arc_description(lineno, b, arcs_executed))</span>
+            <span class="s2">elif </span><span class="s1">lineno </span><span class="s2">in </span><span class="s1">analysis.statements:</span>
+                <span class="s1">category = </span><span class="s3">'run'</span>
+
+            <span class="s1">contexts = contexts_label = </span><span class="s2">None</span>
+            <span class="s1">context_list = </span><span class="s2">None</span>
+            <span class="s2">if </span><span class="s1">category </span><span class="s2">and </span><span class="s1">self.config.show_contexts:</span>
+                <span class="s1">contexts = sorted(c </span><span class="s2">or </span><span class="s1">self.EMPTY </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">contexts_by_lineno[lineno])</span>
+                <span class="s2">if </span><span class="s1">contexts == [self.EMPTY]:</span>
+                    <span class="s1">contexts_label = self.EMPTY</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">contexts_label = </span><span class="s3">&quot;{} ctx&quot;</span><span class="s1">.format(len(contexts))</span>
+                    <span class="s1">context_list = contexts</span>
+
+            <span class="s1">lines.append(SimpleNamespace(</span>
+                <span class="s1">tokens=tokens,</span>
+                <span class="s1">number=lineno,</span>
+                <span class="s1">category=category,</span>
+                <span class="s1">statement=(lineno </span><span class="s2">in </span><span class="s1">analysis.statements),</span>
+                <span class="s1">contexts=contexts,</span>
+                <span class="s1">contexts_label=contexts_label,</span>
+                <span class="s1">context_list=context_list,</span>
+                <span class="s1">short_annotations=short_annotations,</span>
+                <span class="s1">long_annotations=long_annotations,</span>
+            <span class="s1">))</span>
+
+        <span class="s1">file_data = SimpleNamespace(</span>
+            <span class="s1">relative_filename=fr.relative_filename(),</span>
+            <span class="s1">nums=analysis.numbers,</span>
+            <span class="s1">lines=lines,</span>
+        <span class="s1">)</span>
+
+        <span class="s2">return </span><span class="s1">file_data</span>
+
+
+<span class="s2">class </span><span class="s1">HtmlReporter(object):</span>
+    <span class="s0">&quot;&quot;&quot;HTML reporting.&quot;&quot;&quot;</span>
+
+    <span class="s0"># These files will be copied from the htmlfiles directory to the output</span>
+    <span class="s0"># directory.</span>
+    <span class="s1">STATIC_FILES = [</span>
+        <span class="s1">(</span><span class="s3">&quot;style.css&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">),</span>
+        <span class="s1">(</span><span class="s3">&quot;jquery.min.js&quot;</span><span class="s1">, </span><span class="s3">&quot;jquery&quot;</span><span class="s1">),</span>
+        <span class="s1">(</span><span class="s3">&quot;jquery.ba-throttle-debounce.min.js&quot;</span><span class="s1">, </span><span class="s3">&quot;jquery-throttle-debounce&quot;</span><span class="s1">),</span>
+        <span class="s1">(</span><span class="s3">&quot;jquery.hotkeys.js&quot;</span><span class="s1">, </span><span class="s3">&quot;jquery-hotkeys&quot;</span><span class="s1">),</span>
+        <span class="s1">(</span><span class="s3">&quot;jquery.isonscreen.js&quot;</span><span class="s1">, </span><span class="s3">&quot;jquery-isonscreen&quot;</span><span class="s1">),</span>
+        <span class="s1">(</span><span class="s3">&quot;jquery.tablesorter.min.js&quot;</span><span class="s1">, </span><span class="s3">&quot;jquery-tablesorter&quot;</span><span class="s1">),</span>
+        <span class="s1">(</span><span class="s3">&quot;coverage_html.js&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">),</span>
+        <span class="s1">(</span><span class="s3">&quot;keybd_closed.png&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">),</span>
+        <span class="s1">(</span><span class="s3">&quot;keybd_open.png&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">),</span>
+        <span class="s1">(</span><span class="s3">&quot;favicon_32.png&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">),</span>
+    <span class="s1">]</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, cov):</span>
+        <span class="s1">self.coverage = cov</span>
+        <span class="s1">self.config = self.coverage.config</span>
+        <span class="s1">self.directory = self.config.html_dir</span>
+
+        <span class="s1">self.skip_covered = self.config.html_skip_covered</span>
+        <span class="s2">if </span><span class="s1">self.skip_covered </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">self.skip_covered = self.config.skip_covered</span>
+        <span class="s1">self.skip_empty = self.config.html_skip_empty</span>
+        <span class="s2">if </span><span class="s1">self.skip_empty </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s1">self.skip_empty= self.config.skip_empty</span>
+
+        <span class="s1">title = self.config.html_title</span>
+        <span class="s2">if </span><span class="s1">env.PY2:</span>
+            <span class="s1">title = title.decode(</span><span class="s3">&quot;utf8&quot;</span><span class="s1">)</span>
+
+        <span class="s2">if </span><span class="s1">self.config.extra_css:</span>
+            <span class="s1">self.extra_css = os.path.basename(self.config.extra_css)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.extra_css = </span><span class="s2">None</span>
+
+        <span class="s1">self.data = self.coverage.get_data()</span>
+        <span class="s1">self.has_arcs = self.data.has_arcs()</span>
+
+        <span class="s1">self.file_summaries = []</span>
+        <span class="s1">self.all_files_nums = []</span>
+        <span class="s1">self.incr = IncrementalChecker(self.directory)</span>
+        <span class="s1">self.datagen = HtmlDataGeneration(self.coverage)</span>
+        <span class="s1">self.totals = Numbers()</span>
+
+        <span class="s1">self.template_globals = {</span>
+            <span class="s0"># Functions available in the templates.</span>
+            <span class="s3">'escape'</span><span class="s1">: escape,</span>
+            <span class="s3">'pair'</span><span class="s1">: pair,</span>
+            <span class="s3">'len'</span><span class="s1">: len,</span>
+
+            <span class="s0"># Constants for this report.</span>
+            <span class="s3">'__url__'</span><span class="s1">: coverage.__url__,</span>
+            <span class="s3">'__version__'</span><span class="s1">: coverage.__version__,</span>
+            <span class="s3">'title'</span><span class="s1">: title,</span>
+            <span class="s3">'time_stamp'</span><span class="s1">: format_local_datetime(datetime.datetime.now()),</span>
+            <span class="s3">'extra_css'</span><span class="s1">: self.extra_css,</span>
+            <span class="s3">'has_arcs'</span><span class="s1">: self.has_arcs,</span>
+            <span class="s3">'show_contexts'</span><span class="s1">: self.config.show_contexts,</span>
+
+            <span class="s0"># Constants for all reports.</span>
+            <span class="s0"># These css classes determine which lines are highlighted by default.</span>
+            <span class="s3">'category'</span><span class="s1">: {</span>
+                <span class="s3">'exc'</span><span class="s1">: </span><span class="s3">'exc show_exc'</span><span class="s1">,</span>
+                <span class="s3">'mis'</span><span class="s1">: </span><span class="s3">'mis show_mis'</span><span class="s1">,</span>
+                <span class="s3">'par'</span><span class="s1">: </span><span class="s3">'par run show_par'</span><span class="s1">,</span>
+                <span class="s3">'run'</span><span class="s1">: </span><span class="s3">'run'</span><span class="s1">,</span>
+            <span class="s1">}</span>
+        <span class="s1">}</span>
+        <span class="s1">self.pyfile_html_source = read_data(</span><span class="s3">&quot;pyfile.html&quot;</span><span class="s1">)</span>
+        <span class="s1">self.source_tmpl = Templite(self.pyfile_html_source, self.template_globals)</span>
+
+    <span class="s2">def </span><span class="s1">report(self, morfs):</span>
+        <span class="s0">&quot;&quot;&quot;Generate an HTML report for `morfs`. 
+ 
+        `morfs` is a list of modules or file names. 
+ 
+        &quot;&quot;&quot;</span>
+        <span class="s0"># Read the status data and check that this run used the same</span>
+        <span class="s0"># global data as the last run.</span>
+        <span class="s1">self.incr.read()</span>
+        <span class="s1">self.incr.check_global_data(self.config, self.pyfile_html_source)</span>
+
+        <span class="s0"># Process all the files.</span>
+        <span class="s2">for </span><span class="s1">fr, analysis </span><span class="s2">in </span><span class="s1">get_analysis_to_report(self.coverage, morfs):</span>
+            <span class="s1">self.html_file(fr, analysis)</span>
+
+        <span class="s2">if not </span><span class="s1">self.all_files_nums:</span>
+            <span class="s2">raise </span><span class="s1">CoverageException(</span><span class="s3">&quot;No data to report.&quot;</span><span class="s1">)</span>
+
+        <span class="s1">self.totals = sum(self.all_files_nums)</span>
+
+        <span class="s0"># Write the index file.</span>
+        <span class="s1">self.index_file()</span>
+
+        <span class="s1">self.make_local_static_report_files()</span>
+        <span class="s2">return </span><span class="s1">self.totals.n_statements </span><span class="s2">and </span><span class="s1">self.totals.pc_covered</span>
+
+    <span class="s2">def </span><span class="s1">make_local_static_report_files(self):</span>
+        <span class="s0">&quot;&quot;&quot;Make local instances of static files for HTML report.&quot;&quot;&quot;</span>
+        <span class="s0"># The files we provide must always be copied.</span>
+        <span class="s2">for </span><span class="s1">static, pkgdir </span><span class="s2">in </span><span class="s1">self.STATIC_FILES:</span>
+            <span class="s1">shutil.copyfile(</span>
+                <span class="s1">data_filename(static, pkgdir),</span>
+                <span class="s1">os.path.join(self.directory, static)</span>
+            <span class="s1">)</span>
+
+        <span class="s0"># The user may have extra CSS they want copied.</span>
+        <span class="s2">if </span><span class="s1">self.extra_css:</span>
+            <span class="s1">shutil.copyfile(</span>
+                <span class="s1">self.config.extra_css,</span>
+                <span class="s1">os.path.join(self.directory, self.extra_css)</span>
+            <span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">html_file(self, fr, analysis):</span>
+        <span class="s0">&quot;&quot;&quot;Generate an HTML file for one source file.&quot;&quot;&quot;</span>
+        <span class="s1">rootname = flat_rootname(fr.relative_filename())</span>
+        <span class="s1">html_filename = rootname + </span><span class="s3">&quot;.html&quot;</span>
+        <span class="s1">ensure_dir(self.directory)</span>
+        <span class="s1">html_path = os.path.join(self.directory, html_filename)</span>
+
+        <span class="s0"># Get the numbers for this file.</span>
+        <span class="s1">nums = analysis.numbers</span>
+        <span class="s1">self.all_files_nums.append(nums)</span>
+
+        <span class="s2">if </span><span class="s1">self.skip_covered:</span>
+            <span class="s0"># Don't report on 100% files.</span>
+            <span class="s1">no_missing_lines = (nums.n_missing == </span><span class="s5">0</span><span class="s1">)</span>
+            <span class="s1">no_missing_branches = (nums.n_partial_branches == </span><span class="s5">0</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">no_missing_lines </span><span class="s2">and </span><span class="s1">no_missing_branches:</span>
+                <span class="s0"># If there's an existing file, remove it.</span>
+                <span class="s1">file_be_gone(html_path)</span>
+                <span class="s2">return</span>
+
+        <span class="s2">if </span><span class="s1">self.skip_empty:</span>
+            <span class="s0"># Don't report on empty files.</span>
+            <span class="s2">if </span><span class="s1">nums.n_statements == </span><span class="s5">0</span><span class="s1">:</span>
+                <span class="s1">file_be_gone(html_path)</span>
+                <span class="s2">return</span>
+
+        <span class="s0"># Find out if the file on disk is already correct.</span>
+        <span class="s2">if </span><span class="s1">self.incr.can_skip_file(self.data, fr, rootname):</span>
+            <span class="s1">self.file_summaries.append(self.incr.index_info(rootname))</span>
+            <span class="s2">return</span>
+
+        <span class="s0"># Write the HTML page for this file.</span>
+        <span class="s1">file_data = self.datagen.data_for_file(fr, analysis)</span>
+        <span class="s2">for </span><span class="s1">ldata </span><span class="s2">in </span><span class="s1">file_data.lines:</span>
+            <span class="s0"># Build the HTML for the line.</span>
+            <span class="s1">html = []</span>
+            <span class="s2">for </span><span class="s1">tok_type, tok_text </span><span class="s2">in </span><span class="s1">ldata.tokens:</span>
+                <span class="s2">if </span><span class="s1">tok_type == </span><span class="s3">&quot;ws&quot;</span><span class="s1">:</span>
+                    <span class="s1">html.append(escape(tok_text))</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">tok_html = escape(tok_text) </span><span class="s2">or </span><span class="s3">'&amp;nbsp;'</span>
+                    <span class="s1">html.append(</span>
+                        <span class="s3">u'&lt;span class=&quot;{}&quot;&gt;{}&lt;/span&gt;'</span><span class="s1">.format(tok_type, tok_html)</span>
+                    <span class="s1">)</span>
+            <span class="s1">ldata.html = </span><span class="s3">''</span><span class="s1">.join(html)</span>
+
+            <span class="s2">if </span><span class="s1">ldata.short_annotations:</span>
+                <span class="s0"># 202F is NARROW NO-BREAK SPACE.</span>
+                <span class="s0"># 219B is RIGHTWARDS ARROW WITH STROKE.</span>
+                <span class="s1">ldata.annotate = </span><span class="s3">u&quot;,&amp;nbsp;&amp;nbsp; &quot;</span><span class="s1">.join(</span>
+                    <span class="s3">u&quot;{}&amp;#x202F;&amp;#x219B;&amp;#x202F;{}&quot;</span><span class="s1">.format(ldata.number, d)</span>
+                    <span class="s2">for </span><span class="s1">d </span><span class="s2">in </span><span class="s1">ldata.short_annotations</span>
+                    <span class="s1">)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">ldata.annotate = </span><span class="s2">None</span>
+
+            <span class="s2">if </span><span class="s1">ldata.long_annotations:</span>
+                <span class="s1">longs = ldata.long_annotations</span>
+                <span class="s2">if </span><span class="s1">len(longs) == </span><span class="s5">1</span><span class="s1">:</span>
+                    <span class="s1">ldata.annotate_long = longs[</span><span class="s5">0</span><span class="s1">]</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">ldata.annotate_long = </span><span class="s3">u&quot;{:d} missed branches: {}&quot;</span><span class="s1">.format(</span>
+                        <span class="s1">len(longs),</span>
+                        <span class="s3">u&quot;, &quot;</span><span class="s1">.join(</span>
+                            <span class="s3">u&quot;{:d}) {}&quot;</span><span class="s1">.format(num, ann_long)</span>
+                            <span class="s2">for </span><span class="s1">num, ann_long </span><span class="s2">in </span><span class="s1">enumerate(longs, start=</span><span class="s5">1</span><span class="s1">)</span>
+                            <span class="s1">),</span>
+                    <span class="s1">)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">ldata.annotate_long = </span><span class="s2">None</span>
+
+            <span class="s1">css_classes = []</span>
+            <span class="s2">if </span><span class="s1">ldata.category:</span>
+                <span class="s1">css_classes.append(self.template_globals[</span><span class="s3">'category'</span><span class="s1">][ldata.category])</span>
+            <span class="s1">ldata.css_class = </span><span class="s3">' '</span><span class="s1">.join(css_classes) </span><span class="s2">or </span><span class="s3">&quot;pln&quot;</span>
+
+        <span class="s1">html = self.source_tmpl.render(file_data.__dict__)</span>
+        <span class="s1">write_html(html_path, html)</span>
+
+        <span class="s0"># Save this file's information for the index file.</span>
+        <span class="s1">index_info = {</span>
+            <span class="s3">'nums'</span><span class="s1">: nums,</span>
+            <span class="s3">'html_filename'</span><span class="s1">: html_filename,</span>
+            <span class="s3">'relative_filename'</span><span class="s1">: fr.relative_filename(),</span>
+        <span class="s1">}</span>
+        <span class="s1">self.file_summaries.append(index_info)</span>
+        <span class="s1">self.incr.set_index_info(rootname, index_info)</span>
+
+    <span class="s2">def </span><span class="s1">index_file(self):</span>
+        <span class="s0">&quot;&quot;&quot;Write the index.html file for this report.&quot;&quot;&quot;</span>
+        <span class="s1">index_tmpl = Templite(read_data(</span><span class="s3">&quot;index.html&quot;</span><span class="s1">), self.template_globals)</span>
+
+        <span class="s1">html = index_tmpl.render({</span>
+            <span class="s3">'files'</span><span class="s1">: self.file_summaries,</span>
+            <span class="s3">'totals'</span><span class="s1">: self.totals,</span>
+        <span class="s1">})</span>
+
+        <span class="s1">write_html(os.path.join(self.directory, </span><span class="s3">&quot;index.html&quot;</span><span class="s1">), html)</span>
+
+        <span class="s0"># Write the latest hashes for next time.</span>
+        <span class="s1">self.incr.write()</span>
+
+
+<span class="s2">class </span><span class="s1">IncrementalChecker(object):</span>
+    <span class="s0">&quot;&quot;&quot;Logic and data to support incremental reporting.&quot;&quot;&quot;</span>
+
+    <span class="s1">STATUS_FILE = </span><span class="s3">&quot;status.json&quot;</span>
+    <span class="s1">STATUS_FORMAT = </span><span class="s5">2</span>
+
+    <span class="s0">#           pylint: disable=wrong-spelling-in-comment,useless-suppression</span>
+    <span class="s0">#  The data looks like:</span>
+    <span class="s0">#</span>
+    <span class="s0">#  {</span>
+    <span class="s0">#      &quot;format&quot;: 2,</span>
+    <span class="s0">#      &quot;globals&quot;: &quot;540ee119c15d52a68a53fe6f0897346d&quot;,</span>
+    <span class="s0">#      &quot;version&quot;: &quot;4.0a1&quot;,</span>
+    <span class="s0">#      &quot;files&quot;: {</span>
+    <span class="s0">#          &quot;cogapp___init__&quot;: {</span>
+    <span class="s0">#              &quot;hash&quot;: &quot;e45581a5b48f879f301c0f30bf77a50c&quot;,</span>
+    <span class="s0">#              &quot;index&quot;: {</span>
+    <span class="s0">#                  &quot;html_filename&quot;: &quot;cogapp___init__.html&quot;,</span>
+    <span class="s0">#                  &quot;relative_filename&quot;: &quot;cogapp/__init__&quot;,</span>
+    <span class="s0">#                  &quot;nums&quot;: [ 1, 14, 0, 0, 0, 0, 0 ]</span>
+    <span class="s0">#              }</span>
+    <span class="s0">#          },</span>
+    <span class="s0">#          ...</span>
+    <span class="s0">#          &quot;cogapp_whiteutils&quot;: {</span>
+    <span class="s0">#              &quot;hash&quot;: &quot;8504bb427fc488c4176809ded0277d51&quot;,</span>
+    <span class="s0">#              &quot;index&quot;: {</span>
+    <span class="s0">#                  &quot;html_filename&quot;: &quot;cogapp_whiteutils.html&quot;,</span>
+    <span class="s0">#                  &quot;relative_filename&quot;: &quot;cogapp/whiteutils&quot;,</span>
+    <span class="s0">#                  &quot;nums&quot;: [ 1, 59, 0, 1, 28, 2, 2 ]</span>
+    <span class="s0">#              }</span>
+    <span class="s0">#          }</span>
+    <span class="s0">#      }</span>
+    <span class="s0">#  }</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, directory):</span>
+        <span class="s1">self.directory = directory</span>
+        <span class="s1">self.reset()</span>
+
+    <span class="s2">def </span><span class="s1">reset(self):</span>
+        <span class="s0">&quot;&quot;&quot;Initialize to empty. Causes all files to be reported.&quot;&quot;&quot;</span>
+        <span class="s1">self.globals = </span><span class="s3">''</span>
+        <span class="s1">self.files = {}</span>
+
+    <span class="s2">def </span><span class="s1">read(self):</span>
+        <span class="s0">&quot;&quot;&quot;Read the information we stored last time.&quot;&quot;&quot;</span>
+        <span class="s1">usable = </span><span class="s2">False</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">status_file = os.path.join(self.directory, self.STATUS_FILE)</span>
+            <span class="s2">with </span><span class="s1">open(status_file) </span><span class="s2">as </span><span class="s1">fstatus:</span>
+                <span class="s1">status = json.load(fstatus)</span>
+        <span class="s2">except </span><span class="s1">(IOError, ValueError):</span>
+            <span class="s1">usable = </span><span class="s2">False</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">usable = </span><span class="s2">True</span>
+            <span class="s2">if </span><span class="s1">status[</span><span class="s3">'format'</span><span class="s1">] != self.STATUS_FORMAT:</span>
+                <span class="s1">usable = </span><span class="s2">False</span>
+            <span class="s2">elif </span><span class="s1">status[</span><span class="s3">'version'</span><span class="s1">] != coverage.__version__:</span>
+                <span class="s1">usable = </span><span class="s2">False</span>
+
+        <span class="s2">if </span><span class="s1">usable:</span>
+            <span class="s1">self.files = {}</span>
+            <span class="s2">for </span><span class="s1">filename, fileinfo </span><span class="s2">in </span><span class="s1">iitems(status[</span><span class="s3">'files'</span><span class="s1">]):</span>
+                <span class="s1">fileinfo[</span><span class="s3">'index'</span><span class="s1">][</span><span class="s3">'nums'</span><span class="s1">] = Numbers(*fileinfo[</span><span class="s3">'index'</span><span class="s1">][</span><span class="s3">'nums'</span><span class="s1">])</span>
+                <span class="s1">self.files[filename] = fileinfo</span>
+            <span class="s1">self.globals = status[</span><span class="s3">'globals'</span><span class="s1">]</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.reset()</span>
+
+    <span class="s2">def </span><span class="s1">write(self):</span>
+        <span class="s0">&quot;&quot;&quot;Write the current status.&quot;&quot;&quot;</span>
+        <span class="s1">status_file = os.path.join(self.directory, self.STATUS_FILE)</span>
+        <span class="s1">files = {}</span>
+        <span class="s2">for </span><span class="s1">filename, fileinfo </span><span class="s2">in </span><span class="s1">iitems(self.files):</span>
+            <span class="s1">fileinfo[</span><span class="s3">'index'</span><span class="s1">][</span><span class="s3">'nums'</span><span class="s1">] = fileinfo[</span><span class="s3">'index'</span><span class="s1">][</span><span class="s3">'nums'</span><span class="s1">].init_args()</span>
+            <span class="s1">files[filename] = fileinfo</span>
+
+        <span class="s1">status = {</span>
+            <span class="s3">'format'</span><span class="s1">: self.STATUS_FORMAT,</span>
+            <span class="s3">'version'</span><span class="s1">: coverage.__version__,</span>
+            <span class="s3">'globals'</span><span class="s1">: self.globals,</span>
+            <span class="s3">'files'</span><span class="s1">: files,</span>
+        <span class="s1">}</span>
+        <span class="s2">with </span><span class="s1">open(status_file, </span><span class="s3">&quot;w&quot;</span><span class="s1">) </span><span class="s2">as </span><span class="s1">fout:</span>
+            <span class="s1">json.dump(status, fout, separators=(</span><span class="s3">','</span><span class="s1">, </span><span class="s3">':'</span><span class="s1">))</span>
+
+    <span class="s2">def </span><span class="s1">check_global_data(self, *data):</span>
+        <span class="s0">&quot;&quot;&quot;Check the global data that can affect incremental reporting.&quot;&quot;&quot;</span>
+        <span class="s1">m = Hasher()</span>
+        <span class="s2">for </span><span class="s1">d </span><span class="s2">in </span><span class="s1">data:</span>
+            <span class="s1">m.update(d)</span>
+        <span class="s1">these_globals = m.hexdigest()</span>
+        <span class="s2">if </span><span class="s1">self.globals != these_globals:</span>
+            <span class="s1">self.reset()</span>
+            <span class="s1">self.globals = these_globals</span>
+
+    <span class="s2">def </span><span class="s1">can_skip_file(self, data, fr, rootname):</span>
+        <span class="s0">&quot;&quot;&quot;Can we skip reporting this file? 
+ 
+        `data` is a CoverageData object, `fr` is a `FileReporter`, and 
+        `rootname` is the name being used for the file. 
+        &quot;&quot;&quot;</span>
+        <span class="s1">m = Hasher()</span>
+        <span class="s1">m.update(fr.source().encode(</span><span class="s3">'utf-8'</span><span class="s1">))</span>
+        <span class="s1">add_data_to_hash(data, fr.filename, m)</span>
+        <span class="s1">this_hash = m.hexdigest()</span>
+
+        <span class="s1">that_hash = self.file_hash(rootname)</span>
+
+        <span class="s2">if </span><span class="s1">this_hash == that_hash:</span>
+            <span class="s0"># Nothing has changed to require the file to be reported again.</span>
+            <span class="s2">return True</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">self.set_file_hash(rootname, this_hash)</span>
+            <span class="s2">return False</span>
+
+    <span class="s2">def </span><span class="s1">file_hash(self, fname):</span>
+        <span class="s0">&quot;&quot;&quot;Get the hash of `fname`'s contents.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.files.get(fname, {}).get(</span><span class="s3">'hash'</span><span class="s1">, </span><span class="s3">''</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">set_file_hash(self, fname, val):</span>
+        <span class="s0">&quot;&quot;&quot;Set the hash of `fname`'s contents.&quot;&quot;&quot;</span>
+        <span class="s1">self.files.setdefault(fname, {})[</span><span class="s3">'hash'</span><span class="s1">] = val</span>
+
+    <span class="s2">def </span><span class="s1">index_info(self, fname):</span>
+        <span class="s0">&quot;&quot;&quot;Get the information for index.html for `fname`.&quot;&quot;&quot;</span>
+        <span class="s2">return </span><span class="s1">self.files.get(fname, {}).get(</span><span class="s3">'index'</span><span class="s1">, {})</span>
+
+    <span class="s2">def </span><span class="s1">set_index_info(self, fname, info):</span>
+        <span class="s0">&quot;&quot;&quot;Set the information for index.html for `fname`.&quot;&quot;&quot;</span>
+        <span class="s1">self.files.setdefault(fname, {})[</span><span class="s3">'index'</span><span class="s1">] = info</span>
+
+
+<span class="s0"># Helpers for templates and generating HTML</span>
+
+<span class="s2">def </span><span class="s1">escape(t):</span>
+    <span class="s0">&quot;&quot;&quot;HTML-escape the text in `t`. 
+ 
+    This is only suitable for HTML text, not attributes. 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s0"># Convert HTML special chars into HTML entities.</span>
+    <span class="s2">return </span><span class="s1">t.replace(</span><span class="s3">&quot;&amp;&quot;</span><span class="s1">, </span><span class="s3">&quot;&amp;amp;&quot;</span><span class="s1">).replace(</span><span class="s3">&quot;&lt;&quot;</span><span class="s1">, </span><span class="s3">&quot;&amp;lt;&quot;</span><span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">pair(ratio):</span>
+    <span class="s0">&quot;&quot;&quot;Format a pair of numbers so JavaScript can read them in an attribute.&quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s3">&quot;%s %s&quot; </span><span class="s1">% ratio</span>
+</pre>
+</body>
+</html>

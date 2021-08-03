@@ -1,0 +1,601 @@
+<html>
+<head>
+<title>docopt.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #56b6c2;}
+.s5 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+docopt.py</font>
+</center></td></tr></table>
+<pre><span class="s0">&quot;&quot;&quot;Pythonic command-line interface parser that will make you smile. 
+ 
+ * http://docopt.org 
+ * Repository and issue-tracker: https://github.com/docopt/docopt 
+ * Licensed under terms of MIT license (see LICENSE-MIT) 
+ * Copyright (c) 2013 Vladimir Keleshev, vladimir@keleshev.com 
+ 
+&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">re</span>
+
+
+<span class="s1">__all__ = [</span><span class="s3">'docopt'</span><span class="s1">]</span>
+<span class="s1">__version__ = </span><span class="s3">'0.6.2'</span>
+
+
+<span class="s2">class </span><span class="s1">DocoptLanguageError(Exception):</span>
+
+    <span class="s0">&quot;&quot;&quot;Error in construction of usage-message by developer.&quot;&quot;&quot;</span>
+
+
+<span class="s2">class </span><span class="s1">DocoptExit(SystemExit):</span>
+
+    <span class="s0">&quot;&quot;&quot;Exit in case user invoked program with incorrect arguments.&quot;&quot;&quot;</span>
+
+    <span class="s1">usage = </span><span class="s3">''</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, message=</span><span class="s3">''</span><span class="s1">):</span>
+        <span class="s1">SystemExit.__init__(self, (message + </span><span class="s3">'</span><span class="s4">\n</span><span class="s3">' </span><span class="s1">+ self.usage).strip())</span>
+
+
+<span class="s2">class </span><span class="s1">Pattern(object):</span>
+
+    <span class="s2">def </span><span class="s1">__eq__(self, other):</span>
+        <span class="s2">return </span><span class="s1">repr(self) == repr(other)</span>
+
+    <span class="s2">def </span><span class="s1">__hash__(self):</span>
+        <span class="s2">return </span><span class="s1">hash(repr(self))</span>
+
+    <span class="s2">def </span><span class="s1">fix(self):</span>
+        <span class="s1">self.fix_identities()</span>
+        <span class="s1">self.fix_repeating_arguments()</span>
+        <span class="s2">return </span><span class="s1">self</span>
+
+    <span class="s2">def </span><span class="s1">fix_identities(self, uniq=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s0">&quot;&quot;&quot;Make pattern-tree tips point to same object if they are equal.&quot;&quot;&quot;</span>
+        <span class="s2">if not </span><span class="s1">hasattr(self, </span><span class="s3">'children'</span><span class="s1">):</span>
+            <span class="s2">return </span><span class="s1">self</span>
+        <span class="s1">uniq = list(set(self.flat())) </span><span class="s2">if </span><span class="s1">uniq </span><span class="s2">is None else </span><span class="s1">uniq</span>
+        <span class="s2">for </span><span class="s1">i, c </span><span class="s2">in </span><span class="s1">enumerate(self.children):</span>
+            <span class="s2">if not </span><span class="s1">hasattr(c, </span><span class="s3">'children'</span><span class="s1">):</span>
+                <span class="s2">assert </span><span class="s1">c </span><span class="s2">in </span><span class="s1">uniq</span>
+                <span class="s1">self.children[i] = uniq[uniq.index(c)]</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">c.fix_identities(uniq)</span>
+
+    <span class="s2">def </span><span class="s1">fix_repeating_arguments(self):</span>
+        <span class="s0">&quot;&quot;&quot;Fix elements that should accumulate/increment values.&quot;&quot;&quot;</span>
+        <span class="s1">either = [list(c.children) </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">self.either.children]</span>
+        <span class="s2">for </span><span class="s1">case </span><span class="s2">in </span><span class="s1">either:</span>
+            <span class="s2">for </span><span class="s1">e </span><span class="s2">in </span><span class="s1">[c </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">case </span><span class="s2">if </span><span class="s1">case.count(c) &gt; </span><span class="s5">1</span><span class="s1">]:</span>
+                <span class="s2">if </span><span class="s1">type(e) </span><span class="s2">is </span><span class="s1">Argument </span><span class="s2">or </span><span class="s1">type(e) </span><span class="s2">is </span><span class="s1">Option </span><span class="s2">and </span><span class="s1">e.argcount:</span>
+                    <span class="s2">if </span><span class="s1">e.value </span><span class="s2">is None</span><span class="s1">:</span>
+                        <span class="s1">e.value = []</span>
+                    <span class="s2">elif </span><span class="s1">type(e.value) </span><span class="s2">is not </span><span class="s1">list:</span>
+                        <span class="s1">e.value = e.value.split()</span>
+                <span class="s2">if </span><span class="s1">type(e) </span><span class="s2">is </span><span class="s1">Command </span><span class="s2">or </span><span class="s1">type(e) </span><span class="s2">is </span><span class="s1">Option </span><span class="s2">and </span><span class="s1">e.argcount == </span><span class="s5">0</span><span class="s1">:</span>
+                    <span class="s1">e.value = </span><span class="s5">0</span>
+        <span class="s2">return </span><span class="s1">self</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">either(self):</span>
+        <span class="s0">&quot;&quot;&quot;Transform pattern into an equivalent, with only top-level Either.&quot;&quot;&quot;</span>
+        <span class="s0"># Currently the pattern will not be equivalent, but more &quot;narrow&quot;,</span>
+        <span class="s0"># although good enough to reason about list arguments.</span>
+        <span class="s1">ret = []</span>
+        <span class="s1">groups = [[self]]</span>
+        <span class="s2">while </span><span class="s1">groups:</span>
+            <span class="s1">children = groups.pop(</span><span class="s5">0</span><span class="s1">)</span>
+            <span class="s1">types = [type(c) </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">children]</span>
+            <span class="s2">if </span><span class="s1">Either </span><span class="s2">in </span><span class="s1">types:</span>
+                <span class="s1">either = [c </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">children </span><span class="s2">if </span><span class="s1">type(c) </span><span class="s2">is </span><span class="s1">Either][</span><span class="s5">0</span><span class="s1">]</span>
+                <span class="s1">children.pop(children.index(either))</span>
+                <span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">either.children:</span>
+                    <span class="s1">groups.append([c] + children)</span>
+            <span class="s2">elif </span><span class="s1">Required </span><span class="s2">in </span><span class="s1">types:</span>
+                <span class="s1">required = [c </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">children </span><span class="s2">if </span><span class="s1">type(c) </span><span class="s2">is </span><span class="s1">Required][</span><span class="s5">0</span><span class="s1">]</span>
+                <span class="s1">children.pop(children.index(required))</span>
+                <span class="s1">groups.append(list(required.children) + children)</span>
+            <span class="s2">elif </span><span class="s1">Optional </span><span class="s2">in </span><span class="s1">types:</span>
+                <span class="s1">optional = [c </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">children </span><span class="s2">if </span><span class="s1">type(c) </span><span class="s2">is </span><span class="s1">Optional][</span><span class="s5">0</span><span class="s1">]</span>
+                <span class="s1">children.pop(children.index(optional))</span>
+                <span class="s1">groups.append(list(optional.children) + children)</span>
+            <span class="s2">elif </span><span class="s1">AnyOptions </span><span class="s2">in </span><span class="s1">types:</span>
+                <span class="s1">optional = [c </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">children </span><span class="s2">if </span><span class="s1">type(c) </span><span class="s2">is </span><span class="s1">AnyOptions][</span><span class="s5">0</span><span class="s1">]</span>
+                <span class="s1">children.pop(children.index(optional))</span>
+                <span class="s1">groups.append(list(optional.children) + children)</span>
+            <span class="s2">elif </span><span class="s1">OneOrMore </span><span class="s2">in </span><span class="s1">types:</span>
+                <span class="s1">oneormore = [c </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">children </span><span class="s2">if </span><span class="s1">type(c) </span><span class="s2">is </span><span class="s1">OneOrMore][</span><span class="s5">0</span><span class="s1">]</span>
+                <span class="s1">children.pop(children.index(oneormore))</span>
+                <span class="s1">groups.append(list(oneormore.children) * </span><span class="s5">2 </span><span class="s1">+ children)</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">ret.append(children)</span>
+        <span class="s2">return </span><span class="s1">Either(*[Required(*e) </span><span class="s2">for </span><span class="s1">e </span><span class="s2">in </span><span class="s1">ret])</span>
+
+
+<span class="s2">class </span><span class="s1">ChildPattern(Pattern):</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, name, value=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.value = value</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">'%s(%r, %r)' </span><span class="s1">% (self.__class__.__name__, self.name, self.value)</span>
+
+    <span class="s2">def </span><span class="s1">flat(self, *types):</span>
+        <span class="s2">return </span><span class="s1">[self] </span><span class="s2">if not </span><span class="s1">types </span><span class="s2">or </span><span class="s1">type(self) </span><span class="s2">in </span><span class="s1">types </span><span class="s2">else </span><span class="s1">[]</span>
+
+    <span class="s2">def </span><span class="s1">match(self, left, collected=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">collected = [] </span><span class="s2">if </span><span class="s1">collected </span><span class="s2">is None else </span><span class="s1">collected</span>
+        <span class="s1">pos, match = self.single_match(left)</span>
+        <span class="s2">if </span><span class="s1">match </span><span class="s2">is None</span><span class="s1">:</span>
+            <span class="s2">return False</span><span class="s1">, left, collected</span>
+        <span class="s1">left_ = left[:pos] + left[pos + </span><span class="s5">1</span><span class="s1">:]</span>
+        <span class="s1">same_name = [a </span><span class="s2">for </span><span class="s1">a </span><span class="s2">in </span><span class="s1">collected </span><span class="s2">if </span><span class="s1">a.name == self.name]</span>
+        <span class="s2">if </span><span class="s1">type(self.value) </span><span class="s2">in </span><span class="s1">(int, list):</span>
+            <span class="s2">if </span><span class="s1">type(self.value) </span><span class="s2">is </span><span class="s1">int:</span>
+                <span class="s1">increment = </span><span class="s5">1</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">increment = ([match.value] </span><span class="s2">if </span><span class="s1">type(match.value) </span><span class="s2">is </span><span class="s1">str</span>
+                             <span class="s2">else </span><span class="s1">match.value)</span>
+            <span class="s2">if not </span><span class="s1">same_name:</span>
+                <span class="s1">match.value = increment</span>
+                <span class="s2">return True</span><span class="s1">, left_, collected + [match]</span>
+            <span class="s1">same_name[</span><span class="s5">0</span><span class="s1">].value += increment</span>
+            <span class="s2">return True</span><span class="s1">, left_, collected</span>
+        <span class="s2">return True</span><span class="s1">, left_, collected + [match]</span>
+
+
+<span class="s2">class </span><span class="s1">ParentPattern(Pattern):</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, *children):</span>
+        <span class="s1">self.children = list(children)</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">'%s(%s)' </span><span class="s1">% (self.__class__.__name__,</span>
+                           <span class="s3">', '</span><span class="s1">.join(repr(a) </span><span class="s2">for </span><span class="s1">a </span><span class="s2">in </span><span class="s1">self.children))</span>
+
+    <span class="s2">def </span><span class="s1">flat(self, *types):</span>
+        <span class="s2">if </span><span class="s1">type(self) </span><span class="s2">in </span><span class="s1">types:</span>
+            <span class="s2">return </span><span class="s1">[self]</span>
+        <span class="s2">return </span><span class="s1">sum([c.flat(*types) </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s1">self.children], [])</span>
+
+
+<span class="s2">class </span><span class="s1">Argument(ChildPattern):</span>
+
+    <span class="s2">def </span><span class="s1">single_match(self, left):</span>
+        <span class="s2">for </span><span class="s1">n, p </span><span class="s2">in </span><span class="s1">enumerate(left):</span>
+            <span class="s2">if </span><span class="s1">type(p) </span><span class="s2">is </span><span class="s1">Argument:</span>
+                <span class="s2">return </span><span class="s1">n, Argument(self.name, p.value)</span>
+        <span class="s2">return None</span><span class="s1">, </span><span class="s2">None</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s2">def </span><span class="s1">parse(class_, source):</span>
+        <span class="s1">name = re.findall(</span><span class="s3">'(&lt;\S*?&gt;)'</span><span class="s1">, source)[</span><span class="s5">0</span><span class="s1">]</span>
+        <span class="s1">value = re.findall(</span><span class="s3">'\[default: (.*)\]'</span><span class="s1">, source, flags=re.I)</span>
+        <span class="s2">return </span><span class="s1">class_(name, value[</span><span class="s5">0</span><span class="s1">] </span><span class="s2">if </span><span class="s1">value </span><span class="s2">else None</span><span class="s1">)</span>
+
+
+<span class="s2">class </span><span class="s1">Command(Argument):</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, name, value=</span><span class="s2">False</span><span class="s1">):</span>
+        <span class="s1">self.name = name</span>
+        <span class="s1">self.value = value</span>
+
+    <span class="s2">def </span><span class="s1">single_match(self, left):</span>
+        <span class="s2">for </span><span class="s1">n, p </span><span class="s2">in </span><span class="s1">enumerate(left):</span>
+            <span class="s2">if </span><span class="s1">type(p) </span><span class="s2">is </span><span class="s1">Argument:</span>
+                <span class="s2">if </span><span class="s1">p.value == self.name:</span>
+                    <span class="s2">return </span><span class="s1">n, Command(self.name, </span><span class="s2">True</span><span class="s1">)</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s2">break</span>
+        <span class="s2">return None</span><span class="s1">, </span><span class="s2">None</span>
+
+
+<span class="s2">class </span><span class="s1">Option(ChildPattern):</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, short=</span><span class="s2">None</span><span class="s1">, long=</span><span class="s2">None</span><span class="s1">, argcount=</span><span class="s5">0</span><span class="s1">, value=</span><span class="s2">False</span><span class="s1">):</span>
+        <span class="s2">assert </span><span class="s1">argcount </span><span class="s2">in </span><span class="s1">(</span><span class="s5">0</span><span class="s1">, </span><span class="s5">1</span><span class="s1">)</span>
+        <span class="s1">self.short, self.long = short, long</span>
+        <span class="s1">self.argcount, self.value = argcount, value</span>
+        <span class="s1">self.value = </span><span class="s2">None if </span><span class="s1">value </span><span class="s2">is False and </span><span class="s1">argcount </span><span class="s2">else </span><span class="s1">value</span>
+
+    <span class="s1">@classmethod</span>
+    <span class="s2">def </span><span class="s1">parse(class_, option_description):</span>
+        <span class="s1">short, long, argcount, value = </span><span class="s2">None</span><span class="s1">, </span><span class="s2">None</span><span class="s1">, </span><span class="s5">0</span><span class="s1">, </span><span class="s2">False</span>
+        <span class="s1">options, _, description = option_description.strip().partition(</span><span class="s3">'  '</span><span class="s1">)</span>
+        <span class="s1">options = options.replace(</span><span class="s3">','</span><span class="s1">, </span><span class="s3">' '</span><span class="s1">).replace(</span><span class="s3">'='</span><span class="s1">, </span><span class="s3">' '</span><span class="s1">)</span>
+        <span class="s2">for </span><span class="s1">s </span><span class="s2">in </span><span class="s1">options.split():</span>
+            <span class="s2">if </span><span class="s1">s.startswith(</span><span class="s3">'--'</span><span class="s1">):</span>
+                <span class="s1">long = s</span>
+            <span class="s2">elif </span><span class="s1">s.startswith(</span><span class="s3">'-'</span><span class="s1">):</span>
+                <span class="s1">short = s</span>
+            <span class="s2">else</span><span class="s1">:</span>
+                <span class="s1">argcount = </span><span class="s5">1</span>
+        <span class="s2">if </span><span class="s1">argcount:</span>
+            <span class="s1">matched = re.findall(</span><span class="s3">'\[default: (.*)\]'</span><span class="s1">, description, flags=re.I)</span>
+            <span class="s1">value = matched[</span><span class="s5">0</span><span class="s1">] </span><span class="s2">if </span><span class="s1">matched </span><span class="s2">else None</span>
+        <span class="s2">return </span><span class="s1">class_(short, long, argcount, value)</span>
+
+    <span class="s2">def </span><span class="s1">single_match(self, left):</span>
+        <span class="s2">for </span><span class="s1">n, p </span><span class="s2">in </span><span class="s1">enumerate(left):</span>
+            <span class="s2">if </span><span class="s1">self.name == p.name:</span>
+                <span class="s2">return </span><span class="s1">n, p</span>
+        <span class="s2">return None</span><span class="s1">, </span><span class="s2">None</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">name(self):</span>
+        <span class="s2">return </span><span class="s1">self.long </span><span class="s2">or </span><span class="s1">self.short</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">'Option(%r, %r, %r, %r)' </span><span class="s1">% (self.short, self.long,</span>
+                                           <span class="s1">self.argcount, self.value)</span>
+
+
+<span class="s2">class </span><span class="s1">Required(ParentPattern):</span>
+
+    <span class="s2">def </span><span class="s1">match(self, left, collected=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">collected = [] </span><span class="s2">if </span><span class="s1">collected </span><span class="s2">is None else </span><span class="s1">collected</span>
+        <span class="s1">l = left</span>
+        <span class="s1">c = collected</span>
+        <span class="s2">for </span><span class="s1">p </span><span class="s2">in </span><span class="s1">self.children:</span>
+            <span class="s1">matched, l, c = p.match(l, c)</span>
+            <span class="s2">if not </span><span class="s1">matched:</span>
+                <span class="s2">return False</span><span class="s1">, left, collected</span>
+        <span class="s2">return True</span><span class="s1">, l, c</span>
+
+
+<span class="s2">class </span><span class="s1">Optional(ParentPattern):</span>
+
+    <span class="s2">def </span><span class="s1">match(self, left, collected=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">collected = [] </span><span class="s2">if </span><span class="s1">collected </span><span class="s2">is None else </span><span class="s1">collected</span>
+        <span class="s2">for </span><span class="s1">p </span><span class="s2">in </span><span class="s1">self.children:</span>
+            <span class="s1">m, left, collected = p.match(left, collected)</span>
+        <span class="s2">return True</span><span class="s1">, left, collected</span>
+
+
+<span class="s2">class </span><span class="s1">AnyOptions(Optional):</span>
+
+    <span class="s0">&quot;&quot;&quot;Marker/placeholder for [options] shortcut.&quot;&quot;&quot;</span>
+
+
+<span class="s2">class </span><span class="s1">OneOrMore(ParentPattern):</span>
+
+    <span class="s2">def </span><span class="s1">match(self, left, collected=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s2">assert </span><span class="s1">len(self.children) == </span><span class="s5">1</span>
+        <span class="s1">collected = [] </span><span class="s2">if </span><span class="s1">collected </span><span class="s2">is None else </span><span class="s1">collected</span>
+        <span class="s1">l = left</span>
+        <span class="s1">c = collected</span>
+        <span class="s1">l_ = </span><span class="s2">None</span>
+        <span class="s1">matched = </span><span class="s2">True</span>
+        <span class="s1">times = </span><span class="s5">0</span>
+        <span class="s2">while </span><span class="s1">matched:</span>
+            <span class="s0"># could it be that something didn't match but changed l or c?</span>
+            <span class="s1">matched, l, c = self.children[</span><span class="s5">0</span><span class="s1">].match(l, c)</span>
+            <span class="s1">times += </span><span class="s5">1 </span><span class="s2">if </span><span class="s1">matched </span><span class="s2">else </span><span class="s5">0</span>
+            <span class="s2">if </span><span class="s1">l_ == l:</span>
+                <span class="s2">break</span>
+            <span class="s1">l_ = l</span>
+        <span class="s2">if </span><span class="s1">times &gt;= </span><span class="s5">1</span><span class="s1">:</span>
+            <span class="s2">return True</span><span class="s1">, l, c</span>
+        <span class="s2">return False</span><span class="s1">, left, collected</span>
+
+
+<span class="s2">class </span><span class="s1">Either(ParentPattern):</span>
+
+    <span class="s2">def </span><span class="s1">match(self, left, collected=</span><span class="s2">None</span><span class="s1">):</span>
+        <span class="s1">collected = [] </span><span class="s2">if </span><span class="s1">collected </span><span class="s2">is None else </span><span class="s1">collected</span>
+        <span class="s1">outcomes = []</span>
+        <span class="s2">for </span><span class="s1">p </span><span class="s2">in </span><span class="s1">self.children:</span>
+            <span class="s1">matched, _, _ = outcome = p.match(left, collected)</span>
+            <span class="s2">if </span><span class="s1">matched:</span>
+                <span class="s1">outcomes.append(outcome)</span>
+        <span class="s2">if </span><span class="s1">outcomes:</span>
+            <span class="s2">return </span><span class="s1">min(outcomes, key=</span><span class="s2">lambda </span><span class="s1">outcome: len(outcome[</span><span class="s5">1</span><span class="s1">]))</span>
+        <span class="s2">return False</span><span class="s1">, left, collected</span>
+
+
+<span class="s2">class </span><span class="s1">TokenStream(list):</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, source, error):</span>
+        <span class="s1">self += source.split() </span><span class="s2">if </span><span class="s1">hasattr(source, </span><span class="s3">'split'</span><span class="s1">) </span><span class="s2">else </span><span class="s1">source</span>
+        <span class="s1">self.error = error</span>
+
+    <span class="s2">def </span><span class="s1">move(self):</span>
+        <span class="s2">return </span><span class="s1">self.pop(</span><span class="s5">0</span><span class="s1">) </span><span class="s2">if </span><span class="s1">len(self) </span><span class="s2">else None</span>
+
+    <span class="s2">def </span><span class="s1">current(self):</span>
+        <span class="s2">return </span><span class="s1">self[</span><span class="s5">0</span><span class="s1">] </span><span class="s2">if </span><span class="s1">len(self) </span><span class="s2">else None</span>
+
+
+<span class="s2">def </span><span class="s1">parse_long(tokens, options):</span>
+    <span class="s0">&quot;&quot;&quot;long ::= '--' chars [ ( ' ' | '=' ) chars ] ;&quot;&quot;&quot;</span>
+    <span class="s1">long, eq, value = tokens.move().partition(</span><span class="s3">'='</span><span class="s1">)</span>
+    <span class="s2">assert </span><span class="s1">long.startswith(</span><span class="s3">'--'</span><span class="s1">)</span>
+    <span class="s1">value = </span><span class="s2">None if </span><span class="s1">eq == value == </span><span class="s3">'' </span><span class="s2">else </span><span class="s1">value</span>
+    <span class="s1">similar = [o </span><span class="s2">for </span><span class="s1">o </span><span class="s2">in </span><span class="s1">options </span><span class="s2">if </span><span class="s1">o.long == long]</span>
+    <span class="s2">if </span><span class="s1">tokens.error </span><span class="s2">is </span><span class="s1">DocoptExit </span><span class="s2">and </span><span class="s1">similar == []:  </span><span class="s0"># if no exact match</span>
+        <span class="s1">similar = [o </span><span class="s2">for </span><span class="s1">o </span><span class="s2">in </span><span class="s1">options </span><span class="s2">if </span><span class="s1">o.long </span><span class="s2">and </span><span class="s1">o.long.startswith(long)]</span>
+    <span class="s2">if </span><span class="s1">len(similar) &gt; </span><span class="s5">1</span><span class="s1">:  </span><span class="s0"># might be simply specified ambiguously 2+ times?</span>
+        <span class="s2">raise </span><span class="s1">tokens.error(</span><span class="s3">'%s is not a unique prefix: %s?' </span><span class="s1">%</span>
+                           <span class="s1">(long, </span><span class="s3">', '</span><span class="s1">.join(o.long </span><span class="s2">for </span><span class="s1">o </span><span class="s2">in </span><span class="s1">similar)))</span>
+    <span class="s2">elif </span><span class="s1">len(similar) &lt; </span><span class="s5">1</span><span class="s1">:</span>
+        <span class="s1">argcount = </span><span class="s5">1 </span><span class="s2">if </span><span class="s1">eq == </span><span class="s3">'=' </span><span class="s2">else </span><span class="s5">0</span>
+        <span class="s1">o = Option(</span><span class="s2">None</span><span class="s1">, long, argcount)</span>
+        <span class="s1">options.append(o)</span>
+        <span class="s2">if </span><span class="s1">tokens.error </span><span class="s2">is </span><span class="s1">DocoptExit:</span>
+            <span class="s1">o = Option(</span><span class="s2">None</span><span class="s1">, long, argcount, value </span><span class="s2">if </span><span class="s1">argcount </span><span class="s2">else True</span><span class="s1">)</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s1">o = Option(similar[</span><span class="s5">0</span><span class="s1">].short, similar[</span><span class="s5">0</span><span class="s1">].long,</span>
+                   <span class="s1">similar[</span><span class="s5">0</span><span class="s1">].argcount, similar[</span><span class="s5">0</span><span class="s1">].value)</span>
+        <span class="s2">if </span><span class="s1">o.argcount == </span><span class="s5">0</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">value </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s2">raise </span><span class="s1">tokens.error(</span><span class="s3">'%s must not have an argument' </span><span class="s1">% o.long)</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s2">if </span><span class="s1">value </span><span class="s2">is None</span><span class="s1">:</span>
+                <span class="s2">if </span><span class="s1">tokens.current() </span><span class="s2">is None</span><span class="s1">:</span>
+                    <span class="s2">raise </span><span class="s1">tokens.error(</span><span class="s3">'%s requires argument' </span><span class="s1">% o.long)</span>
+                <span class="s1">value = tokens.move()</span>
+        <span class="s2">if </span><span class="s1">tokens.error </span><span class="s2">is </span><span class="s1">DocoptExit:</span>
+            <span class="s1">o.value = value </span><span class="s2">if </span><span class="s1">value </span><span class="s2">is not None else True</span>
+    <span class="s2">return </span><span class="s1">[o]</span>
+
+
+<span class="s2">def </span><span class="s1">parse_shorts(tokens, options):</span>
+    <span class="s0">&quot;&quot;&quot;shorts ::= '-' ( chars )* [ [ ' ' ] chars ] ;&quot;&quot;&quot;</span>
+    <span class="s1">token = tokens.move()</span>
+    <span class="s2">assert </span><span class="s1">token.startswith(</span><span class="s3">'-'</span><span class="s1">) </span><span class="s2">and not </span><span class="s1">token.startswith(</span><span class="s3">'--'</span><span class="s1">)</span>
+    <span class="s1">left = token.lstrip(</span><span class="s3">'-'</span><span class="s1">)</span>
+    <span class="s1">parsed = []</span>
+    <span class="s2">while </span><span class="s1">left != </span><span class="s3">''</span><span class="s1">:</span>
+        <span class="s1">short, left = </span><span class="s3">'-' </span><span class="s1">+ left[</span><span class="s5">0</span><span class="s1">], left[</span><span class="s5">1</span><span class="s1">:]</span>
+        <span class="s1">similar = [o </span><span class="s2">for </span><span class="s1">o </span><span class="s2">in </span><span class="s1">options </span><span class="s2">if </span><span class="s1">o.short == short]</span>
+        <span class="s2">if </span><span class="s1">len(similar) &gt; </span><span class="s5">1</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">tokens.error(</span><span class="s3">'%s is specified ambiguously %d times' </span><span class="s1">%</span>
+                               <span class="s1">(short, len(similar)))</span>
+        <span class="s2">elif </span><span class="s1">len(similar) &lt; </span><span class="s5">1</span><span class="s1">:</span>
+            <span class="s1">o = Option(short, </span><span class="s2">None</span><span class="s1">, </span><span class="s5">0</span><span class="s1">)</span>
+            <span class="s1">options.append(o)</span>
+            <span class="s2">if </span><span class="s1">tokens.error </span><span class="s2">is </span><span class="s1">DocoptExit:</span>
+                <span class="s1">o = Option(short, </span><span class="s2">None</span><span class="s1">, </span><span class="s5">0</span><span class="s1">, </span><span class="s2">True</span><span class="s1">)</span>
+        <span class="s2">else</span><span class="s1">:  </span><span class="s0"># why copying is necessary here?</span>
+            <span class="s1">o = Option(short, similar[</span><span class="s5">0</span><span class="s1">].long,</span>
+                       <span class="s1">similar[</span><span class="s5">0</span><span class="s1">].argcount, similar[</span><span class="s5">0</span><span class="s1">].value)</span>
+            <span class="s1">value = </span><span class="s2">None</span>
+            <span class="s2">if </span><span class="s1">o.argcount != </span><span class="s5">0</span><span class="s1">:</span>
+                <span class="s2">if </span><span class="s1">left == </span><span class="s3">''</span><span class="s1">:</span>
+                    <span class="s2">if </span><span class="s1">tokens.current() </span><span class="s2">is None</span><span class="s1">:</span>
+                        <span class="s2">raise </span><span class="s1">tokens.error(</span><span class="s3">'%s requires argument' </span><span class="s1">% short)</span>
+                    <span class="s1">value = tokens.move()</span>
+                <span class="s2">else</span><span class="s1">:</span>
+                    <span class="s1">value = left</span>
+                    <span class="s1">left = </span><span class="s3">''</span>
+            <span class="s2">if </span><span class="s1">tokens.error </span><span class="s2">is </span><span class="s1">DocoptExit:</span>
+                <span class="s1">o.value = value </span><span class="s2">if </span><span class="s1">value </span><span class="s2">is not None else True</span>
+        <span class="s1">parsed.append(o)</span>
+    <span class="s2">return </span><span class="s1">parsed</span>
+
+
+<span class="s2">def </span><span class="s1">parse_pattern(source, options):</span>
+    <span class="s1">tokens = TokenStream(re.sub(</span><span class="s3">r'([\[\]\(\)\|]|\.\.\.)'</span><span class="s1">, </span><span class="s3">r' \1 '</span><span class="s1">, source),</span>
+                         <span class="s1">DocoptLanguageError)</span>
+    <span class="s1">result = parse_expr(tokens, options)</span>
+    <span class="s2">if </span><span class="s1">tokens.current() </span><span class="s2">is not None</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">tokens.error(</span><span class="s3">'unexpected ending: %r' </span><span class="s1">% </span><span class="s3">' '</span><span class="s1">.join(tokens))</span>
+    <span class="s2">return </span><span class="s1">Required(*result)</span>
+
+
+<span class="s2">def </span><span class="s1">parse_expr(tokens, options):</span>
+    <span class="s0">&quot;&quot;&quot;expr ::= seq ( '|' seq )* ;&quot;&quot;&quot;</span>
+    <span class="s1">seq = parse_seq(tokens, options)</span>
+    <span class="s2">if </span><span class="s1">tokens.current() != </span><span class="s3">'|'</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">seq</span>
+    <span class="s1">result = [Required(*seq)] </span><span class="s2">if </span><span class="s1">len(seq) &gt; </span><span class="s5">1 </span><span class="s2">else </span><span class="s1">seq</span>
+    <span class="s2">while </span><span class="s1">tokens.current() == </span><span class="s3">'|'</span><span class="s1">:</span>
+        <span class="s1">tokens.move()</span>
+        <span class="s1">seq = parse_seq(tokens, options)</span>
+        <span class="s1">result += [Required(*seq)] </span><span class="s2">if </span><span class="s1">len(seq) &gt; </span><span class="s5">1 </span><span class="s2">else </span><span class="s1">seq</span>
+    <span class="s2">return </span><span class="s1">[Either(*result)] </span><span class="s2">if </span><span class="s1">len(result) &gt; </span><span class="s5">1 </span><span class="s2">else </span><span class="s1">result</span>
+
+
+<span class="s2">def </span><span class="s1">parse_seq(tokens, options):</span>
+    <span class="s0">&quot;&quot;&quot;seq ::= ( atom [ '...' ] )* ;&quot;&quot;&quot;</span>
+    <span class="s1">result = []</span>
+    <span class="s2">while </span><span class="s1">tokens.current() </span><span class="s2">not in </span><span class="s1">[</span><span class="s2">None</span><span class="s1">, </span><span class="s3">']'</span><span class="s1">, </span><span class="s3">')'</span><span class="s1">, </span><span class="s3">'|'</span><span class="s1">]:</span>
+        <span class="s1">atom = parse_atom(tokens, options)</span>
+        <span class="s2">if </span><span class="s1">tokens.current() == </span><span class="s3">'...'</span><span class="s1">:</span>
+            <span class="s1">atom = [OneOrMore(*atom)]</span>
+            <span class="s1">tokens.move()</span>
+        <span class="s1">result += atom</span>
+    <span class="s2">return </span><span class="s1">result</span>
+
+
+<span class="s2">def </span><span class="s1">parse_atom(tokens, options):</span>
+    <span class="s0">&quot;&quot;&quot;atom ::= '(' expr ')' | '[' expr ']' | 'options' 
+             | long | shorts | argument | command ; 
+    &quot;&quot;&quot;</span>
+    <span class="s1">token = tokens.current()</span>
+    <span class="s1">result = []</span>
+    <span class="s2">if </span><span class="s1">token </span><span class="s2">in </span><span class="s3">'(['</span><span class="s1">:</span>
+        <span class="s1">tokens.move()</span>
+        <span class="s1">matching, pattern = {</span><span class="s3">'('</span><span class="s1">: [</span><span class="s3">')'</span><span class="s1">, Required], </span><span class="s3">'['</span><span class="s1">: [</span><span class="s3">']'</span><span class="s1">, Optional]}[token]</span>
+        <span class="s1">result = pattern(*parse_expr(tokens, options))</span>
+        <span class="s2">if </span><span class="s1">tokens.move() != matching:</span>
+            <span class="s2">raise </span><span class="s1">tokens.error(</span><span class="s3">&quot;unmatched '%s'&quot; </span><span class="s1">% token)</span>
+        <span class="s2">return </span><span class="s1">[result]</span>
+    <span class="s2">elif </span><span class="s1">token == </span><span class="s3">'options'</span><span class="s1">:</span>
+        <span class="s1">tokens.move()</span>
+        <span class="s2">return </span><span class="s1">[AnyOptions()]</span>
+    <span class="s2">elif </span><span class="s1">token.startswith(</span><span class="s3">'--'</span><span class="s1">) </span><span class="s2">and </span><span class="s1">token != </span><span class="s3">'--'</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">parse_long(tokens, options)</span>
+    <span class="s2">elif </span><span class="s1">token.startswith(</span><span class="s3">'-'</span><span class="s1">) </span><span class="s2">and </span><span class="s1">token </span><span class="s2">not in </span><span class="s1">(</span><span class="s3">'-'</span><span class="s1">, </span><span class="s3">'--'</span><span class="s1">):</span>
+        <span class="s2">return </span><span class="s1">parse_shorts(tokens, options)</span>
+    <span class="s2">elif </span><span class="s1">token.startswith(</span><span class="s3">'&lt;'</span><span class="s1">) </span><span class="s2">and </span><span class="s1">token.endswith(</span><span class="s3">'&gt;'</span><span class="s1">) </span><span class="s2">or </span><span class="s1">token.isupper():</span>
+        <span class="s2">return </span><span class="s1">[Argument(tokens.move())]</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s2">return </span><span class="s1">[Command(tokens.move())]</span>
+
+
+<span class="s2">def </span><span class="s1">parse_argv(tokens, options, options_first=</span><span class="s2">False</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Parse command-line argument vector. 
+ 
+    If options_first: 
+        argv ::= [ long | shorts ]* [ argument ]* [ '--' [ argument ]* ] ; 
+    else: 
+        argv ::= [ long | shorts | argument ]* [ '--' [ argument ]* ] ; 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">parsed = []</span>
+    <span class="s2">while </span><span class="s1">tokens.current() </span><span class="s2">is not None</span><span class="s1">:</span>
+        <span class="s2">if </span><span class="s1">tokens.current() == </span><span class="s3">'--'</span><span class="s1">:</span>
+            <span class="s2">return </span><span class="s1">parsed + [Argument(</span><span class="s2">None</span><span class="s1">, v) </span><span class="s2">for </span><span class="s1">v </span><span class="s2">in </span><span class="s1">tokens]</span>
+        <span class="s2">elif </span><span class="s1">tokens.current().startswith(</span><span class="s3">'--'</span><span class="s1">):</span>
+            <span class="s1">parsed += parse_long(tokens, options)</span>
+        <span class="s2">elif </span><span class="s1">tokens.current().startswith(</span><span class="s3">'-'</span><span class="s1">) </span><span class="s2">and </span><span class="s1">tokens.current() != </span><span class="s3">'-'</span><span class="s1">:</span>
+            <span class="s1">parsed += parse_shorts(tokens, options)</span>
+        <span class="s2">elif </span><span class="s1">options_first:</span>
+            <span class="s2">return </span><span class="s1">parsed + [Argument(</span><span class="s2">None</span><span class="s1">, v) </span><span class="s2">for </span><span class="s1">v </span><span class="s2">in </span><span class="s1">tokens]</span>
+        <span class="s2">else</span><span class="s1">:</span>
+            <span class="s1">parsed.append(Argument(</span><span class="s2">None</span><span class="s1">, tokens.move()))</span>
+    <span class="s2">return </span><span class="s1">parsed</span>
+
+
+<span class="s2">def </span><span class="s1">parse_defaults(doc):</span>
+    <span class="s0"># in python &lt; 2.7 you can't pass flags=re.MULTILINE</span>
+    <span class="s1">split = re.split(</span><span class="s3">'</span><span class="s4">\n </span><span class="s3">*(&lt;\S+?&gt;|-\S+?)'</span><span class="s1">, doc)[</span><span class="s5">1</span><span class="s1">:]</span>
+    <span class="s1">split = [s1 + s2 </span><span class="s2">for </span><span class="s1">s1, s2 </span><span class="s2">in </span><span class="s1">zip(split[::</span><span class="s5">2</span><span class="s1">], split[</span><span class="s5">1</span><span class="s1">::</span><span class="s5">2</span><span class="s1">])]</span>
+    <span class="s1">options = [Option.parse(s) </span><span class="s2">for </span><span class="s1">s </span><span class="s2">in </span><span class="s1">split </span><span class="s2">if </span><span class="s1">s.startswith(</span><span class="s3">'-'</span><span class="s1">)]</span>
+    <span class="s0">#arguments = [Argument.parse(s) for s in split if s.startswith('&lt;')]</span>
+    <span class="s0">#return options, arguments</span>
+    <span class="s2">return </span><span class="s1">options</span>
+
+
+<span class="s2">def </span><span class="s1">printable_usage(doc):</span>
+    <span class="s0"># in python &lt; 2.7 you can't pass flags=re.IGNORECASE</span>
+    <span class="s1">usage_split = re.split(</span><span class="s3">r'([Uu][Ss][Aa][Gg][Ee]:)'</span><span class="s1">, doc)</span>
+    <span class="s2">if </span><span class="s1">len(usage_split) &lt; </span><span class="s5">3</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">DocoptLanguageError(</span><span class="s3">'&quot;usage:&quot; (case-insensitive) not found.'</span><span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">len(usage_split) &gt; </span><span class="s5">3</span><span class="s1">:</span>
+        <span class="s2">raise </span><span class="s1">DocoptLanguageError(</span><span class="s3">'More than one &quot;usage:&quot; (case-insensitive).'</span><span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">re.split(</span><span class="s3">r'\n\s*\n'</span><span class="s1">, </span><span class="s3">''</span><span class="s1">.join(usage_split[</span><span class="s5">1</span><span class="s1">:]))[</span><span class="s5">0</span><span class="s1">].strip()</span>
+
+
+<span class="s2">def </span><span class="s1">formal_usage(printable_usage):</span>
+    <span class="s1">pu = printable_usage.split()[</span><span class="s5">1</span><span class="s1">:]  </span><span class="s0"># split and drop &quot;usage:&quot;</span>
+    <span class="s2">return </span><span class="s3">'( ' </span><span class="s1">+ </span><span class="s3">' '</span><span class="s1">.join(</span><span class="s3">') | (' </span><span class="s2">if </span><span class="s1">s == pu[</span><span class="s5">0</span><span class="s1">] </span><span class="s2">else </span><span class="s1">s </span><span class="s2">for </span><span class="s1">s </span><span class="s2">in </span><span class="s1">pu[</span><span class="s5">1</span><span class="s1">:]) + </span><span class="s3">' )'</span>
+
+
+<span class="s2">def </span><span class="s1">extras(help, version, options, doc):</span>
+    <span class="s2">if </span><span class="s1">help </span><span class="s2">and </span><span class="s1">any((o.name </span><span class="s2">in </span><span class="s1">(</span><span class="s3">'-h'</span><span class="s1">, </span><span class="s3">'--help'</span><span class="s1">)) </span><span class="s2">and </span><span class="s1">o.value </span><span class="s2">for </span><span class="s1">o </span><span class="s2">in </span><span class="s1">options):</span>
+        <span class="s1">print(doc.strip(</span><span class="s3">&quot;</span><span class="s4">\n</span><span class="s3">&quot;</span><span class="s1">))</span>
+        <span class="s1">sys.exit()</span>
+    <span class="s2">if </span><span class="s1">version </span><span class="s2">and </span><span class="s1">any(o.name == </span><span class="s3">'--version' </span><span class="s2">and </span><span class="s1">o.value </span><span class="s2">for </span><span class="s1">o </span><span class="s2">in </span><span class="s1">options):</span>
+        <span class="s1">print(version)</span>
+        <span class="s1">sys.exit()</span>
+
+
+<span class="s2">class </span><span class="s1">Dict(dict):</span>
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">'{%s}' </span><span class="s1">% </span><span class="s3">',</span><span class="s4">\n </span><span class="s3">'</span><span class="s1">.join(</span><span class="s3">'%r: %r' </span><span class="s1">% i </span><span class="s2">for </span><span class="s1">i </span><span class="s2">in </span><span class="s1">sorted(self.items()))</span>
+
+
+<span class="s2">def </span><span class="s1">docopt(doc, argv=</span><span class="s2">None</span><span class="s1">, help=</span><span class="s2">True</span><span class="s1">, version=</span><span class="s2">None</span><span class="s1">, options_first=</span><span class="s2">False</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Parse `argv` based on command-line interface described in `doc`. 
+ 
+    `docopt` creates your command-line interface based on its 
+    description that you pass as `doc`. Such description can contain 
+    --options, &lt;positional-argument&gt;, commands, which could be 
+    [optional], (required), (mutually | exclusive) or repeated... 
+ 
+    Parameters 
+    ---------- 
+    doc : str 
+        Description of your command-line interface. 
+    argv : list of str, optional 
+        Argument vector to be parsed. sys.argv[1:] is used if not 
+        provided. 
+    help : bool (default: True) 
+        Set to False to disable automatic help on -h or --help 
+        options. 
+    version : any object 
+        If passed, the object will be printed if --version is in 
+        `argv`. 
+    options_first : bool (default: False) 
+        Set to True to require options preceed positional arguments, 
+        i.e. to forbid options and positional arguments intermix. 
+ 
+    Returns 
+    ------- 
+    args : dict 
+        A dictionary, where keys are names of command-line elements 
+        such as e.g. &quot;--verbose&quot; and &quot;&lt;path&gt;&quot;, and values are the 
+        parsed values of those elements. 
+ 
+    Example 
+    ------- 
+    &gt;&gt;&gt; from docopt import docopt 
+    &gt;&gt;&gt; doc = ''' 
+    Usage: 
+        my_program tcp &lt;host&gt; &lt;port&gt; [--timeout=&lt;seconds&gt;] 
+        my_program serial &lt;port&gt; [--baud=&lt;n&gt;] [--timeout=&lt;seconds&gt;] 
+        my_program (-h | --help | --version) 
+ 
+    Options: 
+        -h, --help  Show this screen and exit. 
+        --baud=&lt;n&gt;  Baudrate [default: 9600] 
+    ''' 
+    &gt;&gt;&gt; argv = ['tcp', '127.0.0.1', '80', '--timeout', '30'] 
+    &gt;&gt;&gt; docopt(doc, argv) 
+    {'--baud': '9600', 
+     '--help': False, 
+     '--timeout': '30', 
+     '--version': False, 
+     '&lt;host&gt;': '127.0.0.1', 
+     '&lt;port&gt;': '80', 
+     'serial': False, 
+     'tcp': True} 
+ 
+    See also 
+    -------- 
+    * For video introduction see http://docopt.org 
+    * Full documentation is available in README.rst as well as online 
+      at https://github.com/docopt/docopt#readme 
+ 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">argv </span><span class="s2">is None</span><span class="s1">:</span>
+        <span class="s1">argv = sys.argv[</span><span class="s5">1</span><span class="s1">:]</span>
+    <span class="s1">DocoptExit.usage = printable_usage(doc)</span>
+    <span class="s1">options = parse_defaults(doc)</span>
+    <span class="s1">pattern = parse_pattern(formal_usage(DocoptExit.usage), options)</span>
+    <span class="s0"># [default] syntax for argument is disabled</span>
+    <span class="s0">#for a in pattern.flat(Argument):</span>
+    <span class="s0">#    same_name = [d for d in arguments if d.name == a.name]</span>
+    <span class="s0">#    if same_name:</span>
+    <span class="s0">#        a.value = same_name[0].value</span>
+    <span class="s1">argv = parse_argv(TokenStream(argv, DocoptExit), list(options),</span>
+                      <span class="s1">options_first)</span>
+    <span class="s1">pattern_options = set(pattern.flat(Option))</span>
+    <span class="s2">for </span><span class="s1">ao </span><span class="s2">in </span><span class="s1">pattern.flat(AnyOptions):</span>
+        <span class="s1">doc_options = parse_defaults(doc)</span>
+        <span class="s1">ao.children = list(set(doc_options) - pattern_options)</span>
+        <span class="s0">#if any_options:</span>
+        <span class="s0">#    ao.children += [Option(o.short, o.long, o.argcount)</span>
+        <span class="s0">#                    for o in argv if type(o) is Option]</span>
+    <span class="s1">extras(help, version, argv, doc)</span>
+    <span class="s1">matched, left, collected = pattern.fix().match(argv)</span>
+    <span class="s2">if </span><span class="s1">matched </span><span class="s2">and </span><span class="s1">left == []:  </span><span class="s0"># better error message if left?</span>
+        <span class="s2">return </span><span class="s1">Dict((a.name, a.value) </span><span class="s2">for </span><span class="s1">a </span><span class="s2">in </span><span class="s1">(pattern.flat() + collected))</span>
+    <span class="s2">raise </span><span class="s1">DocoptExit()</span>
+</pre>
+</body>
+</html>

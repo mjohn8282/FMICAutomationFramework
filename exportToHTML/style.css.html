@@ -1,0 +1,206 @@
+<html>
+<head>
+<title>style.css</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #abb2bf;}
+.s1 { color: #d19a66;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+style.css</font>
+</center></td></tr></table>
+<pre><span class="s0">body {</span>
+  <span class="s0">font-family: Helvetica, Arial, sans-serif;</span>
+  <span class="s0">font-size: </span><span class="s1">12</span><span class="s0">px;</span>
+  <span class="s2">/* do not increase min-width as some may use split screens */</span>
+  <span class="s0">min-width: </span><span class="s1">800</span><span class="s0">px;</span>
+  <span class="s0">color: #</span><span class="s1">999</span><span class="s0">;</span>
+<span class="s0">}</span>
+
+<span class="s0">h1 {</span>
+  <span class="s0">font-size: </span><span class="s1">24</span><span class="s0">px;</span>
+  <span class="s0">color: black;</span>
+<span class="s0">}</span>
+
+<span class="s0">h2 {</span>
+  <span class="s0">font-size: </span><span class="s1">16</span><span class="s0">px;</span>
+  <span class="s0">color: black;</span>
+<span class="s0">}</span>
+
+<span class="s0">p {</span>
+  <span class="s0">color: black;</span>
+<span class="s0">}</span>
+
+<span class="s0">a {</span>
+  <span class="s0">color: #</span><span class="s1">999</span><span class="s0">;</span>
+<span class="s0">}</span>
+
+<span class="s0">table {</span>
+  <span class="s0">border-collapse: collapse;</span>
+<span class="s0">}</span>
+
+<span class="s2">/****************************** 
+ * SUMMARY INFORMATION 
+ ******************************/</span>
+<span class="s0">#environment td {</span>
+  <span class="s0">padding: </span><span class="s1">5</span><span class="s0">px;</span>
+  <span class="s0">border: </span><span class="s1">1</span><span class="s0">px solid #E6E6E6;</span>
+<span class="s0">}</span>
+<span class="s0">#environment tr:nth-child(odd) {</span>
+  <span class="s0">background-color: #f6f6f6;</span>
+<span class="s0">}</span>
+
+<span class="s2">/****************************** 
+ * TEST RESULT COLORS 
+ ******************************/</span>
+<span class="s0">span.passed,</span>
+<span class="s0">.passed .col-result {</span>
+  <span class="s0">color: green;</span>
+<span class="s0">}</span>
+
+<span class="s0">span.skipped,</span>
+<span class="s0">span.xfailed,</span>
+<span class="s0">span.rerun,</span>
+<span class="s0">.skipped .col-result,</span>
+<span class="s0">.xfailed .col-result,</span>
+<span class="s0">.rerun .col-result {</span>
+  <span class="s0">color: orange;</span>
+<span class="s0">}</span>
+
+<span class="s0">span.error,</span>
+<span class="s0">span.failed,</span>
+<span class="s0">span.xpassed,</span>
+<span class="s0">.error .col-result,</span>
+<span class="s0">.failed .col-result,</span>
+<span class="s0">.xpassed .col-result {</span>
+  <span class="s0">color: red;</span>
+<span class="s0">}</span>
+
+<span class="s2">/****************************** 
+ * RESULTS TABLE 
+ * 
+ * 1. Table Layout 
+ * 2. Extra 
+ * 3. Sorting items 
+ * 
+ ******************************/</span>
+<span class="s2">/*------------------ 
+ * 1. Table Layout 
+ *------------------*/</span>
+<span class="s0">#results-table {</span>
+  <span class="s0">border: </span><span class="s1">1</span><span class="s0">px solid #e6e6e6;</span>
+  <span class="s0">color: #</span><span class="s1">999</span><span class="s0">;</span>
+  <span class="s0">font-size: </span><span class="s1">12</span><span class="s0">px;</span>
+  <span class="s0">width: </span><span class="s1">100</span><span class="s0">%;</span>
+<span class="s0">}</span>
+<span class="s0">#results-table th,</span>
+<span class="s0">#results-table td {</span>
+  <span class="s0">padding: </span><span class="s1">5</span><span class="s0">px;</span>
+  <span class="s0">border: </span><span class="s1">1</span><span class="s0">px solid #E6E6E6;</span>
+  <span class="s0">text-align: left;</span>
+<span class="s0">}</span>
+<span class="s0">#results-table th {</span>
+  <span class="s0">font-weight: bold;</span>
+<span class="s0">}</span>
+
+<span class="s2">/*------------------ 
+ * 2. Extra 
+ *------------------*/</span>
+<span class="s0">.log {</span>
+  <span class="s0">background-color: #e6e6e6;</span>
+  <span class="s0">border: </span><span class="s1">1</span><span class="s0">px solid #e6e6e6;</span>
+  <span class="s0">color: black;</span>
+  <span class="s0">display: block;</span>
+  <span class="s0">font-family: </span><span class="s3">&quot;Courier New&quot;</span><span class="s0">, Courier, monospace;</span>
+  <span class="s0">height: </span><span class="s1">230</span><span class="s0">px;</span>
+  <span class="s0">overflow-y: scroll;</span>
+  <span class="s0">padding: </span><span class="s1">5</span><span class="s0">px;</span>
+  <span class="s0">white-space: pre-wrap;</span>
+<span class="s0">}</span>
+<span class="s0">.log:only-child {</span>
+  <span class="s0">height: inherit;</span>
+<span class="s0">}</span>
+
+<span class="s0">div.image {</span>
+  <span class="s0">border: </span><span class="s1">1</span><span class="s0">px solid #e6e6e6;</span>
+  <span class="s0">float: right;</span>
+  <span class="s0">height: </span><span class="s1">240</span><span class="s0">px;</span>
+  <span class="s0">margin-left: </span><span class="s1">5</span><span class="s0">px;</span>
+  <span class="s0">overflow: hidden;</span>
+  <span class="s0">width: </span><span class="s1">320</span><span class="s0">px;</span>
+<span class="s0">}</span>
+<span class="s0">div.image img {</span>
+  <span class="s0">width: </span><span class="s1">320</span><span class="s0">px;</span>
+<span class="s0">}</span>
+
+<span class="s0">div.video {</span>
+  <span class="s0">border: </span><span class="s1">1</span><span class="s0">px solid #e6e6e6;</span>
+  <span class="s0">float: right;</span>
+  <span class="s0">height: </span><span class="s1">240</span><span class="s0">px;</span>
+  <span class="s0">margin-left: </span><span class="s1">5</span><span class="s0">px;</span>
+  <span class="s0">overflow: hidden;</span>
+  <span class="s0">width: </span><span class="s1">320</span><span class="s0">px;</span>
+<span class="s0">}</span>
+<span class="s0">div.video video {</span>
+  <span class="s0">overflow: hidden;</span>
+  <span class="s0">width: </span><span class="s1">320</span><span class="s0">px;</span>
+  <span class="s0">height: </span><span class="s1">240</span><span class="s0">px;</span>
+<span class="s0">}</span>
+
+<span class="s0">.collapsed {</span>
+  <span class="s0">display: none;</span>
+<span class="s0">}</span>
+
+<span class="s0">.expander::after {</span>
+  <span class="s0">content: </span><span class="s3">&quot; (show details)&quot;</span><span class="s0">;</span>
+  <span class="s0">color: #BBB;</span>
+  <span class="s0">font-style: italic;</span>
+  <span class="s0">cursor: pointer;</span>
+<span class="s0">}</span>
+
+<span class="s0">.collapser::after {</span>
+  <span class="s0">content: </span><span class="s3">&quot; (hide details)&quot;</span><span class="s0">;</span>
+  <span class="s0">color: #BBB;</span>
+  <span class="s0">font-style: italic;</span>
+  <span class="s0">cursor: pointer;</span>
+<span class="s0">}</span>
+
+<span class="s2">/*------------------ 
+ * 3. Sorting items 
+ *------------------*/</span>
+<span class="s0">.sortable {</span>
+  <span class="s0">cursor: pointer;</span>
+<span class="s0">}</span>
+
+<span class="s0">.sort-icon {</span>
+  <span class="s0">font-size: </span><span class="s1">0</span><span class="s0">px;</span>
+  <span class="s0">float: left;</span>
+  <span class="s0">margin-right: </span><span class="s1">5</span><span class="s0">px;</span>
+  <span class="s0">margin-top: </span><span class="s1">5</span><span class="s0">px;</span>
+  <span class="s2">/*triangle*/</span>
+  <span class="s0">width: </span><span class="s1">0</span><span class="s0">;</span>
+  <span class="s0">height: </span><span class="s1">0</span><span class="s0">;</span>
+  <span class="s0">border-left: </span><span class="s1">8</span><span class="s0">px solid transparent;</span>
+  <span class="s0">border-right: </span><span class="s1">8</span><span class="s0">px solid transparent;</span>
+<span class="s0">}</span>
+<span class="s0">.inactive .sort-icon {</span>
+  <span class="s2">/*finish triangle*/</span>
+  <span class="s0">border-top: </span><span class="s1">8</span><span class="s0">px solid #E6E6E6;</span>
+<span class="s0">}</span>
+<span class="s0">.asc.active .sort-icon {</span>
+  <span class="s2">/*finish triangle*/</span>
+  <span class="s0">border-bottom: </span><span class="s1">8</span><span class="s0">px solid #</span><span class="s1">999</span><span class="s0">;</span>
+<span class="s0">}</span>
+<span class="s0">.desc.active .sort-icon {</span>
+  <span class="s2">/*finish triangle*/</span>
+  <span class="s0">border-top: </span><span class="s1">8</span><span class="s0">px solid #</span><span class="s1">999</span><span class="s0">;</span>
+<span class="s0">}</span>
+</pre>
+</body>
+</html>

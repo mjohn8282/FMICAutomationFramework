@@ -1,0 +1,163 @@
+<html>
+<head>
+<title>extended.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+extended.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">unicode</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">NestedText,</span>
+<span class="s1">)</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">XPROPS_NS</span>
+
+
+<span class="s0">def </span><span class="s1">get_version():</span>
+    <span class="s0">from </span><span class="s1">openpyexcel </span><span class="s0">import </span><span class="s1">__version__</span>
+
+    <span class="s1">VERSION = </span><span class="s3">&quot;.&quot;</span><span class="s1">.join(__version__.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">)[:</span><span class="s4">2</span><span class="s1">])</span>
+    <span class="s0">return </span><span class="s1">VERSION</span>
+
+
+<span class="s0">class </span><span class="s1">DigSigBlob(Serialisable):</span>
+
+    <span class="s1">__elements__ = __attrs__ = ()</span>
+
+
+<span class="s0">class </span><span class="s1">VectorLpstr(Serialisable):</span>
+
+    <span class="s1">__elements__ = __attrs__ = ()</span>
+
+
+<span class="s0">class </span><span class="s1">VectorVariant(Serialisable):</span>
+
+    <span class="s1">__elements__ = __attrs__ = ()</span>
+
+
+<span class="s0">class </span><span class="s1">ExtendedProperties(Serialisable):</span>
+
+    <span class="s2">&quot;&quot;&quot; 
+    See 22.2 
+ 
+    Most of this is irrelevant 
+    &quot;&quot;&quot;</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;Properties&quot;</span>
+
+    <span class="s1">Template = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">Manager = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">Company = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">Pages = NestedText(expected_type=int, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">Words = NestedText(expected_type=int,allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">Characters = NestedText(expected_type=int, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">PresentationFormat = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">Lines = NestedText(expected_type=int, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">Paragraphs = NestedText(expected_type=int, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">Slides = NestedText(expected_type=int, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">Notes = NestedText(expected_type=int, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">TotalTime = NestedText(expected_type=int, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">HiddenSlides = NestedText(expected_type=int, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">MMClips = NestedText(expected_type=int, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">ScaleCrop = NestedText(expected_type=bool, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">HeadingPairs = Typed(expected_type=VectorVariant, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">TitlesOfParts = Typed(expected_type=VectorLpstr, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">LinksUpToDate = NestedText(expected_type=bool, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">CharactersWithSpaces = NestedText(expected_type=int, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">SharedDoc = NestedText(expected_type=bool, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">HyperlinkBase = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">HLinks = Typed(expected_type=VectorVariant, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">HyperlinksChanged = NestedText(expected_type=bool, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">DigSig = Typed(expected_type=DigSigBlob, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">Application = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">AppVersion = NestedText(expected_type=unicode, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">DocSecurity = NestedText(expected_type=int, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'Application'</span><span class="s1">, </span><span class="s3">'AppVersion'</span><span class="s1">, </span><span class="s3">'DocSecurity'</span><span class="s1">, </span><span class="s3">'ScaleCrop'</span><span class="s1">,</span>
+                    <span class="s3">'LinksUpToDate'</span><span class="s1">, </span><span class="s3">'SharedDoc'</span><span class="s1">, </span><span class="s3">'HyperlinksChanged'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">Template=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">Manager=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">Company=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">Pages=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">Words=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">Characters=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">PresentationFormat=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">Lines=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">Paragraphs=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">Slides=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">Notes=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">TotalTime=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">HiddenSlides=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">MMClips=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">ScaleCrop=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">HeadingPairs=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">TitlesOfParts=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">LinksUpToDate=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">CharactersWithSpaces=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">SharedDoc=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">HyperlinkBase=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">HLinks=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">HyperlinksChanged=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">DigSig=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">Application=</span><span class="s3">&quot;Microsoft Excel&quot;</span><span class="s1">,</span>
+                 <span class="s1">AppVersion=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">DocSecurity=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.Template = Template</span>
+        <span class="s1">self.Manager = Manager</span>
+        <span class="s1">self.Company = Company</span>
+        <span class="s1">self.Pages = Pages</span>
+        <span class="s1">self.Words = Words</span>
+        <span class="s1">self.Characters = Characters</span>
+        <span class="s1">self.PresentationFormat = PresentationFormat</span>
+        <span class="s1">self.Lines = Lines</span>
+        <span class="s1">self.Paragraphs = Paragraphs</span>
+        <span class="s1">self.Slides = Slides</span>
+        <span class="s1">self.Notes = Notes</span>
+        <span class="s1">self.TotalTime = TotalTime</span>
+        <span class="s1">self.HiddenSlides = HiddenSlides</span>
+        <span class="s1">self.MMClips = MMClips</span>
+        <span class="s1">self.ScaleCrop = ScaleCrop</span>
+        <span class="s1">self.HeadingPairs = </span><span class="s0">None</span>
+        <span class="s1">self.TitlesOfParts = </span><span class="s0">None</span>
+        <span class="s1">self.LinksUpToDate = LinksUpToDate</span>
+        <span class="s1">self.CharactersWithSpaces = CharactersWithSpaces</span>
+        <span class="s1">self.SharedDoc = SharedDoc</span>
+        <span class="s1">self.HyperlinkBase = HyperlinkBase</span>
+        <span class="s1">self.HLinks = </span><span class="s0">None</span>
+        <span class="s1">self.HyperlinksChanged = HyperlinksChanged</span>
+        <span class="s1">self.DigSig = </span><span class="s0">None</span>
+        <span class="s1">self.Application = Application</span>
+        <span class="s0">if </span><span class="s1">AppVersion </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">AppVersion = get_version()</span>
+        <span class="s1">self.AppVersion = AppVersion</span>
+        <span class="s1">self.DocSecurity = DocSecurity</span>
+
+
+    <span class="s0">def </span><span class="s1">to_tree(self):</span>
+        <span class="s1">tree = super(ExtendedProperties, self).to_tree()</span>
+        <span class="s1">tree.set(</span><span class="s3">&quot;xmlns&quot;</span><span class="s1">, XPROPS_NS)</span>
+        <span class="s0">return </span><span class="s1">tree</span>
+</pre>
+</body>
+</html>

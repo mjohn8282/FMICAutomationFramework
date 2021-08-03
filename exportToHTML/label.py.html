@@ -1,0 +1,153 @@
+<html>
+<head>
+<title>label.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+label.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s2">import </span><span class="s1">Serialisable</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">Float,</span>
+    <span class="s1">Sequence,</span>
+    <span class="s1">Alias</span>
+<span class="s1">)</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s2">import </span><span class="s1">ExtensionList</span>
+<span class="s2">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">NestedNoneSet,</span>
+    <span class="s1">NestedBool,</span>
+    <span class="s1">NestedString,</span>
+    <span class="s1">NestedInteger,</span>
+    <span class="s1">)</span>
+
+<span class="s2">from </span><span class="s1">.shapes </span><span class="s2">import </span><span class="s1">GraphicalProperties</span>
+<span class="s2">from </span><span class="s1">.text </span><span class="s2">import </span><span class="s1">RichText</span>
+
+
+<span class="s2">class </span><span class="s1">_DataLabelBase(Serialisable):</span>
+
+    <span class="s1">numFmt = NestedString(allow_none=</span><span class="s2">True</span><span class="s1">, attribute=</span><span class="s3">&quot;formatCode&quot;</span><span class="s1">)</span>
+    <span class="s1">spPr = Typed(expected_type=GraphicalProperties, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">graphicalProperties = Alias(</span><span class="s3">'spPr'</span><span class="s1">)</span>
+    <span class="s1">txPr = Typed(expected_type=RichText, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">textProperties = Alias(</span><span class="s3">'txPr'</span><span class="s1">)</span>
+    <span class="s1">dLblPos = NestedNoneSet(values=[</span><span class="s3">'bestFit'</span><span class="s1">, </span><span class="s3">'b'</span><span class="s1">, </span><span class="s3">'ctr'</span><span class="s1">, </span><span class="s3">'inBase'</span><span class="s1">, </span><span class="s3">'inEnd'</span><span class="s1">,</span>
+                                    <span class="s3">'l'</span><span class="s1">, </span><span class="s3">'outEnd'</span><span class="s1">, </span><span class="s3">'r'</span><span class="s1">, </span><span class="s3">'t'</span><span class="s1">])</span>
+    <span class="s1">position = Alias(</span><span class="s3">'dLblPos'</span><span class="s1">)</span>
+    <span class="s1">showLegendKey = NestedBool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">showVal = NestedBool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">showCatName = NestedBool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">showSerName = NestedBool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">showPercent = NestedBool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">showBubbleSize = NestedBool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">showLeaderLines = NestedBool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">separator = NestedString(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">&quot;numFmt&quot;</span><span class="s1">, </span><span class="s3">&quot;spPr&quot;</span><span class="s1">, </span><span class="s3">&quot;txPr&quot;</span><span class="s1">, </span><span class="s3">&quot;dLblPos&quot;</span><span class="s1">, </span><span class="s3">&quot;showLegendKey&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;showVal&quot;</span><span class="s1">, </span><span class="s3">&quot;showCatName&quot;</span><span class="s1">, </span><span class="s3">&quot;showSerName&quot;</span><span class="s1">, </span><span class="s3">&quot;showPercent&quot;</span><span class="s1">, </span><span class="s3">&quot;showBubbleSize&quot;</span><span class="s1">,</span>
+                    <span class="s3">&quot;showLeaderLines&quot;</span><span class="s1">, </span><span class="s3">&quot;separator&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">numFmt=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">spPr=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">txPr=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">dLblPos=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">showLegendKey=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">showVal=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">showCatName=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">showSerName=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">showPercent=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">showBubbleSize=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">showLeaderLines=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">separator=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s2">None</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.numFmt = numFmt</span>
+        <span class="s1">self.spPr = spPr</span>
+        <span class="s1">self.txPr = txPr</span>
+        <span class="s1">self.dLblPos = dLblPos</span>
+        <span class="s1">self.showLegendKey = showLegendKey</span>
+        <span class="s1">self.showVal = showVal</span>
+        <span class="s1">self.showCatName = showCatName</span>
+        <span class="s1">self.showSerName = showSerName</span>
+        <span class="s1">self.showPercent = showPercent</span>
+        <span class="s1">self.showBubbleSize = showBubbleSize</span>
+        <span class="s1">self.showLeaderLines = showLeaderLines</span>
+        <span class="s1">self.separator = separator</span>
+
+
+<span class="s2">class </span><span class="s1">DataLabel(_DataLabelBase):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;dLbl&quot;</span>
+
+    <span class="s1">idx = NestedInteger()</span>
+
+    <span class="s1">numFmt = _DataLabelBase.numFmt</span>
+    <span class="s1">spPr = _DataLabelBase.spPr</span>
+    <span class="s1">txPr = _DataLabelBase.txPr</span>
+    <span class="s1">dLblPos = _DataLabelBase.dLblPos</span>
+    <span class="s1">showLegendKey = _DataLabelBase.showLegendKey</span>
+    <span class="s1">showVal = _DataLabelBase.showVal</span>
+    <span class="s1">showCatName = _DataLabelBase.showCatName</span>
+    <span class="s1">showSerName = _DataLabelBase.showSerName</span>
+    <span class="s1">showPercent = _DataLabelBase.showPercent</span>
+    <span class="s1">showBubbleSize = _DataLabelBase.showBubbleSize</span>
+    <span class="s1">showLeaderLines = _DataLabelBase.showLeaderLines</span>
+    <span class="s1">separator = _DataLabelBase.separator</span>
+    <span class="s1">extLst = _DataLabelBase.extLst</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">&quot;idx&quot;</span><span class="s1">,)  + _DataLabelBase.__elements__</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, idx=</span><span class="s4">0</span><span class="s1">, **kw ):</span>
+        <span class="s1">self.idx = idx</span>
+        <span class="s1">super(DataLabel, self).__init__(**kw)</span>
+
+
+<span class="s2">class </span><span class="s1">DataLabelList(_DataLabelBase):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;dLbls&quot;</span>
+
+    <span class="s1">dLbl = Sequence(expected_type=DataLabel, allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+
+    <span class="s1">delete = NestedBool(allow_none=</span><span class="s2">True</span><span class="s1">)</span>
+    <span class="s1">numFmt = _DataLabelBase.numFmt</span>
+    <span class="s1">spPr = _DataLabelBase.spPr</span>
+    <span class="s1">txPr = _DataLabelBase.txPr</span>
+    <span class="s1">dLblPos = _DataLabelBase.dLblPos</span>
+    <span class="s1">showLegendKey = _DataLabelBase.showLegendKey</span>
+    <span class="s1">showVal = _DataLabelBase.showVal</span>
+    <span class="s1">showCatName = _DataLabelBase.showCatName</span>
+    <span class="s1">showSerName = _DataLabelBase.showSerName</span>
+    <span class="s1">showPercent = _DataLabelBase.showPercent</span>
+    <span class="s1">showBubbleSize = _DataLabelBase.showBubbleSize</span>
+    <span class="s1">showLeaderLines = _DataLabelBase.showLeaderLines</span>
+    <span class="s1">separator = _DataLabelBase.separator</span>
+    <span class="s1">extLst = _DataLabelBase.extLst</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">&quot;delete&quot;</span><span class="s1">, </span><span class="s3">&quot;dLbl&quot;</span><span class="s1">,) + _DataLabelBase.__elements__</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, dLbl=(), delete=</span><span class="s2">None</span><span class="s1">,  **kw):</span>
+        <span class="s1">self.dLbl = dLbl</span>
+        <span class="s1">self.delete = delete</span>
+        <span class="s1">super(DataLabelList, self).__init__(**kw)</span>
+</pre>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<html>
+<head>
+<title>properties.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+properties.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Typed</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.styles </span><span class="s0">import </span><span class="s1">Color</span>
+
+
+<span class="s0">class </span><span class="s1">ChartsheetProperties(Serialisable):</span>
+    <span class="s1">tagname = </span><span class="s3">&quot;sheetPr&quot;</span>
+
+    <span class="s1">published = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">codeName = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">tabColor = Typed(expected_type=Color, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'tabColor'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">published=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">codeName=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">tabColor=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">):</span>
+        <span class="s1">self.published = published</span>
+        <span class="s1">self.codeName = codeName</span>
+        <span class="s1">self.tabColor = tabColor</span>
+</pre>
+</body>
+</html>

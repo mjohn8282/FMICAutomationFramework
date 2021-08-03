@@ -1,0 +1,79 @@
+<html>
+<head>
+<title>print_settings.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+print_settings.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Float,</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Alias,</span>
+<span class="s1">)</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.worksheet.page </span><span class="s0">import </span><span class="s1">PrintPageSetup</span>
+<span class="s0">from </span><span class="s1">openpyexcel.worksheet.header_footer </span><span class="s0">import </span><span class="s1">HeaderFooter</span>
+
+
+<span class="s0">class </span><span class="s1">PageMargins(Serialisable):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Identical to openpyexcel.worksheet.page.Pagemargins but element names are different :-/ 
+    &quot;&quot;&quot;</span>
+    <span class="s1">tagname = </span><span class="s3">&quot;pageMargins&quot;</span>
+
+    <span class="s1">l = Float()</span>
+    <span class="s1">left = Alias(</span><span class="s3">'l'</span><span class="s1">)</span>
+    <span class="s1">r = Float()</span>
+    <span class="s1">right = Alias(</span><span class="s3">'r'</span><span class="s1">)</span>
+    <span class="s1">t = Float()</span>
+    <span class="s1">top = Alias(</span><span class="s3">'t'</span><span class="s1">)</span>
+    <span class="s1">b = Float()</span>
+    <span class="s1">bottom = Alias(</span><span class="s3">'b'</span><span class="s1">)</span>
+    <span class="s1">header = Float()</span>
+    <span class="s1">footer = Float()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self, l=</span><span class="s4">0.75</span><span class="s1">, r=</span><span class="s4">0.75</span><span class="s1">, t=</span><span class="s4">1</span><span class="s1">, b=</span><span class="s4">1</span><span class="s1">, header=</span><span class="s4">0.5</span><span class="s1">, footer=</span><span class="s4">0.5</span><span class="s1">):</span>
+        <span class="s1">self.l = l</span>
+        <span class="s1">self.r = r</span>
+        <span class="s1">self.t = t</span>
+        <span class="s1">self.b = b</span>
+        <span class="s1">self.header = header</span>
+        <span class="s1">self.footer = footer</span>
+
+
+<span class="s0">class </span><span class="s1">PrintSettings(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;printSettings&quot;</span>
+
+    <span class="s1">headerFooter = Typed(expected_type=HeaderFooter, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">pageMargins = Typed(expected_type=PageMargins, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">pageSetup = Typed(expected_type=PrintPageSetup, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">&quot;headerFooter&quot;</span><span class="s1">, </span><span class="s3">&quot;pageMargins&quot;</span><span class="s1">, </span><span class="s3">&quot;pageMargins&quot;</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">headerFooter=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pageMargins=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">pageSetup=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.headerFooter = headerFooter</span>
+        <span class="s1">self.pageMargins = pageMargins</span>
+        <span class="s1">self.pageSetup = pageSetup</span>
+</pre>
+</body>
+</html>

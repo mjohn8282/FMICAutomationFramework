@@ -1,0 +1,253 @@
+<html>
+<head>
+<title>comment_sheet.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+comment_sheet.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s2">## Incomplete!</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Float,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Bool,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">Guid, ExtensionList</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.sequence </span><span class="s0">import </span><span class="s1">NestedSequence</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.utils.indexed_list </span><span class="s0">import </span><span class="s1">IndexedList</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.constants </span><span class="s0">import </span><span class="s1">SHEET_MAIN_NS</span>
+<span class="s0">from </span><span class="s1">openpyexcel.xml.functions </span><span class="s0">import </span><span class="s1">tostring</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.cell.text </span><span class="s0">import </span><span class="s1">Text</span>
+<span class="s0">from </span><span class="s1">.author </span><span class="s0">import </span><span class="s1">AuthorList</span>
+<span class="s0">from </span><span class="s1">.comments </span><span class="s0">import </span><span class="s1">Comment</span>
+<span class="s0">from </span><span class="s1">.shape_writer </span><span class="s0">import </span><span class="s1">ShapeWriter</span>
+
+
+<span class="s0">class </span><span class="s1">ObjectAnchor(Serialisable):</span>
+
+    <span class="s1">moveWithCells = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">sizeWithCells = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s2">#z-order = Integer(allow_none=True) needs alias</span>
+    <span class="s2">#from</span>
+    <span class="s2">#to defs from xdr</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">moveWithCells=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">sizeWithCells=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s2">#z-order=None,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.moveWithCells = moveWithCells</span>
+        <span class="s1">self.sizeWithCells = sizeWithCells</span>
+        <span class="s2">#self.z-order = z-order</span>
+
+
+<span class="s0">class </span><span class="s1">Properties(Serialisable):</span>
+
+    <span class="s1">locked = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">defaultSize = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">_print = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">disabled = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">uiObject = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">autoFill = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">autoLine = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">altText = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">textHAlign = Set(values=([</span><span class="s3">'left'</span><span class="s1">, </span><span class="s3">'center'</span><span class="s1">, </span><span class="s3">'right'</span><span class="s1">, </span><span class="s3">'justify'</span><span class="s1">, </span><span class="s3">'distributed'</span><span class="s1">]))</span>
+    <span class="s1">textVAlign = Set(values=([</span><span class="s3">'top'</span><span class="s1">, </span><span class="s3">'center'</span><span class="s1">, </span><span class="s3">'bottom'</span><span class="s1">, </span><span class="s3">'justify'</span><span class="s1">, </span><span class="s3">'distributed'</span><span class="s1">]))</span>
+    <span class="s1">lockText = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">justLastX = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">autoScale = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">rowHidden = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">colHidden = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">anchor = Typed(expected_type=ObjectAnchor, )</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'anchor'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">locked=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">defaultSize=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">_print=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">disabled=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">uiObject=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">autoFill=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">autoLine=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">altText=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">textHAlign=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">textVAlign=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">lockText=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">justLastX=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">autoScale=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rowHidden=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">colHidden=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">anchor=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.locked = locked</span>
+        <span class="s1">self.defaultSize = defaultSize</span>
+        <span class="s1">self._print = _print</span>
+        <span class="s1">self.disabled = disabled</span>
+        <span class="s1">self.uiObject = uiObject</span>
+        <span class="s1">self.autoFill = autoFill</span>
+        <span class="s1">self.autoLine = autoLine</span>
+        <span class="s1">self.altText = altText</span>
+        <span class="s1">self.textHAlign = textHAlign</span>
+        <span class="s1">self.textVAlign = textVAlign</span>
+        <span class="s1">self.lockText = lockText</span>
+        <span class="s1">self.justLastX = justLastX</span>
+        <span class="s1">self.autoScale = autoScale</span>
+        <span class="s1">self.rowHidden = rowHidden</span>
+        <span class="s1">self.colHidden = colHidden</span>
+        <span class="s1">self.anchor = anchor</span>
+
+
+<span class="s0">class </span><span class="s1">CommentRecord(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;comment&quot;</span>
+
+    <span class="s1">ref = String()</span>
+    <span class="s1">authorId = Integer()</span>
+    <span class="s1">guid = Guid(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">shapeId = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">text = Typed(expected_type=Text)</span>
+    <span class="s1">commentPr = Typed(expected_type=Properties, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">author = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'text'</span><span class="s1">, </span><span class="s3">'commentPr'</span><span class="s1">)</span>
+    <span class="s1">__attrs__ = (</span><span class="s3">'ref'</span><span class="s1">, </span><span class="s3">'authorId'</span><span class="s1">, </span><span class="s3">'guid'</span><span class="s1">, </span><span class="s3">'shapeId'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">ref=</span><span class="s3">&quot;&quot;</span><span class="s1">,</span>
+                 <span class="s1">authorId=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">guid=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">shapeId=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">text=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">commentPr=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">author=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">height=</span><span class="s4">79</span><span class="s1">,</span>
+                 <span class="s1">width=</span><span class="s4">144</span>
+                <span class="s1">):</span>
+        <span class="s1">self.ref = ref</span>
+        <span class="s1">self.authorId = authorId</span>
+        <span class="s1">self.guid = guid</span>
+        <span class="s1">self.shapeId = shapeId</span>
+        <span class="s0">if </span><span class="s1">text </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">text = Text()</span>
+        <span class="s1">self.text = text</span>
+        <span class="s1">self.commentPr = commentPr</span>
+        <span class="s1">self.author = author</span>
+        <span class="s1">self.height = height</span>
+        <span class="s1">self.width = width</span>
+
+
+    <span class="s1">@classmethod</span>
+    <span class="s0">def </span><span class="s1">from_cell(cls, cell):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Class method to convert cell comment 
+        &quot;&quot;&quot;</span>
+        <span class="s1">comment = cell._comment</span>
+        <span class="s1">ref = cell.coordinate</span>
+        <span class="s1">self = cls(ref=ref, author=comment.author)</span>
+        <span class="s1">self.text.t = comment.content</span>
+        <span class="s1">self.height = comment.height</span>
+        <span class="s1">self.width = comment.width</span>
+        <span class="s0">return </span><span class="s1">self</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">content(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Remove all inline formatting and stuff 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self.text.content</span>
+
+
+<span class="s0">class </span><span class="s1">CommentSheet(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;comments&quot;</span>
+
+    <span class="s1">authors = Typed(expected_type=AuthorList)</span>
+    <span class="s1">commentList = NestedSequence(expected_type=CommentRecord, count=</span><span class="s4">0</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">_id = </span><span class="s0">None</span>
+    <span class="s1">_path = </span><span class="s3">&quot;/xl/comments/comment{0}.xml&quot;</span>
+    <span class="s1">mime_type = </span><span class="s3">&quot;application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml&quot;</span>
+    <span class="s1">_rel_type = </span><span class="s3">&quot;comments&quot;</span>
+    <span class="s1">_rel_id = </span><span class="s0">None</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'authors'</span><span class="s1">, </span><span class="s3">'commentList'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">authors=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">commentList=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.authors = authors</span>
+        <span class="s1">self.commentList = commentList</span>
+
+
+    <span class="s0">def </span><span class="s1">to_tree(self):</span>
+        <span class="s1">tree = super(CommentSheet, self).to_tree()</span>
+        <span class="s1">tree.set(</span><span class="s3">&quot;xmlns&quot;</span><span class="s1">, SHEET_MAIN_NS)</span>
+        <span class="s0">return </span><span class="s1">tree</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">comments(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Return a dictionary of comments keyed by coord 
+        &quot;&quot;&quot;</span>
+        <span class="s1">authors = self.authors.author</span>
+
+        <span class="s0">for </span><span class="s1">c </span><span class="s0">in </span><span class="s1">self.commentList:</span>
+            <span class="s0">yield </span><span class="s1">c.ref, Comment(c.content, authors[c.authorId], c.height, c.width)</span>
+
+
+    <span class="s1">@classmethod</span>
+    <span class="s0">def </span><span class="s1">from_comments(cls, comments):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Create a comment sheet from a list of comments for a particular worksheet 
+        &quot;&quot;&quot;</span>
+        <span class="s1">authors = IndexedList()</span>
+
+        <span class="s2"># dedupe authors and get indexes</span>
+        <span class="s0">for </span><span class="s1">comment </span><span class="s0">in </span><span class="s1">comments:</span>
+            <span class="s1">comment.authorId = authors.add(comment.author)</span>
+
+        <span class="s0">return </span><span class="s1">cls(authors=AuthorList(authors), commentList=comments)</span>
+
+
+    <span class="s0">def </span><span class="s1">write_shapes(self, vml=</span><span class="s0">None</span><span class="s1">):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Create the VML for comments 
+        &quot;&quot;&quot;</span>
+        <span class="s1">sw = ShapeWriter(self.comments)</span>
+        <span class="s0">return </span><span class="s1">sw.write(vml)</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">path(self):</span>
+        <span class="s2">&quot;&quot;&quot; 
+        Return path within the archive 
+        &quot;&quot;&quot;</span>
+        <span class="s0">return </span><span class="s1">self._path.format(self._id)</span>
+</pre>
+</body>
+</html>

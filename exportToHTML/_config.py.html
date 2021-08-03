@@ -1,0 +1,43 @@
+<html>
+<head>
+<title>_config.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #98c379;}
+.s3 { color: #5c6370;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+_config.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import, division, print_function</span>
+
+
+<span class="s1">__all__ = [</span><span class="s2">&quot;set_run_validators&quot;</span><span class="s1">, </span><span class="s2">&quot;get_run_validators&quot;</span><span class="s1">]</span>
+
+<span class="s1">_run_validators = </span><span class="s0">True</span>
+
+
+<span class="s0">def </span><span class="s1">set_run_validators(run):</span>
+    <span class="s3">&quot;&quot;&quot; 
+    Set whether or not validators are run.  By default, they are run. 
+    &quot;&quot;&quot;</span>
+    <span class="s0">if not </span><span class="s1">isinstance(run, bool):</span>
+        <span class="s0">raise </span><span class="s1">TypeError(</span><span class="s2">&quot;'run' must be bool.&quot;</span><span class="s1">)</span>
+    <span class="s0">global </span><span class="s1">_run_validators</span>
+    <span class="s1">_run_validators = run</span>
+
+
+<span class="s0">def </span><span class="s1">get_run_validators():</span>
+    <span class="s3">&quot;&quot;&quot; 
+    Return whether or not validators are run. 
+    &quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">_run_validators</span>
+</pre>
+</body>
+</html>

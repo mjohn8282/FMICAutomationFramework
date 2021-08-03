@@ -1,0 +1,315 @@
+<html>
+<head>
+<title>rule.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+rule.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.compat </span><span class="s0">import </span><span class="s1">basestring, unicode</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">String,</span>
+    <span class="s1">Sequence,</span>
+    <span class="s1">Bool,</span>
+    <span class="s1">NoneSet,</span>
+    <span class="s1">Set,</span>
+    <span class="s1">Integer,</span>
+    <span class="s1">Float,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">HexBinary, ExtensionList</span>
+<span class="s0">from </span><span class="s1">openpyexcel.styles.colors </span><span class="s0">import </span><span class="s1">Color, ColorDescriptor</span>
+<span class="s0">from </span><span class="s1">openpyexcel.styles.differential </span><span class="s0">import </span><span class="s1">DifferentialStyle</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.utils.cell </span><span class="s0">import </span><span class="s1">COORD_RE</span>
+
+
+<span class="s0">class </span><span class="s1">ValueDescriptor(Float):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Expected type depends upon type attribue of parent :-( 
+ 
+    Most values should be numeric BUT they can also be cell references 
+    &quot;&quot;&quot;</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s1">ref = </span><span class="s0">None</span>
+        <span class="s0">if </span><span class="s1">value </span><span class="s0">is not None and </span><span class="s1">isinstance(value, basestring):</span>
+            <span class="s1">ref = COORD_RE.match(value)</span>
+        <span class="s0">if </span><span class="s1">instance.type == </span><span class="s3">&quot;formula&quot; </span><span class="s0">or </span><span class="s1">ref:</span>
+            <span class="s1">self.expected_type = basestring</span>
+        <span class="s0">else</span><span class="s1">:</span>
+            <span class="s1">self.expected_type = float</span>
+        <span class="s1">super(ValueDescriptor, self).__set__(instance, value)</span>
+
+
+<span class="s0">class </span><span class="s1">FormatObject(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;cfvo&quot;</span>
+
+    <span class="s1">type = Set(values=([</span><span class="s3">'num'</span><span class="s1">, </span><span class="s3">'percent'</span><span class="s1">, </span><span class="s3">'max'</span><span class="s1">, </span><span class="s3">'min'</span><span class="s1">, </span><span class="s3">'formula'</span><span class="s1">, </span><span class="s3">'percentile'</span><span class="s1">]))</span>
+    <span class="s1">val = ValueDescriptor(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">gte = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = ()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">type,</span>
+                 <span class="s1">val=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">gte=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.type = type</span>
+        <span class="s1">self.val = val</span>
+        <span class="s1">self.gte = gte</span>
+
+
+<span class="s0">class </span><span class="s1">RuleType(Serialisable):</span>
+
+    <span class="s1">cfvo = Sequence(expected_type=FormatObject)</span>
+
+
+<span class="s0">class </span><span class="s1">IconSet(RuleType):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;iconSet&quot;</span>
+
+    <span class="s1">iconSet = NoneSet(values=([</span><span class="s3">'3Arrows'</span><span class="s1">, </span><span class="s3">'3ArrowsGray'</span><span class="s1">, </span><span class="s3">'3Flags'</span><span class="s1">,</span>
+                           <span class="s3">'3TrafficLights1'</span><span class="s1">, </span><span class="s3">'3TrafficLights2'</span><span class="s1">, </span><span class="s3">'3Signs'</span><span class="s1">, </span><span class="s3">'3Symbols'</span><span class="s1">, </span><span class="s3">'3Symbols2'</span><span class="s1">,</span>
+                           <span class="s3">'4Arrows'</span><span class="s1">, </span><span class="s3">'4ArrowsGray'</span><span class="s1">, </span><span class="s3">'4RedToBlack'</span><span class="s1">, </span><span class="s3">'4Rating'</span><span class="s1">, </span><span class="s3">'4TrafficLights'</span><span class="s1">,</span>
+                           <span class="s3">'5Arrows'</span><span class="s1">, </span><span class="s3">'5ArrowsGray'</span><span class="s1">, </span><span class="s3">'5Rating'</span><span class="s1">, </span><span class="s3">'5Quarters'</span><span class="s1">]))</span>
+    <span class="s1">showValue = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">percent = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">reverse = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">&quot;cfvo&quot;</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">iconSet=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">showValue=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">percent=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">reverse=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">cfvo=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.iconSet = iconSet</span>
+        <span class="s1">self.showValue = showValue</span>
+        <span class="s1">self.percent = percent</span>
+        <span class="s1">self.reverse = reverse</span>
+        <span class="s1">self.cfvo = cfvo</span>
+
+
+<span class="s0">class </span><span class="s1">DataBar(RuleType):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;dataBar&quot;</span>
+
+    <span class="s1">minLength = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">maxLength = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">showValue = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">color = ColorDescriptor()</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'cfvo'</span><span class="s1">, </span><span class="s3">'color'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">minLength=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">maxLength=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">showValue=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">cfvo=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">color=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.minLength = minLength</span>
+        <span class="s1">self.maxLength = maxLength</span>
+        <span class="s1">self.showValue = showValue</span>
+        <span class="s1">self.cfvo = cfvo</span>
+        <span class="s1">self.color = color</span>
+
+
+<span class="s0">class </span><span class="s1">ColorScale(RuleType):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;colorScale&quot;</span>
+
+    <span class="s1">color = Sequence(expected_type=Color)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'cfvo'</span><span class="s1">, </span><span class="s3">'color'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">cfvo=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">color=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.cfvo = cfvo</span>
+        <span class="s1">self.color = color</span>
+
+
+<span class="s0">class </span><span class="s1">Rule(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;cfRule&quot;</span>
+
+    <span class="s1">type = Set(values=([</span><span class="s3">'expression'</span><span class="s1">, </span><span class="s3">'cellIs'</span><span class="s1">, </span><span class="s3">'colorScale'</span><span class="s1">, </span><span class="s3">'dataBar'</span><span class="s1">,</span>
+                        <span class="s3">'iconSet'</span><span class="s1">, </span><span class="s3">'top10'</span><span class="s1">, </span><span class="s3">'uniqueValues'</span><span class="s1">, </span><span class="s3">'duplicateValues'</span><span class="s1">, </span><span class="s3">'containsText'</span><span class="s1">,</span>
+                        <span class="s3">'notContainsText'</span><span class="s1">, </span><span class="s3">'beginsWith'</span><span class="s1">, </span><span class="s3">'endsWith'</span><span class="s1">, </span><span class="s3">'containsBlanks'</span><span class="s1">,</span>
+                        <span class="s3">'notContainsBlanks'</span><span class="s1">, </span><span class="s3">'containsErrors'</span><span class="s1">, </span><span class="s3">'notContainsErrors'</span><span class="s1">, </span><span class="s3">'timePeriod'</span><span class="s1">,</span>
+                        <span class="s3">'aboveAverage'</span><span class="s1">]))</span>
+    <span class="s1">dxfId = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">priority = Integer()</span>
+    <span class="s1">stopIfTrue = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">aboveAverage = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">percent = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">bottom = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">operator = NoneSet(values=([</span><span class="s3">'lessThan'</span><span class="s1">, </span><span class="s3">'lessThanOrEqual'</span><span class="s1">, </span><span class="s3">'equal'</span><span class="s1">,</span>
+                            <span class="s3">'notEqual'</span><span class="s1">, </span><span class="s3">'greaterThanOrEqual'</span><span class="s1">, </span><span class="s3">'greaterThan'</span><span class="s1">, </span><span class="s3">'between'</span><span class="s1">, </span><span class="s3">'notBetween'</span><span class="s1">,</span>
+                            <span class="s3">'containsText'</span><span class="s1">, </span><span class="s3">'notContains'</span><span class="s1">, </span><span class="s3">'beginsWith'</span><span class="s1">, </span><span class="s3">'endsWith'</span><span class="s1">]))</span>
+    <span class="s1">text = String(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">timePeriod = NoneSet(values=([</span><span class="s3">'today'</span><span class="s1">, </span><span class="s3">'yesterday'</span><span class="s1">, </span><span class="s3">'tomorrow'</span><span class="s1">, </span><span class="s3">'last7Days'</span><span class="s1">,</span>
+                              <span class="s3">'thisMonth'</span><span class="s1">, </span><span class="s3">'lastMonth'</span><span class="s1">, </span><span class="s3">'nextMonth'</span><span class="s1">, </span><span class="s3">'thisWeek'</span><span class="s1">, </span><span class="s3">'lastWeek'</span><span class="s1">,</span>
+                              <span class="s3">'nextWeek'</span><span class="s1">]))</span>
+    <span class="s1">rank = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">stdDev = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">equalAverage = Bool(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">formula = Sequence(expected_type=unicode)</span>
+    <span class="s1">colorScale = Typed(expected_type=ColorScale, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">dataBar = Typed(expected_type=DataBar, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">iconSet = Typed(expected_type=IconSet, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">dxf = Typed(expected_type=DifferentialStyle, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'colorScale'</span><span class="s1">, </span><span class="s3">'dataBar'</span><span class="s1">, </span><span class="s3">'iconSet'</span><span class="s1">, </span><span class="s3">'formula'</span><span class="s1">)</span>
+    <span class="s1">__attrs__ = (</span><span class="s3">'type'</span><span class="s1">, </span><span class="s3">'rank'</span><span class="s1">, </span><span class="s3">'priority'</span><span class="s1">, </span><span class="s3">'equalAverage'</span><span class="s1">, </span><span class="s3">'operator'</span><span class="s1">,</span>
+                 <span class="s3">'aboveAverage'</span><span class="s1">, </span><span class="s3">'dxfId'</span><span class="s1">, </span><span class="s3">'stdDev'</span><span class="s1">, </span><span class="s3">'stopIfTrue'</span><span class="s1">, </span><span class="s3">'timePeriod'</span><span class="s1">, </span><span class="s3">'text'</span><span class="s1">,</span>
+                 <span class="s3">'percent'</span><span class="s1">, </span><span class="s3">'bottom'</span><span class="s1">)</span>
+
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">type,</span>
+                 <span class="s1">dxfId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">priority=</span><span class="s4">0</span><span class="s1">,</span>
+                 <span class="s1">stopIfTrue=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">aboveAverage=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">percent=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">bottom=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">operator=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">text=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">timePeriod=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">rank=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">stdDev=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">equalAverage=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">formula=(),</span>
+                 <span class="s1">colorScale=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dataBar=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">iconSet=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">dxf=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.type = type</span>
+        <span class="s1">self.dxfId = dxfId</span>
+        <span class="s1">self.priority = priority</span>
+        <span class="s1">self.stopIfTrue = stopIfTrue</span>
+        <span class="s1">self.aboveAverage = aboveAverage</span>
+        <span class="s1">self.percent = percent</span>
+        <span class="s1">self.bottom = bottom</span>
+        <span class="s1">self.operator = operator</span>
+        <span class="s1">self.text = text</span>
+        <span class="s1">self.timePeriod = timePeriod</span>
+        <span class="s1">self.rank = rank</span>
+        <span class="s1">self.stdDev = stdDev</span>
+        <span class="s1">self.equalAverage = equalAverage</span>
+        <span class="s1">self.formula = formula</span>
+        <span class="s1">self.colorScale = colorScale</span>
+        <span class="s1">self.dataBar = dataBar</span>
+        <span class="s1">self.iconSet = iconSet</span>
+        <span class="s1">self.dxf = dxf</span>
+
+
+<span class="s0">def </span><span class="s1">ColorScaleRule(start_type=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">start_value=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">start_color=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">mid_type=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">mid_value=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">mid_color=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">end_type=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">end_value=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">end_color=</span><span class="s0">None</span><span class="s1">):</span>
+
+    <span class="s2">&quot;&quot;&quot;Backwards compatibility&quot;&quot;&quot;</span>
+    <span class="s1">formats = []</span>
+    <span class="s0">if </span><span class="s1">start_type </span><span class="s0">is not None</span><span class="s1">:</span>
+        <span class="s1">formats.append(FormatObject(type=start_type, val=start_value))</span>
+    <span class="s0">if </span><span class="s1">mid_type </span><span class="s0">is not None</span><span class="s1">:</span>
+        <span class="s1">formats.append(FormatObject(type=mid_type, val=mid_value))</span>
+    <span class="s0">if </span><span class="s1">end_type </span><span class="s0">is not None</span><span class="s1">:</span>
+        <span class="s1">formats.append(FormatObject(type=end_type, val=end_value))</span>
+    <span class="s1">colors = []</span>
+    <span class="s0">for </span><span class="s1">v </span><span class="s0">in </span><span class="s1">(start_color, mid_color, end_color):</span>
+        <span class="s0">if </span><span class="s1">v </span><span class="s0">is not None</span><span class="s1">:</span>
+            <span class="s0">if not </span><span class="s1">isinstance(v, Color):</span>
+                <span class="s1">v = Color(v)</span>
+            <span class="s1">colors.append(v)</span>
+    <span class="s1">cs = ColorScale(cfvo=formats, color=colors)</span>
+    <span class="s1">rule = Rule(type=</span><span class="s3">&quot;colorScale&quot;</span><span class="s1">, colorScale=cs)</span>
+    <span class="s0">return </span><span class="s1">rule</span>
+
+
+<span class="s0">def </span><span class="s1">FormulaRule(formula=</span><span class="s0">None</span><span class="s1">, stopIfTrue=</span><span class="s0">None</span><span class="s1">, font=</span><span class="s0">None</span><span class="s1">, border=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">fill=</span><span class="s0">None</span><span class="s1">):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Conditional formatting with custom differential style 
+    &quot;&quot;&quot;</span>
+    <span class="s1">rule = Rule(type=</span><span class="s3">&quot;expression&quot;</span><span class="s1">, formula=formula, stopIfTrue=stopIfTrue)</span>
+    <span class="s1">rule.dxf =  DifferentialStyle(font=font, border=border, fill=fill)</span>
+    <span class="s0">return </span><span class="s1">rule</span>
+
+
+<span class="s0">def </span><span class="s1">CellIsRule(operator=</span><span class="s0">None</span><span class="s1">, formula=</span><span class="s0">None</span><span class="s1">, stopIfTrue=</span><span class="s0">None</span><span class="s1">, font=</span><span class="s0">None</span><span class="s1">, border=</span><span class="s0">None</span><span class="s1">, fill=</span><span class="s0">None</span><span class="s1">):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Conditional formatting rule based on cell contents. 
+    &quot;&quot;&quot;</span>
+    <span class="s2"># Excel doesn't use &gt;, &gt;=, etc, but allow for ease of python development</span>
+    <span class="s1">expand = {</span><span class="s3">&quot;&gt;&quot;</span><span class="s1">: </span><span class="s3">&quot;greaterThan&quot;</span><span class="s1">, </span><span class="s3">&quot;&gt;=&quot;</span><span class="s1">: </span><span class="s3">&quot;greaterThanOrEqual&quot;</span><span class="s1">, </span><span class="s3">&quot;&lt;&quot;</span><span class="s1">: </span><span class="s3">&quot;lessThan&quot;</span><span class="s1">, </span><span class="s3">&quot;&lt;=&quot;</span><span class="s1">: </span><span class="s3">&quot;lessThanOrEqual&quot;</span><span class="s1">,</span>
+              <span class="s3">&quot;=&quot;</span><span class="s1">: </span><span class="s3">&quot;equal&quot;</span><span class="s1">, </span><span class="s3">&quot;==&quot;</span><span class="s1">: </span><span class="s3">&quot;equal&quot;</span><span class="s1">, </span><span class="s3">&quot;!=&quot;</span><span class="s1">: </span><span class="s3">&quot;notEqual&quot;</span><span class="s1">}</span>
+
+    <span class="s1">operator = expand.get(operator, operator)</span>
+
+    <span class="s1">rule = Rule(type=</span><span class="s3">'cellIs'</span><span class="s1">, operator=operator, formula=formula, stopIfTrue=stopIfTrue)</span>
+    <span class="s1">rule.dxf = DifferentialStyle(font=font, border=border, fill=fill)</span>
+
+    <span class="s0">return </span><span class="s1">rule</span>
+
+
+<span class="s0">def </span><span class="s1">IconSetRule(icon_style=</span><span class="s0">None</span><span class="s1">, type=</span><span class="s0">None</span><span class="s1">, values=</span><span class="s0">None</span><span class="s1">, showValue=</span><span class="s0">None</span><span class="s1">, percent=</span><span class="s0">None</span><span class="s1">, reverse=</span><span class="s0">None</span><span class="s1">):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Convenience function for creating icon set rules 
+    &quot;&quot;&quot;</span>
+    <span class="s1">cfvo = []</span>
+    <span class="s0">for </span><span class="s1">val </span><span class="s0">in </span><span class="s1">values:</span>
+        <span class="s1">cfvo.append(FormatObject(type, val))</span>
+    <span class="s1">icon_set = IconSet(iconSet=icon_style, cfvo=cfvo, showValue=showValue,</span>
+                       <span class="s1">percent=percent, reverse=reverse)</span>
+    <span class="s1">rule = Rule(type=</span><span class="s3">'iconSet'</span><span class="s1">, iconSet=icon_set)</span>
+
+    <span class="s0">return </span><span class="s1">rule</span>
+
+
+<span class="s0">def </span><span class="s1">DataBarRule(start_type=</span><span class="s0">None</span><span class="s1">, start_value=</span><span class="s0">None</span><span class="s1">, end_type=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">end_value=</span><span class="s0">None</span><span class="s1">, color=</span><span class="s0">None</span><span class="s1">, showValue=</span><span class="s0">None</span><span class="s1">, minLength=</span><span class="s0">None</span><span class="s1">, maxLength=</span><span class="s0">None</span><span class="s1">):</span>
+    <span class="s1">start = FormatObject(start_type, start_value)</span>
+    <span class="s1">end = FormatObject(end_type, end_value)</span>
+    <span class="s1">data_bar = DataBar(cfvo=[start, end], color=color, showValue=showValue,</span>
+                       <span class="s1">minLength=minLength, maxLength=maxLength)</span>
+    <span class="s1">rule = Rule(type=</span><span class="s3">'dataBar'</span><span class="s1">, dataBar=data_bar)</span>
+
+    <span class="s0">return </span><span class="s1">rule</span>
+</pre>
+</body>
+</html>

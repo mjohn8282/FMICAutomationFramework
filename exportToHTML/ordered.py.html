@@ -1,0 +1,31 @@
+<html>
+<head>
+<title>ordered.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+ordered.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">collections </span><span class="s0">import </span><span class="s1">OrderedDict</span>
+
+<span class="s0">from </span><span class="s1">. </span><span class="s0">import </span><span class="s1">TomlDecoder, TomlEncoder</span>
+
+
+<span class="s0">class </span><span class="s1">TomlOrderedDecoder(TomlDecoder):</span>
+    <span class="s0">def </span><span class="s1">__init__(self):</span>
+        <span class="s1">super(self.__class__, self).__init__(_dict=OrderedDict)</span>
+
+
+<span class="s0">class </span><span class="s1">TomlOrderedEncoder(TomlEncoder):</span>
+    <span class="s0">def </span><span class="s1">__init__(self):</span>
+        <span class="s1">super(self.__class__, self).__init__(_dict=OrderedDict)</span>
+</pre>
+</body>
+</html>

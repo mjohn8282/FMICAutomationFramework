@@ -1,0 +1,95 @@
+<html>
+<head>
+<title>layout.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+layout.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">NoneSet,</span>
+    <span class="s1">Float,</span>
+    <span class="s1">Typed,</span>
+    <span class="s1">Alias,</span>
+<span class="s1">)</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.excel </span><span class="s0">import </span><span class="s1">ExtensionList</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.nested </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">NestedNoneSet,</span>
+    <span class="s1">NestedFloat</span>
+
+<span class="s1">)</span>
+
+<span class="s0">class </span><span class="s1">ManualLayout(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;manualLayout&quot;</span>
+
+    <span class="s1">layoutTarget = NestedNoneSet(values=([</span><span class="s3">'inner'</span><span class="s1">, </span><span class="s3">'outer'</span><span class="s1">]))</span>
+    <span class="s1">xMode = NestedNoneSet(values=([</span><span class="s3">'edge'</span><span class="s1">, </span><span class="s3">'factor'</span><span class="s1">]))</span>
+    <span class="s1">yMode = NestedNoneSet(values=([</span><span class="s3">'edge'</span><span class="s1">, </span><span class="s3">'factor'</span><span class="s1">]))</span>
+    <span class="s1">wMode = NestedNoneSet(values=([</span><span class="s3">'edge'</span><span class="s1">, </span><span class="s3">'factor'</span><span class="s1">]))</span>
+    <span class="s1">hMode = NestedNoneSet(values=([</span><span class="s3">'edge'</span><span class="s1">, </span><span class="s3">'factor'</span><span class="s1">]))</span>
+    <span class="s1">x = NestedFloat(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">y = NestedFloat(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">w = NestedFloat(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">width = Alias(</span><span class="s3">'w'</span><span class="s1">)</span>
+    <span class="s1">h = NestedFloat(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">height = Alias(</span><span class="s3">'h'</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'layoutTarget'</span><span class="s1">, </span><span class="s3">'xMode'</span><span class="s1">, </span><span class="s3">'yMode'</span><span class="s1">, </span><span class="s3">'wMode'</span><span class="s1">, </span><span class="s3">'hMode'</span><span class="s1">, </span><span class="s3">'x'</span><span class="s1">,</span>
+                    <span class="s3">'y'</span><span class="s1">, </span><span class="s3">'w'</span><span class="s1">, </span><span class="s3">'h'</span><span class="s1">)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">layoutTarget=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">xMode=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">yMode=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">wMode=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">hMode=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">x=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">y=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">w=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">h=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.layoutTarget = layoutTarget</span>
+        <span class="s1">self.xMode = xMode</span>
+        <span class="s1">self.yMode = yMode</span>
+        <span class="s1">self.wMode = wMode</span>
+        <span class="s1">self.hMode = hMode</span>
+        <span class="s1">self.x = x</span>
+        <span class="s1">self.y = y</span>
+        <span class="s1">self.w = w</span>
+        <span class="s1">self.h = h</span>
+
+
+<span class="s0">class </span><span class="s1">Layout(Serialisable):</span>
+
+    <span class="s1">tagname = </span><span class="s3">&quot;layout&quot;</span>
+
+    <span class="s1">manualLayout = Typed(expected_type=ManualLayout, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">extLst = Typed(expected_type=ExtensionList, allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s3">'manualLayout'</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">manualLayout=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">extLst=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.manualLayout = manualLayout</span>
+</pre>
+</body>
+</html>

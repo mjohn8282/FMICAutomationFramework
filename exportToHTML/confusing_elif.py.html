@@ -1,0 +1,77 @@
+<html>
+<head>
+<title>confusing_elif.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+confusing_elif.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Andreas Finkler &lt;andi.finkler@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+
+<span class="s2">from </span><span class="s1">pylint.checkers </span><span class="s2">import </span><span class="s1">BaseChecker</span>
+<span class="s2">from </span><span class="s1">pylint.checkers.utils </span><span class="s2">import </span><span class="s1">check_messages</span>
+<span class="s2">from </span><span class="s1">pylint.interfaces </span><span class="s2">import </span><span class="s1">IAstroidChecker</span>
+<span class="s2">from </span><span class="s1">pylint.lint </span><span class="s2">import </span><span class="s1">PyLinter</span>
+
+
+<span class="s2">class </span><span class="s1">ConfusingConsecutiveElifChecker(BaseChecker):</span>
+    <span class="s0">&quot;&quot;&quot;Checks if &quot;elif&quot; is used right after an indented block that finishes with &quot;if&quot; or &quot;elif&quot; itself.&quot;&quot;&quot;</span>
+
+    <span class="s1">__implements__ = IAstroidChecker</span>
+
+    <span class="s1">name = </span><span class="s3">&quot;confusing-elif-checker&quot;</span>
+    <span class="s1">priority = -</span><span class="s4">1</span>
+    <span class="s1">msgs = {</span>
+        <span class="s3">&quot;R5601&quot;</span><span class="s1">: (</span>
+            <span class="s3">&quot;Consecutive elif with differing indentation level, consider creating a function to separate the inner elif&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;confusing-consecutive-elif&quot;</span><span class="s1">,</span>
+            <span class="s3">&quot;Used when an elif statement follows right after an indented block which itself ends with if or elif. &quot;</span>
+            <span class="s3">&quot;It may not be ovious if the elif statement was willingly or mistakenly unindented. &quot;</span>
+            <span class="s3">&quot;Extracting the indented if statement into a separate function might avoid confusion and prevent errors.&quot;</span><span class="s1">,</span>
+        <span class="s1">)</span>
+    <span class="s1">}</span>
+
+    <span class="s1">@check_messages(</span><span class="s3">&quot;confusing-consecutive-elif&quot;</span><span class="s1">)</span>
+    <span class="s2">def </span><span class="s1">visit_if(self, node: astroid.If):</span>
+        <span class="s1">body_ends_with_if = isinstance(</span>
+            <span class="s1">node.body[-</span><span class="s4">1</span><span class="s1">], astroid.If</span>
+        <span class="s1">) </span><span class="s2">and </span><span class="s1">self._has_no_else_clause(node.body[-</span><span class="s4">1</span><span class="s1">])</span>
+        <span class="s2">if </span><span class="s1">node.has_elif_block() </span><span class="s2">and </span><span class="s1">body_ends_with_if:</span>
+            <span class="s1">self.add_message(</span><span class="s3">&quot;confusing-consecutive-elif&quot;</span><span class="s1">, node=node.orelse[</span><span class="s4">0</span><span class="s1">])</span>
+
+    <span class="s1">@staticmethod</span>
+    <span class="s2">def </span><span class="s1">_has_no_else_clause(node: astroid.If):</span>
+        <span class="s1">orelse = node.orelse</span>
+        <span class="s2">while </span><span class="s1">orelse </span><span class="s2">and </span><span class="s1">isinstance(orelse[</span><span class="s4">0</span><span class="s1">], astroid.If):</span>
+            <span class="s1">orelse = orelse[</span><span class="s4">0</span><span class="s1">].orelse</span>
+        <span class="s2">if not </span><span class="s1">orelse </span><span class="s2">or </span><span class="s1">isinstance(orelse[</span><span class="s4">0</span><span class="s1">], astroid.If):</span>
+            <span class="s2">return True</span>
+        <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">register(linter: PyLinter):</span>
+    <span class="s0">&quot;&quot;&quot;This required method auto registers the checker. 
+ 
+    :param linter: The linter to register the checker to. 
+    :type linter: pylint.lint.PyLinter 
+    &quot;&quot;&quot;</span>
+    <span class="s1">linter.register_checker(ConfusingConsecutiveElifChecker(linter))</span>
+</pre>
+</body>
+</html>

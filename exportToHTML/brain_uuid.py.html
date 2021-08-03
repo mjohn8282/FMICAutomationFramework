@@ -1,0 +1,42 @@
+<html>
+<head>
+<title>brain_uuid.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_uuid.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2017-2018, 2020 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2020-2021 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+
+<span class="s0"># Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/astroid/blob/master/LICENSE</span>
+
+<span class="s0">&quot;&quot;&quot;Astroid hooks for the UUID module.&quot;&quot;&quot;</span>
+
+
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">MANAGER, nodes</span>
+
+
+<span class="s2">def </span><span class="s1">_patch_uuid_class(node):</span>
+    <span class="s0"># The .int member is patched using __dict__</span>
+    <span class="s1">node.locals[</span><span class="s3">&quot;int&quot;</span><span class="s1">] = [nodes.Const(</span><span class="s4">0</span><span class="s1">, parent=node)]</span>
+
+
+<span class="s1">MANAGER.register_transform(</span>
+    <span class="s1">nodes.ClassDef, _patch_uuid_class, </span><span class="s2">lambda </span><span class="s1">node: node.qname() == </span><span class="s3">&quot;uuid.UUID&quot;</span>
+<span class="s1">)</span>
+</pre>
+</body>
+</html>

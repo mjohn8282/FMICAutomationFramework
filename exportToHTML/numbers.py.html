@@ -1,0 +1,209 @@
+<html>
+<head>
+<title>numbers.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+numbers.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+<span class="s0">import </span><span class="s1">re</span>
+
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors </span><span class="s0">import </span><span class="s1">(</span>
+    <span class="s1">String,</span>
+    <span class="s1">Sequence,</span>
+    <span class="s1">Integer,</span>
+<span class="s1">)</span>
+<span class="s0">from </span><span class="s1">openpyexcel.descriptors.serialisable </span><span class="s0">import </span><span class="s1">Serialisable</span>
+
+
+<span class="s1">BUILTIN_FORMATS = {</span>
+    <span class="s3">0</span><span class="s1">: </span><span class="s4">'General'</span><span class="s1">,</span>
+    <span class="s3">1</span><span class="s1">: </span><span class="s4">'0'</span><span class="s1">,</span>
+    <span class="s3">2</span><span class="s1">: </span><span class="s4">'0.00'</span><span class="s1">,</span>
+    <span class="s3">3</span><span class="s1">: </span><span class="s4">'#,##0'</span><span class="s1">,</span>
+    <span class="s3">4</span><span class="s1">: </span><span class="s4">'#,##0.00'</span><span class="s1">,</span>
+    <span class="s3">5</span><span class="s1">: </span><span class="s4">'&quot;$&quot;#,##0_);(&quot;$&quot;#,##0)'</span><span class="s1">,</span>
+    <span class="s3">6</span><span class="s1">: </span><span class="s4">'&quot;$&quot;#,##0_);[Red](&quot;$&quot;#,##0)'</span><span class="s1">,</span>
+    <span class="s3">7</span><span class="s1">: </span><span class="s4">'&quot;$&quot;#,##0.00_);(&quot;$&quot;#,##0.00)'</span><span class="s1">,</span>
+    <span class="s3">8</span><span class="s1">: </span><span class="s4">'&quot;$&quot;#,##0.00_);[Red](&quot;$&quot;#,##0.00)'</span><span class="s1">,</span>
+    <span class="s3">9</span><span class="s1">: </span><span class="s4">'0%'</span><span class="s1">,</span>
+    <span class="s3">10</span><span class="s1">: </span><span class="s4">'0.00%'</span><span class="s1">,</span>
+    <span class="s3">11</span><span class="s1">: </span><span class="s4">'0.00E+00'</span><span class="s1">,</span>
+    <span class="s3">12</span><span class="s1">: </span><span class="s4">'# ?/?'</span><span class="s1">,</span>
+    <span class="s3">13</span><span class="s1">: </span><span class="s4">'# ??/??'</span><span class="s1">,</span>
+    <span class="s3">14</span><span class="s1">: </span><span class="s4">'mm-dd-yy'</span><span class="s1">,</span>
+    <span class="s3">15</span><span class="s1">: </span><span class="s4">'d-mmm-yy'</span><span class="s1">,</span>
+    <span class="s3">16</span><span class="s1">: </span><span class="s4">'d-mmm'</span><span class="s1">,</span>
+    <span class="s3">17</span><span class="s1">: </span><span class="s4">'mmm-yy'</span><span class="s1">,</span>
+    <span class="s3">18</span><span class="s1">: </span><span class="s4">'h:mm AM/PM'</span><span class="s1">,</span>
+    <span class="s3">19</span><span class="s1">: </span><span class="s4">'h:mm:ss AM/PM'</span><span class="s1">,</span>
+    <span class="s3">20</span><span class="s1">: </span><span class="s4">'h:mm'</span><span class="s1">,</span>
+    <span class="s3">21</span><span class="s1">: </span><span class="s4">'h:mm:ss'</span><span class="s1">,</span>
+    <span class="s3">22</span><span class="s1">: </span><span class="s4">'m/d/yy h:mm'</span><span class="s1">,</span>
+
+    <span class="s3">37</span><span class="s1">: </span><span class="s4">'#,##0_);(#,##0)'</span><span class="s1">,</span>
+    <span class="s3">38</span><span class="s1">: </span><span class="s4">'#,##0_);[Red](#,##0)'</span><span class="s1">,</span>
+    <span class="s3">39</span><span class="s1">: </span><span class="s4">'#,##0.00_);(#,##0.00)'</span><span class="s1">,</span>
+    <span class="s3">40</span><span class="s1">: </span><span class="s4">'#,##0.00_);[Red](#,##0.00)'</span><span class="s1">,</span>
+
+    <span class="s3">41</span><span class="s1">: </span><span class="s4">r'_(* #,##0_);_(* \(#,##0\);_(* &quot;-&quot;_);_(@_)'</span><span class="s1">,</span>
+    <span class="s3">42</span><span class="s1">: </span><span class="s4">r'_(&quot;$&quot;* #,##0_);_(&quot;$&quot;* \(#,##0\);_(&quot;$&quot;* &quot;-&quot;_);_(@_)'</span><span class="s1">,</span>
+    <span class="s3">43</span><span class="s1">: </span><span class="s4">r'_(* #,##0.00_);_(* \(#,##0.00\);_(* &quot;-&quot;??_);_(@_)'</span><span class="s1">,</span>
+
+    <span class="s3">44</span><span class="s1">: </span><span class="s4">r'_(&quot;$&quot;* #,##0.00_)_(&quot;$&quot;* \(#,##0.00\)_(&quot;$&quot;* &quot;-&quot;??_)_(@_)'</span><span class="s1">,</span>
+    <span class="s3">45</span><span class="s1">: </span><span class="s4">'mm:ss'</span><span class="s1">,</span>
+    <span class="s3">46</span><span class="s1">: </span><span class="s4">'[h]:mm:ss'</span><span class="s1">,</span>
+    <span class="s3">47</span><span class="s1">: </span><span class="s4">'mmss.0'</span><span class="s1">,</span>
+    <span class="s3">48</span><span class="s1">: </span><span class="s4">'##0.0E+0'</span><span class="s1">,</span>
+    <span class="s3">49</span><span class="s1">: </span><span class="s4">'@'</span><span class="s1">, }</span>
+
+<span class="s1">BUILTIN_FORMATS_REVERSE = dict(</span>
+        <span class="s1">[(value, key) </span><span class="s0">for </span><span class="s1">key, value </span><span class="s0">in </span><span class="s1">BUILTIN_FORMATS.items()])</span>
+
+<span class="s1">FORMAT_GENERAL = BUILTIN_FORMATS[</span><span class="s3">0</span><span class="s1">]</span>
+<span class="s1">FORMAT_TEXT = BUILTIN_FORMATS[</span><span class="s3">49</span><span class="s1">]</span>
+<span class="s1">FORMAT_NUMBER = BUILTIN_FORMATS[</span><span class="s3">1</span><span class="s1">]</span>
+<span class="s1">FORMAT_NUMBER_00 = BUILTIN_FORMATS[</span><span class="s3">2</span><span class="s1">]</span>
+<span class="s1">FORMAT_NUMBER_COMMA_SEPARATED1 = BUILTIN_FORMATS[</span><span class="s3">4</span><span class="s1">]</span>
+<span class="s1">FORMAT_NUMBER_COMMA_SEPARATED2 = </span><span class="s4">'#,##0.00_-'</span>
+<span class="s1">FORMAT_PERCENTAGE = BUILTIN_FORMATS[</span><span class="s3">9</span><span class="s1">]</span>
+<span class="s1">FORMAT_PERCENTAGE_00 = BUILTIN_FORMATS[</span><span class="s3">10</span><span class="s1">]</span>
+<span class="s1">FORMAT_DATE_YYYYMMDD2 = </span><span class="s4">'yyyy-mm-dd'</span>
+<span class="s1">FORMAT_DATE_YYMMDD = </span><span class="s4">'yy-mm-dd'</span>
+<span class="s1">FORMAT_DATE_DDMMYY = </span><span class="s4">'dd/mm/yy'</span>
+<span class="s1">FORMAT_DATE_DMYSLASH = </span><span class="s4">'d/m/y'</span>
+<span class="s1">FORMAT_DATE_DMYMINUS = </span><span class="s4">'d-m-y'</span>
+<span class="s1">FORMAT_DATE_DMMINUS = </span><span class="s4">'d-m'</span>
+<span class="s1">FORMAT_DATE_MYMINUS = </span><span class="s4">'m-y'</span>
+<span class="s1">FORMAT_DATE_XLSX14 = BUILTIN_FORMATS[</span><span class="s3">14</span><span class="s1">]</span>
+<span class="s1">FORMAT_DATE_XLSX15 = BUILTIN_FORMATS[</span><span class="s3">15</span><span class="s1">]</span>
+<span class="s1">FORMAT_DATE_XLSX16 = BUILTIN_FORMATS[</span><span class="s3">16</span><span class="s1">]</span>
+<span class="s1">FORMAT_DATE_XLSX17 = BUILTIN_FORMATS[</span><span class="s3">17</span><span class="s1">]</span>
+<span class="s1">FORMAT_DATE_XLSX22 = BUILTIN_FORMATS[</span><span class="s3">22</span><span class="s1">]</span>
+<span class="s1">FORMAT_DATE_DATETIME = </span><span class="s4">'yyyy-mm-dd h:mm:ss'</span>
+<span class="s1">FORMAT_DATE_TIME1 = BUILTIN_FORMATS[</span><span class="s3">18</span><span class="s1">]</span>
+<span class="s1">FORMAT_DATE_TIME2 = BUILTIN_FORMATS[</span><span class="s3">19</span><span class="s1">]</span>
+<span class="s1">FORMAT_DATE_TIME3 = BUILTIN_FORMATS[</span><span class="s3">20</span><span class="s1">]</span>
+<span class="s1">FORMAT_DATE_TIME4 = BUILTIN_FORMATS[</span><span class="s3">21</span><span class="s1">]</span>
+<span class="s1">FORMAT_DATE_TIME5 = BUILTIN_FORMATS[</span><span class="s3">45</span><span class="s1">]</span>
+<span class="s1">FORMAT_DATE_TIME6 = BUILTIN_FORMATS[</span><span class="s3">21</span><span class="s1">]</span>
+<span class="s1">FORMAT_DATE_TIME7 = </span><span class="s4">'i:s.S'</span>
+<span class="s1">FORMAT_DATE_TIME8 = </span><span class="s4">'h:mm:ss@'</span>
+<span class="s1">FORMAT_DATE_TIMEDELTA = </span><span class="s4">'[hh]:mm:ss'</span>
+<span class="s1">FORMAT_DATE_YYMMDDSLASH = </span><span class="s4">'yy/mm/dd@'</span>
+<span class="s1">FORMAT_CURRENCY_USD_SIMPLE = </span><span class="s4">'&quot;$&quot;#,##0.00_-'</span>
+<span class="s1">FORMAT_CURRENCY_USD = </span><span class="s4">'$#,##0_-'</span>
+<span class="s1">FORMAT_CURRENCY_EUR_SIMPLE = </span><span class="s4">'[$EUR ]#,##0.00_-'</span>
+
+
+<span class="s1">COLORS = </span><span class="s4">r&quot;\[(BLACK|BLUE|CYAN|GREEN|MAGENTA|RED|WHITE|YELLOW)\]&quot;</span>
+<span class="s1">LITERAL_GROUP = </span><span class="s4">r'&quot;[^&quot;]+&quot;'</span>
+<span class="s1">LOCALE_GROUP = </span><span class="s4">r'\[\$[^\]]+\]'</span>
+<span class="s1">STRIP_RE = re.compile(</span><span class="s4">&quot;{0}|{1}|{2}&quot;</span><span class="s1">.format(COLORS, LITERAL_GROUP, LOCALE_GROUP), re.IGNORECASE + re.UNICODE)</span>
+
+
+<span class="s2"># Spec 18.8.31 numFmts</span>
+<span class="s2"># +ve;-ve;zero;text</span>
+
+<span class="s0">def </span><span class="s1">is_date_format(fmt):</span>
+    <span class="s0">if </span><span class="s1">fmt </span><span class="s0">is None</span><span class="s1">:</span>
+        <span class="s0">return False</span>
+    <span class="s1">fmt = fmt.split(</span><span class="s4">&quot;;&quot;</span><span class="s1">)[</span><span class="s3">0</span><span class="s1">] </span><span class="s2"># only look at the first format</span>
+    <span class="s1">fmt = STRIP_RE.sub(</span><span class="s4">&quot;&quot;</span><span class="s1">, fmt)</span>
+    <span class="s0">return </span><span class="s1">re.search(</span><span class="s4">&quot;[dmhysDMHYS]&quot;</span><span class="s1">, fmt) </span><span class="s0">is not None</span>
+
+
+<span class="s0">def </span><span class="s1">is_datetime(fmt):</span>
+    <span class="s2">&quot;&quot;&quot; 
+    Return date, time or datetime 
+    &quot;&quot;&quot;</span>
+    <span class="s0">if not </span><span class="s1">is_date_format(fmt):</span>
+        <span class="s0">return</span>
+
+    <span class="s1">DATE = TIME = </span><span class="s0">False</span>
+
+    <span class="s0">if </span><span class="s1">any((x </span><span class="s0">in </span><span class="s1">fmt </span><span class="s0">for </span><span class="s1">x </span><span class="s0">in </span><span class="s4">'dy'</span><span class="s1">)):</span>
+        <span class="s1">DATE = </span><span class="s0">True</span>
+    <span class="s0">if </span><span class="s1">any((x </span><span class="s0">in </span><span class="s1">fmt </span><span class="s0">for </span><span class="s1">x </span><span class="s0">in </span><span class="s4">'hs'</span><span class="s1">)):</span>
+        <span class="s1">TIME = </span><span class="s0">True</span>
+
+    <span class="s0">if </span><span class="s1">DATE </span><span class="s0">and </span><span class="s1">TIME:</span>
+        <span class="s0">return </span><span class="s4">&quot;datetime&quot;</span>
+    <span class="s0">if </span><span class="s1">DATE:</span>
+        <span class="s0">return </span><span class="s4">&quot;date&quot;</span>
+    <span class="s0">return </span><span class="s4">&quot;time&quot;</span>
+
+
+<span class="s0">def </span><span class="s1">is_builtin(fmt):</span>
+    <span class="s0">return </span><span class="s1">fmt </span><span class="s0">in </span><span class="s1">BUILTIN_FORMATS.values()</span>
+
+
+<span class="s0">def </span><span class="s1">builtin_format_code(index):</span>
+    <span class="s2">&quot;&quot;&quot;Return one of the standard format codes by index.&quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">BUILTIN_FORMATS[index]</span>
+
+
+<span class="s0">def </span><span class="s1">builtin_format_id(fmt):</span>
+    <span class="s2">&quot;&quot;&quot;Return the id of a standard style.&quot;&quot;&quot;</span>
+    <span class="s0">return </span><span class="s1">BUILTIN_FORMATS_REVERSE.get(fmt)</span>
+
+
+<span class="s0">class </span><span class="s1">NumberFormatDescriptor(String):</span>
+
+    <span class="s0">def </span><span class="s1">__set__(self, instance, value):</span>
+        <span class="s0">if </span><span class="s1">value </span><span class="s0">is None</span><span class="s1">:</span>
+            <span class="s1">value = FORMAT_GENERAL</span>
+        <span class="s1">super(NumberFormatDescriptor, self).__set__(instance, value)</span>
+
+
+<span class="s0">class </span><span class="s1">NumberFormat(Serialisable):</span>
+
+    <span class="s1">numFmtId = Integer()</span>
+    <span class="s1">formatCode = String()</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">numFmtId=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">formatCode=</span><span class="s0">None</span><span class="s1">,</span>
+                <span class="s1">):</span>
+        <span class="s1">self.numFmtId = numFmtId</span>
+        <span class="s1">self.formatCode = formatCode</span>
+
+
+<span class="s0">class </span><span class="s1">NumberFormatList(Serialisable):</span>
+
+    <span class="s1">count = Integer(allow_none=</span><span class="s0">True</span><span class="s1">)</span>
+    <span class="s1">numFmt = Sequence(expected_type=NumberFormat)</span>
+
+    <span class="s1">__elements__ = (</span><span class="s4">'numFmt'</span><span class="s1">,)</span>
+    <span class="s1">__attrs__ = (</span><span class="s4">&quot;count&quot;</span><span class="s1">,)</span>
+
+    <span class="s0">def </span><span class="s1">__init__(self,</span>
+                 <span class="s1">count=</span><span class="s0">None</span><span class="s1">,</span>
+                 <span class="s1">numFmt=(),</span>
+                <span class="s1">):</span>
+        <span class="s1">self.numFmt = numFmt</span>
+
+
+    <span class="s1">@property</span>
+    <span class="s0">def </span><span class="s1">count(self):</span>
+        <span class="s0">return </span><span class="s1">len(self.numFmt)</span>
+
+
+    <span class="s0">def </span><span class="s1">__getitem__(self, idx):</span>
+        <span class="s0">return </span><span class="s1">self.numFmt[idx]</span>
+</pre>
+</body>
+</html>

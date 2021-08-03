@@ -1,0 +1,381 @@
+<html>
+<head>
+<title>brain_typing.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #d19a66;}
+.s4 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+brain_typing.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Copyright (c) 2017-2018 Claudiu Popa &lt;pcmanticore@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 Łukasz Rogalski &lt;rogalski.91@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2017 David Euresti &lt;github@euresti.com&gt;</span>
+<span class="s0"># Copyright (c) 2018 Bryce Guinta &lt;bryce.paul.guinta@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Marc Mueller &lt;30130371+cdce8p@users.noreply.github.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 Pierre Sassoulas &lt;pierre.sassoulas@gmail.com&gt;</span>
+<span class="s0"># Copyright (c) 2021 hippo91 &lt;guillaume.peillex@gmail.com&gt;</span>
+
+<span class="s0">&quot;&quot;&quot;Astroid hooks for typing.py support.&quot;&quot;&quot;</span>
+<span class="s2">import </span><span class="s1">sys</span>
+<span class="s2">import </span><span class="s1">typing</span>
+<span class="s2">from </span><span class="s1">functools </span><span class="s2">import </span><span class="s1">partial</span>
+
+<span class="s2">import </span><span class="s1">astroid</span>
+<span class="s2">from </span><span class="s1">astroid </span><span class="s2">import </span><span class="s1">(</span>
+    <span class="s1">MANAGER,</span>
+    <span class="s1">AttributeInferenceError,</span>
+    <span class="s1">InferenceError,</span>
+    <span class="s1">UseInferenceDefault,</span>
+    <span class="s1">context,</span>
+    <span class="s1">extract_node,</span>
+    <span class="s1">inference_tip,</span>
+    <span class="s1">node_classes,</span>
+    <span class="s1">nodes,</span>
+<span class="s1">)</span>
+
+<span class="s1">PY37 = sys.version_info[:</span><span class="s3">2</span><span class="s1">] &gt;= (</span><span class="s3">3</span><span class="s1">, </span><span class="s3">7</span><span class="s1">)</span>
+<span class="s1">PY39 = sys.version_info[:</span><span class="s3">2</span><span class="s1">] &gt;= (</span><span class="s3">3</span><span class="s1">, </span><span class="s3">9</span><span class="s1">)</span>
+
+<span class="s1">TYPING_NAMEDTUPLE_BASENAMES = {</span><span class="s4">&quot;NamedTuple&quot;</span><span class="s1">, </span><span class="s4">&quot;typing.NamedTuple&quot;</span><span class="s1">}</span>
+<span class="s1">TYPING_TYPEVARS = {</span><span class="s4">&quot;TypeVar&quot;</span><span class="s1">, </span><span class="s4">&quot;NewType&quot;</span><span class="s1">}</span>
+<span class="s1">TYPING_TYPEVARS_QUALIFIED = {</span><span class="s4">&quot;typing.TypeVar&quot;</span><span class="s1">, </span><span class="s4">&quot;typing.NewType&quot;</span><span class="s1">}</span>
+<span class="s1">TYPING_TYPE_TEMPLATE = </span><span class="s4">&quot;&quot;&quot; 
+class Meta(type): 
+    def __getitem__(self, item): 
+        return self 
+ 
+    @property 
+    def __args__(self): 
+        return () 
+ 
+class {0}(metaclass=Meta): 
+    pass 
+&quot;&quot;&quot;</span>
+<span class="s1">TYPING_MEMBERS = set(typing.__all__)</span>
+
+<span class="s1">TYPING_ALIAS = frozenset(</span>
+    <span class="s1">(</span>
+        <span class="s4">&quot;typing.Hashable&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Awaitable&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Coroutine&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.AsyncIterable&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.AsyncIterator&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Iterable&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Iterator&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Reversible&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Sized&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Container&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Collection&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Callable&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.AbstractSet&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.MutableSet&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Mapping&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.MutableMapping&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Sequence&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.MutableSequence&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.ByteString&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Tuple&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.List&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Deque&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Set&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.FrozenSet&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.MappingView&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.KeysView&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.ItemsView&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.ValuesView&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.ContextManager&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.AsyncContextManager&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Dict&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.DefaultDict&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.OrderedDict&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Counter&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.ChainMap&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Generator&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.AsyncGenerator&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Type&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Pattern&quot;</span><span class="s1">,</span>
+        <span class="s4">&quot;typing.Match&quot;</span><span class="s1">,</span>
+    <span class="s1">)</span>
+<span class="s1">)</span>
+
+<span class="s1">CLASS_GETITEM_TEMPLATE = </span><span class="s4">&quot;&quot;&quot; 
+@classmethod 
+def __class_getitem__(cls, item): 
+    return cls 
+&quot;&quot;&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">looks_like_typing_typevar_or_newtype(node):</span>
+    <span class="s1">func = node.func</span>
+    <span class="s2">if </span><span class="s1">isinstance(func, nodes.Attribute):</span>
+        <span class="s2">return </span><span class="s1">func.attrname </span><span class="s2">in </span><span class="s1">TYPING_TYPEVARS</span>
+    <span class="s2">if </span><span class="s1">isinstance(func, nodes.Name):</span>
+        <span class="s2">return </span><span class="s1">func.name </span><span class="s2">in </span><span class="s1">TYPING_TYPEVARS</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">infer_typing_typevar_or_newtype(node, context_itton=</span><span class="s2">None</span><span class="s1">):</span>
+    <span class="s0">&quot;&quot;&quot;Infer a typing.TypeVar(...) or typing.NewType(...) call&quot;&quot;&quot;</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">func = next(node.func.infer(context=context_itton))</span>
+    <span class="s2">except </span><span class="s1">InferenceError </span><span class="s2">as </span><span class="s1">exc:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault </span><span class="s2">from </span><span class="s1">exc</span>
+
+    <span class="s2">if </span><span class="s1">func.qname() </span><span class="s2">not in </span><span class="s1">TYPING_TYPEVARS_QUALIFIED:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+    <span class="s2">if not </span><span class="s1">node.args:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+
+    <span class="s1">typename = node.args[</span><span class="s3">0</span><span class="s1">].as_string().strip(</span><span class="s4">&quot;'&quot;</span><span class="s1">)</span>
+    <span class="s1">node = extract_node(TYPING_TYPE_TEMPLATE.format(typename))</span>
+    <span class="s2">return </span><span class="s1">node.infer(context=context_itton)</span>
+
+
+<span class="s2">def </span><span class="s1">_looks_like_typing_subscript(node):</span>
+    <span class="s0">&quot;&quot;&quot;Try to figure out if a Subscript node *might* be a typing-related subscript&quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">isinstance(node, nodes.Name):</span>
+        <span class="s2">return </span><span class="s1">node.name </span><span class="s2">in </span><span class="s1">TYPING_MEMBERS</span>
+    <span class="s2">if </span><span class="s1">isinstance(node, nodes.Attribute):</span>
+        <span class="s2">return </span><span class="s1">node.attrname </span><span class="s2">in </span><span class="s1">TYPING_MEMBERS</span>
+    <span class="s2">if </span><span class="s1">isinstance(node, nodes.Subscript):</span>
+        <span class="s2">return </span><span class="s1">_looks_like_typing_subscript(node.value)</span>
+    <span class="s2">return False</span>
+
+
+<span class="s2">def </span><span class="s1">infer_typing_attr(</span>
+    <span class="s1">node: nodes.Subscript, ctx: context.InferenceContext = </span><span class="s2">None</span>
+<span class="s1">) -&gt; typing.Iterator[nodes.ClassDef]:</span>
+    <span class="s0">&quot;&quot;&quot;Infer a typing.X[...] subscript&quot;&quot;&quot;</span>
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">value = next(node.value.infer())</span>
+    <span class="s2">except </span><span class="s1">InferenceError </span><span class="s2">as </span><span class="s1">exc:</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault </span><span class="s2">from </span><span class="s1">exc</span>
+
+    <span class="s2">if </span><span class="s1">(</span>
+        <span class="s2">not </span><span class="s1">value.qname().startswith(</span><span class="s4">&quot;typing.&quot;</span><span class="s1">)</span>
+        <span class="s2">or </span><span class="s1">PY37</span>
+        <span class="s2">and </span><span class="s1">value.qname() </span><span class="s2">in </span><span class="s1">TYPING_ALIAS</span>
+    <span class="s1">):</span>
+        <span class="s0"># If typing subscript belongs to an alias</span>
+        <span class="s0"># (PY37+) handle it separately.</span>
+        <span class="s2">raise </span><span class="s1">UseInferenceDefault</span>
+
+    <span class="s2">if </span><span class="s1">(</span>
+        <span class="s1">PY37</span>
+        <span class="s2">and </span><span class="s1">isinstance(value, nodes.ClassDef)</span>
+        <span class="s2">and </span><span class="s1">value.qname()</span>
+        <span class="s2">in </span><span class="s1">(</span><span class="s4">&quot;typing.Generic&quot;</span><span class="s1">, </span><span class="s4">&quot;typing.Annotated&quot;</span><span class="s1">, </span><span class="s4">&quot;typing_extensions.Annotated&quot;</span><span class="s1">)</span>
+    <span class="s1">):</span>
+        <span class="s0"># With PY37+ typing.Generic and typing.Annotated (PY39) are subscriptable</span>
+        <span class="s0"># through __class_getitem__. Since astroid can't easily</span>
+        <span class="s0"># infer the native methods, replace them for an easy inference tip</span>
+        <span class="s1">func_to_add = astroid.extract_node(CLASS_GETITEM_TEMPLATE)</span>
+        <span class="s1">value.locals[</span><span class="s4">&quot;__class_getitem__&quot;</span><span class="s1">] = [func_to_add]</span>
+        <span class="s2">if </span><span class="s1">(</span>
+            <span class="s1">isinstance(node.parent, nodes.ClassDef)</span>
+            <span class="s2">and </span><span class="s1">node </span><span class="s2">in </span><span class="s1">node.parent.bases</span>
+            <span class="s2">and </span><span class="s1">getattr(node.parent, </span><span class="s4">&quot;__cache&quot;</span><span class="s1">, </span><span class="s2">None</span><span class="s1">)</span>
+        <span class="s1">):</span>
+            <span class="s0"># node.parent.slots is evaluated and cached before the inference tip</span>
+            <span class="s0"># is first applied. Remove the last result to allow a recalculation of slots</span>
+            <span class="s1">cache = getattr(node.parent, </span><span class="s4">&quot;__cache&quot;</span><span class="s1">)</span>
+            <span class="s2">if </span><span class="s1">cache.get(node.parent.slots) </span><span class="s2">is not None</span><span class="s1">:</span>
+                <span class="s2">del </span><span class="s1">cache[node.parent.slots]</span>
+        <span class="s2">return </span><span class="s1">iter([value])</span>
+
+    <span class="s1">node = extract_node(TYPING_TYPE_TEMPLATE.format(value.qname().split(</span><span class="s4">&quot;.&quot;</span><span class="s1">)[-</span><span class="s3">1</span><span class="s1">]))</span>
+    <span class="s2">return </span><span class="s1">node.infer(context=ctx)</span>
+
+
+<span class="s2">def </span><span class="s1">_looks_like_typedDict(  </span><span class="s0"># pylint: disable=invalid-name</span>
+    <span class="s1">node: nodes.FunctionDef,</span>
+<span class="s1">) -&gt; bool:</span>
+    <span class="s0">&quot;&quot;&quot;Check if node is TypedDict FunctionDef.&quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">isinstance(node, nodes.FunctionDef) </span><span class="s2">and </span><span class="s1">node.name == </span><span class="s4">&quot;TypedDict&quot;</span>
+
+
+<span class="s2">def </span><span class="s1">infer_typedDict(  </span><span class="s0"># pylint: disable=invalid-name</span>
+    <span class="s1">node: nodes.FunctionDef, ctx: context.InferenceContext = </span><span class="s2">None</span>
+<span class="s1">) -&gt; typing.Iterator[nodes.ClassDef]:</span>
+    <span class="s0">&quot;&quot;&quot;Replace TypedDict FunctionDef with ClassDef.&quot;&quot;&quot;</span>
+    <span class="s1">class_def = nodes.ClassDef(</span>
+        <span class="s1">name=</span><span class="s4">&quot;TypedDict&quot;</span><span class="s1">,</span>
+        <span class="s1">lineno=node.lineno,</span>
+        <span class="s1">col_offset=node.col_offset,</span>
+        <span class="s1">parent=node.parent,</span>
+    <span class="s1">)</span>
+    <span class="s2">return </span><span class="s1">iter([class_def])</span>
+
+
+<span class="s2">def </span><span class="s1">_looks_like_typing_alias(node: nodes.Call) -&gt; bool:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Returns True if the node corresponds to a call to _alias function. 
+    For example : 
+ 
+    MutableSet = _alias(collections.abc.MutableSet, T) 
+ 
+    :param node: call node 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">(</span>
+        <span class="s1">isinstance(node, nodes.Call)</span>
+        <span class="s2">and </span><span class="s1">isinstance(node.func, nodes.Name)</span>
+        <span class="s2">and </span><span class="s1">node.func.name == </span><span class="s4">&quot;_alias&quot;</span>
+        <span class="s2">and </span><span class="s1">(</span>
+            <span class="s0"># _alias function works also for builtins object such as list and dict</span>
+            <span class="s1">isinstance(node.args[</span><span class="s3">0</span><span class="s1">], nodes.Attribute)</span>
+            <span class="s2">or </span><span class="s1">isinstance(node.args[</span><span class="s3">0</span><span class="s1">], nodes.Name)</span>
+            <span class="s2">and </span><span class="s1">node.args[</span><span class="s3">0</span><span class="s1">].name != </span><span class="s4">&quot;type&quot;</span>
+        <span class="s1">)</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">_forbid_class_getitem_access(node: nodes.ClassDef) -&gt; </span><span class="s2">None</span><span class="s1">:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Disable the access to __class_getitem__ method for the node in parameters 
+    &quot;&quot;&quot;</span>
+
+    <span class="s2">def </span><span class="s1">full_raiser(origin_func, attr, *args, **kwargs):</span>
+        <span class="s0">&quot;&quot;&quot; 
+        Raises an AttributeInferenceError in case of access to __class_getitem__ method. 
+        Otherwise just call origin_func. 
+        &quot;&quot;&quot;</span>
+        <span class="s2">if </span><span class="s1">attr == </span><span class="s4">&quot;__class_getitem__&quot;</span><span class="s1">:</span>
+            <span class="s2">raise </span><span class="s1">AttributeInferenceError(</span><span class="s4">&quot;__class_getitem__ access is not allowed&quot;</span><span class="s1">)</span>
+        <span class="s2">return </span><span class="s1">origin_func(attr, *args, **kwargs)</span>
+
+    <span class="s2">try</span><span class="s1">:</span>
+        <span class="s1">node.getattr(</span><span class="s4">&quot;__class_getitem__&quot;</span><span class="s1">)</span>
+        <span class="s0"># If we are here, then we are sure to modify object that do have __class_getitem__ method (which origin is one the</span>
+        <span class="s0"># protocol defined in collections module) whereas the typing module consider it should not</span>
+        <span class="s0"># We do not want __class_getitem__ to be found in the classdef</span>
+        <span class="s1">partial_raiser = partial(full_raiser, node.getattr)</span>
+        <span class="s1">node.getattr = partial_raiser</span>
+    <span class="s2">except </span><span class="s1">AttributeInferenceError:</span>
+        <span class="s2">pass</span>
+
+
+<span class="s2">def </span><span class="s1">infer_typing_alias(</span>
+    <span class="s1">node: nodes.Call, ctx: context.InferenceContext = </span><span class="s2">None</span>
+<span class="s1">) -&gt; typing.Iterator[nodes.ClassDef]:</span>
+    <span class="s0">&quot;&quot;&quot; 
+    Infers the call to _alias function 
+    Insert ClassDef, with same name as aliased class, 
+    in mro to simulate _GenericAlias. 
+ 
+    :param node: call node 
+    :param context: inference context 
+    &quot;&quot;&quot;</span>
+    <span class="s2">if </span><span class="s1">(</span>
+        <span class="s2">not </span><span class="s1">isinstance(node.parent, nodes.Assign)</span>
+        <span class="s2">or not </span><span class="s1">len(node.parent.targets) == </span><span class="s3">1</span>
+        <span class="s2">or not </span><span class="s1">isinstance(node.parent.targets[</span><span class="s3">0</span><span class="s1">], nodes.AssignName)</span>
+    <span class="s1">):</span>
+        <span class="s2">return None</span>
+    <span class="s1">res = next(node.args[</span><span class="s3">0</span><span class="s1">].infer(context=ctx))</span>
+    <span class="s1">assign_name = node.parent.targets[</span><span class="s3">0</span><span class="s1">]</span>
+
+    <span class="s1">class_def = nodes.ClassDef(</span>
+        <span class="s1">name=assign_name.name,</span>
+        <span class="s1">lineno=assign_name.lineno,</span>
+        <span class="s1">col_offset=assign_name.col_offset,</span>
+        <span class="s1">parent=node.parent,</span>
+    <span class="s1">)</span>
+    <span class="s2">if </span><span class="s1">res != astroid.Uninferable </span><span class="s2">and </span><span class="s1">isinstance(res, nodes.ClassDef):</span>
+        <span class="s0"># Only add `res` as base if it's a `ClassDef`</span>
+        <span class="s0"># This isn't the case for `typing.Pattern` and `typing.Match`</span>
+        <span class="s1">class_def.postinit(bases=[res], body=[], decorators=</span><span class="s2">None</span><span class="s1">)</span>
+
+    <span class="s1">maybe_type_var = node.args[</span><span class="s3">1</span><span class="s1">]</span>
+    <span class="s2">if </span><span class="s1">(</span>
+        <span class="s2">not </span><span class="s1">PY39</span>
+        <span class="s2">and not </span><span class="s1">(</span>
+            <span class="s1">isinstance(maybe_type_var, node_classes.Tuple) </span><span class="s2">and not </span><span class="s1">maybe_type_var.elts</span>
+        <span class="s1">)</span>
+        <span class="s2">or </span><span class="s1">PY39</span>
+        <span class="s2">and </span><span class="s1">isinstance(maybe_type_var, nodes.Const)</span>
+        <span class="s2">and </span><span class="s1">maybe_type_var.value &gt; </span><span class="s3">0</span>
+    <span class="s1">):</span>
+        <span class="s0"># If typing alias is subscriptable, add `__class_getitem__` to ClassDef</span>
+        <span class="s1">func_to_add = astroid.extract_node(CLASS_GETITEM_TEMPLATE)</span>
+        <span class="s1">class_def.locals[</span><span class="s4">&quot;__class_getitem__&quot;</span><span class="s1">] = [func_to_add]</span>
+    <span class="s2">else</span><span class="s1">:</span>
+        <span class="s0"># If not, make sure that `__class_getitem__` access is forbidden.</span>
+        <span class="s0"># This is an issue in cases where the aliased class implements it,</span>
+        <span class="s0"># but the typing alias isn't subscriptable. E.g., `typing.ByteString` for PY39+</span>
+        <span class="s1">_forbid_class_getitem_access(class_def)</span>
+    <span class="s2">return </span><span class="s1">iter([class_def])</span>
+
+
+<span class="s2">def </span><span class="s1">_looks_like_tuple_alias(node: nodes.Call) -&gt; bool:</span>
+    <span class="s0">&quot;&quot;&quot;Return True if call is for Tuple alias. 
+ 
+    In PY37 and PY38 the call is to '_VariadicGenericAlias' with 'tuple' as 
+    first argument. In PY39+ it is replaced by a call to '_TupleType'. 
+ 
+    PY37: Tuple = _VariadicGenericAlias(tuple, (), inst=False, special=True) 
+    PY39: Tuple = _TupleType(tuple, -1, inst=False, name='Tuple') 
+    &quot;&quot;&quot;</span>
+    <span class="s2">return </span><span class="s1">(</span>
+        <span class="s1">isinstance(node, nodes.Call)</span>
+        <span class="s2">and </span><span class="s1">isinstance(node.func, nodes.Name)</span>
+        <span class="s2">and </span><span class="s1">(</span>
+            <span class="s2">not </span><span class="s1">PY39</span>
+            <span class="s2">and </span><span class="s1">node.func.name == </span><span class="s4">&quot;_VariadicGenericAlias&quot;</span>
+            <span class="s2">and </span><span class="s1">isinstance(node.args[</span><span class="s3">0</span><span class="s1">], nodes.Name)</span>
+            <span class="s2">and </span><span class="s1">node.args[</span><span class="s3">0</span><span class="s1">].name == </span><span class="s4">&quot;tuple&quot;</span>
+            <span class="s2">or </span><span class="s1">PY39</span>
+            <span class="s2">and </span><span class="s1">node.func.name == </span><span class="s4">&quot;_TupleType&quot;</span>
+            <span class="s2">and </span><span class="s1">isinstance(node.args[</span><span class="s3">0</span><span class="s1">], nodes.Name)</span>
+            <span class="s2">and </span><span class="s1">node.args[</span><span class="s3">0</span><span class="s1">].name == </span><span class="s4">&quot;tuple&quot;</span>
+        <span class="s1">)</span>
+    <span class="s1">)</span>
+
+
+<span class="s2">def </span><span class="s1">infer_tuple_alias(</span>
+    <span class="s1">node: nodes.Call, ctx: context.InferenceContext = </span><span class="s2">None</span>
+<span class="s1">) -&gt; typing.Iterator[nodes.ClassDef]:</span>
+    <span class="s0">&quot;&quot;&quot;Infer call to tuple alias as new subscriptable class typing.Tuple.&quot;&quot;&quot;</span>
+    <span class="s1">res = next(node.args[</span><span class="s3">0</span><span class="s1">].infer(context=ctx))</span>
+    <span class="s1">class_def = nodes.ClassDef(</span>
+        <span class="s1">name=</span><span class="s4">&quot;Tuple&quot;</span><span class="s1">,</span>
+        <span class="s1">parent=node.parent,</span>
+    <span class="s1">)</span>
+    <span class="s1">class_def.postinit(bases=[res], body=[], decorators=</span><span class="s2">None</span><span class="s1">)</span>
+    <span class="s1">func_to_add = astroid.extract_node(CLASS_GETITEM_TEMPLATE)</span>
+    <span class="s1">class_def.locals[</span><span class="s4">&quot;__class_getitem__&quot;</span><span class="s1">] = [func_to_add]</span>
+    <span class="s2">return </span><span class="s1">iter([class_def])</span>
+
+
+<span class="s1">MANAGER.register_transform(</span>
+    <span class="s1">nodes.Call,</span>
+    <span class="s1">inference_tip(infer_typing_typevar_or_newtype),</span>
+    <span class="s1">looks_like_typing_typevar_or_newtype,</span>
+<span class="s1">)</span>
+<span class="s1">MANAGER.register_transform(</span>
+    <span class="s1">nodes.Subscript, inference_tip(infer_typing_attr), _looks_like_typing_subscript</span>
+<span class="s1">)</span>
+
+<span class="s2">if </span><span class="s1">PY39:</span>
+    <span class="s1">MANAGER.register_transform(</span>
+        <span class="s1">nodes.FunctionDef, inference_tip(infer_typedDict), _looks_like_typedDict</span>
+    <span class="s1">)</span>
+
+<span class="s2">if </span><span class="s1">PY37:</span>
+    <span class="s1">MANAGER.register_transform(</span>
+        <span class="s1">nodes.Call, inference_tip(infer_typing_alias), _looks_like_typing_alias</span>
+    <span class="s1">)</span>
+    <span class="s1">MANAGER.register_transform(</span>
+        <span class="s1">nodes.Call, inference_tip(infer_tuple_alias), _looks_like_tuple_alias</span>
+    <span class="s1">)</span>
+</pre>
+</body>
+</html>

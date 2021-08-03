@@ -1,0 +1,80 @@
+<html>
+<head>
+<title>encodings.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+encodings.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the Apache License: http://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="s0"># For details: https://github.com/nedbat/coveragepy/blob/master/NOTICE.txt</span>
+
+<span class="s0">&quot;&quot;&quot;Imposter encodings module that installs a coverage-style tracer. 
+ 
+This is NOT the encodings module; it is an imposter that sets up tracing 
+instrumentation and then replaces itself with the real encodings module. 
+ 
+If the directory that holds this file is placed first in the PYTHONPATH when 
+using &quot;coverage&quot; to run Python's tests, then this file will become the very 
+first module imported by the internals of Python 3.  It installs a 
+coverage.py-compatible trace function that can watch Standard Library modules 
+execute from the very earliest stages of Python's own boot process.  This fixes 
+a problem with coverage.py - that it starts too late to trace the coverage of 
+many of the most fundamental modules in the Standard Library. 
+ 
+&quot;&quot;&quot;</span>
+
+<span class="s2">import </span><span class="s1">sys</span>
+
+<span class="s2">class </span><span class="s1">FullCoverageTracer(object):</span>
+    <span class="s2">def </span><span class="s1">__init__(self):</span>
+        <span class="s0"># `traces` is a list of trace events.  Frames are tricky: the same</span>
+        <span class="s0"># frame object is used for a whole scope, with new line numbers</span>
+        <span class="s0"># written into it.  So in one scope, all the frame objects are the</span>
+        <span class="s0"># same object, and will eventually all will point to the last line</span>
+        <span class="s0"># executed.  So we keep the line numbers alongside the frames.</span>
+        <span class="s0"># The list looks like:</span>
+        <span class="s0">#</span>
+        <span class="s0">#   traces = [</span>
+        <span class="s0">#       ((frame, event, arg), lineno), ...</span>
+        <span class="s0">#       ]</span>
+        <span class="s0">#</span>
+        <span class="s1">self.traces = []</span>
+
+    <span class="s2">def </span><span class="s1">fullcoverage_trace(self, *args):</span>
+        <span class="s1">frame, event, arg = args</span>
+        <span class="s1">self.traces.append((args, frame.f_lineno))</span>
+        <span class="s2">return </span><span class="s1">self.fullcoverage_trace</span>
+
+<span class="s1">sys.settrace(FullCoverageTracer().fullcoverage_trace)</span>
+
+<span class="s0"># In coverage/files.py is actual_filename(), which uses glob.glob.  I don't</span>
+<span class="s0"># understand why, but that use of glob borks everything if fullcoverage is in</span>
+<span class="s0"># effect.  So here we make an ugly hail-mary pass to switch off glob.glob over</span>
+<span class="s0"># there.  This means when using fullcoverage, Windows path names will not be</span>
+<span class="s0"># their actual case.</span>
+
+<span class="s0">#sys.fullcoverage = True</span>
+
+<span class="s0"># Finally, remove our own directory from sys.path; remove ourselves from</span>
+<span class="s0"># sys.modules; and re-import &quot;encodings&quot;, which will be the real package</span>
+<span class="s0"># this time.  Note that the delete from sys.modules dictionary has to</span>
+<span class="s0"># happen last, since all of the symbols in this module will become None</span>
+<span class="s0"># at that exact moment, including &quot;sys&quot;.</span>
+
+<span class="s1">parentdir = max(filter(__file__.startswith, sys.path), key=len)</span>
+<span class="s1">sys.path.remove(parentdir)</span>
+<span class="s2">del </span><span class="s1">sys.modules[</span><span class="s3">'encodings'</span><span class="s1">]</span>
+<span class="s2">import </span><span class="s1">encodings</span>
+</pre>
+</body>
+</html>

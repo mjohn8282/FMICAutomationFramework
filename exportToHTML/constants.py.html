@@ -1,0 +1,137 @@
+<html>
+<head>
+<title>constants.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #c678dd;}
+.s1 { color: #abb2bf;}
+.s2 { color: #5c6370;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+constants.py</font>
+</center></td></tr></table>
+<pre><span class="s0">from </span><span class="s1">__future__ </span><span class="s0">import </span><span class="s1">absolute_import</span>
+<span class="s2"># Copyright (c) 2010-2019 openpyexcel</span>
+
+
+<span class="s3">&quot;&quot;&quot;Constants for fixed paths in a file and xml namespace urls.&quot;&quot;&quot;</span>
+
+<span class="s1">MIN_ROW = </span><span class="s4">0</span>
+<span class="s1">MIN_COLUMN = </span><span class="s4">0</span>
+<span class="s1">MAX_COLUMN = </span><span class="s4">16384</span>
+<span class="s1">MAX_ROW = </span><span class="s4">1048576</span>
+
+<span class="s2"># constants</span>
+<span class="s1">PACKAGE_PROPS = </span><span class="s3">'docProps'</span>
+<span class="s1">PACKAGE_XL = </span><span class="s3">'xl'</span>
+<span class="s1">PACKAGE_RELS = </span><span class="s3">'_rels'</span>
+<span class="s1">PACKAGE_THEME = PACKAGE_XL + </span><span class="s3">'/' </span><span class="s1">+ </span><span class="s3">'theme'</span>
+<span class="s1">PACKAGE_WORKSHEETS = PACKAGE_XL + </span><span class="s3">'/' </span><span class="s1">+ </span><span class="s3">'worksheets'</span>
+<span class="s1">PACKAGE_CHARTSHEETS = PACKAGE_XL + </span><span class="s3">'/' </span><span class="s1">+ </span><span class="s3">'chartsheets'</span>
+<span class="s1">PACKAGE_DRAWINGS = PACKAGE_XL + </span><span class="s3">'/' </span><span class="s1">+ </span><span class="s3">'drawings'</span>
+<span class="s1">PACKAGE_CHARTS = PACKAGE_XL + </span><span class="s3">'/' </span><span class="s1">+ </span><span class="s3">'charts'</span>
+<span class="s1">PACKAGE_IMAGES = PACKAGE_XL + </span><span class="s3">'/' </span><span class="s1">+ </span><span class="s3">'media'</span>
+<span class="s1">PACKAGE_WORKSHEET_RELS = PACKAGE_WORKSHEETS + </span><span class="s3">'/' </span><span class="s1">+ </span><span class="s3">'_rels'</span>
+<span class="s1">PACKAGE_CHARTSHEETS_RELS = PACKAGE_CHARTSHEETS + </span><span class="s3">'/' </span><span class="s1">+ </span><span class="s3">'_rels'</span>
+<span class="s1">PACKAGE_PIVOT_TABLE = PACKAGE_XL + </span><span class="s3">'/' </span><span class="s1">+ </span><span class="s3">'pivotTables'</span>
+<span class="s1">PACKAGE_PIVOT_CACHE = PACKAGE_XL + </span><span class="s3">'/' </span><span class="s1">+ </span><span class="s3">'pivotCache'</span>
+
+<span class="s1">ARC_CONTENT_TYPES = </span><span class="s3">'[Content_Types].xml'</span>
+<span class="s1">ARC_ROOT_RELS = PACKAGE_RELS + </span><span class="s3">'/.rels'</span>
+<span class="s1">ARC_WORKBOOK_RELS = PACKAGE_XL + </span><span class="s3">'/' </span><span class="s1">+ PACKAGE_RELS + </span><span class="s3">'/workbook.xml.rels'</span>
+<span class="s1">ARC_CORE = PACKAGE_PROPS + </span><span class="s3">'/core.xml'</span>
+<span class="s1">ARC_APP = PACKAGE_PROPS + </span><span class="s3">'/app.xml'</span>
+<span class="s1">ARC_WORKBOOK = PACKAGE_XL + </span><span class="s3">'/workbook.xml'</span>
+<span class="s1">ARC_STYLE = PACKAGE_XL + </span><span class="s3">'/styles.xml'</span>
+<span class="s1">ARC_THEME = PACKAGE_THEME + </span><span class="s3">'/theme1.xml'</span>
+<span class="s1">ARC_SHARED_STRINGS = PACKAGE_XL + </span><span class="s3">'/sharedStrings.xml'</span>
+<span class="s1">ARC_CUSTOM_UI = </span><span class="s3">'customUI/customUI.xml'</span>
+
+<span class="s2">## namespaces</span>
+<span class="s2"># Dublin Core</span>
+<span class="s1">DCORE_NS = </span><span class="s3">'http://purl.org/dc/elements/1.1/'</span>
+<span class="s1">DCTERMS_NS = </span><span class="s3">'http://purl.org/dc/terms/'</span>
+<span class="s1">DCTERMS_PREFIX = </span><span class="s3">'dcterms'</span>
+
+<span class="s2"># Document</span>
+<span class="s1">DOC_NS = </span><span class="s3">&quot;http://schemas.openxmlformats.org/officeDocument/2006/&quot;</span>
+<span class="s1">REL_NS = DOC_NS + </span><span class="s3">&quot;relationships&quot;</span>
+<span class="s1">COMMENTS_NS = REL_NS + </span><span class="s3">&quot;/comments&quot;</span>
+<span class="s1">IMAGE_NS = REL_NS + </span><span class="s3">&quot;/image&quot;</span>
+<span class="s1">VML_NS =  REL_NS + </span><span class="s3">&quot;/vmlDrawing&quot;</span>
+<span class="s1">VTYPES_NS = DOC_NS + </span><span class="s3">'docPropsVTypes'</span>
+<span class="s1">XPROPS_NS = DOC_NS + </span><span class="s3">'extended-properties'</span>
+<span class="s1">EXTERNAL_LINK_NS = REL_NS + </span><span class="s3">&quot;/externalLink&quot;</span>
+
+<span class="s2"># Package</span>
+<span class="s1">PKG_NS = </span><span class="s3">&quot;http://schemas.openxmlformats.org/package/2006/&quot;</span>
+<span class="s1">PKG_REL_NS = PKG_NS + </span><span class="s3">&quot;relationships&quot;</span>
+<span class="s1">COREPROPS_NS = PKG_NS + </span><span class="s3">'metadata/core-properties'</span>
+<span class="s1">CONTYPES_NS = PKG_NS + </span><span class="s3">'content-types'</span>
+
+<span class="s1">XSI_NS = </span><span class="s3">'http://www.w3.org/2001/XMLSchema-instance'</span>
+<span class="s1">XML_NS = </span><span class="s3">'http://www.w3.org/XML/1998/namespace'</span>
+<span class="s1">SHEET_MAIN_NS = </span><span class="s3">'http://schemas.openxmlformats.org/spreadsheetml/2006/main'</span>
+
+<span class="s2"># Drawing</span>
+<span class="s1">CHART_NS = </span><span class="s3">&quot;http://schemas.openxmlformats.org/drawingml/2006/chart&quot;</span>
+<span class="s1">DRAWING_NS = </span><span class="s3">&quot;http://schemas.openxmlformats.org/drawingml/2006/main&quot;</span>
+<span class="s1">SHEET_DRAWING_NS = </span><span class="s3">&quot;http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing&quot;</span>
+<span class="s1">CHART_DRAWING_NS = </span><span class="s3">&quot;http://schemas.openxmlformats.org/drawingml/2006/chartDrawing&quot;</span>
+
+<span class="s1">CUSTOMUI_NS = </span><span class="s3">'http://schemas.microsoft.com/office/2006/relationships/ui/extensibility'</span>
+
+
+<span class="s1">NAMESPACES = {</span>
+    <span class="s3">'cp'</span><span class="s1">: COREPROPS_NS,</span>
+    <span class="s3">'dc'</span><span class="s1">: DCORE_NS,</span>
+    <span class="s1">DCTERMS_PREFIX: DCTERMS_NS,</span>
+    <span class="s3">'dcmitype'</span><span class="s1">: </span><span class="s3">'http://purl.org/dc/dcmitype/'</span><span class="s1">,</span>
+    <span class="s3">'xsi'</span><span class="s1">: XSI_NS,</span>
+    <span class="s3">'vt'</span><span class="s1">: VTYPES_NS,</span>
+    <span class="s3">'xml'</span><span class="s1">: XML_NS,</span>
+    <span class="s3">'main'</span><span class="s1">: SHEET_MAIN_NS</span>
+<span class="s1">}</span>
+
+<span class="s2">## Mime types</span>
+<span class="s1">WORKBOOK_MACRO = </span><span class="s3">&quot;application/vnd.ms-excel.%s.macroEnabled.main+xml&quot;</span>
+<span class="s1">WORKBOOK = </span><span class="s3">&quot;application/vnd.openxmlformats-officedocument.spreadsheetml.%s.main+xml&quot;</span>
+<span class="s1">SPREADSHEET = </span><span class="s3">&quot;application/vnd.openxmlformats-officedocument.spreadsheetml.%s+xml&quot;</span>
+<span class="s1">SHARED_STRINGS = SPREADSHEET % </span><span class="s3">&quot;sharedStrings&quot;</span>
+<span class="s1">EXTERNAL_LINK = SPREADSHEET % </span><span class="s3">&quot;externalLink&quot;</span>
+<span class="s1">WORKSHEET_TYPE = SPREADSHEET % </span><span class="s3">&quot;worksheet&quot;</span>
+<span class="s1">COMMENTS_TYPE = SPREADSHEET % </span><span class="s3">&quot;comments&quot;</span>
+<span class="s1">STYLES_TYPE = SPREADSHEET % </span><span class="s3">&quot;styles&quot;</span>
+<span class="s1">CHARTSHEET_TYPE = SPREADSHEET % </span><span class="s3">&quot;chartsheet&quot;</span>
+<span class="s1">DRAWING_TYPE = </span><span class="s3">&quot;application/vnd.openxmlformats-officedocument.drawing+xml&quot;</span>
+<span class="s1">CHART_TYPE = </span><span class="s3">&quot;application/vnd.openxmlformats-officedocument.drawingml.chart+xml&quot;</span>
+<span class="s1">CHARTSHAPE_TYPE = </span><span class="s3">&quot;application/vnd.openxmlformats-officedocument.drawingml.chartshapes+xml&quot;</span>
+<span class="s1">THEME_TYPE = </span><span class="s3">&quot;application/vnd.openxmlformats-officedocument.theme+xml&quot;</span>
+<span class="s1">XLTM = WORKBOOK_MACRO % </span><span class="s3">'template'</span>
+<span class="s1">XLSM = WORKBOOK_MACRO % </span><span class="s3">'sheet'</span>
+<span class="s1">XLTX = WORKBOOK % </span><span class="s3">'template'</span>
+<span class="s1">XLSX = WORKBOOK % </span><span class="s3">'sheet'</span>
+
+
+<span class="s2"># Extensions to the specification</span>
+
+<span class="s1">EXT_TYPES = {</span>
+    <span class="s3">'{78C0D931-6437-407D-A8EE-F0AAD7539E65}'</span><span class="s1">: </span><span class="s3">'Conditional Formatting'</span><span class="s1">,</span>
+    <span class="s3">'{CCE6A557-97BC-4B89-ADB6-D9C93CAAB3DF}'</span><span class="s1">: </span><span class="s3">'Data Validation'</span><span class="s1">,</span>
+    <span class="s3">'{05C60535-1F16-4FD2-B633-F4F36F0B64E0}'</span><span class="s1">: </span><span class="s3">'Sparkline Group'</span><span class="s1">,</span>
+    <span class="s3">'{A8765BA9-456A-4DAB-B4F3-ACF838C121DE}'</span><span class="s1">: </span><span class="s3">'Slicer List'</span><span class="s1">,</span>
+    <span class="s3">'{FC87AEE6-9EDD-4A0A-B7FB-166176984837}'</span><span class="s1">: </span><span class="s3">'Protected Range'</span><span class="s1">,</span>
+    <span class="s3">'{01252117-D84E-4E92-8308-4BE1C098FCBB}'</span><span class="s1">: </span><span class="s3">'Ignored Error'</span><span class="s1">,</span>
+    <span class="s3">'{F7C9EE02-42E1-4005-9D12-6889AFFD525C}'</span><span class="s1">: </span><span class="s3">'Web Extension'</span><span class="s1">,</span>
+    <span class="s3">'{3A4CF648-6AED-40f4-86FF-DC5316D8AED3}'</span><span class="s1">: </span><span class="s3">'Slicer List'</span><span class="s1">,</span>
+    <span class="s3">'{7E03D99C-DC04-49d9-9315-930204A7B6E9}'</span><span class="s1">: </span><span class="s3">'Timeline Ref'</span><span class="s1">,</span>
+<span class="s1">}</span>
+</pre>
+</body>
+</html>

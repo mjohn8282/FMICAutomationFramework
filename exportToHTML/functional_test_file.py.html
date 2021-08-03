@@ -1,0 +1,95 @@
+<html>
+<head>
+<title>functional_test_file.py</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #5c6370;}
+.s1 { color: #abb2bf;}
+.s2 { color: #c678dd;}
+.s3 { color: #98c379;}
+.s4 { color: #d19a66;}
+.s5 { color: #56b6c2;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+functional_test_file.py</font>
+</center></td></tr></table>
+<pre><span class="s0"># Licensed under the GPL: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</span>
+<span class="s0"># For details: https://github.com/PyCQA/pylint/blob/master/LICENSE</span>
+
+<span class="s2">import </span><span class="s1">configparser</span>
+<span class="s2">from </span><span class="s1">os.path </span><span class="s2">import </span><span class="s1">basename, exists, join</span>
+
+
+<span class="s2">def </span><span class="s1">parse_python_version(ver_str):</span>
+    <span class="s2">return </span><span class="s1">tuple(int(digit) </span><span class="s2">for </span><span class="s1">digit </span><span class="s2">in </span><span class="s1">ver_str.split(</span><span class="s3">&quot;.&quot;</span><span class="s1">))</span>
+
+
+<span class="s2">class </span><span class="s1">NoFileError(Exception):</span>
+    <span class="s2">pass</span>
+
+
+<span class="s2">class </span><span class="s1">FunctionalTestFile:</span>
+    <span class="s0">&quot;&quot;&quot;A single functional test case file with options.&quot;&quot;&quot;</span>
+
+    <span class="s1">_CONVERTERS = {</span>
+        <span class="s3">&quot;min_pyver&quot;</span><span class="s1">: parse_python_version,</span>
+        <span class="s3">&quot;max_pyver&quot;</span><span class="s1">: parse_python_version,</span>
+        <span class="s3">&quot;requires&quot;</span><span class="s1">: </span><span class="s2">lambda </span><span class="s1">s: s.split(</span><span class="s3">&quot;,&quot;</span><span class="s1">),</span>
+    <span class="s1">}</span>
+
+    <span class="s2">def </span><span class="s1">__init__(self, directory, filename):</span>
+        <span class="s1">self._directory = directory</span>
+        <span class="s1">self.base = filename.replace(</span><span class="s3">&quot;.py&quot;</span><span class="s1">, </span><span class="s3">&quot;&quot;</span><span class="s1">)</span>
+        <span class="s1">self.options = {</span>
+            <span class="s3">&quot;min_pyver&quot;</span><span class="s1">: (</span><span class="s4">2</span><span class="s1">, </span><span class="s4">5</span><span class="s1">),</span>
+            <span class="s3">&quot;max_pyver&quot;</span><span class="s1">: (</span><span class="s4">4</span><span class="s1">, </span><span class="s4">0</span><span class="s1">),</span>
+            <span class="s3">&quot;requires&quot;</span><span class="s1">: [],</span>
+            <span class="s3">&quot;except_implementations&quot;</span><span class="s1">: [],</span>
+            <span class="s3">&quot;exclude_platforms&quot;</span><span class="s1">: [],</span>
+        <span class="s1">}</span>
+        <span class="s1">self._parse_options()</span>
+
+    <span class="s2">def </span><span class="s1">__repr__(self):</span>
+        <span class="s2">return </span><span class="s3">f&quot;FunctionalTest:</span><span class="s5">{</span><span class="s1">self.base</span><span class="s5">}</span><span class="s3">&quot;</span>
+
+    <span class="s2">def </span><span class="s1">_parse_options(self):</span>
+        <span class="s1">cp = configparser.ConfigParser()</span>
+        <span class="s1">cp.add_section(</span><span class="s3">&quot;testoptions&quot;</span><span class="s1">)</span>
+        <span class="s2">try</span><span class="s1">:</span>
+            <span class="s1">cp.read(self.option_file)</span>
+        <span class="s2">except </span><span class="s1">NoFileError:</span>
+            <span class="s2">pass</span>
+
+        <span class="s2">for </span><span class="s1">name, value </span><span class="s2">in </span><span class="s1">cp.items(</span><span class="s3">&quot;testoptions&quot;</span><span class="s1">):</span>
+            <span class="s1">conv = self._CONVERTERS.get(name, </span><span class="s2">lambda </span><span class="s1">v: v)</span>
+            <span class="s1">self.options[name] = conv(value)</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">option_file(self):</span>
+        <span class="s2">return </span><span class="s1">self._file_type(</span><span class="s3">&quot;.rc&quot;</span><span class="s1">)</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">module(self):</span>
+        <span class="s1">package = basename(self._directory)</span>
+        <span class="s2">return </span><span class="s3">&quot;.&quot;</span><span class="s1">.join([package, self.base])</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">expected_output(self):</span>
+        <span class="s2">return </span><span class="s1">self._file_type(</span><span class="s3">&quot;.txt&quot;</span><span class="s1">, check_exists=</span><span class="s2">False</span><span class="s1">)</span>
+
+    <span class="s1">@property</span>
+    <span class="s2">def </span><span class="s1">source(self):</span>
+        <span class="s2">return </span><span class="s1">self._file_type(</span><span class="s3">&quot;.py&quot;</span><span class="s1">)</span>
+
+    <span class="s2">def </span><span class="s1">_file_type(self, ext, check_exists=</span><span class="s2">True</span><span class="s1">):</span>
+        <span class="s1">name = join(self._directory, self.base + ext)</span>
+        <span class="s2">if not </span><span class="s1">check_exists </span><span class="s2">or </span><span class="s1">exists(name):</span>
+            <span class="s2">return </span><span class="s1">name</span>
+        <span class="s2">raise </span><span class="s1">NoFileError(</span><span class="s3">f&quot;Cannot find '</span><span class="s5">{</span><span class="s1">name</span><span class="s5">}</span><span class="s3">'.&quot;</span><span class="s1">)</span>
+</pre>
+</body>
+</html>
