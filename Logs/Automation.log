@@ -74,3 +74,57 @@
 2021-08-03 16:30:58 INFO     ************ Verifying Homepage Title ***********
 2021-08-03 16:30:58 INFO     ************ Verifying login***********
 2021-08-03 16:30:58 INFO     ************ Verifying login***********
+2021-08-04 14:29:02 INFO     ************ Verifying Homepage Title ***********
+2021-08-04 14:29:02 INFO     ************ Verifying login***********
+2021-08-04 14:29:06 INFO     ************ Verifying Homepage Title ***********
+2021-08-04 14:29:06 INFO     ************ Verifying login***********
+2021-08-04 14:32:16 INFO     ************ Verifying Homepage Title ***********
+2021-08-04 14:32:16 INFO     ************ Verifying login***********
+2021-08-04 14:32:21 INFO     starting CheckHomepage_links
+2021-08-04 14:32:22 INFO     https://benchmarktest.dat.com/Web/Home/HomePage.aspx?m=2180502&i=483&h=1# Status code 200
+2021-08-04 14:32:24 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/UserProfile.aspx&mi=127 Status code 200
+2021-08-04 14:32:26 INFO     https://benchmarktest.dat.com/Web/Static/ContactUS.aspx Status code 200
+2021-08-04 14:32:27 INFO     https://benchmarktest.dat.com/Web/Home/HomePage.aspx Status code 200
+2021-08-04 14:32:29 INFO     https://benchmarktest.dat.com/Web/Home/HomePage.aspx?m=2180502&i=483&h=1# Status code 200
+2021-08-04 14:32:31 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/RTEstimator.aspx?u=21610902&mi=3 Status code 200
+2021-08-04 14:32:32 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/upload.aspx?u=21610902&mi=1 Status code 200
+2021-08-04 14:32:34 INFO     https://benchmarktest.dat.com/Web/Home/HomePage.aspx?m=2180502&i=483&h=1# Status code 200
+2021-08-04 14:32:36 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=https%3A%2F%2Fsso.online.tableau.com%2Fpublic%2Fidp%2FSSO?u=21610902&mi=429 Status code 200
+2021-08-04 14:32:38 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/DownloadCompanyReports.aspx?u=21610902&mi=126 Status code 200
+2021-08-04 14:32:39 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/MyMarketIntelligenceResources.aspx?u=21610902&mi=433 Status code 200
+2021-08-04 14:32:41 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/VideoTutorial.aspx?u=21610902&mi=430 Status code 200
+2021-08-04 14:32:42 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=FMIC%5F2021%5FJuly%5FTL%5FIM%5Fdata%5Ftemplate.xlsx?u=21610902&mi=431 Status code 500
+2021-08-04 14:32:43 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=FMIC%5FTL%5FData%5FTemplate%20EUR%5FAug%202021.xlsx?u=21610902&mi=535 Status code 500
+2021-08-04 14:32:44 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=FMIC%5F3PL%5FTL%5F2021%5Fdata%5Ftemplate.xlsx?u=21610902&mi=536 Status code 500
+2021-08-04 14:32:45 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=LTL%5FEUROPE%5FData%5FTemplate%202021.xlsx?u=21610902&mi=537 Status code 500
+2021-08-04 14:32:46 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Allvideos/FMIC_LTL_2020_data_template.xlsx?u=21610902&mi=432 Status code 500
+2021-08-04 14:32:48 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/DataSubmission.aspx?u=21610902&mi=435 Status code 200
+2021-08-04 14:32:51 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/Admin/UserAdmin.aspx?u=21610902&mi=15 Status code 200
+2021-08-04 14:32:53 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/Admin/CompanyAdmin.aspx?u=21610902&mi=436 Status code 200
+2021-08-04 14:32:55 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/globalpages/submenus.aspx?menu=4&u=21610902&mi=437 Status code 200
+2021-08-04 14:32:57 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/UserProfile.aspx?u=21610902&mi=438 Status code 200
+2021-08-04 14:32:58 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=DAT%20Policy.pdf?u=21610902&mi=166 Status code 500
+2021-08-04 14:32:59 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/Static/ContactUS.aspx?u=21610902&mi=439 Status code 200
+2021-08-04 14:33:01 INFO     https://benchmarktest.dat.com/Web/globalpages/submenus.aspx?menu=527 Status code 200
+2021-08-04 14:33:01 INFO     https://www.dat.com/resources/podcasts/tab-dat-freightvine-podcast Status code 403
+2021-08-04 14:33:02 INFO     https://www.surveymonkey.com/r/BFSWQFL Status code 200
+2021-08-04 14:33:02 INFO     https://www.dat.com/wp-content/uploads/2021/03/2021_freight_focus.pdf Status code 403
+2021-08-04 14:33:04 INFO     https://benchmarktest.dat.com/Web/Home/HomePage.aspx?m=2180502&i=483&h=1# Status code 200
+2021-08-04 14:33:07 INFO     ************ Verifying Homepage Title ***********
+2021-08-04 14:33:07 INFO     ************ Verifying login***********
+2021-08-04 14:33:16 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/RTEstimator.aspx&u=21610902&mi=1&ci=1 Status code 200
+2021-08-04 14:33:18 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/Upload.aspx&u=21610902&mi=2&ci=2 Status code 200
+2021-08-04 14:33:19 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=https%3A%2F%2Fsso.online.tableau.com%2Fpublic%2Fidp%2FSSO&u=21610902&mi=3&ci=3 Status code 200
+2021-08-04 14:33:21 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/DownloadCompanyReports.aspx&u=21610902&mi=4&ci=4 Status code 200
+2021-08-04 14:33:23 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/DownloadCompanyReports.aspx&u=21610902&mi=5&ci=5 Status code 200
+2021-08-04 14:33:25 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/DownloadCompanyReports.aspx&u=21610902&mi=6&ci=6 Status code 200
+2021-08-04 14:33:28 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/DownloadCompanyReports.aspx&u=21610902&mi=7&ci=7 Status code 200
+2021-08-04 14:33:29 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/globalpages/submenus.aspx?menu=476&u=21610902&mi=8&ci=8 Status code 200
+2021-08-04 14:33:31 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/GlobalPages/DownloadCompanyReports.aspx&u=21610902&mi=9&ci=9 Status code 200
+2021-08-04 14:33:34 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=https%3A%2F%2Fwww.podbean.com%2Feu%2Fpb-b5qub-d73b50&u=21610902&mi=15&ci=15 Status code 200
+2021-08-04 14:33:38 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=https%3A%2F%2Fwww.podbean.com%2Feu%2Fpb-w7mmf-d8a5f9&u=21610902&mi=17&ci=17 Status code 200
+2021-08-04 14:33:41 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=https%3A%2F%2Fwww.podbean.com%2Feu%2Fpb-nv2v5-da167d&u=21610902&mi=16&ci=16 Status code 200
+2021-08-04 14:33:42 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=https%3A%2F%2Fwww.dat.com%2Fresources%2Fpodcasts&u=21610902&mi=18&ci=18 Status code 403
+2021-08-04 14:33:44 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/globalpages/submenus.aspx?menu=527&u=21610902&mi=19&ci=19 Status code 200
+2021-08-04 14:33:46 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/globalpages/submenus.aspx?menu=530&u=21610902&mi=23&ci=23 Status code 200
+2021-08-04 14:33:47 INFO     https://benchmarktest.dat.com/Web/GlobalPages/TrackUrl.aspx?Url=/Web/globalpages/submenus.aspx?menu=516&u=21610902&mi=22&ci=22 Status code 200
